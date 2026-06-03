@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Loader2, LogIn, Mail, KeyRound, CheckCircle2 } from "lucide-react";
+import { Flame, Loader2, LogIn, Mail, KeyRound, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/membro/login")({
@@ -51,7 +51,7 @@ function MembroLoginPage() {
       <aside className="hidden lg:flex flex-col justify-between bg-gradient-sacro p-10 text-sidebar-foreground">
         <div className="flex items-center gap-2">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-sidebar-accent text-gold">
-            <Sparkles className="h-4 w-4" />
+            <Flame className="h-4 w-4" />
           </div>
           <span className="font-serif text-lg">Lumen Pastoral</span>
         </div>
@@ -75,7 +75,7 @@ function MembroLoginPage() {
           {/* Logo mobile */}
           <div className="lg:hidden mb-8 flex items-center gap-2">
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-gold">
-              <Sparkles className="h-4 w-4" />
+              <Flame className="h-4 w-4" />
             </div>
             <span className="font-serif text-lg">Lumen Pastoral</span>
           </div>

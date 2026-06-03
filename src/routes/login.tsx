@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Flame, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,7 +80,7 @@ function LoginPage() {
       <aside className="hidden lg:flex flex-col justify-between bg-gradient-sacro p-10 text-sidebar-foreground">
         <Link to="/" className="flex items-center gap-2">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-sidebar-accent text-gold">
-            <Sparkles className="h-4 w-4" />
+            <Flame className="h-4 w-4" />
           </div>
           <span className="font-serif text-lg">Lumen Pastoral</span>
         </Link>
@@ -96,7 +96,7 @@ function LoginPage() {
       <main className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8 flex items-center gap-2">
-            <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-gold"><Sparkles className="h-4 w-4" /></div>
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-gold"><Flame className="h-4 w-4" /></div>
             <span className="font-serif text-lg">Lumen Pastoral</span>
           </div>
           <h1 className="font-serif text-3xl">Entrar na coordenação</h1>

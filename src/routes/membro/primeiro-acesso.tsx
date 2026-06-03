@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Loader2, CheckCircle2, ArrowRight, UserCircle2, Phone, Calendar } from "lucide-react";
+import { Flame, Loader2, CheckCircle2, ArrowRight, UserCircle2, Phone, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 
@@ -95,7 +95,7 @@ function PrimeiroAcessoPage() {
         {/* Logo */}
         <div className="flex items-center gap-2 justify-center mb-8">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-gold">
-            <Sparkles className="h-4 w-4" />
+            <Flame className="h-4 w-4" />
           </div>
           <span className="font-serif text-lg">Lumen Pastoral</span>
         </div>

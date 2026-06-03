@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Flame, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/cadastro")({
@@ -37,7 +37,7 @@ function SignupPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-6 py-12">
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center gap-2 mb-10">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-sacro text-gold"><Sparkles className="h-4 w-4" /></div>
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-sacro text-gold"><Flame className="h-4 w-4" /></div>
           <span className="font-serif text-lg">Lumen Pastoral</span>
         </Link>
 

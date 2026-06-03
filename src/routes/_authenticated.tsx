@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
-  Sparkles, BookOpen, CalendarRange, Bell, MoreHorizontal, Trophy, UserCircle, Church,
+  Flame, BookOpen, CalendarRange, Bell, MoreHorizontal, Trophy, UserCircle, Church,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -159,7 +159,7 @@ function AuthLayout() {
         <div className="flex h-20 items-center gap-3 px-5 border-b border-sidebar-border/70">
           <Link to="/painel" className="flex items-center gap-3 min-w-0">
             <div className="grid h-12 w-12 place-items-center rounded-3xl bg-primary text-white shadow-gold">
-              <Sparkles className="h-5 w-5" />
+              <Flame className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">Lumen Pastoral</p>

@@ -757,36 +757,33 @@ function DashboardPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto space-y-6 pb-24 lg:pb-10">
+    <div className="p-3 sm:p-6 lg:p-10 max-w-7xl mx-auto space-y-4 sm:space-y-6 pb-24 lg:pb-10">
       <div>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Painel pastoral</p>
-            <h1 className="mt-2 font-serif text-2xl sm:text-4xl text-foreground truncate">{paroquia?.nome ?? "Sua paróquia"}</h1>
-            {paroquia?.diocese && (
-              <p className="mt-1 text-sm text-muted-foreground truncate">{paroquia.diocese}</p>
-            )}
-          </div>
-        </div>
+        <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Painel pastoral</p>
+        <h1 className="mt-1.5 font-serif text-xl sm:text-4xl text-foreground truncate">{paroquia?.nome ?? "Sua paróquia"}</h1>
+        {paroquia?.diocese && (
+          <p className="mt-0.5 text-xs sm:text-sm text-muted-foreground truncate">{paroquia.diocese}</p>
+        )}
       </div>
 
-      <section className="rounded-3xl border border-border/70 bg-card shadow-altar overflow-hidden">
-        <div className="p-6 space-y-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <section className="rounded-2xl sm:rounded-3xl border border-border/70 bg-card shadow-altar overflow-hidden">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Painel litúrgico</p>
-              <h2 className="mt-2 text-3xl font-serif text-foreground">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">Painel litúrgico</p>
+              <h2 className="mt-1.5 text-xl sm:text-3xl font-serif text-foreground">
                 {format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}
               </h2>
-              <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
+              <p className="mt-1.5 text-sm text-muted-foreground leading-snug">
                 {primaryCelebration
                   ? primaryCelebration.name
                   : "Feria — sem celebração especial registrada."}
               </p>
             </div>
-            <div className="inline-flex flex-wrap items-center gap-2 rounded-full bg-muted/70 px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-muted-foreground shrink-0">
-              <span className={`h-2.5 w-2.5 rounded-full ${VESTMENT_DOT[todayColor]}`} />
-              {`${VESTMENT_LABEL[todayColor]} · ${SEASON_LABELS[season] ?? season}`}
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted/70 px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
+              <span className={`h-2 w-2 rounded-full shrink-0 ${VESTMENT_DOT[todayColor]}`} />
+              <span className="hidden sm:inline">{`${VESTMENT_LABEL[todayColor]} · ${SEASON_LABELS[season] ?? season}`}</span>
+              <span className="sm:hidden">{VESTMENT_LABEL[todayColor]}</span>
             </div>
           </div>
 
@@ -840,7 +837,7 @@ function DashboardPage() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted-foreground shrink-0">
+          <div className="hidden sm:grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted-foreground shrink-0">
             <div className="flex items-center justify-between gap-2">
               <span>Preenchimento</span>
               <span className="font-semibold text-foreground">{saudePastoral.compPreenchimento}%</span>
@@ -935,7 +932,7 @@ function DashboardPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {stats.map((item) => (
           <DashboardMetricCard
             key={item.label}

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Calendar, ShieldCheck, Sparkles, Users, ChevronRight } from "lucide-react";
+import { Calendar, ShieldCheck, Flame, Users, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -19,7 +19,7 @@ function Landing() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link to="/" className="flex items-center gap-2">
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-sacro text-gold">
-              <Sparkles className="h-4 w-4" />
+              <Flame className="h-4 w-4" />
             </div>
             <span className="font-serif text-lg font-semibold tracking-tight">Lumen Pastoral</span>
           </Link>

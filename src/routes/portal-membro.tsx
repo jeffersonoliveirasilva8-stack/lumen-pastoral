@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, useNavigate, Link, useRouterState } from "@tan
 import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Loader2, Home, Calendar, Trophy, User, LogOut, Sparkles, CalendarDays, MessageSquare, Bell, BookOpen } from "lucide-react";
+import { Loader2, Home, Calendar, Trophy, User, LogOut, Flame, CalendarDays, MessageSquare, Bell, BookOpen } from "lucide-react";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { getLiturgicalDays } from "@/lib/liturgical-calendar";
@@ -86,7 +86,7 @@ function PortalMembroLayout() {
       <aside className="hidden lg:flex flex-col w-64 bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border shrink-0 shadow-altar lg:h-screen lg:overflow-y-auto">
         <div className="flex items-center gap-2 p-5 border-b border-sidebar-border">
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sidebar-accent text-gold">
-            <Sparkles className="h-4 w-4" />
+            <Flame className="h-4 w-4" />
           </div>
           <div className="min-w-0">
             <p className="font-serif text-sm leading-tight truncate">{membro.paroquia_nome}</p>
@@ -190,7 +190,7 @@ function PortalMembroLayout() {
             {/* Identidade da paróquia */}
             <div className="flex items-center gap-3 min-w-0">
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-white shadow-sm">
-                <Sparkles className="h-4 w-4" />
+                <Flame className="h-4 w-4" />
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground leading-none">Portal do Servidor</p>
