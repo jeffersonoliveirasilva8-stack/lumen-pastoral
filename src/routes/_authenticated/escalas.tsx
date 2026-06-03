@@ -263,10 +263,12 @@ function EscalasPage() {
     queryKey: ["escala-historico", profile?.paroquia_id],
     enabled: !!profile?.paroquia_id,
     queryFn: async () => {
+      const sixMonthsAgo = format(subMonths(new Date(), 6), "yyyy-MM-dd");
       const { data, error } = await supabase
         .from("escalas")
         .select("id, data, escala_membros(membro_id, ministerio_id)")
-        .eq("paroquia_id", profile!.paroquia_id!);
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .gte("data", sixMonthsAgo);
 
       if (error || !data) return [];
 
@@ -1371,7 +1373,7 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt="Rodapé" /><
 
       {/* ── Dialog criar ────────────────────────────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={(o) => { if (!o) setFormOpen(false); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Nova escala</DialogTitle>
           </DialogHeader>

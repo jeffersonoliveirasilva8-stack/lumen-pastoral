@@ -313,7 +313,7 @@ function PortalMembroHome() {
           {liturgy && (
             <span className="inline-flex items-center gap-1.5 text-[11px] rounded-full border border-border bg-background/80 px-2.5 py-1">
               <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: LITURGY_HEX[liturgy.color] }} />
-              <span className="text-muted-foreground truncate max-w-[180px]">
+              <span className="text-muted-foreground truncate max-w-[120px] sm:max-w-[180px]">
                 {SEASON_LABEL[(liturgy.season as string)] ?? "Tempo Comum"} · {LITURGY_LABEL[liturgy.color]}
               </span>
             </span>

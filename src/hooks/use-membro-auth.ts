@@ -156,26 +156,35 @@ export function useMembroAuth(): UseMembroAuth {
   }
 
   useEffect(() => {
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+    let isMounted = true;
+
+    async function start() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!isMounted) return;
         const u = session?.user ?? null;
         setUser(u);
         if (u) {
-          init(u.id, u.email ?? undefined);
+          await init(u.id, u.email ?? undefined);
         } else {
-          setLoading(false);
+          if (isMounted) setLoading(false);
         }
-      })
-      .catch(() => setLoading(false));
+      } catch {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    start();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
         Promise.all([
           loadMembro(u.id, u.email ?? undefined).catch(() => null),
           fetchRoles(u.id).catch(() => null),
-        ]).finally(() => setLoading(false));
+        ]).finally(() => { if (isMounted) setLoading(false); });
       } else {
         setMembro(null);
         setUserRoles([]);
@@ -183,7 +192,10 @@ export function useMembroAuth(): UseMembroAuth {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
