@@ -117,37 +117,35 @@ function AuthLayout() {
 
   if (pathname === "/onboarding") return <Outlet />;
 
-  // Coordenação limitada: vê tudo exceto Membros e Personalização
-  const sidebarNav = [
-    { to: "/painel",          label: "Painel",          icon: LayoutDashboard,  badge: 0 },
-    { to: "/escalas",         label: "Escalas",         icon: Calendar,         badge: 0 },
-    { to: "/sacristia",       label: "Sacristia",       icon: Church,           badge: 0 },
-    { to: "/formacoes",       label: "Agenda Pastoral", icon: CalendarRange,    badge: 0 },
-    { to: "/espiritualidade", label: "Liturgia",        icon: BookOpen,         badge: 0 },
-    // Membros com badge de solicitações pendentes
+  // ── Fonte única de navegação ─────────────────────────────────────────
+  // Desktop sidebar e drawer mobile consomem a mesma lista.
+  // Bottom nav mobile = primeiros 4 itens marcados com inBottom.
+  type NavItem = { to: string; label: string; icon: React.ElementType; badge?: number };
+
+  const allNav: NavItem[] = [
+    { to: "/painel",                  label: "Painel",          icon: LayoutDashboard },
+    { to: "/escalas",                 label: "Escalas",         icon: Calendar },
+    { to: "/formacoes",               label: "Agenda Pastoral", icon: CalendarRange },
+    { to: "/espiritualidade",         label: "Liturgia",        icon: BookOpen },
+    { to: "/sacristia",               label: "Sacristia",       icon: Church },
+    { to: "/calendario",              label: "Calendário",      icon: BookOpen },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes }] : []),
-    { to: "/ranking",         label: "Ranking",         icon: Trophy,           badge: 0 },
-    ...(!isLimitedCoord ? [{ to: "/configuracoes/paroquia", label: "Personalização", icon: Settings, badge: 0 }] : []),
-  ] as { to: string; label: string; icon: React.ElementType; badge: number }[];
-
-  // Items do menu "Mais" — sem Personalização para coordenação limitada
-  const drawerNav = [
-    { to: "/sacristia",      label: "Modo Sacristia",       icon: Church },
-    { to: "/calendario",     label: "Calendário Litúrgico", icon: BookOpen },
-    { to: "/notificacoes",   label: "Notificações",         icon: Bell },
+    { to: "/ranking",                 label: "Ranking",         icon: Trophy },
+    { to: "/notificacoes",            label: "Notificações",    icon: Bell },
     ...(!isLimitedCoord ? [{ to: "/configuracoes/paroquia", label: "Personalização", icon: Settings }] : []),
-    { to: "/formacoes",      label: "Formações",            icon: CalendarRange },
-    { to: "/ranking",        label: "Ranking",              icon: Trophy },
-    { to: "/minha-conta",    label: "Minha Conta",          icon: UserCircle },
-  ] as { to: string; label: string; icon: React.ElementType }[];
+  ];
 
-  // Bottom nav mobile — sem Membros para coordenação limitada
-  const bottomNav = [
-    { to: "/painel",    label: "Início",  icon: LayoutDashboard },
-    { to: "/escalas",   label: "Escalas", icon: Calendar },
-    { to: "/formacoes", label: "Agenda",  icon: CalendarRange },
-    ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users }] : []),
-  ] as { to: string; label: string; icon: React.ElementType }[];
+  // Sidebar desktop = todos os itens (exceto Notificações, já no header)
+  const sidebarNav = allNav.filter(i => i.to !== "/notificacoes");
+
+  // Drawer mobile = todos os itens + Minha Conta
+  const drawerNav = [...allNav, { to: "/minha-conta", label: "Minha Conta", icon: UserCircle }];
+
+  // Bottom nav = 4 itens prioritários
+  const BOTTOM_ROUTES = isLimitedCoord
+    ? ["/painel", "/escalas", "/formacoes", "/espiritualidade"]
+    : ["/painel", "/escalas", "/formacoes", "/membros"];
+  const bottomNav = allNav.filter(i => BOTTOM_ROUTES.includes(i.to));
 
   async function logout() {
     await supabase.auth.signOut();
@@ -279,10 +277,13 @@ function AuthLayout() {
               {/* Mobile: ícone de notificações no header */}
               <Link
                 to="/notificacoes"
-                className="sm:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+                className="sm:hidden relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground transition"
                 aria-label="Notificações"
               >
                 <Bell className="h-5 w-5" />
+                {solicitacoesPendentes > 0 && (
+                  <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-amber-500 border-2 border-card" />
+                )}
               </Link>
             </div>
           </div>
@@ -315,7 +316,12 @@ function AuthLayout() {
                     }`}
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
-                    {item.label}
+                    <span className="flex-1">{item.label}</span>
+                    {(item as NavItem).badge != null && (item as NavItem).badge! > 0 && (
+                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 shrink-0">
+                        {(item as NavItem).badge! > 9 ? "9+" : (item as NavItem).badge}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -337,7 +343,7 @@ function AuthLayout() {
           </DrawerContent>
         </Drawer>
 
-        {/* Mobile bottom navigation — Início | Escalas | Agenda | Membros | Mais */}
+        {/* Mobile bottom navigation — fonte única: bottomNav derivado de allNav */}
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-card/98 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-t border-border/80 safe-area-pb shadow-[0_-1px_8px_rgba(0,0,0,0.06)]">
           <div className="flex items-stretch h-[60px]">
             {bottomNav.map((item) => {
@@ -346,24 +352,35 @@ function AuthLayout() {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pt-2 pb-1 min-w-0 transition-colors ${
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pt-2 pb-1 min-w-0 transition-colors relative ${
                     active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <item.icon className={`h-5 w-5 shrink-0 ${active ? "stroke-[2.2]" : "stroke-[1.7]"}`} />
-                  <span className={`text-[10px] leading-none font-medium truncate max-w-full px-1 ${active ? "font-semibold" : ""}`}>
-                    {item.label}
+                  <div className="relative">
+                    <item.icon className={`h-5 w-5 shrink-0 ${active ? "stroke-[2.2]" : "stroke-[1.7]"}`} />
+                    {item.badge != null && item.badge > 0 && (
+                      <span className="absolute -top-1 -right-1.5 h-3.5 min-w-[0.875rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
+                        {item.badge > 9 ? "9+" : item.badge}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`text-[10px] leading-none truncate max-w-full px-0.5 mt-0.5 ${active ? "font-semibold" : "font-medium"}`}>
+                    {item.label === "Agenda Pastoral" ? "Agenda" : item.label}
                   </span>
                 </Link>
               );
             })}
-            {/* Mais — abre o drawer */}
+            {/* Mais — abre drawer com navegação completa */}
             <button
               onClick={() => setMenuOpen(true)}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 pt-2 pb-1 min-w-0 transition-colors text-muted-foreground hover:text-foreground"
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 pt-2 pb-1 min-w-0 transition-colors ${
+                drawerNav.some(i => (pathname === i.to || pathname.startsWith(i.to + "/")) && !BOTTOM_ROUTES.includes(i.to))
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
               <MoreHorizontal className="h-5 w-5 shrink-0 stroke-[1.7]" />
-              <span className="text-[10px] leading-none font-medium truncate max-w-full px-1">Mais</span>
+              <span className="text-[10px] leading-none font-medium mt-0.5">Mais</span>
             </button>
           </div>
         </nav>

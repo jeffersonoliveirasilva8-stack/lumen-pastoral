@@ -250,10 +250,10 @@ function PortalMembroPerfil() {
 
       {/* Status card */}
       <div className="rounded-2xl border border-border bg-card p-4 mb-6">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
           {/* Avatar / foto */}
           <div className="relative shrink-0">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+            <div className="h-20 w-20 sm:h-16 sm:w-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
               {fotoDisplay ? (
                 <img src={fotoDisplay} alt="Foto" className="h-full w-full object-cover" />
               ) : (
@@ -281,7 +281,7 @@ function PortalMembroPerfil() {
             />
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 text-center sm:text-left">
             <p className="font-semibold truncate">{membroData.nome}</p>
             <p className="text-xs text-muted-foreground">{membroData.email}</p>
             <div className="flex items-center gap-3 mt-1">

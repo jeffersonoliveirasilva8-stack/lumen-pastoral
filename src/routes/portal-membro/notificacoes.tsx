@@ -116,7 +116,7 @@ function PortalMembroNotificacoes() {
     <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-24 space-y-5">
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Portal</p>
           <h1 className="mt-1.5 font-serif text-3xl flex items-center gap-2">
@@ -134,13 +134,14 @@ function PortalMembroNotificacoes() {
             size="sm"
             onClick={() => marcarTodasMutation.mutate()}
             disabled={marcarTodasMutation.isPending}
-            className="shrink-0 mt-1"
+            className="self-start sm:shrink-0 sm:mt-1"
           >
             {marcarTodasMutation.isPending
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
               : <CheckCheck className="h-3.5 w-3.5" />
             }
-            Marcar todas como lidas
+            <span className="hidden xs:inline">Marcar todas como lidas</span>
+            <span className="xs:hidden">Marcar lidas</span>
           </Button>
         )}
       </div>

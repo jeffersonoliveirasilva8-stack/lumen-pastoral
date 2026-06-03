@@ -497,8 +497,8 @@ function PortalMembroHome() {
             <Link to="/portal-membro/escalas" className="text-sm text-primary hover:underline">Histórico</Link>
           </div>
           <div className="rounded-3xl border border-border bg-card p-4 shadow-altar">
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={chartData} barSize={10} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={chartData} barSize={8} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
                 <XAxis dataKey="mes" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip
