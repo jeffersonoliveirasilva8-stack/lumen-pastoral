@@ -13,6 +13,10 @@ import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 
+// Constante injetada pelo Vite em build-time (vite.config.ts → define)
+// true = Vercel SPA, false = Cloudflare SSR
+declare const __IS_SPA__: boolean;
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -55,30 +59,36 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+const HEAD_META = {
+  meta: [
+    { charSet: "utf-8" },
+    { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+    { title: "Liturgia — Gestão pastoral para paróquias" },
+    { name: "description", content: "Plataforma SaaS para gestão litúrgica, escalas pastorais e coordenação de paróquias." },
+    { property: "og:title", content: "Liturgia — Gestão pastoral para paróquias" },
+    { property: "og:description", content: "Escalas inteligentes, multi-paróquia, totalmente em nuvem." },
+    { property: "og:type", content: "website" },
+  ],
+  links: [
+    { rel: "stylesheet", href: appCss },
+    { rel: "preconnect", href: "https://fonts.googleapis.com" },
+    { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" as const },
+    { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@500;600;700;800&display=swap" },
+  ],
+};
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Liturgia — Gestão pastoral para paróquias" },
-      { name: "description", content: "Plataforma SaaS para gestão litúrgica, escalas pastorais e coordenação de paróquias." },
-      { property: "og:title", content: "Liturgia — Gestão pastoral para paróquias" },
-      { property: "og:description", content: "Escalas inteligentes, multi-paróquia, totalmente em nuvem." },
-      { property: "og:type", content: "website" },
-    ],
-    links: [
-      { rel: "stylesheet", href: appCss },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@500;600;700;800&display=swap" },
-    ],
-  }),
-  shellComponent: RootShell,
+  head: () => HEAD_META,
+  // shellComponent só é usado no build SSR (Cloudflare Workers).
+  // No SPA (Vercel) ele renderizaria <html><head><body> dentro do <div id="root">,
+  // o browser auto-corrigiria o HTML inválido e quebraria o virtual DOM do React.
+  ...(__IS_SPA__ ? {} : { shellComponent: RootShell }),
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
 
+// Usado apenas no build SSR — fornece o envelope HTML para Server-Side Rendering
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">

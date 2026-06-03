@@ -156,22 +156,26 @@ export function useMembroAuth(): UseMembroAuth {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) {
-        init(u.id, u.email ?? undefined);
-      } else {
-        setLoading(false);
-      }
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        const u = session?.user ?? null;
+        setUser(u);
+        if (u) {
+          init(u.id, u.email ?? undefined);
+        } else {
+          setLoading(false);
+        }
+      })
+      .catch(() => setLoading(false));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
-        loadMembro(u.id, u.email ?? undefined).catch(() => null);
-        fetchRoles(u.id).catch(() => null);
+        Promise.all([
+          loadMembro(u.id, u.email ?? undefined).catch(() => null),
+          fetchRoles(u.id).catch(() => null),
+        ]).finally(() => setLoading(false));
       } else {
         setMembro(null);
         setUserRoles([]);

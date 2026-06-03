@@ -35,6 +35,10 @@ export default defineConfig(async ({ command }) => {
 
   return {
     plugins,
+    // Injeta constante de build: true = Vercel SPA, false = Cloudflare SSR
+    define: {
+      __IS_SPA__: JSON.stringify(isVercel),
+    },
     resolve: {
       alias: { "@": `${process.cwd()}/src` },
       dedupe: [

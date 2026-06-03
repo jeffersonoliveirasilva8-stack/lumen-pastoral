@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
 import { routeTree } from "./routeTree.gen";
@@ -26,8 +26,5 @@ declare module "@tanstack/react-router" {
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element not found");
 
-ReactDOM.createRoot(root).render(
-  <QueryClientProvider client={queryClient}>
-    <RouterProvider router={router} />
-  </QueryClientProvider>
-);
+// QueryClientProvider é fornecido por RootComponent via router context
+ReactDOM.createRoot(root).render(<RouterProvider router={router} />);

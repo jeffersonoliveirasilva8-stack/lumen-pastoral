@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Sparkles, Loader2, LogIn, Mail, KeyRound, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useMembroAuth } from "@/hooks/use-membro-auth";
 
 export const Route = createFileRoute("/membro/login")({
   component: MembroLoginPage,
@@ -14,24 +13,31 @@ type Mode = "otp" | "senha";
 
 function MembroLoginPage() {
   const navigate = useNavigate();
-  const { user, membro, loading } = useMembroAuth();
   const [mode, setMode] = useState<Mode>("otp");
+  // Verificação única de sessão — evita re-renders do hook completo na tela de login
+  const [checking, setChecking] = useState(true);
 
-  // Já autenticado e vinculado → portal
   useEffect(() => {
-    if (!loading && user && membro) {
-      navigate({ to: "/portal-membro/home" });
-    }
-  }, [loading, user, membro, navigate]);
+    // Listener para capturar tokens processados assincronamente (magic link implicit flow)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) navigate({ to: "/portal-membro/home" });
+    });
 
-  // Autenticado mas sem membro → vai tentar vincular
-  useEffect(() => {
-    if (!loading && user && membro === null) {
-      navigate({ to: "/membro/primeiro-acesso" });
-    }
-  }, [loading, user, membro, navigate]);
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session?.user) {
+          navigate({ to: "/portal-membro/home" });
+        } else {
+          setChecking(false);
+        }
+      })
+      .catch(() => setChecking(false));
 
-  if (loading) {
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (checking) {
     return (
       <div className="min-h-screen grid place-items-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -136,21 +142,24 @@ function OtpForm() {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) return;
     setSubmitting(true);
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: window.location.origin + "/portal-membro/home",
-      },
-    });
-
-    setSubmitting(false);
-    if (error) {
-      toast.error("Não foi possível enviar o link. Verifique o e-mail e tente novamente.");
-      return;
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: window.location.origin + "/portal-membro/home",
+        },
+      });
+      if (error) {
+        toast.error("Não foi possível enviar o link. Verifique o e-mail e tente novamente.");
+        return;
+      }
+      setSent(true);
+    } catch {
+      toast.error("Erro de conexão. Verifique sua internet e tente novamente.");
+    } finally {
+      setSubmitting(false);
     }
-    setSent(true);
   }
 
   if (sent) {
@@ -225,24 +234,25 @@ function SenhaForm() {
   async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
     setSubmitting(true);
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (error) {
+        toast.error(
+          error.message === "Invalid login credentials"
+            ? "E-mail ou senha incorretos."
+            : error.message
+        );
+        return;
+      }
+      navigate({ to: "/portal-membro/home" });
+    } catch {
+      toast.error("Erro de conexão. Verifique sua internet e tente novamente.");
+    } finally {
       setSubmitting(false);
-      toast.error(
-        error.message === "Invalid login credentials"
-          ? "E-mail ou senha incorretos."
-          : error.message
-      );
-      return;
     }
-
-    // useMembroAuth vai tentar vincular automaticamente
-    navigate({ to: "/portal-membro/home" });
   }
 
   return (
