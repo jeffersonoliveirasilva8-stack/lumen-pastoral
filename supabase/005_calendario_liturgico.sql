@@ -30,10 +30,10 @@ CREATE TABLE IF NOT EXISTS liturgia_base (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_liturgia_base_data
+CREATE INDEX IF NOT EXISTS idx_liturgia_base_data
 ON liturgia_base(data);
 
-CREATE INDEX idx_liturgia_base_ano
+CREATE INDEX IF NOT EXISTS idx_liturgia_base_ano
 ON liturgia_base(ano);
 CREATE TABLE IF NOT EXISTS liturgia_diocese (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

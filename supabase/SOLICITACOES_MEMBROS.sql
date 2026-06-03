@@ -39,10 +39,12 @@ CREATE INDEX IF NOT EXISTS idx_solicitacoes_paroquia_status
 ALTER TABLE solicitacoes_membros ENABLE ROW LEVEL SECURITY;
 
 -- Qualquer visitante (anon) pode inserir — formulário público sem login
+DROP POLICY IF EXISTS "solicitacoes_public_insert" ON solicitacoes_membros;
 CREATE POLICY "solicitacoes_public_insert" ON solicitacoes_membros
   FOR INSERT WITH CHECK (true);
 
 -- Apenas usuários autenticados da mesma paróquia podem ler
+DROP POLICY IF EXISTS "solicitacoes_coord_select" ON solicitacoes_membros;
 CREATE POLICY "solicitacoes_coord_select" ON solicitacoes_membros
   FOR SELECT TO authenticated
   USING (
@@ -53,6 +55,7 @@ CREATE POLICY "solicitacoes_coord_select" ON solicitacoes_membros
   );
 
 -- Apenas coordenação da mesma paróquia pode atualizar (aprovar/rejeitar)
+DROP POLICY IF EXISTS "solicitacoes_coord_update" ON solicitacoes_membros;
 CREATE POLICY "solicitacoes_coord_update" ON solicitacoes_membros
   FOR UPDATE TO authenticated
   USING (

@@ -13,7 +13,7 @@
 -- causando "infinite recursion detected in policy for relation membros"
 -- em qualquer SELECT/INSERT-RETURNING. Agora usa profiles, que é populado
 -- por portal_link_auth_user() e não tem policy recursiva.
-DROP FUNCTION IF EXISTS auth_member_paroquia_id();
+DROP FUNCTION IF EXISTS auth_member_paroquia_id() CASCADE;
 
 CREATE FUNCTION auth_member_paroquia_id()
 RETURNS UUID
