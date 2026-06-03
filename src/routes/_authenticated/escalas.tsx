@@ -1,0 +1,2836 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo, useEffect } from "react";
+import {
+  Plus, Loader2, Calendar, List, ChevronLeft, ChevronRight, ChevronDown,
+  MapPin, Clock, Trash2, Pencil, UserPlus, X, Check, Sparkles,
+  MoreVertical, FileText, AlertTriangle, Users, ClipboardCheck,
+} from "lucide-react";
+import { toast } from "sonner";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths, addDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
+import { generateEscalaAssignments, type AssignmentHistoryEntry, type FuncaoRestricao } from "@/lib/escala-engine";
+import { supabaseErrorMessage } from "@/lib/supabase-error";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+export const Route = createFileRoute("/_authenticated/escalas")({
+  validateSearch: (search: Record<string, unknown>): { abrir?: string } => ({
+    abrir: typeof search.abrir === "string" ? search.abrir : undefined,
+  }),
+  component: EscalasPage,
+  head: () => ({ meta: [{ title: "Escalas — Liturgia" }] }),
+});
+
+import { nomeExibicao } from "@/lib/nome";
+
+// ── Tipos ────────────────────────────────────────────────────────────────────
+
+type Ministerio = { id: string; nome: string; cor: string; categoria?: string | null };
+type Membro = {
+  id: string;
+  nome: string;
+  telefone: string | null;
+  score: number;
+  forcar_escalacao_solene: boolean;
+  restricoes_dia_semana: number[];
+  sexo: "M" | "F" | null;
+};
+
+type Escala = {
+  id: string;
+  titulo: string;
+  data: string;
+  hora_inicio: string | null;
+  hora_fim: string | null;
+  local: string | null;
+  tipo: string;
+  tipo_missa_id: string | null;
+  status: string;
+  observacoes: string | null;
+  solene: boolean;
+  tem_adoracao: boolean;
+  tem_bispo: boolean;
+  token_publico: string;
+};
+
+type EscalaFuncao = {
+  id: string;
+  escala_id: string;
+  ministerio_id: string;
+  quantidade: number;
+  ministerio: Ministerio;
+};
+
+type EscalaMembro = {
+  id: string;
+  membro_id: string;
+  ministerio_id: string;
+  status: string;
+  membro: Membro;
+};
+
+type EscalaForm = {
+  titulo: string;
+  data: string;
+  hora_inicio: string;
+  local: string;
+  tipo: string;
+  tipo_missa_id: string;
+  status: string;
+  observacoes: string;
+  solene: boolean;
+  tem_adoracao: boolean;
+  tem_bispo: boolean;
+};
+
+const EMPTY_FORM: EscalaForm = {
+  titulo: "",
+  data: format(new Date(), "yyyy-MM-dd"),
+  hora_inicio: "",
+  local: "",
+  tipo: "",
+  tipo_missa_id: "",
+  status: "rascunho",
+  observacoes: "",
+  solene: false,
+  tem_adoracao: false,
+  tem_bispo: false,
+};
+
+const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
+  rascunho: { label: "Rascunho", variant: "secondary" },
+  publicada: { label: "Publicada", variant: "default" },
+  arquivada: { label: "Arquivada", variant: "outline" },
+};
+
+type FuncaoPreview = {
+  ministerio_id: string;
+  nome: string;
+  cor: string;
+  categoria?: string | null;
+  quantidade: number;
+  membros: { id: string; nome: string }[];
+};
+type EscalaPreview = { needed: number; filled: number; funcoes: FuncaoPreview[] };
+
+// ── Componente principal ─────────────────────────────────────────────────────
+
+function EscalasPage() {
+  const { profile } = useAuth();
+  const qc = useQueryClient();
+  const { abrir } = Route.useSearch();
+
+  const [view, setView] = useState<"lista" | "calendario">("lista");
+  const [calMonth, setCalMonth] = useState(new Date());
+  const [formOpen, setFormOpen] = useState(false);
+  const [detailEscala, setDetailEscala] = useState<Escala | null>(null);
+  const [detailEditMode, setDetailEditMode] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Escala | null>(null);
+  const [autoArchiveTriggered, setAutoArchiveTriggered] = useState(false);
+  const [selectedEscalaIds, setSelectedEscalaIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteEscalasOpen, setBulkDeleteEscalasOpen] = useState(false);
+  const [gerarPeriodoOpen, setGerarPeriodoOpen] = useState(false);
+  const [gerarInicio, setGerarInicio] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
+  const [gerarFim, setGerarFim] = useState(() => format(addDays(new Date(), 7), "yyyy-MM-dd"));
+  const [reorganizarOpen, setReorganizarOpen] = useState(false);
+  const [reorganizarEscalaId, setReorganizarEscalaId] = useState("");
+
+  // ── Queries ────────────────────────────────────────────────────────────────
+
+  const { data: escalas = [], isLoading } = useQuery({
+    queryKey: ["escalas", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("escalas")
+        .select("id, titulo, data, hora_inicio, hora_fim, local, tipo, tipo_missa_id, status, observacoes, solene, tem_adoracao, tem_bispo, token_publico")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .order("data")
+        .order("hora_inicio");
+      if (error) throw error;
+      return (data ?? []) as Escala[];
+    },
+  });
+
+  const { data: ministerios = [] } = useQuery({
+    queryKey: ["ministerios", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("ministerios")
+        .select("id, nome, cor, categoria")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .eq("ativo", true)
+        .order("ordem");
+      return (data ?? []) as Ministerio[];
+    },
+  });
+
+  const { data: membros = [] } = useQuery({
+    queryKey: ["membros-ativos", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("membros")
+        .select("id, nome, telefone, score, forcar_escalacao_solene, restricoes_dia_semana, sexo")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .eq("ativo", true)
+        .order("nome");
+      return ((data ?? []) as unknown[]).map((m: any) => ({
+        ...m,
+        restricoes_dia_semana: m.restricoes_dia_semana ?? [],
+      })) as Membro[];
+    },
+  });
+
+  const { data: funcoes = [], refetch: refetchFuncoes } = useQuery({
+    queryKey: ["escala-funcoes", detailEscala?.id],
+    enabled: !!detailEscala,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("escala_funcoes")
+        .select("id, escala_id, ministerio_id, quantidade, ministerios(id, nome, cor, categoria)")
+        .eq("escala_id", detailEscala!.id);
+      return ((data ?? []) as any[]).map((r) => ({
+        ...r,
+        ministerio: r.ministerios,
+      })) as EscalaFuncao[];
+    },
+  });
+
+  const { data: atribuicoes = [], refetch: refetchAtribuicoes } = useQuery({
+    queryKey: ["escala-membros", detailEscala?.id],
+    enabled: !!detailEscala,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("escala_membros")
+        .select("id, membro_id, ministerio_id, status, membros(id, nome, telefone)")
+        .eq("escala_id", detailEscala!.id);
+      return ((data ?? []) as any[]).map((r) => ({
+        ...r,
+        membro: r.membros,
+      })) as EscalaMembro[];
+    },
+  });
+
+  const { data: membroMinisterios = {} } = useQuery({
+    queryKey: ["membro-ministerios-map", profile?.paroquia_id, membros.length],
+    enabled: !!profile?.paroquia_id && membros.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("membro_ministerios")
+        .select("membro_id, ministerio_id")
+        .in(
+          "membro_id",
+          membros.map((m) => m.id)
+        );
+      const map: Record<string, string[]> = {};
+      (data ?? []).forEach((r) => {
+        if (!map[r.ministerio_id]) map[r.ministerio_id] = [];
+        map[r.ministerio_id].push(r.membro_id);
+      });
+      return map;
+    },
+  });
+
+  const { data: assignmentHistory = [] } = useQuery<AssignmentHistoryEntry[]>({
+    queryKey: ["escala-historico", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("escalas")
+        .select("id, data, escala_membros(membro_id, ministerio_id)")
+        .eq("paroquia_id", profile!.paroquia_id!);
+
+      if (error || !data) return [];
+
+      return (data as any[]).flatMap((escala) =>
+        (escala.escala_membros ?? []).map((entry: any) => ({
+          memberId: entry.membro_id,
+          ministerioId: entry.ministerio_id,
+          date: escala.data,
+        }))
+      );
+    },
+  });
+
+  const { data: comunidades = [] } = useQuery<{ id: string; nome: string }[]>({
+    queryKey: ["comunidades", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("comunidades")
+        .select("id, nome")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .eq("ativo", true)
+        .order("nome");
+      return (data ?? []) as { id: string; nome: string }[];
+    },
+  });
+
+  const { data: tiposMissa = [] } = useQuery<{ id: string; nome: string; cor: string; icone: string | null }[]>({
+    queryKey: ["tipos_missa", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("tipos_missa")
+        .select("id, nome, cor, icone")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .eq("ativo", true)
+        .order("ordem");
+      return (data ?? []) as { id: string; nome: string; cor: string; icone: string | null }[];
+    },
+  });
+
+  const { data: missasPadrao = [] } = useQuery<{
+    id: string; nome: string; dia_semana: number; hora_inicio: string | null;
+    local: string | null; tipo_missa_id: string | null; solene: boolean;
+    tem_adoracao: boolean; tem_bispo: boolean; recorrencia: any;
+  }[]>({
+    queryKey: ["missas_padrao", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("missas_padrao")
+        .select("id, nome, dia_semana, hora_inicio, local, tipo_missa_id, solene, tem_adoracao, tem_bispo, recorrencia")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .eq("ativo", true)
+        .order("dia_semana").order("ordem");
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: indisponibilidades = [] } = useQuery<{ membro_id: string; data: string }[]>({
+    queryKey: ["indisponibilidades", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("indisponibilidades")
+        .select("membro_id, data")
+        .eq("paroquia_id", profile!.paroquia_id!);
+      return (data ?? []) as { membro_id: string; data: string }[];
+    },
+  });
+
+  const membroIds = membros.map((m) => m.id);
+  const { data: funcaoRestricoes = [] } = useQuery<FuncaoRestricao[]>({
+    queryKey: ["funcao-restricoes", profile?.paroquia_id, membroIds.length],
+    enabled: !!profile?.paroquia_id && membroIds.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("membro_funcao_restricoes")
+        .select("membro_id, ministerio_id, tipo")
+        .in("membro_id", membroIds);
+      return (data ?? []) as FuncaoRestricao[];
+    },
+  });
+
+  // missa_padrao_id → membro_ids que não podem servir nessa missa
+  const { data: membroMissaRestricoes = {} } = useQuery<Record<string, string[]>>({
+    queryKey: ["membro-missa-restricoes", profile?.paroquia_id, membroIds.length],
+    enabled: !!profile?.paroquia_id && membroIds.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("membro_missa_restricoes")
+        .select("membro_id, missa_padrao_id")
+        .in("membro_id", membroIds);
+      const map: Record<string, string[]> = {};
+      (data ?? []).forEach((r: any) => {
+        if (!map[r.missa_padrao_id]) map[r.missa_padrao_id] = [];
+        map[r.missa_padrao_id].push(r.membro_id);
+      });
+      return map;
+    },
+  });
+
+  const { data: paroquiaConfig } = useQuery<{ regras_escala: any; usa_tochas: boolean; nome: string | null; pdf_cabecalho_url: string | null; pdf_rodape_url: string | null } | null>({
+    queryKey: ["paroquia-config", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("paroquias")
+        .select("regras_escala, usa_tochas, nome, pdf_cabecalho_url, pdf_rodape_url")
+        .eq("id", profile!.paroquia_id!)
+        .maybeSingle();
+      return data ?? null;
+    },
+  });
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ form, editId }: { form: EscalaForm; editId: string | null }): Promise<{ autoSugestoes: number }> => {
+      const payload = {
+        titulo: form.titulo.trim(),
+        data: form.data,
+        hora_inicio: form.hora_inicio || null,
+        local: form.local || null,
+        tipo: form.tipo_missa_id ? "tipo_missa" : (form.tipo || "missa"),
+        tipo_missa_id: form.tipo_missa_id || null,
+        status: form.status,
+        observacoes: form.observacoes || null,
+        solene: form.solene,
+        tem_adoracao: form.tem_adoracao,
+        tem_bispo: form.tem_bispo,
+      };
+      const anyDb = supabase as any;
+      if (editId) {
+        const { error } = await anyDb.from("escalas").update(payload).eq("id", editId);
+        if (error) throw error;
+        return { autoSugestoes: 0 };
+      }
+
+      const { data: nova, error } = await anyDb
+        .from("escalas")
+        .insert({ ...payload, paroquia_id: profile!.paroquia_id!, created_by: profile!.id })
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      let autoSugestoes = 0;
+
+      // Auto-inject funções do tipo de missa e distribuir membros
+      if (nova?.id && payload.tipo_missa_id) {
+        const { data: tipoFuncoes } = await anyDb
+          .from("tipo_missa_funcoes")
+          .select("ministerio_id, quantidade_min")
+          .eq("tipo_missa_id", payload.tipo_missa_id)
+          .eq("tipo_vinculo", "obrigatoria");
+
+        if (tipoFuncoes && tipoFuncoes.length > 0) {
+          await anyDb.from("escala_funcoes").insert(
+            (tipoFuncoes as { ministerio_id: string; quantidade_min: number }[]).map((tf) => ({
+              escala_id: nova.id,
+              ministerio_id: tf.ministerio_id,
+              quantidade: tf.quantidade_min,
+            }))
+          );
+
+          // Auto-distribuição: rodar o motor e inserir sugestões como "pendente"
+          const funcoesPedido = (tipoFuncoes as { ministerio_id: string; quantidade_min: number }[])
+            .map((tf) => {
+              const min = ministerios.find((m) => m.id === tf.ministerio_id);
+              return {
+                ministerio_id: tf.ministerio_id,
+                quantidade: tf.quantidade_min,
+                ministerio: { id: tf.ministerio_id, nome: min?.nome ?? "", cor: min?.cor },
+              };
+            });
+
+          const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
+          const engineConfig = {
+            usa_tochas: paroquiaConfig?.usa_tochas ?? false,
+            limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
+            limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
+            impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
+          };
+
+          const sugestoes = generateEscalaAssignments(
+            { titulo: form.titulo, data: form.data, tipo: form.tipo || "missa", observacoes: form.observacoes || null },
+            funcoesPedido,
+            membros,
+            membroMinisterios,
+            {
+              history: assignmentHistory,
+              indisponibilidades,
+              restricoes: funcaoRestricoes,
+              config: engineConfig,
+              solene: form.solene,
+              tem_adoracao: form.tem_adoracao,
+              tem_bispo: form.tem_bispo,
+            }
+          );
+
+          if (sugestoes.length > 0) {
+            await anyDb.from("escala_membros").insert(
+              sugestoes.map((s) => ({
+                escala_id: nova.id,
+                membro_id: s.membro_id,
+                ministerio_id: s.ministerio_id,
+                status: "pendente",
+              }))
+            );
+            autoSugestoes = sugestoes.length;
+          }
+        }
+      }
+
+      return { autoSugestoes };
+    },
+    onSuccess: ({ autoSugestoes }, { form, editId }) => {
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+      // Sincroniza com portal do membro
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      if (editId) {
+        setDetailEscala((prev) =>
+          prev
+            ? {
+                ...prev,
+                titulo: form.titulo.trim(),
+                data: form.data,
+                hora_inicio: form.hora_inicio || null,
+                local: form.local || null,
+                tipo: form.tipo_missa_id ? "tipo_missa" : (form.tipo || "missa"),
+                tipo_missa_id: form.tipo_missa_id || null,
+                status: form.status,
+                observacoes: form.observacoes || null,
+                solene: form.solene,
+                tem_adoracao: form.tem_adoracao,
+                tem_bispo: form.tem_bispo,
+              }
+            : prev
+        );
+        toast.success("Escala atualizada.");
+      } else if (autoSugestoes > 0) {
+        toast.success(`Escala criada com ${autoSugestoes} membro(s) sugerido(s) automaticamente.`);
+      } else {
+        toast.success("Escala criada.");
+      }
+      if (!editId) setFormOpen(false);
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("escalas").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      toast.success("Escala removida.");
+      setDeleteTarget(null);
+      setDetailEscala(null);
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const addFuncaoMutation = useMutation({
+    mutationFn: async ({ ministerio_id, quantidade }: { ministerio_id: string; quantidade: number }) => {
+      const { error } = await supabase.from("escala_funcoes").upsert({
+        escala_id: detailEscala!.id,
+        ministerio_id,
+        quantidade,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => refetchFuncoes(),
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const removeFuncaoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("escala_funcoes").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchFuncoes();
+      refetchAtribuicoes();
+    },
+  });
+
+  const atribuirMutation = useMutation({
+    mutationFn: async ({ membro_id, ministerio_id }: { membro_id: string; ministerio_id: string }) => {
+      const { error } = await (supabase as any).from("escala_membros").insert({
+        escala_id: detailEscala!.id,
+        membro_id,
+        ministerio_id,
+        status: "pendente",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchAtribuicoes();
+      // Sincroniza com portal do membro
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const removerAtribuicaoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("escala_membros").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchAtribuicoes();
+      // Sincroniza com portal do membro
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase.from("escalas").update({ status }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+      // Sincroniza com portal do membro quando status é alterado
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      setDetailEscala((prev) => prev ? { ...prev, status: vars.status } : prev);
+      toast.success("Status da escala atualizado.");
+    },
+  });
+
+  const bulkUpdateStatusMutation = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
+      const { error } = await supabase.from("escalas").update({ status }).in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: (_, { ids, status }) => {
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+      // Sincroniza com portal do membro quando múltiplas escalas mudam status
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      setSelectedEscalaIds(new Set());
+      toast.success(`${ids.length} escala(s) ${status === "publicada" ? "publicada(s)" : "arquivada(s)"}.`);
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const bulkDeleteEscalasMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from("escalas").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: (_, ids) => {
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+      qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      setSelectedEscalaIds(new Set());
+      setBulkDeleteEscalasOpen(false);
+      toast.success(`${ids.length} escala(s) removida(s).`);
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  const reorganizarMutation = useMutation({
+    mutationFn: async (escalaId: string) => {
+      const escala = escalas.find((e) => e.id === escalaId);
+      if (!escala) throw new Error("Escala não encontrada.");
+
+      const { data: funcoesData } = await (supabase as any)
+        .from("escala_funcoes")
+        .select("ministerio_id, quantidade, ministerios(id, nome, cor)")
+        .eq("escala_id", escalaId);
+
+      if (!funcoesData || funcoesData.length === 0)
+        throw new Error("Escala sem funções definidas. Adicione funções antes de reorganizar.");
+
+      await (supabase as any).from("escala_membros").delete().eq("escala_id", escalaId);
+
+      const funcoesPedido = (funcoesData as any[]).map((f) => ({
+        ministerio_id: f.ministerio_id,
+        quantidade: f.quantidade,
+        ministerio: { id: f.ministerio_id, nome: f.ministerios?.nome ?? "", cor: f.ministerios?.cor },
+      }));
+
+      const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
+      const engineConfig = {
+        usa_tochas: paroquiaConfig?.usa_tochas ?? false,
+        limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
+        limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
+        impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
+      };
+
+      const sugestoes = generateEscalaAssignments(
+        { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
+        funcoesPedido,
+        membros,
+        membroMinisterios,
+        {
+          history: assignmentHistory.filter((h) => h.date !== escala.data),
+          indisponibilidades,
+          restricoes: funcaoRestricoes,
+          config: engineConfig,
+          solene: escala.solene,
+          tem_adoracao: escala.tem_adoracao,
+          tem_bispo: escala.tem_bispo,
+        }
+      );
+
+      if (sugestoes.length > 0) {
+        await (supabase as any).from("escala_membros").insert(
+          sugestoes.map((s) => ({
+            escala_id: escalaId,
+            membro_id: s.membro_id,
+            ministerio_id: s.ministerio_id,
+            status: "pendente",
+          }))
+        );
+      }
+      return sugestoes.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ["escalas-counts"] });
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros"] });
+      setReorganizarOpen(false);
+      setReorganizarEscalaId("");
+      toast.success(`Membros reorganizados. ${count} membro(s) atribuído(s).`);
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const archivePastEscalasMutation = useMutation({
+    mutationFn: async () => {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const { error } = await supabase
+        .from("escalas")
+        .update({ status: "arquivada" })
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .lt("data", today)
+        .not("status", "eq", "arquivada");
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+      qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      toast.success("Escalas antigas arquivadas.");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const gerarSemanaRapidaMutation = useMutation({
+    mutationFn: async ({ dataInicio, dataFim }: { dataInicio: string; dataFim: string }) => {
+      if (!profile?.paroquia_id) throw new Error("Paróquia não identificada.");
+      if (missasPadrao.length === 0) throw new Error("Nenhuma Missa Padrão cadastrada em Personalização → Missas Padrão.");
+
+      const startDate = new Date(dataInicio + "T00:00:00");
+      const endDate = new Date(dataFim + "T00:00:00");
+
+      const created: string[] = [];
+      const skipped: string[] = [];
+      let totalSugestoes = 0;
+
+      // Acumula atribuições feitas neste batch para que o motor as considere
+      // nas escalas seguintes (limites semanais / anti-repetição imediata)
+      const batchHistory: AssignmentHistoryEntry[] = [];
+
+      for (const missa of missasPadrao) {
+        // Collect all dates in range matching this missa's dia_semana
+        const datesForMissa: Date[] = [];
+        const cur = new Date(startDate);
+        while (cur <= endDate) {
+          if (cur.getDay() === missa.dia_semana) datesForMissa.push(new Date(cur));
+          cur.setDate(cur.getDate() + 1);
+        }
+
+        for (const targetDate of datesForMissa) {
+          const dateStr = format(targetDate, "yyyy-MM-dd");
+
+          // Verificar recorrência
+          const recorrencia = missa.recorrencia ?? { tipo: "semanal" };
+          if (recorrencia.tipo !== "semanal") {
+            const weekOfMonth = Math.ceil(targetDate.getDate() / 7);
+            const isLast = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate() - targetDate.getDate() < 7;
+            const passes = (
+              recorrencia.tipo === "quinzenal"     ? [1, 3].includes(weekOfMonth) :
+              recorrencia.tipo === "quinzenal_1_3" ? [1, 3].includes(weekOfMonth) :
+              recorrencia.tipo === "quinzenal_2_4" ? [2, 4].includes(weekOfMonth) :
+              recorrencia.tipo === "mensal_1"      ? weekOfMonth === 1 :
+              recorrencia.tipo === "mensal_2"      ? weekOfMonth === 2 :
+              recorrencia.tipo === "mensal_3"      ? weekOfMonth === 3 :
+              recorrencia.tipo === "mensal_4"      ? weekOfMonth === 4 :
+              recorrencia.tipo === "mensal_ultimo" ? isLast :
+              recorrencia.tipo === "esporadico"    ? false :
+              true
+            );
+            if (!passes) { skipped.push(missa.nome); continue; }
+          }
+
+          // Verificar se escala já existe nessa data
+          const { data: existing } = await supabase
+            .from("escalas")
+            .select("id")
+            .eq("paroquia_id", profile.paroquia_id!)
+            .eq("data", dateStr)
+            .ilike("titulo", `%${missa.nome}%`)
+            .limit(1);
+
+          if (existing && existing.length > 0) { skipped.push(missa.nome); continue; }
+
+          // Criar escala
+          const { data: newEscala, error } = await (supabase as any).from("escalas").insert({
+            paroquia_id: profile.paroquia_id!,
+            titulo: `${missa.nome} — ${format(targetDate, "dd/MM", { locale: ptBR })}`,
+            data: dateStr,
+            hora_inicio: missa.hora_inicio,
+            local: missa.local,
+            tipo: missa.tipo_missa_id ? "tipo_missa" : "missa",
+            tipo_missa_id: missa.tipo_missa_id,
+            solene: missa.solene,
+            tem_adoracao: missa.tem_adoracao,
+            tem_bispo: missa.tem_bispo,
+            status: "rascunho",
+            created_by: profile.id,
+          }).select("id").single();
+
+          if (error || !newEscala) continue;
+          created.push(missa.nome);
+
+          // Determinar funções a injetar
+          type FuncaoInjetar = { ministerio_id: string; quantidade_min: number };
+          let funcoesParaInjetar: FuncaoInjetar[] = [];
+
+          if (missa.tipo_missa_id) {
+            const { data: tipoFuncoes } = await (supabase as any)
+              .from("tipo_missa_funcoes")
+              .select("ministerio_id, quantidade_min")
+              .eq("tipo_missa_id", missa.tipo_missa_id)
+              .eq("tipo_vinculo", "obrigatoria");
+            funcoesParaInjetar = (tipoFuncoes ?? []) as FuncaoInjetar[];
+          } else {
+            const { data: padFuncoes } = await (supabase as any)
+              .from("missa_padrao_funcoes")
+              .select("ministerio_id, quantidade")
+              .eq("missa_padrao_id", missa.id);
+            funcoesParaInjetar = ((padFuncoes ?? []) as { ministerio_id: string; quantidade: number }[])
+              .map((pf) => ({ ministerio_id: pf.ministerio_id, quantidade_min: pf.quantidade }));
+          }
+
+          if (funcoesParaInjetar.length > 0) {
+            await (supabase as any).from("escala_funcoes").insert(
+              funcoesParaInjetar.map((tf) => ({
+                escala_id: newEscala.id,
+                ministerio_id: tf.ministerio_id,
+                quantidade: tf.quantidade_min,
+              }))
+            );
+
+            if (membros.length > 0) {
+              const funcoesPedido = funcoesParaInjetar.map((tf) => {
+                const min = ministerios.find((m) => m.id === tf.ministerio_id);
+                return {
+                  ministerio_id: tf.ministerio_id,
+                  quantidade: tf.quantidade_min,
+                  ministerio: { id: tf.ministerio_id, nome: min?.nome ?? "", cor: min?.cor },
+                };
+              });
+
+              const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
+              const engineConfig = {
+                usa_tochas: paroquiaConfig?.usa_tochas ?? false,
+                limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
+                limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
+                impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
+              };
+
+              // Membros restritos para esta missa específica → indisponíveis nesta data
+              const missaRestricaoIndisp = (membroMissaRestricoes[missa.id] ?? [])
+                .map((mid) => ({ membro_id: mid, data: dateStr }));
+
+              const sugestoes = generateEscalaAssignments(
+                { titulo: `${missa.nome} — ${format(targetDate, "dd/MM", { locale: ptBR })}`, data: dateStr, tipo: missa.tipo_missa_id ? "tipo_missa" : "missa", observacoes: null },
+                funcoesPedido,
+                membros,
+                membroMinisterios,
+                {
+                  history: [...assignmentHistory, ...batchHistory],
+                  indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
+                  restricoes: funcaoRestricoes,
+                  config: engineConfig,
+                  solene: missa.solene,
+                  tem_adoracao: missa.tem_adoracao,
+                  tem_bispo: missa.tem_bispo,
+                }
+              );
+
+              if (sugestoes.length > 0) {
+                await (supabase as any).from("escala_membros").insert(
+                  sugestoes.map((s) => ({
+                    escala_id: newEscala.id,
+                    membro_id: s.membro_id,
+                    ministerio_id: s.ministerio_id,
+                    status: "pendente",
+                  }))
+                );
+                totalSugestoes += sugestoes.length;
+                // Registra no histórico do batch para as próximas escalas
+                sugestoes.forEach((s) => batchHistory.push({ memberId: s.membro_id, ministerioId: s.ministerio_id, date: dateStr }));
+              }
+            }
+          }
+        }
+      }
+
+      return { created, skipped, totalSugestoes };
+    },
+    onSuccess: ({ created, skipped, totalSugestoes }) => {
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+      qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      setGerarPeriodoOpen(false);
+      if (created.length > 0) {
+        const sugestoesMsg = totalSugestoes > 0 ? ` · ${totalSugestoes} membro(s) sugerido(s).` : "";
+        toast.success(`${created.length} escala(s) criada(s).${sugestoesMsg}`);
+      } else {
+        toast.info(skipped.length > 0 ? "Todas as escalas já existem ou foram puladas por recorrência." : "Nenhuma missa padrão ativa encontrada.");
+      }
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  function openCreate() {
+    setFormOpen(true);
+  }
+
+  function openEdit(e: Escala, ev: React.MouseEvent) {
+    ev.stopPropagation();
+    setDetailEditMode(true);
+    setDetailEscala(e);
+  }
+
+  const today = new Date();
+  const upcoming = useMemo(
+    () => escalas.filter((e) => new Date(e.data + "T00:00:00") >= new Date(today.toDateString())),
+    [escalas]
+  );
+
+  useEffect(() => {
+    if (autoArchiveTriggered || !profile?.paroquia_id) return;
+    const hasPast = escalas.some((e) => {
+      const eventDate = new Date(e.data + "T00:00:00");
+      return eventDate < new Date(today.toDateString()) && e.status !== "arquivada";
+    });
+    if (hasPast) {
+      archivePastEscalasMutation.mutate();
+      setAutoArchiveTriggered(true);
+    }
+  }, [autoArchiveTriggered, escalas, profile?.paroquia_id, today, archivePastEscalasMutation]);
+
+  // Abre escala via search param ?abrir=id (vindo de links profundos do painel)
+  useEffect(() => {
+    if (!abrir || !escalas.length || detailEscala) return;
+    const found = escalas.find((e) => e.id === abrir);
+    if (found) setDetailEscala(found);
+  }, [abrir, escalas, detailEscala]);
+
+  // ── Calendar helpers ────────────────────────────────────────────────────────
+
+  const calDays = useMemo(() => {
+    const start = startOfMonth(calMonth);
+    const end = endOfMonth(calMonth);
+    const days = eachDayOfInterval({ start, end });
+    const offset = getDay(start);
+    return { days, offset };
+  }, [calMonth]);
+
+  function escalasForDay(day: Date) {
+    return escalas.filter((e) => {
+      const d = new Date(e.data + "T00:00:00");
+      return isSameDay(d, day);
+    });
+  }
+
+  // ── Contagens para progress bar nos cards ───────────────────────────────────
+  const escalaIds = useMemo(() => escalas.map((e) => e.id), [escalas]);
+
+  const { data: escalaCounts = {} as Record<string, EscalaPreview> } = useQuery({
+    queryKey: ["escalas-counts", escalaIds],
+    enabled: escalaIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const [funcRes, membRes] = await Promise.all([
+        (supabase as any)
+          .from("escala_funcoes")
+          .select("escala_id, quantidade, ministerio_id, ministerios(id, nome, cor, categoria)")
+          .in("escala_id", escalaIds),
+        (supabase as any)
+          .from("escala_membros")
+          .select("escala_id, ministerio_id, membros(id, nome)")
+          .in("escala_id", escalaIds),
+      ]);
+      const counts: Record<string, EscalaPreview> = {};
+      ((funcRes.data ?? []) as any[]).forEach((f) => {
+        if (!counts[f.escala_id]) counts[f.escala_id] = { needed: 0, filled: 0, funcoes: [] };
+        counts[f.escala_id].needed += f.quantidade;
+        counts[f.escala_id].funcoes.push({
+          ministerio_id: f.ministerio_id,
+          nome: f.ministerios?.nome ?? "—",
+          cor: f.ministerios?.cor ?? "#888",
+          categoria: f.ministerios?.categoria ?? null,
+          quantidade: f.quantidade,
+          membros: [],
+        });
+      });
+      ((membRes.data ?? []) as any[]).forEach((m) => {
+        if (!counts[m.escala_id]) counts[m.escala_id] = { needed: 0, filled: 0, funcoes: [] };
+        counts[m.escala_id].filled += 1;
+        const funcao = counts[m.escala_id].funcoes.find((f) => f.ministerio_id === m.ministerio_id);
+        if (funcao && m.membros) funcao.membros.push({ id: m.membros.id, nome: m.membros.nome });
+      });
+      return counts;
+    },
+  });
+
+  // ── PDF Export ──────────────────────────────────────────────────────────────
+  function exportarEscalasPDF(ids: string[]) {
+    const selected = escalas.filter((e) => ids.includes(e.id));
+    if (selected.length === 0) return;
+    const hoje = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+    const nomeParoquia = paroquiaConfig?.nome ?? "Pastoral Litúrgica";
+    const cabecalhoUrl = paroquiaConfig?.pdf_cabecalho_url ?? null;
+    const rodapeUrl    = paroquiaConfig?.pdf_rodape_url    ?? null;
+
+    const escalasSections = selected.map((e) => {
+      const d = new Date(e.data + "T00:00:00");
+      const diaSemana = format(d, "EEEE", { locale: ptBR });
+      const dataCompleta = format(d, "d 'de' MMMM 'de' yyyy", { locale: ptBR });
+      const preview = escalaCounts[e.id];
+      const funcoes = preview?.funcoes ?? [];
+
+      // group funcoes by categoria
+      const grouped: { categoria: string; funcoes: typeof funcoes }[] = [];
+      const uncategorized: typeof funcoes = [];
+      funcoes.forEach((f) => {
+        if (f.categoria) {
+          const g = grouped.find((x) => x.categoria === f.categoria);
+          if (g) g.funcoes.push(f);
+          else grouped.push({ categoria: f.categoria, funcoes: [f] });
+        } else {
+          uncategorized.push(f);
+        }
+      });
+      if (uncategorized.length > 0) grouped.push({ categoria: "", funcoes: uncategorized });
+
+      const renderFuncoesGrid = (fs: typeof funcoes) =>
+        `<div class="funcoes-grid">${fs.map((f) => {
+          const membrosNomes = f.membros.length > 0
+            ? f.membros.map((m) => `<span class="membro-chip">${nomeExibicao(m.nome)}</span>`).join("")
+            : `<span class="vaga">Vaga</span>`;
+          return `<div class="funcao-card">
+            <div class="funcao-header" style="border-top:3px solid ${f.cor}">
+              <span class="funcao-nome">${f.nome}</span>
+              <span class="funcao-qty">${f.membros.length}/${f.quantidade}</span>
+            </div>
+            <div class="membros-list">${membrosNomes}</div>
+          </div>`;
+        }).join("")}</div>`;
+
+      const funcoesHtml = funcoes.length > 0
+        ? grouped.map((g) =>
+            g.categoria
+              ? `<div class="atuacao-section"><div class="atuacao-label">${g.categoria}</div>${renderFuncoesGrid(g.funcoes)}</div>`
+              : renderFuncoesGrid(g.funcoes)
+          ).join("")
+        : `<p class="sem-funcoes">Nenhuma função definida para esta escala.</p>`;
+
+      return `<div class="escala-section">
+  <div class="escala-header-row">
+    <div class="date-block">
+      <div class="date-day">${format(d, "d")}</div>
+      <div class="date-month">${format(d, "MMM", { locale: ptBR })}</div>
+      <div class="date-week">${format(d, "EEE", { locale: ptBR })}</div>
+    </div>
+    <div class="escala-info">
+      <h2 class="escala-title">${e.titulo}</h2>
+      <div class="escala-meta">
+        <span class="meta-item">${diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)}, ${dataCompleta}</span>
+        ${e.hora_inicio ? `<span class="meta-sep">·</span><span class="meta-item">${e.hora_inicio.slice(0,5)}${e.hora_fim ? `–${e.hora_fim.slice(0,5)}` : ""}</span>` : ""}
+        ${e.local ? `<span class="meta-sep">·</span><span class="meta-item">${e.local}</span>` : ""}
+      </div>
+    </div>
+    <div class="escala-badges">
+      <span class="escala-status status-${e.status}">${STATUS_CONFIG[e.status]?.label ?? e.status}</span>
+      ${e.solene ? `<span class="badge-solene">Solene</span>` : ""}
+    </div>
+  </div>
+  ${e.observacoes ? `<div class="obs-block">${e.observacoes}</div>` : ""}
+  ${funcoesHtml}
+</div>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Escalas — ${nomeParoquia}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+    background:#fff;color:#111827;font-size:12.5px;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+    ${rodapeUrl ? "padding-bottom:90px" : ""}
+  }
+
+  /* ── Header da paróquia ── */
+  .doc-header{
+    padding:24px 32px 18px;
+    display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+    border-bottom:1px solid #e5e7eb;margin-bottom:20px;
+  }
+  .doc-paroquia{font-size:18px;font-weight:700;color:#111827;line-height:1.2;margin-bottom:3px}
+  .doc-subtitle{font-size:10.5px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.1em}
+  .doc-header-right{text-align:right;flex-shrink:0}
+  .doc-emit{font-size:9.5px;color:#9ca3af;line-height:1.7}
+
+  /* ── Cabeçalho da paróquia (imagem) ── */
+  .doc-cabecalho{width:100%;display:block}
+
+  /* ── Layout ── */
+  .content{padding:0 32px 24px}
+  .escalas-grid{display:grid;grid-template-columns:1fr;gap:16px}
+
+  /* ── Card de escala ── */
+  .escala-section{border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;page-break-inside:avoid;background:#fff}
+  .escala-header-row{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
+  .date-block{min-width:48px;text-align:center;flex-shrink:0;background:#111827;border-radius:7px;padding:9px 5px}
+  .date-day{font-size:24px;font-weight:700;line-height:1;color:#fff}
+  .date-month{font-size:8.5px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);margin-top:2px;font-weight:600}
+  .date-week{font-size:7.5px;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.35);margin-top:1px}
+  .escala-info{flex:1;min-width:0}
+  .escala-title{font-size:14px;font-weight:700;color:#111827;margin-bottom:5px;line-height:1.3}
+  .escala-meta{display:flex;flex-wrap:wrap;gap:3px 8px;align-items:center}
+  .meta-item{font-size:11px;color:#6b7280}
+  .meta-sep{color:#d1d5db}
+  .escala-badges{display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0}
+  .escala-status{
+    padding:2px 9px;border-radius:99px;
+    font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;
+  }
+  .status-publicada{background:#d1fae5;color:#065f46}
+  .status-rascunho{background:#f3f4f6;color:#4b5563}
+  .status-arquivada{background:#e5e7eb;color:#9ca3af}
+  .badge-solene{background:#fef3c7;color:#92400e;border-radius:99px;padding:2px 9px;font-size:9.5px;font-weight:600}
+
+  .obs-block{padding:8px 18px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:11px;color:#78350f;font-style:italic;line-height:1.5}
+
+  /* ── Grupos de atuação ── */
+  .atuacao-section + .atuacao-section{border-top:1px solid #f3f4f6}
+  .atuacao-label{padding:6px 18px 3px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:#9ca3af;background:#f9fafb;border-bottom:1px solid #f3f4f6}
+
+  /* ── Grid de funções ── */
+  .funcoes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 18px;background:#fff}
+  .funcao-card{border:1px solid #e5e7eb;border-radius:7px;overflow:hidden}
+  .funcao-header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#f9fafb;border-bottom:1px solid #f3f4f6}
+  .funcao-nome{font-size:10.5px;font-weight:700;color:#111827}
+  .funcao-qty{font-size:9.5px;color:#9ca3af;font-variant-numeric:tabular-nums}
+  .membros-list{padding:8px 10px;display:flex;flex-wrap:wrap;gap:4px;min-height:30px;align-content:flex-start}
+  .membro-chip{background:#f3f4f6;color:#374151;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600}
+  .vaga{font-size:10px;color:#d1d5db;font-style:italic;align-self:center}
+  .sem-funcoes{padding:12px 18px;font-size:11.5px;color:#9ca3af;font-style:italic}
+
+  /* ── Rodapé fixo na última página ── */
+  .doc-rodape{display:none}
+  @media print{
+    .doc-header{padding:18px 24px 14px}
+    .content{padding:0 24px 20px}
+    .escalas-grid{gap:14px}
+    .doc-rodape{
+      display:block;
+      position:fixed;bottom:0;left:0;right:0;
+      width:100%;
+    }
+    .doc-rodape img{width:100%;display:block}
+  }
+  @media (max-width:640px){
+    .doc-header{padding:14px 16px 12px;flex-direction:column;gap:6px}
+    .doc-header-right{text-align:left}
+    .funcoes-grid{grid-template-columns:1fr 1fr;gap:6px;padding:10px 12px}
+    .content{padding:0 16px 16px}
+  }
+</style>
+</head>
+<body>
+${cabecalhoUrl ? `<img class="doc-cabecalho" src="${cabecalhoUrl}" alt="Cabeçalho" />` : ""}
+<div class="doc-header">
+  <div>
+    <div class="doc-paroquia">${nomeParoquia}</div>
+    <div class="doc-subtitle">Escalas de Serviço · Pastoral Litúrgica</div>
+  </div>
+  <div class="doc-header-right">
+    <div class="doc-emit">
+      ${selected.length} escala${selected.length !== 1 ? "s" : ""}<br>
+      Emitido em ${hoje}
+    </div>
+  </div>
+</div>
+<div class="content">
+  <div class="escalas-grid">
+${escalasSections}
+  </div>
+</div>
+${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt="Rodapé" /></div>` : ""}
+</body></html>`;
+
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url  = URL.createObjectURL(blob);
+    const win  = window.open(url, "_blank");
+    if (win) {
+      setTimeout(() => { win.focus(); win.print(); URL.revokeObjectURL(url); }, 800);
+    }
+  }
+
+  const [escalaForm, setEscalaForm] = useState<EscalaForm>(EMPTY_FORM);
+
+  useEffect(() => {
+    if (formOpen) setEscalaForm(EMPTY_FORM);
+  }, [formOpen]);
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Escalas</p>
+          <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Escalas pastorais</h1>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
+          <Tabs value={view} onValueChange={(v) => setView(v as "lista" | "calendario")}>
+            <TabsList>
+              <TabsTrigger value="lista"><List className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Lista</span></TabsTrigger>
+              <TabsTrigger value="calendario"><Calendar className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Calendário</span></TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button
+            variant="outline" size="sm"
+            onClick={() => archivePastEscalasMutation.mutate()}
+            disabled={archivePastEscalasMutation.isPending}
+            title="Arquivar escalas passadas"
+          >
+            <span className="hidden sm:inline">Arquivar antigas</span>
+            <span className="sm:hidden">Arquivar</span>
+          </Button>
+          <Button
+            variant="outline" size="sm"
+            onClick={() => setGerarPeriodoOpen(true)}
+            title="Gera escalas automaticamente a partir das Missas Padrão"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span className="hidden sm:inline ml-1.5">Gerar semana</span>
+          </Button>
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4" /><span className="hidden sm:inline ml-1">Nova escala</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Barra de ações em massa — fixa na base */}
+      {selectedEscalaIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5 max-w-[calc(100vw-2rem)]">
+          <span className="text-sm font-semibold whitespace-nowrap">
+            <span className="text-primary">{selectedEscalaIds.size}</span> escala(s)
+          </span>
+          <div className="h-4 w-px bg-border mx-0.5 shrink-0" />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Button
+              size="sm" variant="outline" className="h-7 text-xs"
+              onClick={() => exportarEscalasPDF([...selectedEscalaIds])}
+              title="Exportar PDF das escalas selecionadas"
+            >
+              <FileText className="h-3 w-3 mr-1" />PDF
+            </Button>
+            <Button
+              size="sm" variant="outline" className="h-7 text-xs"
+              disabled={bulkUpdateStatusMutation.isPending}
+              onClick={() => bulkUpdateStatusMutation.mutate({ ids: [...selectedEscalaIds], status: "publicada" })}
+            >Publicar</Button>
+            <Button
+              size="sm" variant="outline" className="h-7 text-xs"
+              disabled={bulkUpdateStatusMutation.isPending}
+              onClick={() => bulkUpdateStatusMutation.mutate({ ids: [...selectedEscalaIds], status: "arquivada" })}
+            >Arquivar</Button>
+            <Button
+              size="sm" variant="destructive" className="h-7 text-xs"
+              onClick={() => setBulkDeleteEscalasOpen(true)}
+            ><Trash2 className="h-3 w-3 mr-1" />Excluir</Button>
+            <button
+              className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition"
+              onClick={() => setSelectedEscalaIds(new Set())}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="mt-6 space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4">
+              <Skeleton className="h-12 w-12 rounded-xl shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/5" />
+                <Skeleton className="h-3 w-1/4" />
+              </div>
+              <Skeleton className="h-6 w-20 rounded-full" />
+            </div>
+          ))}
+        </div>
+      ) : view === "lista" ? (
+        <ListaView
+          escalas={upcoming}
+          allEscalas={escalas}
+          selectedIds={selectedEscalaIds}
+          escalaCounts={escalaCounts}
+          onToggleSelect={(id) => {
+            const next = new Set(selectedEscalaIds);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            setSelectedEscalaIds(next);
+          }}
+          onSelectAll={(ids) => setSelectedEscalaIds(new Set(ids))}
+          onOpenDetail={(e) => setDetailEscala(e)}
+          onEdit={openEdit}
+          onDelete={(e) => setDeleteTarget(e)}
+          onCreate={openCreate}
+          onExportPDF={(id: string) => exportarEscalasPDF([id])}
+          onReorganizar={() => setReorganizarOpen(true)}
+        />
+      ) : (
+        <CalendarioView
+          calMonth={calMonth}
+          setCalMonth={setCalMonth}
+          calDays={calDays}
+          escalasForDay={escalasForDay}
+          onOpenDetail={(e) => setDetailEscala(e)}
+        />
+      )}
+
+      {/* ── Dialog período para gerar escalas ──────────────────────────────── */}
+      <Dialog open={gerarPeriodoOpen} onOpenChange={setGerarPeriodoOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Gerar escalas automaticamente</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label>Data de início</Label>
+              <input
+                type="date"
+                value={gerarInicio}
+                onChange={(e) => setGerarInicio(e.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Data de término</Label>
+              <input
+                type="date"
+                value={gerarFim}
+                onChange={(e) => setGerarFim(e.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Serão criadas escalas para todas as Missas Padrão que ocorrem no período selecionado, respeitando recorrência e escalas já existentes.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGerarPeriodoOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={gerarSemanaRapidaMutation.isPending || !gerarInicio || !gerarFim || gerarInicio > gerarFim}
+              onClick={() => gerarSemanaRapidaMutation.mutate({ dataInicio: gerarInicio, dataFim: gerarFim })}
+            >
+              {gerarSemanaRapidaMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Gerar escalas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog criar ────────────────────────────────────────────────────── */}
+      <Dialog open={formOpen} onOpenChange={(o) => { if (!o) setFormOpen(false); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nova escala</DialogTitle>
+          </DialogHeader>
+          <EscalaFormContent
+            form={escalaForm}
+            setForm={setEscalaForm}
+            saving={saveMutation.isPending}
+            comunidades={comunidades}
+            tiposMissa={tiposMissa}
+            onSave={() => saveMutation.mutate({ form: escalaForm, editId: null })}
+            onClose={() => setFormOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog reorganizar membros ──────────────────────────────────────── */}
+      <Dialog open={reorganizarOpen} onOpenChange={(o) => { if (!o) { setReorganizarOpen(false); setReorganizarEscalaId(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reorganizar membros</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <p className="text-sm text-muted-foreground">
+              Selecione uma escala para limpar as atribuições atuais e redistribuir os membros automaticamente.
+            </p>
+            <div className="space-y-1.5">
+              <Label>Escala</Label>
+              <Select value={reorganizarEscalaId} onValueChange={setReorganizarEscalaId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar escala..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {upcoming.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {format(new Date(e.data + "T00:00:00"), "dd/MM", { locale: ptBR })} — {e.titulo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              As atribuições atuais serão removidas e redistribuídas pelo motor automático.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setReorganizarOpen(false); setReorganizarEscalaId(""); }}>Cancelar</Button>
+            <Button
+              disabled={!reorganizarEscalaId || reorganizarMutation.isPending}
+              onClick={() => reorganizarMutation.mutate(reorganizarEscalaId)}
+            >
+              {reorganizarMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Reorganizar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Sheet detalhe / editar ──────────────────────────────────────────── */}
+      <Sheet open={!!detailEscala} onOpenChange={(o) => { if (!o) { setDetailEscala(null); setDetailEditMode(false); } }}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          {detailEscala && (
+            <EscalaDetail
+              escala={detailEscala}
+              ministerios={ministerios}
+              membros={membros}
+              funcoes={funcoes}
+              atribuicoes={atribuicoes}
+              membroMinisterios={membroMinisterios}
+              assignmentHistory={assignmentHistory}
+              indisponibilidades={indisponibilidades}
+              funcaoRestricoes={funcaoRestricoes}
+              missasPadrao={missasPadrao}
+              membroMissaRestricoes={membroMissaRestricoes}
+              paroquiaConfig={paroquiaConfig}
+              initialEditMode={detailEditMode}
+              comunidades={comunidades}
+              tiposMissa={tiposMissa}
+              isSaving={saveMutation.isPending}
+              onSave={(form, onDone) => saveMutation.mutate({ form, editId: detailEscala.id }, { onSuccess: onDone })}
+              onDelete={(e) => setDeleteTarget(e)}
+              onAddFuncao={(mid, qty) => addFuncaoMutation.mutate({ ministerio_id: mid, quantidade: qty })}
+              onRemoveFuncao={(id) => removeFuncaoMutation.mutate(id)}
+              onAtribuir={(mid, minid) => atribuirMutation.mutate({ membro_id: mid, ministerio_id: minid })}
+              onRemoverAtribuicao={(id) => removerAtribuicaoMutation.mutate(id)}
+              onStatusChange={(status) => updateStatusMutation.mutate({ id: detailEscala.id, status })}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Confirm bulk delete escalas ─────────────────────────────────────── */}
+      <AlertDialog open={bulkDeleteEscalasOpen} onOpenChange={(o) => !o && setBulkDeleteEscalasOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover {selectedEscalaIds.size} escala(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação é permanente. Todas as atribuições de membros nestas escalas também serão removidas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => bulkDeleteEscalasMutation.mutate([...selectedEscalaIds])}
+            >
+              {bulkDeleteEscalasMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Remover {selectedEscalaIds.size} escala(s)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Confirm delete ──────────────────────────────────────────────────── */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover escala?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleteTarget?.titulo}</strong> e todas as atribuições de membros serão
+              removidas permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+            >
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ── Formulário de escala ─────────────────────────────────────────────────────
+
+function EscalaFormContent({
+  form, setForm, saving, onSave, onClose, comunidades, tiposMissa,
+}: {
+  form: EscalaForm;
+  setForm: (f: EscalaForm) => void;
+  saving: boolean;
+  onSave: () => void;
+  onClose: () => void;
+  comunidades: { id: string; nome: string }[];
+  tiposMissa: { id: string; nome: string; cor: string; icone: string | null }[];
+}) {
+  // Local: detect if it's a comunidade name or free text
+  const comunidadeNomes = comunidades.map((c) => c.nome);
+  const localIsOutro = form.local !== "" && !comunidadeNomes.includes(form.local);
+
+  function handleLocalSelect(val: string) {
+    if (val === "") setForm({ ...form, local: "" });
+    else if (val === "_outro_") setForm({ ...form, local: " " }); // space triggers text input
+    else setForm({ ...form, local: val });
+  }
+
+  const localSelectVal = form.local === ""
+    ? ""
+    : comunidadeNomes.includes(form.local)
+      ? form.local
+      : "_outro_";
+
+  return (
+    <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+      <div className="space-y-1.5">
+        <Label>Título *</Label>
+        <Input
+          required
+          value={form.titulo}
+          onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+          placeholder="Ex: Missa Dominical 10h"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>Data *</Label>
+          <Input
+            type="date"
+            required
+            value={form.data}
+            onChange={(e) => setForm({ ...form, data: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Hora início</Label>
+          <Input type="time" value={form.hora_inicio} onChange={(e) => setForm({ ...form, hora_inicio: e.target.value })} />
+        </div>
+      </div>
+
+      {/* Tipo de Missa — obrigatório */}
+      <div className="space-y-1.5">
+        <Label>Tipo de celebração *</Label>
+        <select
+          required
+          value={form.tipo_missa_id}
+          onChange={(e) => {
+            const val = e.target.value;
+            setForm({ ...form, tipo_missa_id: val, tipo: "tipo_missa" });
+          }}
+          className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+        >
+          <option value="">Selecione o tipo de celebração…</option>
+          {tiposMissa.map((t) => (
+            <option key={t.id} value={t.id}>{t.icone ? `${t.icone} ` : ""}{t.nome}</option>
+          ))}
+        </select>
+        {tiposMissa.length === 0 && (
+          <p className="text-xs text-red-600 font-medium">Nenhum Tipo de Missa cadastrado. Configure em Personalização → Tipos de Missa.</p>
+        )}
+      </div>
+
+      {/* Local — dinâmico (comunidades + outro) */}
+      <div className="space-y-1.5">
+        <Label>Local</Label>
+        {comunidades.length > 0 ? (
+          <>
+            <select
+              value={localSelectVal}
+              onChange={(e) => handleLocalSelect(e.target.value)}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+            >
+              <option value="">Sem local definido</option>
+              {comunidades.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+              <option value="_outro_">Outro local…</option>
+            </select>
+            {localIsOutro && (
+              <Input
+                value={form.local.trim()}
+                onChange={(e) => setForm({ ...form, local: e.target.value })}
+                placeholder="Ex: Nave principal, Salão paroquial…"
+              />
+            )}
+          </>
+        ) : (
+          <Input value={form.local} onChange={(e) => setForm({ ...form, local: e.target.value })} placeholder="Nave principal, Salão paroquial…" />
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Status</Label>
+        <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="rascunho">Rascunho</SelectItem>
+            <SelectItem value="publicada">Publicada</SelectItem>
+            <SelectItem value="arquivada">Arquivada</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Observações</Label>
+        <Textarea
+          value={form.observacoes}
+          onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
+          placeholder="Informações adicionais..."
+          rows={2}
+        />
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Cancelar</Button>
+        <Button disabled={saving || !form.titulo.trim() || !form.data || !form.tipo_missa_id} onClick={onSave}>
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          Salvar
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
+// ── Vista lista ──────────────────────────────────────────────────────────────
+
+const STATUS_BORDER: Record<string, string> = {
+  rascunho:  "#94a3b8",
+  publicada: "#22c55e",
+  arquivada: "#cbd5e1",
+};
+
+// ── Agrupa funções por categoria/atuação ────────────────────────────────────
+
+function groupFuncoesByCategoria(funcoes: FuncaoPreview[]) {
+  const groups: { categoria: string | null; funcoes: FuncaoPreview[] }[] = [];
+  funcoes.forEach((f) => {
+    const cat = f.categoria ?? null;
+    const g = groups.find((x) => x.categoria === cat);
+    if (g) g.funcoes.push(f);
+    else groups.push({ categoria: cat, funcoes: [f] });
+  });
+  return groups.sort((a, b) => {
+    if (a.categoria === null) return 1;
+    if (b.categoria === null) return -1;
+    return a.categoria.localeCompare(b.categoria, "pt-BR");
+  });
+}
+
+function ListaView({
+  escalas, allEscalas, selectedIds, escalaCounts, onToggleSelect, onSelectAll,
+  onOpenDetail, onEdit, onDelete, onCreate, onExportPDF, onReorganizar,
+}: {
+  escalas: Escala[];
+  allEscalas: Escala[];
+  selectedIds: Set<string>;
+  escalaCounts: Record<string, EscalaPreview>;
+  onToggleSelect: (id: string) => void;
+  onSelectAll: (ids: string[]) => void;
+  onOpenDetail: (e: Escala) => void;
+  onEdit: (e: Escala, ev: React.MouseEvent) => void;
+  onDelete: (e: Escala) => void;
+  onCreate: () => void;
+  onExportPDF: (id: string) => void;
+  onReorganizar: () => void;
+}) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const allSelected = escalas.length > 0 && escalas.every((e) => selectedIds.has(e.id));
+  const publishedCount = escalas.filter((e) => e.status === "publicada").length;
+  const draftCount = escalas.filter((e) => e.status === "rascunho").length;
+  const archivedCount = escalas.filter((e) => e.status === "arquivada").length;
+
+  const repeatedAlerts = useMemo(() => {
+    type AlertEntry = {
+      type: "same-day" | "consecutive";
+      memberName: string;
+      escalaA: string;
+      escalaB: string;
+      date: string;
+      dateB?: string;
+    };
+    const alerts: AlertEntry[] = [];
+    const dateMap: Record<string, { memberId: string; memberName: string; escalaId: string; titulo: string }[]> = {};
+
+    escalas.forEach((e) => {
+      const counts = escalaCounts[e.id];
+      if (!counts) return;
+      counts.funcoes.forEach((f) => {
+        f.membros.forEach((m) => {
+          if (!dateMap[e.data]) dateMap[e.data] = [];
+          if (!dateMap[e.data].some((x) => x.memberId === m.id && x.escalaId === e.id))
+            dateMap[e.data].push({ memberId: m.id, memberName: m.nome, escalaId: e.id, titulo: e.titulo });
+        });
+      });
+    });
+
+    const dates = Object.keys(dateMap).sort();
+
+    dates.forEach((date) => {
+      const entries = dateMap[date];
+      const memberTitulos: Record<string, string[]> = {};
+      entries.forEach((e) => {
+        if (!memberTitulos[e.memberId]) memberTitulos[e.memberId] = [];
+        if (!memberTitulos[e.memberId].includes(e.titulo)) memberTitulos[e.memberId].push(e.titulo);
+      });
+      Object.entries(memberTitulos).forEach(([memberId, titulos]) => {
+        if (titulos.length > 1) {
+          const memberName = entries.find((x) => x.memberId === memberId)?.memberName ?? memberId;
+          alerts.push({ type: "same-day", memberName, escalaA: titulos[0], escalaB: titulos[1], date });
+        }
+      });
+    });
+
+    for (let i = 0; i < dates.length - 1; i++) {
+      const date = dates[i];
+      const dateNext = dates[i + 1];
+      const d1 = new Date(date + "T00:00:00");
+      const d2 = new Date(dateNext + "T00:00:00");
+      const diffDays = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays !== 1) continue;
+      const members1 = dateMap[date];
+      const members2 = dateMap[dateNext];
+      const ids1 = new Set(members1.map((m) => m.memberId));
+      const seen = new Set<string>();
+      members2.forEach((m) => {
+        if (ids1.has(m.memberId) && !seen.has(m.memberId)) {
+          seen.add(m.memberId);
+          const escalaA = members1.find((x) => x.memberId === m.memberId)?.titulo ?? date;
+          alerts.push({ type: "consecutive", memberName: m.memberName, escalaA, escalaB: m.titulo, date, dateB: dateNext });
+        }
+      });
+    }
+
+    return alerts;
+  }, [escalas, escalaCounts]);
+
+  if (allEscalas.length === 0) {
+    return (
+      <div className="mt-8 rounded-2xl border border-dashed border-border bg-card p-12 text-center">
+        <Calendar className="h-8 w-8 mx-auto text-muted-foreground" />
+        <p className="mt-4 text-sm text-muted-foreground">Nenhuma escala cadastrada ainda.</p>
+        <Button className="mt-4" onClick={onCreate}>
+          <Plus className="h-4 w-4" /> Criar primeira escala
+        </Button>
+      </div>
+    );
+  }
+
+  if (escalas.length === 0) {
+    return (
+      <div className="mt-8 rounded-2xl border border-dashed border-border bg-card p-12 text-center">
+        <Calendar className="h-8 w-8 mx-auto text-muted-foreground" />
+        <p className="mt-4 text-sm text-muted-foreground">Nenhuma escala futura. Veja o calendário ou crie uma nova.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 space-y-4">
+      <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+        <div className="rounded-3xl border border-border bg-card p-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Visão geral</p>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-3xl font-serif">{escalas.length}</p>
+              <p className="text-sm text-muted-foreground">Escalas agendadas</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:grid-cols-3">
+              <div className="rounded-2xl bg-background p-2">
+                <p className="text-foreground">{publishedCount}</p>
+                <p>Publicadas</p>
+              </div>
+              <div className="rounded-2xl bg-background p-2">
+                <p className="text-foreground">{draftCount}</p>
+                <p>Rascunho</p>
+              </div>
+              <div className="rounded-2xl bg-background p-2">
+                <p className="text-foreground">{archivedCount}</p>
+                <p>Arquivadas</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-border bg-card p-5 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Membros</p>
+            <p className="mt-2 text-sm text-foreground">Redistribuir automaticamente.</p>
+          </div>
+          <Button variant="outline" onClick={onReorganizar}>
+            <Users className="h-4 w-4 mr-1.5" /> Reorganizar
+          </Button>
+        </div>
+      </div>
+
+      {repeatedAlerts.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border/50">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <p className="text-xs font-semibold text-foreground">
+              {repeatedAlerts.length} conflito{repeatedAlerts.length !== 1 ? "s" : ""} de repetição
+            </p>
+            <span className="ml-auto text-[10px] text-muted-foreground">Revisar antes de publicar</span>
+          </div>
+          <div className="divide-y divide-border/40">
+            {repeatedAlerts.slice(0, 5).map((alert, i) => (
+              <div key={i} className="flex items-start gap-3 px-4 py-3">
+                <div className={`mt-0.5 h-1.5 w-1.5 rounded-full shrink-0 ${alert.type === "same-day" ? "bg-red-500" : "bg-amber-400"}`} />
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm font-semibold text-foreground">{nomeExibicao(alert.memberName)}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {alert.type === "same-day"
+                      ? ` · mesmo dia (${format(new Date(alert.date + "T00:00:00"), "d/MM", { locale: ptBR })})`
+                      : ` · dias seguidos (${format(new Date(alert.date + "T00:00:00"), "d/MM", { locale: ptBR })} e ${format(new Date(alert.dateB! + "T00:00:00"), "d/MM", { locale: ptBR })})`}
+                  </span>
+                </div>
+                <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  alert.type === "same-day"
+                    ? "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
+                    : "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
+                }`}>
+                  {alert.type === "same-day" ? "Mesmo dia" : "Consecutivo"}
+                </span>
+              </div>
+            ))}
+            {repeatedAlerts.length > 5 && (
+              <div className="px-4 py-2.5 text-xs text-muted-foreground">
+                + {repeatedAlerts.length - 5} conflito{repeatedAlerts.length - 5 !== 1 ? "s" : ""} não exibido{repeatedAlerts.length - 5 !== 1 ? "s" : ""}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-3xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border/40">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <Checkbox
+              checked={allSelected}
+              onCheckedChange={(checked) => onSelectAll(checked ? escalas.map((e) => e.id) : [])}
+            />
+            <span className="text-xs text-muted-foreground">
+              {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : "Selecionar todas"}
+            </span>
+          </label>
+          <span className="text-xs text-muted-foreground">{escalas.length} escala(s)</span>
+        </div>
+
+        <div className="space-y-3 p-4">
+          {escalas.map((e) => {
+            const cfg = STATUS_CONFIG[e.status] ?? STATUS_CONFIG.rascunho;
+            const borderColor = STATUS_BORDER[e.status] ?? STATUS_BORDER.rascunho;
+            const d = new Date(e.data + "T00:00:00");
+            const isSelected = selectedIds.has(e.id);
+            const counts = escalaCounts[e.id];
+            const pct = counts && counts.needed > 0 ? Math.min(1, counts.filled / counts.needed) : null;
+            const expanded = expandedIds.has(e.id);
+
+            return (
+              <div
+                key={e.id}
+                className={`rounded-3xl border bg-background transition-all ${
+                  isSelected ? "border-primary/50 shadow-sm ring-1 ring-primary/20" : "border-border"
+                }`}
+                style={{ borderLeftColor: borderColor, borderLeftWidth: "4px" }}
+              >
+                <div className="grid gap-3 px-4 py-4 sm:grid-cols-[auto_1fr_auto] sm:items-start">
+                  <div className="text-center min-w-[3rem] shrink-0">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider leading-none">
+                      {format(d, "MMM", { locale: ptBR })}
+                    </p>
+                    <p className="text-3xl font-serif leading-none mt-0.5">
+                      {format(d, "d")}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/70 mt-0.5 capitalize">
+                      {format(d, "EEE", { locale: ptBR })}
+                    </p>
+                  </div>
+
+                  <div
+                    className="min-w-0 cursor-pointer"
+                    onClick={(ev) => { ev.stopPropagation(); onOpenDetail(e); }}
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm leading-tight truncate hover:text-primary transition-colors">{e.titulo}</p>
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          {e.hora_inicio && (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {e.hora_inicio.slice(0, 5)}{e.hora_fim ? `–${e.hora_fim.slice(0, 5)}` : ""}
+                            </span>
+                          )}
+                          {e.local && (
+                            <span className="inline-flex items-center gap-1 truncate">
+                              <MapPin className="h-3 w-3 shrink-0" />{e.local}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border ${
+                          e.status === "publicada"
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : e.status === "arquivada"
+                            ? "bg-slate-100 text-slate-500 border-slate-200"
+                            : "bg-slate-50 text-slate-600 border-slate-200"
+                        }`}>
+                          {cfg.label}
+                        </span>
+                        {e.solene && (
+                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 border border-amber-200">
+                            Solene
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {pct !== null && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${pct >= 1 ? "bg-green-500" : pct >= 0.5 ? "bg-amber-400" : "bg-red-400"}`}
+                            style={{ width: `${Math.round(pct * 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-[11px] text-muted-foreground shrink-0 tabular-nums">
+                          {counts!.filled}/{counts!.needed}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col items-end gap-2 sm:items-start">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onToggleSelect(e.id);
+                      }}
+                      aria-label={isSelected ? "Desmarcar escala" : "Selecionar escala"}
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground sm:hidden"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        const next = new Set(expandedIds);
+                        if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
+                        setExpandedIds(next);
+                      }}
+                      aria-label={expanded ? "Fechar detalhes" : "Ver detalhes"}
+                    >
+                      <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : "rotate-0"}`} />
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onClick={() => onOpenDetail(e)}>
+                          <ChevronDown className="h-3.5 w-3.5 mr-2 rotate-[-90deg]" />Ver detalhes
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(ev) => onEdit(e, ev)}>
+                          <Pencil className="h-3.5 w-3.5 mr-2" />Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onExportPDF(e.id)}>
+                          <FileText className="h-3.5 w-3.5 mr-2" />Exportar PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => onDelete(e)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+
+                <div className={`${expanded ? "block" : "hidden sm:block"} border-t border-border/40 px-4 pb-4 pt-3`}>
+                  {counts && counts.funcoes.length > 0 ? (
+                    <div className="space-y-3">
+                      {groupFuncoesByCategoria(counts.funcoes).map((group) => {
+                        const groupFilled  = group.funcoes.reduce((s, f) => s + f.membros.length, 0);
+                        const groupNeeded  = group.funcoes.reduce((s, f) => s + f.quantidade, 0);
+                        const groupDone    = groupFilled >= groupNeeded && groupNeeded > 0;
+                        return (
+                          <div key={group.categoria ?? "__none__"}>
+                            {group.categoria && (
+                              <div className="flex items-center gap-2 mb-2">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground shrink-0">
+                                  {group.categoria}
+                                </p>
+                                <div className="flex-1 h-px bg-border/50" />
+                                <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${groupDone ? "text-green-600" : "text-amber-500"}`}>
+                                  {groupFilled}/{groupNeeded}
+                                </span>
+                              </div>
+                            )}
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {group.funcoes.map((f) => {
+                                const filled   = f.membros.length;
+                                const complete = filled >= f.quantidade;
+                                return (
+                                  <div
+                                    key={f.ministerio_id}
+                                    className="rounded-xl border border-border bg-background px-2.5 py-2"
+                                    style={{ borderLeftColor: f.cor, borderLeftWidth: "3px" }}
+                                  >
+                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                      <span className="text-[11px] font-semibold truncate" style={{ color: f.cor }}>
+                                        {f.nome}
+                                      </span>
+                                      <span className={`text-[10px] tabular-nums shrink-0 font-medium ${complete ? "text-green-600" : "text-amber-500"}`}>
+                                        {filled}/{f.quantidade}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {filled === 0
+                                        ? Array.from({ length: Math.min(f.quantidade, 2) }).map((_, i) => (
+                                            <span key={i} className="text-[10px] text-muted-foreground/40 italic">Vaga</span>
+                                          ))
+                                        : f.membros.slice(0, 3).map((m) => (
+                                            <span key={m.id} className="inline-flex rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-foreground/70">
+                                              {nomeExibicao(m.nome)}
+                                            </span>
+                                          ))
+                                      }
+                                      {filled > 3 && (
+                                        <span className="text-[10px] text-muted-foreground/60">+{filled - 3}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhuma função definida para esta escala.</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Vista calendário ─────────────────────────────────────────────────────────
+
+function CalendarioView({
+  calMonth, setCalMonth, calDays, escalasForDay, onOpenDetail,
+}: {
+  calMonth: Date;
+  setCalMonth: (d: Date) => void;
+  calDays: { days: Date[]; offset: number };
+  escalasForDay: (d: Date) => Escala[];
+  onOpenDetail: (e: Escala) => void;
+}) {
+  const [selectedDay, setSelectedDay] = useState<Date>(calMonth);
+
+  useEffect(() => {
+    setSelectedDay(calMonth);
+  }, [calMonth]);
+
+  const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  const selectedEscalas = selectedDay ? escalasForDay(selectedDay) : [];
+
+  return (
+    <div className="mt-8 space-y-6">
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={() => setCalMonth(subMonths(calMonth, 1))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => setCalMonth(addMonths(calMonth, 1))}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <h2 className="font-serif text-xl capitalize text-center flex-1">
+          {format(calMonth, "MMMM yyyy", { locale: ptBR })}
+        </h2>
+        <div className="w-10" />
+      </div>
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="grid grid-cols-7 border-b border-border">
+          {weekDays.map((d) => (
+            <div key={d} className="py-2 text-center text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase">
+              <span className="hidden sm:inline">{d}</span>
+              <span className="sm:hidden">{d[0]}</span>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {Array.from({ length: calDays.offset }).map((_, i) => (
+            <div key={`empty-${i}`} className="min-h-[56px] sm:min-h-[80px] border-b border-r border-border bg-muted/10" />
+          ))}
+          {calDays.days.map((day, i) => {
+            const dayEscalas = escalasForDay(day);
+            const isToday = isSameDay(day, new Date());
+            const isSelected = selectedDay && isSameDay(day, selectedDay);
+            const col = (i + calDays.offset) % 7;
+            return (
+              <button
+                key={day.toISOString()}
+                type="button"
+                onClick={() => setSelectedDay(day)}
+                className={`min-h-[56px] sm:min-h-[80px] p-1 sm:p-1.5 border-b border-r border-border ${col === 6 ? "border-r-0" : ""} ${isToday ? "bg-primary/5" : ""} ${isSelected ? "ring-2 ring-primary/30" : ""}`}
+              >
+                <p className={`text-[10px] sm:text-xs font-medium mb-0.5 sm:mb-1 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full ${isToday ? "bg-primary text-primary-foreground" : "text-foreground"}`}>
+                  {format(day, "d")}
+                </p>
+                <div className="space-y-0.5">
+                  <div className="flex flex-wrap gap-0.5 sm:hidden">
+                    {dayEscalas.slice(0, 3).map((e) => (
+                      <span key={e.id} className="h-1.5 w-1.5 rounded-full bg-primary" title={e.titulo} />
+                    ))}
+                    {dayEscalas.length > 3 && (
+                      <span className="text-[9px] text-muted-foreground leading-none">+{dayEscalas.length - 3}</span>
+                    )}
+                  </div>
+                  <div className="hidden sm:block space-y-0.5">
+                    {dayEscalas.slice(0, 2).map((e) => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        className="w-full text-left text-[10px] leading-tight font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition truncate"
+                        onClick={(ev) => { ev.stopPropagation(); onOpenDetail(e); }}
+                      >
+                        {e.hora_inicio ? e.hora_inicio.slice(0, 5) + " " : ""}{e.titulo}
+                      </button>
+                    ))}
+                    {dayEscalas.length > 2 && (
+                      <p className="text-[10px] text-muted-foreground px-1">+{dayEscalas.length - 2} mais</p>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Escalas do dia</p>
+            <p className="mt-1 text-base font-semibold">
+              {format(selectedDay, "EEEE, d 'de' MMMM", { locale: ptBR })}
+            </p>
+          </div>
+          <span className="text-sm text-muted-foreground">{selectedEscalas.length} evento(s)</span>
+        </div>
+
+        {selectedEscalas.length === 0 ? (
+          <p className="mt-4 text-sm text-muted-foreground">Nenhuma escala agendada para esta data.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {selectedEscalas.map((e) => (
+              <div key={e.id} className="rounded-2xl border border-border bg-background p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{e.titulo}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {e.hora_inicio ? e.hora_inicio.slice(0, 5) : "Hora não definida"}
+                      {e.local ? ` · ${e.local}` : ""}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => onOpenDetail(e)}>
+                    Ver detalhes
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Detalhe da escala ────────────────────────────────────────────────────────
+
+function EscalaDetail({
+  escala, ministerios, membros, funcoes, atribuicoes, membroMinisterios, assignmentHistory,
+  indisponibilidades, funcaoRestricoes, missasPadrao, membroMissaRestricoes, paroquiaConfig,
+  initialEditMode, comunidades, tiposMissa, isSaving, onSave,
+  onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onStatusChange,
+}: {
+  escala: Escala;
+  ministerios: Ministerio[];
+  membros: Membro[];
+  funcoes: EscalaFuncao[];
+  atribuicoes: EscalaMembro[];
+  membroMinisterios: Record<string, string[]>;
+  assignmentHistory: AssignmentHistoryEntry[];
+  indisponibilidades: { membro_id: string; data: string }[];
+  funcaoRestricoes: FuncaoRestricao[];
+  missasPadrao: { id: string; dia_semana: number; hora_inicio: string | null }[];
+  membroMissaRestricoes: Record<string, string[]>;
+  paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
+  initialEditMode: boolean;
+  comunidades: { id: string; nome: string }[];
+  tiposMissa: { id: string; nome: string; cor: string; icone: string | null }[];
+  isSaving: boolean;
+  onSave: (form: EscalaForm, onSuccess: () => void) => void;
+  onDelete: (e: Escala) => void;
+  onAddFuncao: (mid: string, qty: number) => void;
+  onRemoveFuncao: (id: string) => void;
+  onAtribuir: (memberId: string, ministerioId: string) => void;
+  onRemoverAtribuicao: (id: string) => void;
+  onStatusChange: (status: string) => void;
+}) {
+  const [editMode, setEditMode] = useState(initialEditMode);
+  const [escalaForm, setEscalaForm] = useState<EscalaForm>(EMPTY_FORM);
+
+  useEffect(() => {
+    setEditMode(initialEditMode);
+  }, [escala.id, initialEditMode]);
+
+  useEffect(() => {
+    if (!editMode) return;
+    setEscalaForm({
+      titulo: escala.titulo,
+      data: escala.data,
+      hora_inicio: escala.hora_inicio ?? "",
+      local: escala.local ?? "",
+      tipo: escala.tipo,
+      tipo_missa_id: escala.tipo_missa_id ?? "",
+      status: escala.status,
+      observacoes: escala.observacoes ?? "",
+      solene: escala.solene,
+      tem_adoracao: escala.tem_adoracao,
+      tem_bispo: escala.tem_bispo,
+    });
+  }, [editMode, escala]);
+
+  const [addMinisterioId, setAddMinisterioId] = useState("");
+  const [addQtd, setAddQtd] = useState("1");
+  const [addMembroMap, setAddMembroMap] = useState<Record<string, string>>({});
+  const [suggestedAssignments, setSuggestedAssignments] = useState<{ ministerio_id: string; membro_id: string }[]>([]);
+  const [generateNotice, setGenerateNotice] = useState<string | null>(null);
+
+  // ── Presença pós-missa ──────────────────────────────────────────────────────
+  const hoje = format(new Date(), "yyyy-MM-dd");
+  const isPastOrToday = escala.data <= hoje;
+  const [presencaOpen, setPresencaOpen] = useState(false);
+  type PresencaStatus = "presente" | "faltou" | "pendente";
+  const [presencaMap, setPresencaMap] = useState<Record<string, PresencaStatus>>({});
+
+  useEffect(() => {
+    const map: Record<string, PresencaStatus> = {};
+    atribuicoes.forEach((a) => {
+      const s = a.status as PresencaStatus;
+      map[a.id] = (s === "presente" || s === "faltou") ? s : "pendente";
+    });
+    setPresencaMap(map);
+  }, [atribuicoes]);
+
+  const queryClient = useQueryClient();
+
+  const applySuggestionsMutation = useMutation({
+    mutationFn: async ({ escalaId, assignments }: { escalaId: string; assignments: { membro_id: string; ministerio_id: string }[] }) => {
+      if (assignments.length === 0) return;
+      const { error } = await supabase.from("escala_membros").insert(
+        assignments.map((assignment) => ({
+          escala_id: escalaId,
+          membro_id: assignment.membro_id,
+          ministerio_id: assignment.ministerio_id,
+          status: "pendente",
+        }))
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["escala-membros", escala.id] });
+      // Sincroniza com portal do membro quando sugestões são aplicadas
+      queryClient.invalidateQueries({ queryKey: ["pm-escalas"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      toast.success("Sugestões aplicadas.");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const marcarPresencasMutation = useMutation({
+    mutationFn: async () => {
+      await Promise.all(
+        atribuicoes.map((a) =>
+          supabase.from("escala_membros").update({ status: presencaMap[a.id] ?? "pendente" }).eq("id", a.id)
+        )
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["escala-membros", escala.id] });
+      queryClient.invalidateQueries({ queryKey: ["escala-historico"] });
+      queryClient.invalidateQueries({ queryKey: ["pm-escalas"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      toast.success("Presenças registradas.");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const cfg = STATUS_CONFIG[escala.status] ?? STATUS_CONFIG.rascunho;
+  const publicUrl = typeof window !== "undefined" && escala.token_publico ? `${window.location.origin}/escala/${escala.token_publico}` : null;
+  const dateStr = format(new Date(escala.data + "T00:00:00"), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
+
+  const funcaoMinsIds = funcoes.map((f) => f.ministerio_id);
+  const ministeriosDisponiveis = ministerios.filter((m) => !funcaoMinsIds.includes(m.id));
+
+  function membrosParaMinisterio(ministerioId: string) {
+    const atribuidos = atribuicoes.filter((a) => a.ministerio_id === ministerioId).map((a) => a.membro_id);
+    const desteMinisterio = membroMinisterios[ministerioId] ?? [];
+    return membros.filter((m) => desteMinisterio.includes(m.id) && !atribuidos.includes(m.id));
+  }
+
+  function handleGenerateSuggestions() {
+    if (funcoes.length === 0) {
+      toast.error("Adicione funções à escala antes de gerar sugestões.");
+      return;
+    }
+
+    const regras = paroquiaConfig?.regras_escala ?? {};
+    const config = {
+      usa_tochas: paroquiaConfig?.usa_tochas ?? false,
+      limite_semanal: regras.limite_semanal ?? undefined,
+      limite_mensal: regras.limite_mensal ?? undefined,
+      impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? true,
+    };
+
+    // Encontra missas_padrao que correspondem a esta escala (mesmo dia da semana + hora)
+    const escalaDia = new Date(escala.data + "T12:00:00").getDay();
+    const escalaHora = (escala.hora_inicio ?? "").slice(0, 5);
+    const missasMatch = missasPadrao.filter((mp) => {
+      if (mp.dia_semana !== escalaDia) return false;
+      if (escalaHora && mp.hora_inicio) return mp.hora_inicio.slice(0, 5) === escalaHora;
+      return true;
+    });
+    const missaRestricaoIndisp = missasMatch.flatMap((mp) =>
+      (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
+    );
+
+    const suggestions = generateEscalaAssignments(
+      { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
+      funcoes,
+      membros,
+      membroMinisterios,
+      {
+        history: assignmentHistory,
+        existingAssignments: atribuicoes.map((entry) => ({ membro_id: entry.membro_id, ministerio_id: entry.ministerio_id })),
+        indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
+        restricoes: funcaoRestricoes,
+        config,
+        solene: escala.solene,
+        tem_adoracao: escala.tem_adoracao,
+        tem_bispo: escala.tem_bispo,
+      }
+    );
+
+    setSuggestedAssignments(suggestions);
+
+    const totalSlots = funcoes.reduce((sum, funcao) => sum + funcao.quantidade, 0);
+    if (suggestions.length === 0) {
+      setGenerateNotice(
+        "Não foi possível gerar sugestões automaticamente. Verifique disponibilidade, funções e ministérios definidos."
+      );
+      return;
+    }
+
+    if (suggestions.length < totalSlots) {
+      setGenerateNotice(`Gerado ${suggestions.length} de ${totalSlots} vagas. Revise antes de aplicar.`);
+      return;
+    }
+
+    setGenerateNotice("Sugestões completas geradas. Reveja e aplique se desejar.");
+  }
+
+  function handleClearSuggestions() {
+    setSuggestedAssignments([]);
+    setGenerateNotice(null);
+  }
+
+  async function handleApplySuggestions() {
+    if (suggestedAssignments.length === 0) {
+      toast.error("Nenhuma sugestão disponível para aplicar.");
+      return;
+    }
+
+    const assignmentsToInsert = suggestedAssignments.filter(
+      (suggestion) =>
+        !atribuicoes.some(
+          (existing) =>
+            existing.membro_id === suggestion.membro_id && existing.ministerio_id === suggestion.ministerio_id
+        )
+    );
+
+    if (assignmentsToInsert.length === 0) {
+      toast.success("Todas as sugestões já foram aplicadas.");
+      return;
+    }
+
+    applySuggestionsMutation.mutate({ escalaId: escala.id, assignments: assignmentsToInsert });
+  }
+
+  const suggestionsByMinisterio = funcoes.map((funcao) => ({
+    funcao,
+    assignments: suggestedAssignments.filter((suggestion) => suggestion.ministerio_id === funcao.ministerio_id),
+  }));
+
+  return (
+    <div className="space-y-6 pt-2">
+      <SheetHeader>
+        <div className="flex items-center justify-between gap-3">
+          <SheetTitle className="text-left font-serif text-2xl leading-tight">
+            {editMode ? (escalaForm.titulo || escala.titulo) : escala.titulo}
+          </SheetTitle>
+          {!editMode && (
+            <Button variant="outline" size="sm" className="shrink-0" onClick={() => setEditMode(true)}>
+              <Pencil className="h-3.5 w-3.5 mr-1.5" />Editar
+            </Button>
+          )}
+        </div>
+      </SheetHeader>
+
+      {/* Edit form — shown when editMode is true */}
+      {editMode ? (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <EscalaFormContent
+            form={escalaForm}
+            setForm={setEscalaForm}
+            saving={isSaving}
+            comunidades={comunidades}
+            tiposMissa={tiposMissa}
+            onSave={() => onSave(escalaForm, () => setEditMode(false))}
+            onClose={() => setEditMode(false)}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Meta info */}
+          <div className="rounded-xl bg-muted/30 p-4 space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="capitalize">{dateStr}</span>
+            </div>
+            {escala.hora_inicio && (
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span>{escala.hora_inicio.slice(0, 5)}{escala.hora_fim ? `–${escala.hora_fim.slice(0, 5)}` : ""}</span>
+              </div>
+            )}
+            {escala.local && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>{escala.local}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-1">
+              <Badge variant={cfg.variant}>{cfg.label}</Badge>
+              <Select value={escala.status} onValueChange={onStatusChange}>
+                <SelectTrigger className="h-7 text-xs w-auto">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rascunho">Rascunho</SelectItem>
+                  <SelectItem value="publicada">Publicar</SelectItem>
+                  <SelectItem value="arquivada">Arquivar</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {publicUrl && (
+              <div className="mt-3 rounded-xl border border-border bg-background p-3 text-sm text-muted-foreground break-all">
+                <p className="font-medium">Link público</p>
+                {escala.status === "publicada" ? (
+                  <a href={publicUrl} target="_blank" rel="noreferrer" className="text-primary underline">
+                    {publicUrl}
+                  </a>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    A escala ainda não está publicada. Altere o status para <strong>publicada</strong> para compartilhar o portal.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {escala.observacoes && (
+            <p className="text-sm text-muted-foreground">{escala.observacoes}</p>
+          )}
+        </>
+      )}
+
+      {/* Ministérios e atribuições */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Funções e atribuições</h3>
+
+        {funcoes.length === 0 && (
+          <p className="text-sm text-muted-foreground mb-3">
+            Nenhuma função definida. Adicione os ministérios necessários abaixo.
+          </p>
+        )}
+
+        {/* Group by categoria */}
+        {(() => {
+          const grouped: { categoria: string | null; fs: typeof funcoes }[] = [];
+          funcoes.forEach((f) => {
+            const cat = f.ministerio.categoria ?? null;
+            const g = grouped.find((x) => x.categoria === cat);
+            if (g) g.fs.push(f);
+            else grouped.push({ categoria: cat, fs: [f] });
+          });
+
+          return grouped.map((group) => (
+            <div key={group.categoria ?? "__none__"} className="mb-5">
+              {group.categoria && (
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="inline-flex items-center rounded-full bg-muted/80 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground shrink-0">
+                    {group.categoria}
+                  </span>
+                  <div className="h-px flex-1 bg-border" />
+                  {(() => {
+                    const gFilled  = group.fs.reduce((s, f) => s + atribuicoes.filter((a) => a.ministerio_id === f.ministerio_id).length, 0);
+                    const gNeeded  = group.fs.reduce((s, f) => s + f.quantidade, 0);
+                    const gDone    = gFilled >= gNeeded && gNeeded > 0;
+                    return (
+                      <span className={`text-xs font-semibold tabular-nums shrink-0 ${gDone ? "text-green-600" : "text-amber-600"}`}>
+                        {gFilled}/{gNeeded}
+                      </span>
+                    );
+                  })()}
+                </div>
+              )}
+              <div className="space-y-3">
+                {group.fs.map((f) => {
+                  const atrib = atribuicoes.filter((a) => a.ministerio_id === f.ministerio_id);
+                  const disponiveis = membrosParaMinisterio(f.ministerio_id);
+                  const selectedMembro = addMembroMap[f.ministerio_id] ?? "";
+
+                  return (
+                    <div
+                      key={f.id}
+                      className="rounded-xl border border-border overflow-hidden"
+                      style={{ borderLeftColor: f.ministerio.cor, borderLeftWidth: "4px" }}
+                    >
+                      {/* Header da função */}
+                      <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-muted/30">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-semibold text-sm truncate" style={{ color: f.ministerio.cor }}>
+                            {f.ministerio.nome}
+                          </span>
+                          <span className={`text-xs font-semibold tabular-nums ${atrib.length >= f.quantidade ? "text-green-600" : "text-amber-600"}`}>
+                            {atrib.length}/{f.quantidade}
+                          </span>
+                          {atrib.length >= f.quantidade && (
+                            <Check className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                          )}
+                        </div>
+                        <button
+                          className="shrink-0 text-muted-foreground hover:text-destructive transition"
+                          onClick={() => onRemoveFuncao(f.id)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="px-3 py-2 space-y-1.5">
+
+                      {/* Membros atribuídos */}
+                      {atrib.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between pl-5 text-sm">
+                          <span>{a.membro.nome}</span>
+                          <button className="text-muted-foreground hover:text-destructive" onClick={() => onRemoverAtribuicao(a.id)}>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Atribuir membro */}
+                      {atrib.length < f.quantidade && disponiveis.length > 0 && (
+                        <div className="flex gap-2 pl-5">
+                          <Select
+                            value={selectedMembro}
+                            onValueChange={(v) => setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: v }))}
+                          >
+                            <SelectTrigger className="h-7 text-xs flex-1">
+                              <SelectValue placeholder="Selecionar membro..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {disponiveis.map((m) => (
+                                <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={!selectedMembro}
+                            onClick={() => {
+                              if (selectedMembro) {
+                                onAtribuir(selectedMembro, f.ministerio_id);
+                                setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
+                              }
+                            }}
+                          >
+                            <UserPlus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      {atrib.length < f.quantidade && disponiveis.length === 0 && (
+                        <p className="pl-5 text-xs text-muted-foreground">
+                          Nenhum membro disponível neste ministério.
+                        </p>
+                      )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ));
+        })()}
+
+        {/* Adicionar função */}
+        {ministeriosDisponiveis.length > 0 && (
+          <div className="mt-4 flex gap-2">
+            <Select value={addMinisterioId} onValueChange={setAddMinisterioId}>
+              <SelectTrigger className="flex-1 h-8 text-sm">
+                <SelectValue placeholder="Adicionar ministério..." />
+              </SelectTrigger>
+              <SelectContent>
+                {ministeriosDisponiveis.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="number"
+              min={1}
+              max={20}
+              value={addQtd}
+              onChange={(e) => setAddQtd(e.target.value)}
+              className="w-16 h-8 text-center text-sm"
+            />
+            <Button
+              size="sm"
+              className="h-8"
+              disabled={!addMinisterioId}
+              onClick={() => {
+                if (addMinisterioId) {
+                  onAddFuncao(addMinisterioId, parseInt(addQtd) || 1);
+                  setAddMinisterioId("");
+                  setAddQtd("1");
+                }
+              }}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
+        {suggestedAssignments.length > 0 || generateNotice ? (
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Sugestões de atribuição</p>
+                {generateNotice && <p className="text-sm text-muted-foreground">{generateNotice}</p>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={handleGenerateSuggestions}>
+                  <Sparkles className="h-4 w-4 mr-2" /> Atualizar sugestões
+                </Button>
+                <Button size="sm" disabled={suggestedAssignments.length === 0 || applySuggestionsMutation.isPending} onClick={handleApplySuggestions}>
+                  {applySuggestionsMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Aplicar sugestões"
+                  )}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={handleClearSuggestions}>
+                  Limpar
+                </Button>
+              </div>
+            </div>
+            {suggestedAssignments.length > 0 ? (
+              <div className="space-y-3">
+                {suggestionsByMinisterio.map(({ funcao, assignments }) => (
+                  <div key={funcao.ministerio_id} className="rounded-lg border border-border bg-card p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">{funcao.ministerio.nome}</span>
+                      <span className="text-xs text-muted-foreground">{assignments.length}/{funcao.quantidade}</span>
+                    </div>
+                    {assignments.length > 0 ? (
+                      <ul className="mt-2 space-y-1 text-sm">
+                        {assignments.map((suggestion) => {
+                          const member = membros.find((m) => m.id === suggestion.membro_id);
+                          return (
+                            <li key={`${suggestion.ministerio_id}-${suggestion.membro_id}`}>{member?.nome ?? suggestion.membro_id}</li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-sm text-muted-foreground">Nenhum membro sugerido para esta função.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Registrar presenças — visível para escalas de hoje ou passadas */}
+      {isPastOrToday && atribuicoes.length > 0 && (
+        <div className="rounded-xl border border-border overflow-hidden">
+          <button
+            type="button"
+            className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition text-left"
+            onClick={() => setPresencaOpen((v) => !v)}
+          >
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className="h-4 w-4 text-emerald-600" />
+              <span className="font-semibold text-sm">Registrar presenças</span>
+              <span className="text-xs text-muted-foreground">
+                ({atribuicoes.filter((a) => (presencaMap[a.id] ?? "pendente") === "presente").length}/{atribuicoes.length} presentes)
+              </span>
+            </div>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${presencaOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {presencaOpen && (
+            <div className="px-4 py-3 space-y-1">
+              <p className="text-xs text-muted-foreground mb-3">
+                Marque quem compareceu. Pontos são atribuídos automaticamente pelo sistema.
+              </p>
+              {atribuicoes.map((a) => {
+                const status = presencaMap[a.id] ?? "pendente";
+                return (
+                  <div key={a.id} className="flex items-center justify-between gap-3 py-1.5">
+                    <span className="text-sm font-medium truncate">{a.membro.nome}</span>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPresencaMap((p) => ({ ...p, [a.id]: "presente" }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                          status === "presente"
+                            ? "bg-emerald-500 text-white"
+                            : "bg-muted text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
+                        }`}
+                      >
+                        Presente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPresencaMap((p) => ({ ...p, [a.id]: "faltou" }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                          status === "faltou"
+                            ? "bg-red-500 text-white"
+                            : "bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-700"
+                        }`}
+                      >
+                        Faltou
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="pt-3 border-t border-border mt-2">
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={marcarPresencasMutation.isPending}
+                  onClick={() => marcarPresencasMutation.mutate()}
+                >
+                  {marcarPresencasMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+                  Salvar presenças
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Ações */}
+      <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1 sm:flex-none text-destructive hover:text-destructive border-destructive/30"
+          onClick={() => onDelete(escala)}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Remover
+        </Button>
+      </div>
+    </div>
+  );
+}

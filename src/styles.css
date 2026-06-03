@@ -1,0 +1,162 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Sistema de design "Liturgia Moderna"
+ * Paleta: slate profundo + dourado litúrgico + creme.
+ * Tipografia: Playfair Display (display sacro) + Inter (UI).
+ * Todas as cores em oklch.
+ */
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", "Cormorant Garamond", ui-serif, Georgia, serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-incense: var(--incense);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* Base creme/marfim */
+  --background: oklch(0.985 0.005 85);
+  --foreground: oklch(0.18 0.025 260);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.025 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.025 260);
+
+  /* Primary: slate profundo (vestes/púrpura litúrgica suave) */
+  --primary: oklch(0.22 0.03 260);
+  --primary-foreground: oklch(0.98 0.01 85);
+
+  --secondary: oklch(0.95 0.012 80);
+  --secondary-foreground: oklch(0.22 0.03 260);
+
+  --muted: oklch(0.955 0.008 80);
+  --muted-foreground: oklch(0.5 0.02 260);
+
+  /* Accent: dourado litúrgico */
+  --accent: oklch(0.82 0.12 85);
+  --accent-foreground: oklch(0.22 0.03 260);
+
+  --gold: oklch(0.74 0.135 80);
+  --gold-soft: oklch(0.93 0.05 85);
+  --incense: oklch(0.96 0.015 60);
+
+  --destructive: oklch(0.55 0.22 27);
+  --destructive-foreground: oklch(0.98 0 0);
+
+  --border: oklch(0.9 0.012 80);
+  --input: oklch(0.92 0.012 80);
+  --ring: oklch(0.74 0.135 80);
+
+  --chart-1: oklch(0.74 0.135 80);
+  --chart-2: oklch(0.45 0.08 260);
+  --chart-3: oklch(0.55 0.15 25);
+  --chart-4: oklch(0.5 0.12 145);
+  --chart-5: oklch(0.45 0.15 305);
+
+  --sidebar: oklch(0.18 0.025 260);
+  --sidebar-foreground: oklch(0.92 0.01 80);
+  --sidebar-primary: oklch(0.74 0.135 80);
+  --sidebar-primary-foreground: oklch(0.18 0.025 260);
+  --sidebar-accent: oklch(0.25 0.03 260);
+  --sidebar-accent-foreground: oklch(0.95 0.01 80);
+  --sidebar-border: oklch(0.3 0.025 260);
+  --sidebar-ring: oklch(0.74 0.135 80);
+
+  --gradient-gold: linear-gradient(135deg, oklch(0.78 0.14 85), oklch(0.68 0.13 70));
+  --gradient-sacro: linear-gradient(180deg, oklch(0.22 0.03 260), oklch(0.15 0.03 270));
+  --shadow-altar: 0 20px 50px -20px oklch(0.22 0.03 260 / 0.25);
+  --shadow-gold: 0 10px 30px -10px oklch(0.74 0.135 80 / 0.4);
+}
+
+.dark {
+  --background: oklch(0.14 0.025 265);
+  --foreground: oklch(0.95 0.01 80);
+  --card: oklch(0.18 0.025 260);
+  --card-foreground: oklch(0.95 0.01 80);
+  --popover: oklch(0.18 0.025 260);
+  --popover-foreground: oklch(0.95 0.01 80);
+  --primary: oklch(0.78 0.135 85);
+  --primary-foreground: oklch(0.18 0.025 260);
+  --secondary: oklch(0.25 0.03 260);
+  --secondary-foreground: oklch(0.95 0.01 80);
+  --muted: oklch(0.25 0.03 260);
+  --muted-foreground: oklch(0.7 0.02 80);
+  --accent: oklch(0.78 0.135 85);
+  --accent-foreground: oklch(0.18 0.025 260);
+  --destructive: oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.78 0.135 85);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html, body { font-family: var(--font-sans); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, .font-serif { font-family: var(--font-serif); letter-spacing: -0.01em; }
+}
+
+@layer utilities {
+  .bg-gradient-gold { background-image: var(--gradient-gold); }
+  .bg-gradient-sacro { background-image: var(--gradient-sacro); }
+  .shadow-altar { box-shadow: var(--shadow-altar); }
+  .shadow-gold { box-shadow: var(--shadow-gold); }
+  .text-gold { color: var(--color-gold); }
+  .bg-gold { background-color: var(--color-gold); }
+  .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}

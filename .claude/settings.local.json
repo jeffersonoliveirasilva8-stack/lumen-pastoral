@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"c:\\\\Users\\\\Marketing\\\\OneDrive\\\\Desktop\\\\Portal do Acolitado\"; Get-ChildItem -Name -Force | Where-Object { $_ -notmatch \"node_modules\" })"
+    ]
+  }
+}
