@@ -27,7 +27,7 @@ export function useAuth() {
       } else {
         setLoading(false);
       }
-    });
+    }).catch(() => setLoading(false));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -44,14 +44,20 @@ export function useAuth() {
   }, []);
 
   async function fetchProfile(userId: string) {
-    const [{ data: profileData }, { data: rolesData }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any).from("user_roles").select("role").eq("user_id", userId),
-    ]);
-    setProfile(profileData as Profile | null);
-    setRoles((rolesData ?? []).map((r: { role: string }) => r.role));
-    setLoading(false);
+    try {
+      const [{ data: profileData }, { data: rolesData }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).from("user_roles").select("role").eq("user_id", userId),
+      ]);
+      setProfile(profileData as Profile | null);
+      setRoles((rolesData ?? []).map((r: { role: string }) => r.role));
+    } catch {
+      setProfile(null);
+      setRoles([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function refreshProfile() {
