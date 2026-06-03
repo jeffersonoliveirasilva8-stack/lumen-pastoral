@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/_authenticated/escalas")({
     abrir: typeof search.abrir === "string" ? search.abrir : undefined,
   }),
   component: EscalasPage,
-  head: () => ({ meta: [{ title: "Escalas — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Escalas — Lumen Pastoral" }] }),
 });
 
 import { nomeExibicao } from "@/lib/nome";

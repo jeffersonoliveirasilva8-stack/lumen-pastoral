@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
@@ -35,7 +35,7 @@ const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/painel")({
   component: DashboardPage,
-  head: () => ({ meta: [{ title: "Painel — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Painel — Lumen Pastoral" }] }),
 });
 
 type SubstituicaoTarget = { escalaId: string; atribuicaoId: string; ministerioId: string; membroNome: string; data: string };

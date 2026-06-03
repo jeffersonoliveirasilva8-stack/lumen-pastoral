@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+﻿import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Loader2, Search, Users, ChevronRight, Church } from "lucide-react";
@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/portal/$token")({
   component: PortalParoquiaPage,
-  head: () => ({ meta: [{ title: "Portal da Paróquia — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Portal da Paróquia — Lumen Pastoral" }] }),
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────

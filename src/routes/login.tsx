@@ -9,7 +9,7 @@ const anyDb = supabase as any;
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
-  head: () => ({ meta: [{ title: "Entrar — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Entrar — Lumen Pastoral" }] }),
 });
 
 function LoginPage() {
@@ -82,7 +82,7 @@ function LoginPage() {
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-sidebar-accent text-gold">
             <Sparkles className="h-4 w-4" />
           </div>
-          <span className="font-serif text-lg">Liturgia</span>
+          <span className="font-serif text-lg">Lumen Pastoral</span>
         </Link>
         <div>
           <h2 className="font-serif text-4xl leading-tight">
@@ -97,7 +97,7 @@ function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8 flex items-center gap-2">
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-gold"><Sparkles className="h-4 w-4" /></div>
-            <span className="font-serif text-lg">Liturgia</span>
+            <span className="font-serif text-lg">Lumen Pastoral</span>
           </div>
           <h1 className="font-serif text-3xl">Entrar na coordenação</h1>
           <p className="mt-2 text-sm text-muted-foreground">Acesse sua paróquia.</p>

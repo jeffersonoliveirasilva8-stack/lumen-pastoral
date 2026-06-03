@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_authenticated/sacristia")({
   component: SacristiaPage,
-  head: () => ({ meta: [{ title: "Modo Sacristia — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Modo Sacristia — Lumen Pastoral" }] }),
 });
 
 type MembroEscala = {

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import {
@@ -34,7 +34,7 @@ const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/formacoes")({
   component: AgendaPastoralPage,
-  head: () => ({ meta: [{ title: "Agenda Pastoral — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Agenda Pastoral — Lumen Pastoral" }] }),
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────

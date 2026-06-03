@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -50,7 +50,7 @@ export const Route = createFileRoute("/_authenticated/membros")({
     abrir: typeof search.abrir === "string" ? search.abrir : undefined,
   }),
   component: MembrosPage,
-  head: () => ({ meta: [{ title: "Membros — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Membros — Lumen Pastoral" }] }),
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────

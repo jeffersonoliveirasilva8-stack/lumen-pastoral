@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -30,7 +30,7 @@ const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/notificacoes")({
   component: NotificacoesPage,
-  head: () => ({ meta: [{ title: "Notificações — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Notificações — Lumen Pastoral" }] }),
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────

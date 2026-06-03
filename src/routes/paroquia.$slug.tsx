@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+﻿import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Loader2, Sparkles, Church, Eye, EyeOff } from "lucide-react";
@@ -11,7 +11,7 @@ const anyDb = supabase as any;
 
 export const Route = createFileRoute("/paroquia/$slug")({
   component: PortalEntradaPage,
-  head: () => ({ meta: [{ title: "Portal — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Portal — Lumen Pastoral" }] }),
 });
 
 type ParoquiaInfo = {

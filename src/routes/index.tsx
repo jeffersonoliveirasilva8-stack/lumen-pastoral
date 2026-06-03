@@ -5,7 +5,7 @@ export const Route = createFileRoute("/")({
   component: Landing,
   head: () => ({
     meta: [
-      { title: "Liturgia — Plataforma SaaS para paróquias" },
+      { title: "Lumen Pastoral — Plataforma de gestão pastoral para paróquias" },
       { name: "description", content: "Gestão de escalas pastorais, acolitato e ministérios. Multi-paróquia, em nuvem, com regras litúrgicas inteligentes." },
     ],
   }),
@@ -21,7 +21,7 @@ function Landing() {
             <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-sacro text-gold">
               <Sparkles className="h-4 w-4" />
             </div>
-            <span className="font-serif text-lg font-semibold tracking-tight">Liturgia</span>
+            <span className="font-serif text-lg font-semibold tracking-tight">Lumen Pastoral</span>
           </Link>
           <nav className="flex items-center gap-2">
             <Link to="/login" className="rounded-md px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -79,7 +79,7 @@ function Landing() {
       </section>
 
       <footer className="border-t border-border/60 py-8 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Liturgia · Plataforma de gestão pastoral
+        © {new Date().getFullYear()} Lumen Pastoral · Plataforma de gestão pastoral
       </footer>
     </div>
   );

@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/reset-senha")({
   component: ResetPage,
-  head: () => ({ meta: [{ title: "Definir nova senha — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Definir nova senha — Lumen Pastoral" }] }),
 });
 
 function ResetPage() {

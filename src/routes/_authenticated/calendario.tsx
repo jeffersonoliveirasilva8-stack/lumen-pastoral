@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, addMonths, subMonths } from "date-fns";
@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/calendario")({
   component: CalendarioPage,
-  head: () => ({ meta: [{ title: "Calendário Litúrgico — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Calendário Litúrgico — Lumen Pastoral" }] }),
 });
 
 function CalendarioPage() {

@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/esqueci-senha")({
   component: ForgotPage,
-  head: () => ({ meta: [{ title: "Recuperar senha — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Recuperar senha — Lumen Pastoral" }] }),
 });
 
 function ForgotPage() {

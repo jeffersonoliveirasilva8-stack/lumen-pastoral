@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/cadastro")({
   component: SignupPage,
-  head: () => ({ meta: [{ title: "Criar conta — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Criar conta — Lumen Pastoral" }] }),
 });
 
 function SignupPage() {
@@ -38,7 +38,7 @@ function SignupPage() {
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center gap-2 mb-10">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-sacro text-gold"><Sparkles className="h-4 w-4" /></div>
-          <span className="font-serif text-lg">Liturgia</span>
+          <span className="font-serif text-lg">Lumen Pastoral</span>
         </Link>
 
         <h1 className="font-serif text-3xl">Crie sua conta</h1>

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import {
@@ -23,7 +23,7 @@ const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/planejamento")({
   component: PlanejamentoPastoralPage,
-  head: () => ({ meta: [{ title: "Planejamento Pastoral — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Planejamento Pastoral — Lumen Pastoral" }] }),
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────

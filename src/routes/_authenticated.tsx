@@ -164,7 +164,7 @@ function AuthLayout() {
               <Sparkles className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold truncate">Liturgia</p>
+              <p className="text-sm font-semibold truncate">Lumen Pastoral</p>
               <p className="text-[11px] text-sidebar-foreground/60 truncate">Painel Pastoral</p>
             </div>
           </Link>

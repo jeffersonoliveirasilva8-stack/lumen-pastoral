@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/onboarding")({
   component: Onboarding,
-  head: () => ({ meta: [{ title: "Configurar paróquia — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Configurar paróquia — Lumen Pastoral" }] }),
 });
 
 function slugify(s: string) {
@@ -60,7 +60,7 @@ function Onboarding() {
       <div className="w-full max-w-lg">
         <div className="flex items-center gap-2 mb-8">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-sacro text-gold"><Sparkles className="h-4 w-4" /></div>
-          <span className="font-serif text-lg">Liturgia</span>
+          <span className="font-serif text-lg">Lumen Pastoral</span>
         </div>
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Passo final</p>
         <h1 className="mt-2 font-serif text-4xl">Cadastre sua paróquia</h1>

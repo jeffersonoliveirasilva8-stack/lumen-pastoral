@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus, Pencil, Trash2, Loader2, Layers } from "lucide-react";
@@ -31,7 +31,7 @@ import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_authenticated/ministerios")({
   component: MinisteriosPage,
-  head: () => ({ meta: [{ title: "Grupos — Liturgia" }] }),
+  head: () => ({ meta: [{ title: "Grupos — Lumen Pastoral" }] }),
 });
 
 type Ministerio = {

@@ -63,9 +63,9 @@ const HEAD_META = {
   meta: [
     { charSet: "utf-8" },
     { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-    { title: "Liturgia — Gestão pastoral para paróquias" },
+    { title: "Lumen Pastoral — Gestão pastoral para paróquias" },
     { name: "description", content: "Plataforma SaaS para gestão litúrgica, escalas pastorais e coordenação de paróquias." },
-    { property: "og:title", content: "Liturgia — Gestão pastoral para paróquias" },
+    { property: "og:title", content: "Lumen Pastoral — Gestão pastoral para paróquias" },
     { property: "og:description", content: "Escalas inteligentes, multi-paróquia, totalmente em nuvem." },
     { property: "og:type", content: "website" },
   ],
