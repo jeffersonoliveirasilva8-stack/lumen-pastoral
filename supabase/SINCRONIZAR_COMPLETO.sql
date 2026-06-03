@@ -332,36 +332,82 @@ CREATE POLICY "presenca_admin_all" ON presencas_eventos
 -- PASSO 14 — POLICIES para escala_ocorrencias (se existir)
 -- ════════════════════════════════════════════════════════════════════
 
-CREATE POLICY IF NOT EXISTS "ocorrencia_admin_read" ON escala_ocorrencias
-  FOR SELECT TO authenticated
-  USING (_portal_is_admin(_portal_escala_paroquia(escala_id)));
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'escala_ocorrencias' AND table_schema = 'public') THEN
+    EXECUTE $p$ CREATE POLICY "ocorrencia_admin_read" ON escala_ocorrencias
+      FOR SELECT TO authenticated
+      USING (_portal_is_admin(_portal_escala_paroquia(escala_id))) $p$;
 
-CREATE POLICY IF NOT EXISTS "ocorrencia_admin_write" ON escala_ocorrencias
+    EXECUTE $p$ CREATE POLICY "ocorrencia_admin_write" ON escala_ocorrencias
+      FOR ALL TO authenticated
+      USING (_portal_is_admin(_portal_escala_paroquia(escala_id)))
+      WITH CHECK (_portal_is_admin(_portal_escala_paroquia(escala_id))) $p$;
+
+    EXECUTE $p$ CREATE POLICY "ocorrencia_coord_insert" ON escala_ocorrencias
+      FOR INSERT TO authenticated
+      WITH CHECK (
+        registrado_por = _portal_membro_id()
+        AND _portal_is_coord(_portal_membro_id())
+        AND EXISTS (
+          SELECT 1 FROM escala_membros em
+          WHERE em.escala_id = escala_ocorrencias.escala_id
+            AND em.membro_id = _portal_membro_id()
+        )
+      ) $p$;
+
+    EXECUTE $p$ CREATE POLICY "ocorrencia_coord_read" ON escala_ocorrencias
+      FOR SELECT TO authenticated
+      USING (
+        _portal_is_coord(_portal_membro_id())
+        AND EXISTS (
+          SELECT 1 FROM escala_membros em
+          WHERE em.escala_id = escala_ocorrencias.escala_id
+            AND em.membro_id = _portal_membro_id()
+        )
+      ) $p$;
+  END IF;
+END $$;
+
+-- ════════════════════════════════════════════════════════════════════
+-- PASSO 14b — POLICIES adicionais necessárias
+-- ════════════════════════════════════════════════════════════════════
+
+-- Paróquias: leitura pública (formulário de inscrição de membro sem login)
+CREATE POLICY "paroquias_read_public" ON paroquias
+  FOR SELECT TO anon
+  USING (true);
+
+-- Membros: INSERT e UPDATE para qualquer usuário com papel na paróquia
+-- (coordenadores precisam inserir membros mesmo sem role admin_paroquial)
+CREATE POLICY "membros_gestao_roles" ON membros
   FOR ALL TO authenticated
-  USING (_portal_is_admin(_portal_escala_paroquia(escala_id)))
-  WITH CHECK (_portal_is_admin(_portal_escala_paroquia(escala_id)));
-
-CREATE POLICY IF NOT EXISTS "ocorrencia_coord_insert" ON escala_ocorrencias
-  FOR INSERT TO authenticated
+  USING (
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND paroquia_id = membros.paroquia_id)
+  )
   WITH CHECK (
-    registrado_por = _portal_membro_id()
-    AND _portal_is_coord(_portal_membro_id())
-    AND EXISTS (
-      SELECT 1 FROM public.escala_membros em
-      WHERE em.escala_id = escala_ocorrencias.escala_id
-        AND em.membro_id = _portal_membro_id()
-    )
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND paroquia_id = membros.paroquia_id)
   );
 
-CREATE POLICY IF NOT EXISTS "ocorrencia_coord_read" ON escala_ocorrencias
-  FOR SELECT TO authenticated
+-- Escalas: INSERT e UPDATE para qualquer usuário com papel na paróquia
+CREATE POLICY "escalas_gestao_roles" ON escalas
+  FOR ALL TO authenticated
   USING (
-    _portal_is_coord(_portal_membro_id())
-    AND EXISTS (
-      SELECT 1 FROM public.escala_membros em
-      WHERE em.escala_id = escala_ocorrencias.escala_id
-        AND em.membro_id = _portal_membro_id()
-    )
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND paroquia_id = escalas.paroquia_id)
+  )
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND paroquia_id = escalas.paroquia_id)
+  );
+
+-- escala_membros: INSERT e DELETE para qualquer usuário com papel na paróquia
+CREATE POLICY "em_gestao_roles" ON escala_membros
+  FOR ALL TO authenticated
+  USING (
+    _portal_is_admin(_portal_escala_paroquia(escala_id))
+    OR EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND paroquia_id = _portal_escala_paroquia(escala_id))
+  )
+  WITH CHECK (
+    _portal_is_admin(_portal_escala_paroquia(escala_id))
+    OR EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND paroquia_id = _portal_escala_paroquia(escala_id))
   );
 
 -- ════════════════════════════════════════════════════════════════════

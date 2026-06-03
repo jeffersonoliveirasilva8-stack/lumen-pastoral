@@ -290,7 +290,7 @@ function AuthLayout() {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <div className="mx-auto max-w-7xl px-4 pt-6 pb-28 sm:px-6 lg:px-8 lg:pb-10">
+          <div className="mx-auto max-w-7xl px-4 pt-6 pb-32 sm:px-6 lg:px-8 lg:pb-10">
             <Outlet />
           </div>
         </main>
@@ -343,10 +343,12 @@ function AuthLayout() {
           </DrawerContent>
         </Drawer>
 
-        {/* Mobile bottom navigation — fonte única: bottomNav derivado de allNav */}
+        {/* ── Mobile bottom navigation — FAB "Mais" centralizado ───────── */}
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-card/98 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-t border-border/80 safe-area-pb shadow-[0_-1px_8px_rgba(0,0,0,0.06)]">
           <div className="flex items-stretch h-[60px]">
-            {bottomNav.map((item) => {
+
+            {/* ── 2 itens esquerda: Painel, Escalas ── */}
+            {bottomNav.slice(0, 2).map((item) => {
               const active = pathname === item.to || pathname.startsWith(item.to + "/");
               return (
                 <Link
@@ -370,18 +372,52 @@ function AuthLayout() {
                 </Link>
               );
             })}
-            {/* Mais — abre drawer com navegação completa */}
-            <button
-              onClick={() => setMenuOpen(true)}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 pt-2 pb-1 min-w-0 transition-colors ${
-                drawerNav.some(i => (pathname === i.to || pathname.startsWith(i.to + "/")) && !BOTTOM_ROUTES.includes(i.to))
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <MoreHorizontal className="h-5 w-5 shrink-0 stroke-[1.7]" />
-              <span className="text-[10px] leading-none font-medium mt-0.5">Mais</span>
-            </button>
+
+            {/* ── Centro: FAB "Mais" elevado ── */}
+            <div className="flex-1 relative flex flex-col items-center justify-end pb-1.5">
+              <button
+                onClick={() => setMenuOpen(true)}
+                className={`absolute -top-4 h-[52px] w-[52px] rounded-full bg-primary text-primary-foreground
+                  flex items-center justify-center shadow-[0_6px_24px_oklch(0.22_0.03_260/0.45)]
+                  transition-all duration-200 active:scale-95
+                  ${menuOpen ? "scale-95 shadow-sm rotate-45" : "scale-100 hover:opacity-90"}`}
+                aria-label="Menu"
+              >
+                <MoreHorizontal className="h-[22px] w-[22px]" />
+              </button>
+              <span className={`text-[9px] font-semibold leading-none ${
+                menuOpen ? "text-primary" : "text-muted-foreground"
+              }`}>
+                Menu
+              </span>
+            </div>
+
+            {/* ── 2 itens direita: Agenda, Membros ── */}
+            {bottomNav.slice(2).map((item) => {
+              const active = pathname === item.to || pathname.startsWith(item.to + "/");
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pt-2 pb-1 min-w-0 transition-colors relative ${
+                    active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <div className="relative">
+                    <item.icon className={`h-5 w-5 shrink-0 ${active ? "stroke-[2.2]" : "stroke-[1.7]"}`} />
+                    {item.badge != null && item.badge > 0 && (
+                      <span className="absolute -top-1 -right-1.5 h-3.5 min-w-[0.875rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
+                        {item.badge > 9 ? "9+" : item.badge}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`text-[10px] leading-none truncate max-w-full px-0.5 mt-0.5 ${active ? "font-semibold" : "font-medium"}`}>
+                    {item.label === "Agenda Pastoral" ? "Agenda" : item.label}
+                  </span>
+                </Link>
+              );
+            })}
+
           </div>
         </nav>
       </div>
