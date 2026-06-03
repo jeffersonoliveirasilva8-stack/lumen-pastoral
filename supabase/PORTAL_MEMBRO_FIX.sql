@@ -4,6 +4,53 @@
 -- ╚══════════════════════════════════════════════════════════════════╝
 
 -- ════════════════════════════════════════════════════════════════════
+-- PASSO 0 — LIMPAR TODAS AS POLICIES DAS TABELAS RELEVANTES
+-- Remove qualquer policy antiga com nome diferente que cause recursão.
+-- Executar primeiro, antes de recriar com SECURITY DEFINER.
+-- ════════════════════════════════════════════════════════════════════
+
+ALTER TABLE IF EXISTS membros                DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS escalas                DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS escala_membros         DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS membro_ministerios     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS ministerios            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS paroquias              DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS coordenadores          DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS indisponibilidades     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS historico_participacoes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS formacoes_eventos      DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS presencas_eventos      DISABLE ROW LEVEL SECURITY;
+
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT tablename, policyname
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename IN (
+        'membros','escalas','escala_membros','membro_ministerios',
+        'ministerios','paroquias','coordenadores','indisponibilidades',
+        'historico_participacoes','formacoes_eventos','presencas_eventos'
+      )
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', r.policyname, r.tablename);
+  END LOOP;
+END $$;
+
+ALTER TABLE IF EXISTS membros                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS escalas                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS escala_membros         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS membro_ministerios     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS ministerios            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS paroquias              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS coordenadores          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS indisponibilidades     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS historico_participacoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS formacoes_eventos      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS presencas_eventos      ENABLE ROW LEVEL SECURITY;
+
+-- ════════════════════════════════════════════════════════════════════
 -- PASSO 1 — FUNÇÕES SECURITY DEFINER
 -- Todas as verificações cruzadas de tabelas passam por aqui
 -- para evitar recursão no RLS.
@@ -314,6 +361,37 @@ NOTIFY pgrst, 'reload schema';
 -- PASSO 14 — DIAGNÓSTICO: execute estas queries separadamente
 -- para verificar se tudo está funcionando para o usuário logado
 -- ════════════════════════════════════════════════════════════════════
+
+-- ════════════════════════════════════════════════════════════════════
+-- PASSO 15 — SINCRONIZAR auth_user_id nos membros pelo email
+-- Vincula todos os membros que têm conta Auth mas não estão linkados.
+-- ════════════════════════════════════════════════════════════════════
+
+UPDATE membros m
+SET auth_user_id = u.id
+FROM auth.users u
+WHERE lower(trim(coalesce(m.email, ''))) = lower(trim(u.email))
+  AND m.auth_user_id IS NULL
+  AND m.ativo = true;
+
+-- Resultado da sincronização
+SELECT
+  COUNT(*) FILTER (WHERE auth_user_id IS NOT NULL) AS membros_sincronizados,
+  COUNT(*) FILTER (WHERE auth_user_id IS NULL)     AS sem_conta_auth,
+  COUNT(*)                                          AS total_ativos
+FROM membros WHERE ativo = true;
+
+-- ════════════════════════════════════════════════════════════════════
+-- PASSO 16 — GRANTS finais
+-- ════════════════════════════════════════════════════════════════════
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES    IN SCHEMA public TO authenticated, service_role;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+GRANT ALL ON ALL ROUTINES  IN SCHEMA public TO authenticated, service_role;
+
+NOTIFY pgrst, 'reload schema';
 
 -- 14a. Verificar se o membro é encontrado pelo usuário logado:
 SELECT
