@@ -70,9 +70,21 @@ function strip(s: string): string {
 }
 
 // ── Verifica se um título corresponde a uma homilia ───────────────────────────
-function isHomilia(titulo: string): boolean {
+// No domingo, aceita também títulos de Missa Dominical (sem a palavra "homilia").
+function isHomilia(titulo: string, targetDate: string): boolean {
   const t = titulo.toLowerCase();
-  return t.includes("homilia") || t.includes("homília");
+  if (t.includes("homilia") || t.includes("homília")) return true;
+  // Domingo: aceita vídeos de missa dominical cujo título não contém "homilia"
+  const dow = new Date(targetDate + "T12:00:00Z").getUTCDay(); // 0 = domingo
+  if (dow === 0) {
+    return (
+      t.includes("missa dominical") ||
+      t.includes("missa do domingo") ||
+      t.includes("domingo de") ||
+      (t.includes("domingo") && (t.includes("missa") || t.includes("festa") || t.includes("solenidade")))
+    );
+  }
+  return false;
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -107,7 +119,7 @@ Deno.serve(async (req) => {
 
     // Procura homilia: mesmo dia → ±1 dia (publicações podem ser às 00h UTC)
     const candidatos = entries.filter((e) => {
-      if (!isHomilia(e.titulo)) return false;
+      if (!isHomilia(e.titulo, targetDate)) return false;
       const diff = Math.abs(
         new Date(e.publishedAt).getTime() - new Date(targetDate).getTime()
       );
