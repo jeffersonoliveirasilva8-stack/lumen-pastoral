@@ -25,12 +25,15 @@ export type EscalaMembroInput = {
   forcar_escalacao_solene?: boolean;
   restricoes_dia_semana?: number[];
   sexo?: "M" | "F" | null;
+  atuacao_ids?: string[];
 };
 
 export type EscalaFuncaoPedido = {
   ministerio_id: string;
   quantidade: number;
   ministerio: EscalaMinisterio;
+  // IDs de atuações exigidas para esta função (vazio = qualquer membro apto)
+  atuacoes_exigidas?: string[];
 };
 
 export type EscalaAssignmentSuggestion = {
@@ -61,6 +64,7 @@ import {
   type ContextoEscala,
   type ConfigParoquia,
   type HistoricoRecente,
+  type DetalheFuncao,
 } from "../biblioteca/escala-engine";
 
 type AllocOptions = {
@@ -72,12 +76,19 @@ type AllocOptions = {
   solene?: boolean;
   tem_adoracao?: boolean;
   tem_bispo?: boolean;
+  // debug: true → loga no console; omitir ou false → silencioso
+  debug?: boolean;
 };
 
-// ── _buildAndAllocate (interno) ───────────────────────────────────────────────
-// Constrói os modelos do engine e executa a alocação.
-// Centraliza a lógica compartilhada entre as duas funções públicas,
-// evitando duplicação e garantindo comportamento consistente.
+// ── Logging condicional ───────────────────────────────────────────────────────
+// Só loga quando debug === true explicitamente. Não loga em produção.
+function logDebug(msg: string, debug?: boolean) {
+  if (debug === true) {
+    console.log(`[ESCALA-ENGINE] ${msg}`);
+  }
+}
+
+// ── _buildAndAllocate ─────────────────────────────────────────────────────────
 
 function _buildAndAllocate(
   evento: EscalaEvent,
@@ -86,11 +97,53 @@ function _buildAndAllocate(
   membroMinisterios: Record<string, string[]>,
   options?: AllocOptions,
 ) {
+  const debug = options?.debug;
+
+  logDebug(`Evento: ${evento.titulo} | Data: ${evento.data}`, debug);
+  logDebug(`Funções: ${funcoes.length} | Membros: ${membros.length} | Ministérios mapeados: ${Object.keys(membroMinisterios).length}`, debug);
+
+  // ── Validações de entrada ──────────────────────────────────────────────────
+  if (membros.length === 0) {
+    logDebug("❌ Sem membros ativos no sistema", debug);
+    return { alocacoes: [], alertas: ["Nenhum membro ativo cadastrado no sistema."], detalhesPorFuncao: [] };
+  }
+
+  if (funcoes.length === 0) {
+    logDebug("❌ Sem funções definidas", debug);
+    return { alocacoes: [], alertas: ["Nenhuma função definida para esta escala."], detalhesPorFuncao: [] };
+  }
+
+  if (Object.keys(membroMinisterios).length === 0) {
+    logDebug("❌ membroMinisterios vazio — nenhum vínculo membro↔ministério encontrado", debug);
+    return {
+      alocacoes: [],
+      alertas: [
+        "Nenhum membro possui vínculo com funções litúrgicas. " +
+        "Acesse Membros → edite cada membro → seção Funções e marque as funções que ele exerce.",
+      ],
+      detalhesPorFuncao: [],
+    };
+  }
+
+  // ── Diagnóstico de cobertura de funções ────────────────────────────────────
+  const minIdsRequeridos = funcoes.map((f) => f.ministerio_id);
+  const minIdsComMembros = new Set(Object.keys(membroMinisterios));
+  const minSemCobertura = minIdsRequeridos.filter((mid) => !minIdsComMembros.has(mid));
+
+  if (minSemCobertura.length > 0 && debug) {
+    minSemCobertura.forEach((mid) => {
+      const f = funcoes.find((x) => x.ministerio_id === mid);
+      logDebug(`⚠ Função sem membros vinculados: "${f?.ministerio.nome || mid}"`, debug);
+    });
+  }
+
   const existing = new Set(
     (options?.existingAssignments ?? []).map((a) => a.membro_id),
   );
 
-  // Inverte o mapa ministerio→membros para membro→ministerios
+  logDebug(`Atribuídos previamente: ${existing.size}`, debug);
+
+  // ── Inverter mapa ministerio→membros para membro→ministerios ──────────────
   const membroParaMinisterios: Record<string, string[]> = {};
   for (const [minId, mids] of Object.entries(membroMinisterios)) {
     for (const mid of mids) {
@@ -99,26 +152,27 @@ function _buildAndAllocate(
     }
   }
 
+  logDebug(`Membros com vínculos: ${Object.keys(membroParaMinisterios).length} de ${membros.length}`, debug);
+
   const restricoes = options?.restricoes ?? [];
 
   const membrosEngine: MembroEngine[] = membros
     .filter((m) => !existing.has(m.id))
     .map((m) => {
-      // Blocklist: ministérios em que o membro explicitamente não pode servir
       const naoPodemIds = restricoes
         .filter((r) => r.membro_id === m.id && r.tipo === "nao_pode")
         .map((r) => r.ministerio_id);
 
-      // Allowlist: ministérios extras concedidos além do membro_ministerios normal.
-      // "pode" garante permissão em ministérios fora da vinculação padrão do membro.
       const podemIds = restricoes
         .filter((r) => r.membro_id === m.id && r.tipo === "pode")
         .map((r) => r.ministerio_id);
 
       const ministerioIdsBase = membroParaMinisterios[m.id] ?? [];
-      const ministerioIdsEfetivo = [
-        ...new Set([...ministerioIdsBase, ...podemIds]),
-      ];
+      const ministerioIdsEfetivo = [...new Set([...ministerioIdsBase, ...podemIds])];
+
+      if (ministerioIdsEfetivo.length === 0) {
+        logDebug(`⚠ Membro "${m.nome}" (${m.id}) sem ministérios — não será candidato`, debug);
+      }
 
       return {
         id: m.id,
@@ -130,13 +184,17 @@ function _buildAndAllocate(
         restricoes_dia_semana: m.restricoes_dia_semana ?? [],
         funcoes_nao_pode_ids: naoPodemIds,
         sexo: (m.sexo === "M" || m.sexo === "F") ? m.sexo : null,
+        atuacao_ids: m.atuacao_ids ?? [],
       };
     });
+
+  logDebug(`Candidatos após filtro de existentes: ${membrosEngine.length}`, debug);
 
   const funcoesEngine: FuncaoNecessaria[] = funcoes.map((f) => ({
     ministerio_id: f.ministerio_id,
     ministerio_nome: f.ministerio.nome,
     quantidade: f.quantidade,
+    atuacoes_exigidas: f.atuacoes_exigidas,
   }));
 
   const contexto: ContextoEscala = {
@@ -157,20 +215,16 @@ function _buildAndAllocate(
       data: h.date!.slice(0, 10),
     }));
 
-  // ── Fix 1: bloqueio de dupla escalação no mesmo dia ───────────────────────
-  // Entradas do histórico com data === evento.data representam alocações já
-  // existentes em OUTRAS escalas neste mesmo dia (horários diferentes).
-  // Tratá-las como indisponibilidade impede que o membro seja sugerido mais de
-  // uma vez no mesmo dia calendário, tanto na geração manual quanto em lote.
+  logDebug(`Histórico: ${historicoRecente.length} registros (6 meses)`, debug);
+
+  // ── Bloqueio de dupla escalação no mesmo dia ───────────────────────────────
   const sameDayBlocks: IndisponibilidadeEngine[] = historicoRecente
     .filter((h) => h.data === evento.data)
     .map((h) => ({ membro_id: h.membro_id, data: evento.data }));
 
-  // ── Fix 2: normalização defensiva de datas das indisponibilidades ─────────
-  // Datas vindas do Supabase podem conter componente de hora em algumas
-  // configurações de timezone (ex.: "2025-06-01T00:00:00+00:00"). O motor
-  // compara strings exatas; slice(0, 10) garante formato YYYY-MM-DD em
-  // qualquer caso — indisponibilidades de qualquer origem são respeitadas.
+  logDebug(`Bloqueios do mesmo dia (outra escala): ${sameDayBlocks.length}`, debug);
+
+  // ── Normalização defensiva de datas ────────────────────────────────────────
   const indisponibilidades: IndisponibilidadeEngine[] = [
     ...(options?.indisponibilidades ?? []).map((i) => ({
       membro_id: i.membro_id,
@@ -179,7 +233,9 @@ function _buildAndAllocate(
     ...sameDayBlocks,
   ];
 
-  return alocarMembros(
+  logDebug(`Indisponibilidades totais (incluindo mesmo dia): ${indisponibilidades.length}`, debug);
+
+  const resultado = alocarMembros(
     funcoesEngine,
     membrosEngine,
     indisponibilidades,
@@ -187,10 +243,23 @@ function _buildAndAllocate(
     historicoRecente,
     config,
   );
+
+  logDebug(`Resultado: ${resultado.alocacoes.length} alocações | ${resultado.alertas.length} alertas`, debug);
+  resultado.alertas.forEach((a) => logDebug(`  ${a}`, debug));
+
+  if (debug) {
+    resultado.detalhesPorFuncao.forEach((d) => {
+      logDebug(
+        `  Função "${d.ministerio_nome}": ${d.alocados}/${d.solicitados}${d.motivo_vazio ? ` — ${d.motivo_vazio}` : ""}`,
+        debug,
+      );
+    });
+  }
+
+  return resultado;
 }
 
 // ── generateEscalaAssignments ─────────────────────────────────────────────────
-// API de alto nível — retorna apenas as sugestões de alocação.
 
 export function generateEscalaAssignments(
   evento: EscalaEvent,
@@ -207,7 +276,13 @@ export function generateEscalaAssignments(
 }
 
 // ── generateEscalaWithAlertas ─────────────────────────────────────────────────
-// Igual a generateEscalaAssignments, mas também devolve os alertas do motor.
+// Igual a generateEscalaAssignments, mas devolve alertas e detalhe por função.
+
+export type ResultadoCompleto = {
+  sugestoes: EscalaAssignmentSuggestion[];
+  alertas: string[];
+  detalhesPorFuncao: DetalheFuncao[];
+};
 
 export function generateEscalaWithAlertas(
   evento: EscalaEvent,
@@ -215,7 +290,7 @@ export function generateEscalaWithAlertas(
   membros: EscalaMembroInput[],
   membroMinisterios: Record<string, string[]>,
   options?: AllocOptions,
-): { sugestoes: EscalaAssignmentSuggestion[]; alertas: string[] } {
+): ResultadoCompleto {
   const resultado = _buildAndAllocate(evento, funcoes, membros, membroMinisterios, options);
   return {
     sugestoes: resultado.alocacoes.map((a) => ({
@@ -224,5 +299,6 @@ export function generateEscalaWithAlertas(
       motivo: a.motivo,
     })),
     alertas: resultado.alertas,
+    detalhesPorFuncao: resultado.detalhesPorFuncao,
   };
 }

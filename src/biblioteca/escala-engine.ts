@@ -10,13 +10,9 @@ export type MembroEngine = {
   ativo: boolean;
   forcar_escalacao_solene: boolean;
   ministerio_ids: string[];
-  // Blocklist: ministérios em que o membro não pode ser alocado
   funcoes_nao_pode_ids?: string[];
-  // Dias da semana em que o membro NÃO está disponível (0=Dom … 6=Sáb)
   restricoes_dia_semana?: number[];
-  // Atuações pastorais para filtragem por categoria
   atuacao_ids?: string[];
-  // Sexo: "M" = masculino, "F" = feminino, null = não informado
   sexo?: "M" | "F" | null;
 };
 
@@ -29,11 +25,13 @@ export type FuncaoNecessaria = {
   ministerio_id: string;
   ministerio_nome: string;
   quantidade: number;
+  // IDs de atuações exigidas para esta função (vazio = qualquer membro apto)
+  atuacoes_exigidas?: string[];
 };
 
 export type ContextoEscala = {
-  data: string;         // YYYY-MM-DD
-  tipo: string;         // missa | evento | retiro | novena | outro
+  data: string;
+  tipo: string;
   solene: boolean;
   tem_adoracao: boolean;
   tem_bispo: boolean;
@@ -48,6 +46,9 @@ export type ConfigParoquia = {
   limite_semanal?: number;
   limite_mensal?: number;
   impedir_repeticao_seguida?: boolean;
+  // Quando true: membros com MAIOR score são priorizados (mérito)
+  // Quando false/undefined: membros com MENOR score são priorizados (equidade)
+  prioridade_score?: boolean;
 };
 
 export type MinisterioBase = {
@@ -60,17 +61,27 @@ export type MembroAlocado = {
   membro_id: string;
   membro_nome: string;
   ministerio_id: string;
-  forcado: boolean; // true = Regra Jefferson
-  motivo: string;   // human-readable reason for selection
+  forcado: boolean;
+  motivo: string;
+};
+
+// ── Detalhes por função (diagnóstico) ────────────────────────────────────────
+
+export type DetalheFuncao = {
+  ministerio_id: string;
+  ministerio_nome: string;
+  solicitados: number;
+  alocados: number;
+  motivo_vazio?: string; // preenchido quando alocados < solicitados
 };
 
 export type ResultadoAlocacao = {
   alocacoes: MembroAlocado[];
   alertas: string[];
+  detalhesPorFuncao: DetalheFuncao[];
 };
 
 // ── Termos de identificação de ministérios ────────────────────────────────────
-// Comparação case-insensitive e flexível para diferentes grafias paroquiais.
 
 const TERMOS: Record<string, string[]> = {
   ce_padre:   ["ce. do padre", "ce do padre", "cerimoniário do padre", "cerimoniar do padre", "ce padre"],
@@ -109,7 +120,6 @@ function ehSoleneContexto(ctx: ContextoEscala): boolean {
 
 // ── isApto ────────────────────────────────────────────────────────────────────
 // Verifica se um membro pode ser escalado para um ministério numa data.
-// NÃO aplica a Regra Jefferson (ela tem lógica própria em alocarMembros).
 
 export function isApto(
   membro: MembroEngine,
@@ -117,25 +127,33 @@ export function isApto(
   data: string,
   indisponibilidades: IndisponibilidadeEngine[],
   ja_alocados: Set<string>,
+  atuacoes_exigidas?: string[],
 ): boolean {
   if (!membro.ativo) return false;
   if (!membro.ministerio_ids.includes(ministerio_id)) return false;
   if (ja_alocados.has(membro.id)) return false;
   if (estaIndisponivel(membro.id, data, indisponibilidades)) return false;
+
   // Restrição por dia da semana
   if (membro.restricoes_dia_semana && membro.restricoes_dia_semana.length > 0) {
     if (membro.restricoes_dia_semana.includes(getDiaSemana(data))) return false;
   }
+
   // Blocklist: ministério explicitamente proibido para este membro
   if (membro.funcoes_nao_pode_ids && membro.funcoes_nao_pode_ids.includes(ministerio_id)) {
     return false;
   }
+
+  // Filtro por atuação: se a função exige atuações específicas, o membro deve ter pelo menos uma
+  if (atuacoes_exigidas && atuacoes_exigidas.length > 0) {
+    const membroAtuacoes = membro.atuacao_ids ?? [];
+    if (!atuacoes_exigidas.some((a) => membroAtuacoes.includes(a))) return false;
+  }
+
   return true;
 }
 
 // ── getFuncoesAdicionais ──────────────────────────────────────────────────────
-// Retorna funções extras que devem ser adicionadas com base nas regras litúrgicas.
-// Não duplica funções já presentes em funcoes_existentes.
 
 export function getFuncoesAdicionais(
   contexto: ContextoEscala,
@@ -152,29 +170,21 @@ export function getFuncoesAdicionais(
       (m) => m.ativo && nomeContem(m.nome, termos),
     );
     if (min && !ids_existentes.has(min.id)) {
-      adicionais.push({
-        ministerio_id: min.id,
-        ministerio_nome: min.nome,
-        quantidade,
-      });
+      adicionais.push({ ministerio_id: min.id, ministerio_nome: min.nome, quantidade });
       ids_existentes.add(min.id);
     }
   }
 
-  // Quinta-feira com Adoração: Turíbulo + Naveta (nunca em domingo)
-  // Regra: missas dominicais NÃO recebem turíbulo/naveta automaticamente.
   if (contexto.tem_adoracao && !domingo) {
     if (config.usa_turibulo !== false) addSeFaltando(TERMOS.turibulo, 1);
     if (config.usa_naveta !== false) addSeFaltando(TERMOS.naveta, 1);
   }
 
-  // Missa com Bispo: Baculífero + Mitrífero
   if (contexto.tem_bispo) {
     if (config.usa_baculifero !== false) addSeFaltando(TERMOS.baculifero, 1);
     if (config.usa_mitrifero !== false) addSeFaltando(TERMOS.mitrifero, 1);
   }
 
-  // Remover tochas se a paróquia não as usa
   if (!config.usa_tochas) {
     return adicionais.filter((f) => !nomeContem(f.ministerio_nome, TERMOS.tocha));
   }
@@ -185,17 +195,10 @@ export function getFuncoesAdicionais(
 export type HistoricoRecente = {
   membro_id: string;
   ministerio_id: string;
-  data: string; // YYYY-MM-DD — data da última alocação neste ministério
+  data: string;
 };
 
 // ── alocarMembros ─────────────────────────────────────────────────────────────
-// Motor principal de alocação. Aplica:
-//   1. Regra Jefferson (prioridade máxima em missas solenes)
-//   2. Distribuição por score (menor score → mais prioridade = mais justo)
-//   3. Respeito a indisponibilidades
-//   4. Allowlist/Blocklist de funções por membro
-//   5. Anti-repetição consecutiva (penalidade de score se serviu recentemente)
-//   6. Sem duplicação na mesma escala
 
 export function alocarMembros(
   funcoes: FuncaoNecessaria[],
@@ -207,45 +210,50 @@ export function alocarMembros(
 ): ResultadoAlocacao {
   const alocacoes: MembroAlocado[] = [];
   const alertas: string[] = [];
+  const detalhesPorFuncao: DetalheFuncao[] = [];
   const ja_alocados = new Set<string>();
 
   const usarPenalidade = config?.impedir_repeticao_seguida !== false;
+  // prioridade_score: true = maior score tem preferência (mérito)
+  //                  false/undefined = menor score tem preferência (equidade)
+  const prioridadeScore = config?.prioridade_score === true;
 
-  // Score efetivo para ordenação dentro de um ministério.
-  // Lógica em camadas:
-  //   1. Base = score do banco + total de serviços históricos (proxy quando score=0)
-  //   2. Penalidade por serviço nos últimos 7 dias (+10 000 por ocorrência)
-  //   3. Penalidade adicional por repetição do mesmo ministério (+50 000)
-  // Com membros todos em score=0 e sem histórico, o score efetivo é 0 para todos —
-  // o embaralhamento prévio (ver abaixo) garante a rotatividade nesse caso.
+  // ── Score efetivo ──────────────────────────────────────────────────────────
   function scoreEfetivo(m: MembroEngine, ministerio_id: string): number {
     const totalServicos = historicoRecente
       ? historicoRecente.filter((h) => h.membro_id === m.id).length
       : 0;
 
+    // Base: score do banco + serviços históricos totais
     let score = m.score + totalServicos;
 
-    if (!usarPenalidade || !historicoRecente || historicoRecente.length === 0) return score;
+    // Penalidade por serviço recente (últimos 7 dias) — apenas no modo equidade
+    if (usarPenalidade && historicoRecente && historicoRecente.length > 0) {
+      const cutoff = new Date(contexto.data + "T12:00:00");
+      cutoff.setDate(cutoff.getDate() - 7);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
 
-    const cutoff = new Date(contexto.data + "T12:00:00");
-    cutoff.setDate(cutoff.getDate() - 7);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+      const recentes = historicoRecente.filter(
+        (h) => h.membro_id === m.id && h.data >= cutoffStr,
+      );
 
-    const recentes = historicoRecente.filter(
-      (h) => h.membro_id === m.id && h.data >= cutoffStr,
-    );
-
-    if (recentes.length > 0) {
-      score += recentes.length * 10000;
-      if (recentes.some((h) => h.ministerio_id === ministerio_id)) score += 50000;
+      if (recentes.length > 0) {
+        if (!prioridadeScore) {
+          // Equidade: penalizar quem serviu recentemente
+          score += recentes.length * 10000;
+          if (recentes.some((h) => h.ministerio_id === ministerio_id)) score += 50000;
+        } else {
+          // Mérito: bonificar quem serviu recentemente (experiência)
+          score += recentes.length * 100;
+        }
+      }
     }
 
-    return score;
+    // No modo equidade, inverter sinal para que sort ascending = maior participação primeiro
+    return prioridadeScore ? -score : score;
   }
 
-  // Fisher-Yates shuffle — aplicado POR FUNÇÃO, depois da filtragem e
-  // antes do sort final por scoreEfetivo. Garante aleatoriedade real dentro
-  // de cada faixa de pontuação idêntica, independente do score bruto.
+  // Fisher-Yates shuffle para aleatoriedade dentro de scores iguais
   function embaralhar<T>(arr: T[]): T[] {
     const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {
@@ -255,49 +263,40 @@ export function alocarMembros(
     return a;
   }
 
-  // ── Limites de participação (semanal / mensal) ───────────────────────────────
-  // Pré-computa quais membros já atingiram o limite no período.
-  // A Regra Jefferson ignora esses limites (escalação forçada).
+  // ── Limites de participação (semanal / mensal) ─────────────────────────────
   const membros_acima_do_limite = new Set<string>();
   if (historicoRecente && historicoRecente.length > 0 && (config?.limite_semanal || config?.limite_mensal)) {
     const dataEvento = new Date(contexto.data + "T12:00:00");
 
-    // Janela semanal: 7 dias anteriores ao evento (inclusive)
     const semanaInicio = new Date(dataEvento);
     semanaInicio.setDate(semanaInicio.getDate() - 6);
     const semanaInicioStr = semanaInicio.toISOString().slice(0, 10);
 
-    // Janela mensal: mês calendário do evento
     const ano = dataEvento.getFullYear();
     const mes = String(dataEvento.getMonth() + 1).padStart(2, "0");
     const mesInicioStr = `${ano}-${mes}-01`;
 
     for (const m of membros) {
-      if (config.limite_semanal) {
+      if (config!.limite_semanal) {
         const countSemana = historicoRecente.filter(
           (h) => h.membro_id === m.id && h.data >= semanaInicioStr && h.data <= contexto.data,
         ).length;
-        if (countSemana >= config.limite_semanal) {
-          membros_acima_do_limite.add(m.id);
-        }
+        if (countSemana >= config!.limite_semanal) membros_acima_do_limite.add(m.id);
       }
-      if (config.limite_mensal && !membros_acima_do_limite.has(m.id)) {
+      if (config!.limite_mensal && !membros_acima_do_limite.has(m.id)) {
         const countMes = historicoRecente.filter(
           (h) => h.membro_id === m.id && h.data >= mesInicioStr && h.data <= contexto.data,
         ).length;
-        if (countMes >= config.limite_mensal) {
-          membros_acima_do_limite.add(m.id);
-        }
+        if (countMes >= config!.limite_mensal) membros_acima_do_limite.add(m.id);
       }
     }
   }
 
-  // ── Regra Jefferson ─────────────────────────────────────────────────────────
+  // ── Regra Jefferson ────────────────────────────────────────────────────────
   const solene = ehSoleneContexto(contexto);
   const jefferson = membros.find((m) => m.forcar_escalacao_solene && m.ativo);
 
   if (jefferson && solene) {
-    // Busca a função mais adequada: Ce. do Padre → Ce. Mor
     const funcao_jeff =
       funcoes.find((f) => nomeContem(f.ministerio_nome, TERMOS.ce_padre)) ??
       funcoes.find((f) => nomeContem(f.ministerio_nome, TERMOS.ce_mor));
@@ -313,20 +312,19 @@ export function alocarMembros(
         });
         ja_alocados.add(jefferson.id);
 
-        // Alerta se indisponível mas escalado pela regra
         if (estaIndisponivel(jefferson.id, contexto.data, indisponibilidades)) {
           alertas.push(
-            `⚠ ${jefferson.nome} está indisponível em ${contexto.data}, mas foi escalado pela Regra Jefferson (missa solene).`,
+            `⚠ ${jefferson.nome} está indisponível em ${contexto.data}, mas foi escalado pela Regra Jefferson.`,
           );
         }
       } else {
         alertas.push(
-          `⚠ Regra Jefferson: ${jefferson.nome} precisa ser escalado, mas não tem o ministério "${funcao_jeff.ministerio_nome}". Verifique o cadastro do membro.`,
+          `⚠ Regra Jefferson: ${jefferson.nome} não tem o ministério "${funcao_jeff.ministerio_nome}". Verifique o cadastro.`,
         );
       }
     } else {
       alertas.push(
-        `⚠ Regra Jefferson: ${jefferson.nome} deve ser escalado, mas não há função Ce. do Padre / Ce. Mor definida nesta escala. Adicione a função manualmente.`,
+        `⚠ Regra Jefferson: nenhuma função Ce. do Padre / Ce. Mor nesta escala. Adicione manualmente.`,
       );
     }
   }
@@ -338,64 +336,120 @@ export function alocarMembros(
     ).length;
 
     let vagas = funcao.quantidade - ja_nessa_funcao;
-    if (vagas <= 0) continue;
+    if (vagas <= 0) {
+      detalhesPorFuncao.push({
+        ministerio_id: funcao.ministerio_id,
+        ministerio_nome: funcao.ministerio_nome,
+        solicitados: funcao.quantidade,
+        alocados: ja_nessa_funcao,
+      });
+      continue;
+    }
 
-    // Filtra aptos → embaralha → ordena por scoreEfetivo.
-    // O shuffle garante rotatividade aleatória real dentro de faixas de pontuação
-    // idêntica, sem depender de ordenação anterior nem de propriedades do sort.
-    const aptos = embaralhar(
-      membros.filter((m) =>
-        !membros_acima_do_limite.has(m.id) &&
-        isApto(m, funcao.ministerio_id, contexto.data, indisponibilidades, ja_alocados),
-      ),
-    ).sort((a, b) => scoreEfetivo(a, funcao.ministerio_id) - scoreEfetivo(b, funcao.ministerio_id));
+    // Filtra membros aptos: respeita limites + isApto (inclui filtro de atuação)
+    const aptosBase = membros.filter((m) =>
+      !membros_acima_do_limite.has(m.id) &&
+      isApto(m, funcao.ministerio_id, contexto.data, indisponibilidades, ja_alocados, funcao.atuacoes_exigidas),
+    );
 
-    // ── Mix de gênero ────────────────────────────────────────────────────────
-    // Se todas as vagas seriam preenchidas pelo mesmo gênero conhecido (M ou F)
-    // e há membro do outro gênero disponível no pool, troca o último selecionado
-    // (pior score) pelo melhor candidato do gênero faltante.
-    // Nunca força mix quando só um gênero está disponível ou cadastrado.
+    // Se não há aptos e havia limite, tenta sem limite (fallback)
+    const aptos =
+      aptosBase.length > 0
+        ? aptosBase
+        : membros_acima_do_limite.size > 0
+          ? membros.filter((m) =>
+              isApto(m, funcao.ministerio_id, contexto.data, indisponibilidades, ja_alocados, funcao.atuacoes_exigidas),
+            )
+          : [];
+
+    const aptosOrdenados = embaralhar(aptos).sort(
+      (a, b) => scoreEfetivo(a, funcao.ministerio_id) - scoreEfetivo(b, funcao.ministerio_id),
+    );
+
+    // ── Mix de gênero ──────────────────────────────────────────────────────
     const selecionados = (() => {
-      const inicial = aptos.slice(0, vagas);
+      const inicial = aptosOrdenados.slice(0, vagas);
       if (vagas < 2) return inicial;
       const comGenero = inicial.filter((m) => m.sexo === "M" || m.sexo === "F");
-      if (comGenero.length === 0) return inicial; // nenhum gênero cadastrado
+      if (comGenero.length === 0) return inicial;
       const generoBase = comGenero[0].sexo;
-      if (!comGenero.every((m) => m.sexo === generoBase)) return inicial; // já misto
-      // Busca o melhor candidato do outro gênero ainda fora da seleção
-      const diferente = aptos.slice(vagas).find(
+      if (!comGenero.every((m) => m.sexo === generoBase)) return inicial;
+      const diferente = aptosOrdenados.slice(vagas).find(
         (m) => m.sexo !== generoBase && (m.sexo === "M" || m.sexo === "F"),
       );
-      if (!diferente) return inicial; // outro gênero não disponível, mantém seleção
+      if (!diferente) return inicial;
       return [...inicial.slice(0, vagas - 1), diferente];
     })();
 
     for (const m of selecionados) {
-      const motivo = solene && m.forcar_escalacao_solene
-        ? "Regra Jefferson (missa solene)"
-        : `Score ${m.score} — menor pontuação`;
+      const emLimite = membros_acima_do_limite.has(m.id) && aptosBase.length === 0;
+      const modoScore = prioridadeScore ? "maior score" : "menor score";
       alocacoes.push({
         membro_id: m.id,
         membro_nome: m.nome,
         ministerio_id: funcao.ministerio_id,
-        forcado: false,
-        motivo,
+        forcado: emLimite,
+        motivo: emLimite
+          ? `Score ${m.score} — alocado acima do limite (fallback)`
+          : `Score ${m.score} — ${modoScore}`,
       });
       ja_alocados.add(m.id);
     }
 
+    // Diagnóstico desta função
+    const alocadosNestaFuncao = selecionados.length + ja_nessa_funcao;
     const faltando = vagas - selecionados.length;
+
+    let motivoVazio: string | undefined;
     if (faltando > 0) {
+      // Diagnosticar o motivo de não preenchimento
+      const semVinculo = membros.filter(
+        (m) => !m.ministerio_ids.includes(funcao.ministerio_id),
+      ).length;
+      const comVinculo = membros.filter(
+        (m) => m.ministerio_ids.includes(funcao.ministerio_id),
+      );
+      const indisps = comVinculo.filter((m) =>
+        estaIndisponivel(m.id, contexto.data, indisponibilidades),
+      ).length;
+      const restricoesdia = comVinculo.filter(
+        (m) => m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data)),
+      ).length;
+      const jaemaloc = comVinculo.filter((m) => ja_alocados.has(m.id)).length;
+      const acimalimite = comVinculo.filter((m) => membros_acima_do_limite.has(m.id)).length;
+
+      if (comVinculo.length === 0) {
+        motivoVazio = `Nenhum membro vinculado a esta função (${membros.length} membros sem vínculo)`;
+      } else if (indisps >= comVinculo.length) {
+        motivoVazio = `Todos os ${comVinculo.length} membro(s) com esta função estão indisponíveis nesta data`;
+      } else if (restricoesdia >= comVinculo.length) {
+        motivoVazio = `Todos os membro(s) com esta função têm restrição para ${getDiaSemana(contexto.data) === 0 ? "domingo" : "este dia da semana"}`;
+      } else if (jaemaloc >= comVinculo.length) {
+        motivoVazio = `Todos os membro(s) com esta função já foram atribuídos a outra função nesta escala`;
+      } else if (acimalimite > 0 && aptosBase.length === 0) {
+        motivoVazio = `${acimalimite} membro(s) atingiu o limite semanal/mensal; ${comVinculo.length - acimalimite} alocado(s)`;
+      } else {
+        motivoVazio = `${faltando} vaga(s) em aberto — candidatos insuficientes (${semVinculo} sem vínculo)`;
+      }
+
       alertas.push(
-        `⚠ Faltam ${faltando} membro(s) para "${funcao.ministerio_nome}". Sem membros disponíveis suficientes neste ministério.`,
+        `⚠ Faltam ${faltando} para "${funcao.ministerio_nome}": ${motivoVazio}.`,
       );
     }
+
+    detalhesPorFuncao.push({
+      ministerio_id: funcao.ministerio_id,
+      ministerio_nome: funcao.ministerio_nome,
+      solicitados: funcao.quantidade,
+      alocados: alocadosNestaFuncao,
+      motivo_vazio: motivoVazio,
+    });
   }
 
-  return { alocacoes, alertas };
+  return { alocacoes, alertas, detalhesPorFuncao };
 }
 
-// ── Regras litúrgicas de classificação ───────────────────────────────────────
+// ── Regras litúrgicas ─────────────────────────────────────────────────────────
 
 export function ehMissaSolene(tipo: string, solene: boolean, tem_bispo: boolean): boolean {
   if (solene || tem_bispo) return true;
@@ -404,7 +458,7 @@ export function ehMissaSolene(tipo: string, solene: boolean, tem_bispo: boolean)
 }
 
 export function getDiaSemana(data: string): number {
-  return new Date(data + "T12:00:00").getDay(); // 0=Dom, 6=Sáb
+  return new Date(data + "T12:00:00").getDay();
 }
 
 export type NomeDiaSemana =

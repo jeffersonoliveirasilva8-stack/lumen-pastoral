@@ -12,7 +12,12 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay,
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { generateEscalaAssignments, type AssignmentHistoryEntry, type FuncaoRestricao } from "@/lib/escala-engine";
+import {
+  generateEscalaAssignments,
+  generateEscalaWithAlertas,
+  type AssignmentHistoryEntry,
+  type FuncaoRestricao,
+} from "@/lib/escala-engine";
 import { supabaseErrorMessage } from "@/lib/supabase-error";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -207,6 +212,27 @@ function EscalasPage() {
         ...m,
         restricoes_dia_semana: m.restricoes_dia_semana ?? [],
       })) as Membro[];
+    },
+  });
+
+  // ── Carregar atuações dos membros (para usar no motor) ───────────────────
+  const { data: membroAtuacoes = {} } = useQuery({
+    queryKey: ["membro-atuacoes-map", profile?.paroquia_id, membros.length],
+    enabled: !!profile?.paroquia_id && membros.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("membro_atuacoes")
+        .select("membro_id, atuacao_id")
+        .in(
+          "membro_id",
+          membros.map((m) => m.id)
+        );
+      const map: Record<string, string[]> = {};
+      (data ?? []).forEach((r: { membro_id: string; atuacao_id: string }) => {
+        if (!map[r.membro_id]) map[r.membro_id] = [];
+        map[r.membro_id].push(r.atuacao_id);
+      });
+      return map;
     },
   });
 
@@ -435,7 +461,22 @@ function EscalasPage() {
             }))
           );
 
+          // ── VALIDAÇÃO PREVENTIVA: Verificar se há membros com vínculos ───
+          const minIds = (tipoFuncoes as any[]).map((f) => f.ministerio_id as string);
+          const membrosComVinculo = minIds.some((mid) => (membroMinisterios[mid] ?? []).length > 0);
+          
+          if (!membrosComVinculo) {
+            console.warn("[ESCALA] Aviso: Nenhum membro possui vínculo com as funções desta escala.");
+            return { autoSugestoes: 0 };
+          }
+
           // Auto-distribuição: rodar o motor e inserir sugestões como "pendente"
+          // ── Enriquecer membros com dados adicionais para o motor ───────────
+          const membrosComAtuacoes = membros.map((m) => ({
+            ...m,
+            atuacao_ids: membroAtuacoes[m.id] ?? [],
+          }));
+
           const funcoesPedido = (tipoFuncoes as { ministerio_id: string; quantidade_min: number }[])
             .map((tf) => {
               const min = ministerios.find((m) => m.id === tf.ministerio_id);
@@ -452,12 +493,13 @@ function EscalasPage() {
             limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
             limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
             impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
+            prioridade_score: (regras.prioridade_score as boolean | undefined) ?? false,
           };
 
           const sugestoes = generateEscalaAssignments(
             { titulo: form.titulo, data: form.data, tipo: form.tipo || "missa", observacoes: form.observacoes || null },
             funcoesPedido,
-            membros,
+            membrosComAtuacoes,
             membroMinisterios,
             {
               history: assignmentHistory,
@@ -467,6 +509,7 @@ function EscalasPage() {
               solene: form.solene,
               tem_adoracao: form.tem_adoracao,
               tem_bispo: form.tem_bispo,
+              debug: true,
             }
           );
 
@@ -480,6 +523,8 @@ function EscalasPage() {
               }))
             );
             autoSugestoes = sugestoes.length;
+          } else {
+            console.warn("[ESCALA] Nenhuma sugestão foi gerada pelo motor. Verifique membros e ministérios.");
           }
         }
       }
@@ -682,10 +727,15 @@ function EscalasPage() {
         impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
       };
 
-      const sugestoes = generateEscalaAssignments(
+      const membrosComAtuacoes = membros.map((m) => ({
+        ...m,
+        atuacao_ids: membroAtuacoes[m.id] ?? [],
+      }));
+
+      const resultado = generateEscalaWithAlertas(
         { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
         funcoesPedido,
-        membros,
+        membrosComAtuacoes,
         membroMinisterios,
         {
           history: assignmentHistory.filter((h) => h.date !== escala.data),
@@ -698,9 +748,9 @@ function EscalasPage() {
         }
       );
 
-      if (sugestoes.length > 0) {
+      if (resultado.sugestoes.length > 0) {
         await (supabase as any).from("escala_membros").insert(
-          sugestoes.map((s) => ({
+          resultado.sugestoes.map((s) => ({
             escala_id: escalaId,
             membro_id: s.membro_id,
             ministerio_id: s.ministerio_id,
@@ -708,9 +758,9 @@ function EscalasPage() {
           }))
         );
       }
-      return sugestoes.length;
+      return { count: resultado.sugestoes.length, alertas: resultado.alertas, detalhes: resultado.detalhesPorFuncao };
     },
-    onSuccess: (count) => {
+    onSuccess: ({ count, alertas, detalhes }) => {
       qc.invalidateQueries({ queryKey: ["escalas-counts"] });
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
@@ -719,8 +769,20 @@ function EscalasPage() {
       setReorganizarEscalaId("");
       if (count > 0) {
         toast.success(`${count} membro(s) atribuído(s) automaticamente.`);
+        // Exibe alertas de vagas não preenchidas
+        alertas.forEach((a) => toast.warning(a, { duration: 8000 }));
       } else {
-        toast.warning("Motor executado, mas nenhum membro foi distribuído. Verifique se há membros disponíveis para as funções desta escala e se não há indisponibilidades.");
+        const motivo = alertas[0] ?? "Verifique se os membros têm funções vinculadas em Membros → Funções.";
+        toast.error(`Nenhum membro distribuído: ${motivo}`, { duration: 10000 });
+        // Diagnóstico por função
+        detalhes
+          .filter((d) => d.alocados < d.solicitados)
+          .forEach((d) => {
+            toast.warning(
+              `"${d.ministerio_nome}": ${d.alocados}/${d.solicitados} preenchido${d.motivo_vazio ? ` — ${d.motivo_vazio}` : ""}`,
+              { duration: 8000 },
+            );
+          });
       }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
@@ -869,16 +931,22 @@ function EscalasPage() {
                 limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
                 limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
                 impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
+            prioridade_score: (regras.prioridade_score as boolean | undefined) ?? false,
               };
 
               // Membros restritos para esta missa específica → indisponíveis nesta data
               const missaRestricaoIndisp = (membroMissaRestricoes[missa.id] ?? [])
                 .map((mid) => ({ membro_id: mid, data: dateStr }));
 
+              const membrosComAtuacoes = membros.map((m) => ({
+                ...m,
+                atuacao_ids: membroAtuacoes[m.id] ?? [],
+              }));
+
               const sugestoes = generateEscalaAssignments(
                 { titulo: `${missa.nome} — ${format(targetDate, "dd/MM", { locale: ptBR })}`, data: dateStr, tipo: missa.tipo_missa_id ? "tipo_missa" : "missa", observacoes: null },
                 funcoesPedido,
-                membros,
+                membrosComAtuacoes,
                 membroMinisterios,
                 {
                   history: [...assignmentHistory, ...batchHistory],
@@ -888,6 +956,7 @@ function EscalasPage() {
                   solene: missa.solene,
                   tem_adoracao: missa.tem_adoracao,
                   tem_bispo: missa.tem_bispo,
+                  debug: false,
                 }
               );
 
@@ -1461,6 +1530,7 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt="Rodapé" /><
               atribuicoes={atribuicoes}
               membroMinisterios={membroMinisterios}
               assignmentHistory={assignmentHistory}
+              membroAtuacoes={membroAtuacoes}
               indisponibilidades={indisponibilidades}
               funcaoRestricoes={funcaoRestricoes}
               missasPadrao={missasPadrao}
@@ -2245,6 +2315,7 @@ function CalendarioView({
 
 function EscalaDetail({
   escala, ministerios, membros, funcoes, atribuicoes, membroMinisterios, assignmentHistory,
+  membroAtuacoes,
   indisponibilidades, funcaoRestricoes, missasPadrao, membroMissaRestricoes, paroquiaConfig,
   initialEditMode, comunidades, tiposMissa, isSaving, onSave,
   onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onStatusChange,
@@ -2256,6 +2327,7 @@ function EscalaDetail({
   atribuicoes: EscalaMembro[];
   membroMinisterios: Record<string, string[]>;
   assignmentHistory: AssignmentHistoryEntry[];
+  membroAtuacoes: Record<string, string[]>;
   indisponibilidades: { membro_id: string; data: string }[];
   funcaoRestricoes: FuncaoRestricao[];
   missasPadrao: { id: string; dia_semana: number; hora_inicio: string | null }[];
@@ -2387,6 +2459,7 @@ function EscalaDetail({
       limite_semanal: regras.limite_semanal ?? undefined,
       limite_mensal: regras.limite_mensal ?? undefined,
       impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? true,
+      prioridade_score: regras.prioridade_score ?? false,
     };
 
     // Encontra missas_padrao que correspondem a esta escala (mesmo dia da semana + hora)
@@ -2401,14 +2474,23 @@ function EscalaDetail({
       (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
     );
 
-    const suggestions = generateEscalaAssignments(
+    const membrosComAtuacoes = membros.map((m) => ({
+      ...m,
+      atuacao_ids: membroAtuacoes[m.id] ?? [],
+    }));
+
+    // Usa generateEscalaWithAlertas para obter alertas do motor
+    const resultado = generateEscalaWithAlertas(
       { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
       funcoes,
-      membros,
+      membrosComAtuacoes,
       membroMinisterios,
       {
         history: assignmentHistory,
-        existingAssignments: atribuicoes.map((entry) => ({ membro_id: entry.membro_id, ministerio_id: entry.ministerio_id })),
+        existingAssignments: atribuicoes.map((entry) => ({
+          membro_id: entry.membro_id,
+          ministerio_id: entry.ministerio_id,
+        })),
         indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
         restricoes: funcaoRestricoes,
         config,
@@ -2418,22 +2500,31 @@ function EscalaDetail({
       }
     );
 
-    setSuggestedAssignments(suggestions);
+    setSuggestedAssignments(resultado.sugestoes);
 
-    const totalSlots = funcoes.reduce((sum, funcao) => sum + funcao.quantidade, 0);
-    if (suggestions.length === 0) {
+    const totalSlots = funcoes.reduce((sum, f) => sum + f.quantidade, 0);
+
+    if (resultado.sugestoes.length === 0) {
+      // Mostra o primeiro alerta específico do motor, se houver
+      const motivo = resultado.alertas[0] ?? "Verifique se os membros têm funções vinculadas e não estão indisponíveis.";
+      setGenerateNotice(`Nenhuma sugestão gerada. ${motivo}`);
+      return;
+    }
+
+    // Mostra alertas de vagas não preenchidas
+    if (resultado.alertas.length > 0) {
+      resultado.alertas.forEach((a) => toast.warning(a, { duration: 6000 }));
+    }
+
+    if (resultado.sugestoes.length < totalSlots) {
       setGenerateNotice(
-        "Não foi possível gerar sugestões automaticamente. Verifique disponibilidade, funções e ministérios definidos."
+        `${resultado.sugestoes.length} de ${totalSlots} vagas preenchidas. ` +
+        `${resultado.detalhesPorFuncao.filter((d) => d.alocados < d.solicitados).map((d) => `"${d.ministerio_nome}" (${d.alocados}/${d.solicitados})`).join(", ")}`
       );
       return;
     }
 
-    if (suggestions.length < totalSlots) {
-      setGenerateNotice(`Gerado ${suggestions.length} de ${totalSlots} vagas. Revise antes de aplicar.`);
-      return;
-    }
-
-    setGenerateNotice("Sugestões completas geradas. Reveja e aplique se desejar.");
+    setGenerateNotice(`${resultado.sugestoes.length} sugestões geradas. Revise e aplique.`);
   }
 
   function handleClearSuggestions() {
