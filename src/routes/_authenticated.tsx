@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
-  Flame, BookOpen, CalendarRange, Bell, MoreHorizontal, Trophy, UserCircle, Church,
+  Flame, BookOpen, CalendarRange, Bell, Trophy, UserCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -127,7 +127,6 @@ function AuthLayout() {
     { to: "/escalas",                 label: "Escalas",         icon: Calendar },
     { to: "/formacoes",               label: "Agenda Pastoral", icon: CalendarRange },
     { to: "/espiritualidade",         label: "Liturgia",        icon: BookOpen },
-    { to: "/sacristia",               label: "Sacristia",       icon: Church },
     { to: "/calendario",              label: "Calendário",      icon: BookOpen },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes }] : []),
     { to: "/ranking",                 label: "Ranking",         icon: Trophy },
@@ -380,10 +379,10 @@ function AuthLayout() {
                 className={`absolute -top-4 h-[52px] w-[52px] rounded-full bg-primary text-primary-foreground
                   flex items-center justify-center shadow-[0_6px_24px_oklch(0.22_0.03_260/0.45)]
                   transition-all duration-200 active:scale-95
-                  ${menuOpen ? "scale-95 shadow-sm rotate-45" : "scale-100 hover:opacity-90"}`}
+                  ${menuOpen ? "scale-95 shadow-sm" : "scale-100 hover:opacity-90"}`}
                 aria-label="Menu"
               >
-                <MoreHorizontal className="h-[22px] w-[22px]" />
+                <Flame className="h-[22px] w-[22px]" />
               </button>
               <span className={`text-[9px] font-semibold leading-none ${
                 menuOpen ? "text-primary" : "text-muted-foreground"

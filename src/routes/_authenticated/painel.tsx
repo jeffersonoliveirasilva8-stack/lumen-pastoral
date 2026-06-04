@@ -104,6 +104,7 @@ function ChartTooltip({ active, payload, label }: {
 function DashboardPage() {
   const { profile } = useAuth();
   const pid = profile?.paroquia_id;
+  const [expandirEscalas, setExpandirEscalas] = useState(false);
 
   // ── Liturgical (pure, no fetch) ───────────────────────────────────────────────
   const today = useMemo(() => new Date(), []);
@@ -962,45 +963,71 @@ function DashboardPage() {
                 <Calendar className="h-6 w-6 mx-auto text-muted-foreground" />
                 <p className="mt-3 text-sm text-muted-foreground">Nenhuma escala futura encontrada.</p>
               </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {groupedEscalas.map((group) => (
-                  <div key={group.date} className="px-5 py-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                          {format(new Date(group.date + "T00:00:00"), "EEEE, d 'de' MMM", { locale: ptBR })}
-                        </p>
-                        <p className="mt-2 text-sm text-foreground">
-                          {group.items.length} escala{group.items.length !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 space-y-3">
-                      {group.items.map((e) => {
-                        const cfg = STATUS_CONFIG[e.status] ?? STATUS_CONFIG.rascunho;
-                        return (
-                          <div key={e.id} className="rounded-3xl border border-border bg-background p-4">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="font-semibold truncate">{e.titulo}</p>
-                                <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                                  {e.hora_inicio && <span>{e.hora_inicio.slice(0, 5)}</span>}
-                                  {e.local && <span>{e.local}</span>}
+            ) : (() => {
+              const MAX_DATAS = 3;
+              const visiveis = expandirEscalas ? groupedEscalas : groupedEscalas.slice(0, MAX_DATAS);
+              const restante = groupedEscalas.length - MAX_DATAS;
+              return (
+                <>
+                  <div className="divide-y divide-border">
+                    {visiveis.map((group) => (
+                      <div key={group.date} className="px-5 py-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                            {format(new Date(group.date + "T00:00:00"), "EEE, d 'de' MMM", { locale: ptBR })}
+                          </p>
+                          <span className="text-[11px] text-muted-foreground">
+                            {group.items.length} escala{group.items.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {group.items.map((e) => {
+                            const cfg = STATUS_CONFIG[e.status] ?? STATUS_CONFIG.rascunho;
+                            return (
+                              <div key={e.id} className="rounded-2xl border border-border bg-background p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-sm truncate">{e.titulo}</p>
+                                    <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                      {e.hora_inicio && <span>{e.hora_inicio.slice(0, 5)}</span>}
+                                      {e.local && <span className="truncate max-w-[120px]">{e.local}</span>}
+                                    </div>
+                                  </div>
+                                  <Badge variant={cfg.variant} className="text-[10px] uppercase shrink-0">
+                                    {cfg.label}
+                                  </Badge>
                                 </div>
                               </div>
-                              <Badge variant={cfg.variant} className="text-[11px] uppercase">
-                                {cfg.label}
-                              </Badge>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                  {!expandirEscalas && restante > 0 && (
+                    <div className="border-t border-border">
+                      <button
+                        onClick={() => setExpandirEscalas(true)}
+                        className="w-full flex items-center justify-center gap-2 py-3 text-xs font-semibold text-primary hover:bg-primary/5 transition"
+                      >
+                        Ver mais {restante} data{restante !== 1 ? "s" : ""}
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                  {expandirEscalas && groupedEscalas.length > MAX_DATAS && (
+                    <div className="border-t border-border">
+                      <button
+                        onClick={() => setExpandirEscalas(false)}
+                        className="w-full flex items-center justify-center gap-2 py-3 text-xs font-semibold text-muted-foreground hover:bg-muted/40 transition"
+                      >
+                        Mostrar menos
+                      </button>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           <div className="rounded-3xl border border-border bg-card shadow-altar p-5">

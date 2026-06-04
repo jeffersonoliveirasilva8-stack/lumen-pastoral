@@ -242,11 +242,11 @@ function MinisteriosPage() {
   }
 
   return (
-    <div className="p-6 lg:p-10 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto pb-24 lg:pb-10">
       <div className="flex items-end justify-between gap-4">
         <div>
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-          <h1 className="mt-2 font-serif text-4xl">Grupos</h1>
+          <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Grupos</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Configure os grupos de serviço litúrgico da sua paróquia.
           </p>
