@@ -183,7 +183,7 @@ function AuthLayout() {
               >
                 <item.icon className="h-4 w-4 shrink-0 transition-colors" />
                 <span className="truncate flex-1">{item.label}</span>
-                {item.badge > 0 && (
+                {(item.badge ?? 0) > 0 && (
                   <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold px-1 shrink-0">
                     {item.badge}
                   </span>

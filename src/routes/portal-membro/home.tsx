@@ -6,6 +6,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Calendar, Clock, MapPin,
   Trophy, Loader2, CheckCircle2, Cake, Play,
+  CalendarDays, BookOpen, Bell, User, ChevronRight,
 } from "lucide-react";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -318,6 +319,27 @@ function PortalMembroHome() {
               </span>
             </span>
           )}
+        </div>
+      </section>
+
+      {/* ── Atalhos rápidos ── */}
+      <section>
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { to: "/portal-membro/escalas",  icon: Calendar,     label: "Escalas"    },
+            { to: "/portal-membro/eventos",  icon: CalendarDays, label: "Eventos"    },
+            { to: "/portal-membro/liturgia", icon: BookOpen,     label: "Liturgia"   },
+            { to: "/portal-membro/notificacoes", icon: Bell,     label: "Avisos"     },
+          ].map(({ to, icon: Icon, label }) => (
+            <Link
+              key={to}
+              to={to}
+              className="flex flex-col items-center gap-1.5 rounded-2xl bg-muted/50 border border-border/60 py-3 px-1 text-center hover:bg-muted transition active:scale-95"
+            >
+              <Icon className="h-5 w-5 text-primary" />
+              <span className="text-[10px] font-semibold text-muted-foreground leading-none">{label}</span>
+            </Link>
+          ))}
         </div>
       </section>
 

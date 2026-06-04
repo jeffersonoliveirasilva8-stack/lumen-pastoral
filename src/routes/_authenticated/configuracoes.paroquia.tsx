@@ -52,10 +52,10 @@ function logDbError(context: string, error: unknown) {
 
 export const Route = createFileRoute("/_authenticated/configuracoes/paroquia")({
   component: PersonalizacaoPage,
-  head: () => ({ meta: [{ title: "Personaliza��o � Lumen Pastoral" }] }),
+  head: () => ({ meta: [{ title: "Personalização — Lumen Pastoral" }] }),
 });
 
-// -- Types ---------------------------------------------------------------------
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type RegrasEscala = {
   limite_semanal: number | null;
@@ -65,9 +65,9 @@ type RegrasEscala = {
   permitir_duplicidade: boolean;
   peso_solene: number;
   peso_normal: number;
-  // Modo de confirma��o
+  // Modo de confirmação
   confirmacao_escala_ativa: boolean;
-  // Anteced�ncia m�nima para registrar indisponibilidade (dias)
+  // Antecedência mínima para registrar indisponibilidade (dias)
   dias_antecedencia_indisp: number | null;
 };
 
@@ -203,26 +203,26 @@ type Atuacao = {
   ordem: number;
 };
 
-// -- Constants -----------------------------------------------------------------
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "S�b"];
+const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const TIPOS_COMUNIDADE: Record<string, string> = {
   matriz: "Matriz",
   capela: "Capela",
   comunidade: "Comunidade",
-  santuario: "Santu�rio",
+  santuario: "Santuário",
 };
 const CORES = [
   "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
   "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#6B7280",
 ];
 const FUNCOES_PADRAO = [
-  { nome: "Ac�lito", descricao: "Auxilia nas celebra��es lit�rgicas", cor: "#6366f1", categoria: "Ac�lito" },
+  { nome: "Acólito", descricao: "Auxilia nas celebrações litúrgicas", cor: "#6366f1", categoria: "Acólito" },
   { nome: "Leitor", descricao: "Proclama a Palavra de Deus", cor: "#8b5cf6", categoria: "Leitor" },
-  { nome: "Ministro da Eucaristia", descricao: "Distribui a comunh�o", cor: "#22c55e", categoria: "Ministro da Eucaristia" },
-  { nome: "Comentador", descricao: "Guia a participa��o da assembleia", cor: "#3b82f6", categoria: "Comentador" },
-  { nome: "Coroinha", descricao: "Auxilia o sacerdote no altar", cor: "#ec4899", categoria: "Ac�lito" },
-  { nome: "Auxiliar", descricao: "Apoio geral �s celebra��es", cor: "#6B7280", categoria: "Auxiliar" },
+  { nome: "Ministro da Eucaristia", descricao: "Distribui a comunhão", cor: "#22c55e", categoria: "Ministro da Eucaristia" },
+  { nome: "Comentador", descricao: "Guia a participação da assembleia", cor: "#3b82f6", categoria: "Comentador" },
+  { nome: "Coroinha", descricao: "Auxilia o sacerdote no altar", cor: "#ec4899", categoria: "Acólito" },
+  { nome: "Auxiliar", descricao: "Apoio geral às celebrações", cor: "#6B7280", categoria: "Auxiliar" },
 ];
 
 const EMPTY_MISSA: Omit<MissaPadrao, "id" | "ordem"> = {
@@ -234,14 +234,14 @@ const EMPTY_MISSA: Omit<MissaPadrao, "id" | "ordem"> = {
 const RECORRENCIAS: { value: Recorrencia["tipo"]; label: string }[] = [
   { value: "semanal",       label: "Toda semana" },
   { value: "quinzenal",     label: "Quinzenal" },
-  { value: "quinzenal_1_3", label: "Quinzenal (1� e 3� semanas)" },
-  { value: "quinzenal_2_4", label: "Quinzenal (2� e 4� semanas)" },
-  { value: "mensal_1",      label: "1� semana do m�s" },
-  { value: "mensal_2",      label: "2� semana do m�s" },
-  { value: "mensal_3",      label: "3� semana do m�s" },
-  { value: "mensal_4",      label: "4� semana do m�s" },
-  { value: "mensal_ultimo", label: "�ltima semana do m�s" },
-  { value: "esporadico",    label: "Data espec�fica" },
+  { value: "quinzenal_1_3", label: "Quinzenal (1ª e 3ª semanas)" },
+  { value: "quinzenal_2_4", label: "Quinzenal (2ª e 4ª semanas)" },
+  { value: "mensal_1",      label: "1ª semana do mês" },
+  { value: "mensal_2",      label: "2ª semana do mês" },
+  { value: "mensal_3",      label: "3ª semana do mês" },
+  { value: "mensal_4",      label: "4ª semana do mês" },
+  { value: "mensal_ultimo", label: "Última semana do mês" },
+  { value: "esporadico",    label: "Data específica" },
 ];
 
 const DEFAULT_REGRAS: RegrasEscala = {
@@ -252,7 +252,7 @@ const DEFAULT_REGRAS: RegrasEscala = {
   dias_antecedencia_indisp: 3,
 };
 
-// -- Helpers -------------------------------------------------------------------
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -282,7 +282,7 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   );
 }
 
-function SaveBtn({ saving, label = "Salvar altera��es" }: { saving: boolean; label?: string }) {
+function SaveBtn({ saving, label = "Salvar alterações" }: { saving: boolean; label?: string }) {
   return (
     <button
       type="submit"
@@ -294,7 +294,7 @@ function SaveBtn({ saving, label = "Salvar altera��es" }: { saving: boolean; lab
   );
 }
 
-// -- Main ----------------------------------------------------------------------
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 function PersonalizacaoPage() {
   const { profile, loading: authLoading } = useAuth();
@@ -316,7 +316,7 @@ function PersonalizacaoPage() {
   if (authLoading || isPending) {
     return (
       <div className="p-10 flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" /> Carregando�
+        <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
       </div>
     );
   }
@@ -324,7 +324,7 @@ function PersonalizacaoPage() {
   if (paroquiaError) {
     return (
       <div className="p-10 text-sm text-destructive">
-        Erro ao carregar par�quia: {paroquiaError.message}
+        Erro ao carregar paróquia: {paroquiaError.message}
       </div>
     );
   }
@@ -332,7 +332,7 @@ function PersonalizacaoPage() {
   if (!paroquia) {
     return (
       <div className="p-10 text-sm text-muted-foreground">
-        Par�quia n�o encontrada. (paroquia_id: {profile?.paroquia_id ?? "null"})
+        Paróquia não encontrada. (paroquia_id: {profile?.paroquia_id ?? "null"})
       </div>
     );
   }
@@ -341,47 +341,28 @@ function PersonalizacaoPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto">
-      <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configura��es</p>
-      <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Personaliza��o</h1>
+      <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
+      <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Personalização</h1>
 
       <Tabs defaultValue="dados" className="mt-6">
-        {/* Mobile: select dropdown */}
-        <div className="sm:hidden mb-4">
-          <select
-            className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm font-medium outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-            onChange={(e) => {
-              const trigger = document.querySelector<HTMLButtonElement>(`[data-value="${e.target.value}"]`);
-              trigger?.click();
-            }}
-          >
-            <option value="dados">Dados da Par�quia</option>
-            <option value="comunidades">Comunidades</option>
-            <option value="atuacoes">Atua��es</option>
-            <option value="funcoes">Fun��es Lit�rgicas</option>
-            <option value="tipos">Tipos de Missa</option>
-            <option value="missas">Missas Padr�o</option>
-            <option value="coord">Coordenadores</option>
-            <option value="prioridades">Prioridades</option>
-            <option value="regras">Regras de Escala</option>
-            <option value="pontuacao">Pontua��o</option>
-            <option value="pdf">Imagens PDF</option>
-          </select>
+        {/* Tabs scrolláveis — mobile e desktop */}
+        <div className="-mx-4 sm:-mx-6 lg:-mx-10 mb-6">
+          <div className="overflow-x-auto scrollbar-none px-4 sm:px-6 lg:px-10">
+            <TabsList className="inline-flex gap-0.5 h-auto bg-muted/50 p-1 rounded-xl flex-nowrap min-w-max">
+              <TabsTrigger value="dados"        className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Dados</TabsTrigger>
+              <TabsTrigger value="comunidades"  className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Comunidades</TabsTrigger>
+              <TabsTrigger value="atuacoes"     className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Atuações</TabsTrigger>
+              <TabsTrigger value="funcoes"      className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Funções</TabsTrigger>
+              <TabsTrigger value="tipos"        className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Tipos de Missa</TabsTrigger>
+              <TabsTrigger value="missas"       className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Missas Padrão</TabsTrigger>
+              <TabsTrigger value="coord"        className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Coordenadores</TabsTrigger>
+              <TabsTrigger value="prioridades"  className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Prioridades</TabsTrigger>
+              <TabsTrigger value="regras"       className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Regras</TabsTrigger>
+              <TabsTrigger value="pontuacao"    className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Pontuação</TabsTrigger>
+              <TabsTrigger value="pdf"          className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Imagens PDF</TabsTrigger>
+            </TabsList>
+          </div>
         </div>
-
-        {/* Desktop: tabs scroll�veis em linha �nica */}
-        <TabsList className="hidden sm:flex mb-6 w-full overflow-x-auto scrollbar-none justify-start gap-0.5 h-auto bg-muted/50 p-1 rounded-xl flex-nowrap">
-          <TabsTrigger value="dados"        data-value="dados"        className="text-xs whitespace-nowrap shrink-0">Dados</TabsTrigger>
-          <TabsTrigger value="comunidades"  data-value="comunidades"  className="text-xs whitespace-nowrap shrink-0">Comunidades</TabsTrigger>
-          <TabsTrigger value="atuacoes"     data-value="atuacoes"     className="text-xs whitespace-nowrap shrink-0">Atua��es</TabsTrigger>
-          <TabsTrigger value="funcoes"      data-value="funcoes"      className="text-xs whitespace-nowrap shrink-0">Fun��es</TabsTrigger>
-          <TabsTrigger value="tipos"        data-value="tipos"        className="text-xs whitespace-nowrap shrink-0">Tipos de Missa</TabsTrigger>
-          <TabsTrigger value="missas"       data-value="missas"       className="text-xs whitespace-nowrap shrink-0">Missas Padr�o</TabsTrigger>
-          <TabsTrigger value="coord"        data-value="coord"        className="text-xs whitespace-nowrap shrink-0">Coordenadores</TabsTrigger>
-          <TabsTrigger value="prioridades"  data-value="prioridades"  className="text-xs whitespace-nowrap shrink-0">Prioridades</TabsTrigger>
-          <TabsTrigger value="regras"       data-value="regras"       className="text-xs whitespace-nowrap shrink-0">Regras</TabsTrigger>
-          <TabsTrigger value="pontuacao"    data-value="pontuacao"    className="text-xs whitespace-nowrap shrink-0">Pontua��o</TabsTrigger>
-          <TabsTrigger value="pdf"          data-value="pdf"          className="text-xs whitespace-nowrap shrink-0">Imagens PDF</TabsTrigger>
-        </TabsList>
 
         <TabsContent value="dados">
           <IdentidadeTab paroquia={paroquia} onSaved={invalidate} />
@@ -421,7 +402,7 @@ function PersonalizacaoPage() {
   );
 }
 
-// -- Tab: Dados da Par�quia ----------------------------------------------------
+// ── Tab: Dados da Paróquia ────────────────────────────────────────────────────
 
 type IdentidadeForm = {
   nome: string; padroeiro: string; cidade: string; diocese: string;
@@ -450,11 +431,11 @@ function IdentidadeTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () 
   }, [paroquia]);
 
   const fields: { key: keyof IdentidadeForm; label: string; placeholder?: string }[] = [
-    { key: "nome", label: "Nome da par�quia", placeholder: "Ex: Par�quia Nossa Senhora�" },
-    { key: "padroeiro", label: "Padroeiro / padroeira", placeholder: "Ex: Nossa Senhora M�e da Igreja" },
+    { key: "nome", label: "Nome da paróquia", placeholder: "Ex: Paróquia Nossa Senhora…" },
+    { key: "padroeiro", label: "Padroeiro / padroeira", placeholder: "Ex: Nossa Senhora Mãe da Igreja" },
     { key: "cidade", label: "Cidade" },
     { key: "diocese", label: "Diocese" },
-    { key: "endereco", label: "Endere�o" },
+    { key: "endereco", label: "Endereço" },
     { key: "contato_email", label: "E-mail de contato" },
     { key: "contato_telefone", label: "Telefone de contato" },
   ];
@@ -491,7 +472,7 @@ function IdentidadeTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () 
         ))}
 
         {/* Portal slug */}
-        <Field label="Endere�o do portal dos servidores">
+        <Field label="Endereço do portal dos servidores">
           <div className="space-y-2">
             <div className="flex items-center rounded-lg border border-input bg-background overflow-hidden">
               <span className="px-3 py-2 text-sm text-muted-foreground bg-muted border-r border-input whitespace-nowrap shrink-0">
@@ -534,7 +515,7 @@ function IdentidadeTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () 
   );
 }
 
-// -- Tab: Comunidades ----------------------------------------------------------
+// ── Tab: Comunidades ──────────────────────────────────────────────────────────
 
 function ComunidadesTab({ paroquiaId }: { paroquiaId: string }) {
   const qc = useQueryClient();
@@ -595,7 +576,7 @@ function ComunidadesTab({ paroquiaId }: { paroquiaId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Matriz, capelas e comunidades vinculadas � par�quia.
+          Matriz, capelas e comunidades vinculadas à paróquia.
         </p>
         <Button size="sm" onClick={openCreate}>
           <Plus className="h-4 w-4 mr-1" /> Nova comunidade
@@ -660,7 +641,7 @@ function ComunidadesTab({ paroquiaId }: { paroquiaId: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover comunidade?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.nome}</strong> ser� removida permanentemente.
+              <strong>{deleteTarget?.nome}</strong> será removida permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -718,7 +699,7 @@ function ComunidadeDialog({
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label>Nome</Label>
-            <Input required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Capela S�o Jos�" />
+            <Input required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Capela São José" />
           </div>
           <div className="space-y-1.5">
             <Label>Tipo</Label>
@@ -733,12 +714,12 @@ function ComunidadeDialog({
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label>Respons�vel (opcional)</Label>
-            <Input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Nome do respons�vel" />
+            <Label>Responsável (opcional)</Label>
+            <Input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} placeholder="Nome do responsável" />
           </div>
           <div className="space-y-1.5">
-            <Label>Endere�o (opcional)</Label>
-            <Input value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Rua, n�mero, bairro" />
+            <Label>Endereço (opcional)</Label>
+            <Input value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Rua, número, bairro" />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
@@ -752,7 +733,7 @@ function ComunidadeDialog({
   );
 }
 
-// -- Tab: Atua��es Pastorais ---------------------------------------------------
+// ── Tab: Atuações Pastorais ───────────────────────────────────────────────────
 
 function AtuacoesSubTab({ paroquiaId }: { paroquiaId: string }) {
   const qc = useQueryClient();
@@ -793,7 +774,7 @@ function AtuacoesSubTab({ paroquiaId }: { paroquiaId: string }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["atuacoes_pastorais", paroquiaId] });
-      toast.success(editTarget ? "Atua��o atualizada." : "Atua��o criada.");
+      toast.success(editTarget ? "Atuação atualizada." : "Atuação criada.");
       setDialogOpen(false);
       setEditTarget(null);
     },
@@ -807,7 +788,7 @@ function AtuacoesSubTab({ paroquiaId }: { paroquiaId: string }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["atuacoes_pastorais", paroquiaId] });
-      toast.success("Atua��o removida.");
+      toast.success("Atuação removida.");
       setDeleteTarget(null);
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
@@ -820,10 +801,10 @@ function AtuacoesSubTab({ paroquiaId }: { paroquiaId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Atua��es pastorais vinculadas aos membros desta par�quia.
+          Atuações pastorais vinculadas aos membros desta paróquia.
         </p>
         <Button size="sm" onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-1" /> Nova atua��o
+          <Plus className="h-4 w-4 mr-1" /> Nova atuação
         </Button>
       </div>
 
@@ -832,12 +813,12 @@ function AtuacoesSubTab({ paroquiaId }: { paroquiaId: string }) {
       ) : atuacoes.length === 0 ? (
         <Card className="text-center py-10">
           <Tag className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhuma atua��o pastoral cadastrada.</p>
+          <p className="text-sm text-muted-foreground">Nenhuma atuação pastoral cadastrada.</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Atua��es identificam como o membro serve na pastoral, ex: Ac�lito, Cerimoni�rio, Coroinha, Filhas de Maria.
+            Atuações identificam como o membro serve na pastoral, ex: Acólito, Cerimoniário, Coroinha, Filhas de Maria.
           </p>
           <Button variant="outline" size="sm" className="mt-4" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1" /> Cadastrar atua��o
+            <Plus className="h-4 w-4 mr-1" /> Cadastrar atuação
           </Button>
         </Card>
       ) : (
@@ -885,9 +866,9 @@ function AtuacoesSubTab({ paroquiaId }: { paroquiaId: string }) {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover atua��o pastoral?</AlertDialogTitle>
+            <AlertDialogTitle>Remover atuação pastoral?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.nome}</strong> ser� removida e todos os membros associados perder�o essa atua��o.
+              <strong>{deleteTarget?.nome}</strong> será removida e todos os membros associados perderão essa atuação.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -940,27 +921,27 @@ function AtuacaoDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{initial ? "Editar atua��o pastoral" : "Nova atua��o pastoral"}</DialogTitle>
+          <DialogTitle>{initial ? "Editar atuação pastoral" : "Nova atuação pastoral"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
             <div className="space-y-1.5">
               <Label>Nome *</Label>
-              <Input required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Ac�lito, Cerimoni�rio, Coroinha, Filhas de Maria�" />
+              <Input required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Acólito, Cerimoniário, Coroinha, Filhas de Maria…" />
             </div>
             <div className="space-y-1.5">
-              <Label>�cone</Label>
-              <Input value={icone} onChange={(e) => setIcone(e.target.value)} placeholder="???" className="w-20 text-center text-lg" />
+              <Label>Ícone</Label>
+              <Input value={icone} onChange={(e) => setIcone(e.target.value)} placeholder="🕊️" className="w-20 text-center text-lg" />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Descri��o (opcional)</Label>
-            <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} placeholder="Ex: Jovens que servem no altar como Ac�litos, Coroinhas e Cerimoni�rios" />
+            <Label>Descrição (opcional)</Label>
+            <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} placeholder="Ex: Jovens que servem no altar como Acólitos, Coroinhas e Cerimoniários" />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Cor de identifica��o</Label>
+            <Label>Cor de identificação</Label>
             <div className="flex flex-wrap gap-2">
               {CORES.map((c) => (
                 <button
@@ -985,7 +966,7 @@ function AtuacaoDialog({
   );
 }
 
-// -- Sub-tab: Fun��es Lit�rgicas -----------------------------------------------
+// ── Sub-tab: Funções Litúrgicas ───────────────────────────────────────────────
 
 function FuncoesLiturgicasTab({ paroquiaId }: { paroquiaId: string }) {
   const qc = useQueryClient();
@@ -1046,7 +1027,7 @@ function FuncoesLiturgicasTab({ paroquiaId }: { paroquiaId: string }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ministerios"] });
-      toast.success(editTarget ? "Fun��o atualizada." : "Fun��o criada.");
+      toast.success(editTarget ? "Função atualizada." : "Função criada.");
       setDialogOpen(false);
       setEditTarget(null);
     },
@@ -1061,7 +1042,7 @@ function FuncoesLiturgicasTab({ paroquiaId }: { paroquiaId: string }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ministerios"] });
       qc.invalidateQueries({ queryKey: ["ministerios-contagens"] });
-      toast.success("Fun��o removida.");
+      toast.success("Função removida.");
       setDeleteTarget(null);
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
@@ -1080,7 +1061,7 @@ function FuncoesLiturgicasTab({ paroquiaId }: { paroquiaId: string }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ministerios"] });
-      toast.success("Fun��es padr�o criadas!");
+      toast.success("Funções padrão criadas!");
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
@@ -1092,10 +1073,10 @@ function FuncoesLiturgicasTab({ paroquiaId }: { paroquiaId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Fun��es lit�rgicas dispon�veis para escala��o nesta par�quia.
+          Funções litúrgicas disponíveis para escalação nesta paróquia.
         </p>
         <Button size="sm" onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-1" /> Nova fun��o
+          <Plus className="h-4 w-4 mr-1" /> Nova função
         </Button>
       </div>
 
@@ -1104,11 +1085,11 @@ function FuncoesLiturgicasTab({ paroquiaId }: { paroquiaId: string }) {
       ) : funcoes.length === 0 ? (
         <Card className="text-center py-10">
           <Layers className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhuma fun��o lit�rgica cadastrada.</p>
+          <p className="text-sm text-muted-foreground">Nenhuma função litúrgica cadastrada.</p>
           <div className="mt-4 flex justify-center gap-3">
             <Button variant="outline" size="sm" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
               {seedMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Criar fun��es padr�o
+              Criar funções padrão
             </Button>
             <Button size="sm" onClick={openCreate}>
               <Plus className="h-4 w-4 mr-1" /> Criar manualmente
@@ -1129,10 +1110,10 @@ function FuncoesLiturgicasTab({ paroquiaId }: { paroquiaId: string }) {
                   {!f.ativo && <Badge variant="outline" className="text-xs text-muted-foreground">Inativa</Badge>}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {f.descricao ?? "�"} � {contagens[f.id] ?? 0} membro(s)
+                  {f.descricao ?? "—"} · {contagens[f.id] ?? 0} membro(s)
                 </p>
                 <div className="flex gap-2 mt-1 flex-wrap">
-                  {f.exigir_experiencia && <span className="text-xs text-amber-600">Exige experi�ncia</span>}
+                  {f.exigir_experiencia && <span className="text-xs text-amber-600">Exige experiência</span>}
                   {f.auto_adicionar && <span className="text-xs text-emerald-600">Auto</span>}
                   {!f.mostrar_no_portal && <span className="text-xs text-muted-foreground">Oculta no portal</span>}
                 </div>
@@ -1166,9 +1147,9 @@ function FuncoesLiturgicasTab({ paroquiaId }: { paroquiaId: string }) {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover fun��o lit�rgica?</AlertDialogTitle>
+            <AlertDialogTitle>Remover função litúrgica?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.nome}</strong> ser� removida e todos os membros associados perder�o essa fun��o.
+              <strong>{deleteTarget?.nome}</strong> será removida e todos os membros associados perderão essa função.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1262,22 +1243,22 @@ function FuncaoDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{initial ? "Editar fun��o lit�rgica" : "Nova fun��o lit�rgica"}</DialogTitle>
+          <DialogTitle>{initial ? "Editar função litúrgica" : "Nova função litúrgica"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
             <div className="space-y-1.5">
-              <Label>Nome da fun��o *</Label>
-              <Input required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Missal, Cred�ncia, Cruz Processional, Vela, Tur�bulo, Naveta�" />
+              <Label>Nome da função *</Label>
+              <Input required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Missal, Credência, Cruz Processional, Vela, Turíbulo, Naveta…" />
             </div>
             <div className="space-y-1.5">
-              <Label>�cone</Label>
-              <Input value={icone} onChange={(e) => setIcone(e.target.value)} placeholder="?" className="w-20 text-center text-lg" />
+              <Label>Ícone</Label>
+              <Input value={icone} onChange={(e) => setIcone(e.target.value)} placeholder="⛪" className="w-20 text-center text-lg" />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Categoria / Atua��o Pastoral</Label>
+            <Label>Categoria / Atuação Pastoral</Label>
             <select
               value={categoria}
               onChange={(e) => setCategoria(e.target.value)}
@@ -1287,17 +1268,17 @@ function FuncaoDialog({
               {atuacoesDisponiveis.map((a) => <option key={a.id} value={a.nome}>{a.nome}</option>)}
             </select>
             {atuacoesDisponiveis.length === 0 && (
-              <p className="text-xs text-muted-foreground">Cadastre Atua��es Pastorais para categorizar as fun��es.</p>
+              <p className="text-xs text-muted-foreground">Cadastre Atuações Pastorais para categorizar as funções.</p>
             )}
           </div>
 
           <div className="space-y-1.5">
-            <Label>Descri��o (opcional)</Label>
-            <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} placeholder="Breve descri��o da fun��o" />
+            <Label>Descrição (opcional)</Label>
+            <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} placeholder="Breve descrição da função" />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Cor de identifica��o</Label>
+            <Label>Cor de identificação</Label>
             <div className="flex flex-wrap gap-2">
               {CORES.map((c) => (
                 <button
@@ -1312,7 +1293,7 @@ function FuncaoDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Qtd. padr�o por escala</Label>
+              <Label>Qtd. padrão por escala</Label>
               <Input
                 type="number" min={1} value={quantidadePadrao}
                 onChange={(e) => setQuantidadePadrao(Math.max(1, Number(e.target.value)))}
@@ -1320,7 +1301,7 @@ function FuncaoDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Pontua��o m�nima</Label>
+              <Label>Pontuação mínima</Label>
               <Input
                 type="number" min={0} value={pontuacaoMinima}
                 onChange={(e) => setPontuacaoMinima(Number(e.target.value))}
@@ -1332,8 +1313,8 @@ function FuncaoDialog({
           <div className="rounded-lg border border-border p-4 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comportamento</p>
             {([
-              { id: "exigir", label: "Exigir experi�ncia", desc: "Somente membros com hist�rico pr�vio s�o sugeridos", val: exigirExperiencia, set: setExigirExperiencia },
-              { id: "portal", label: "Mostrar no portal p�blico", desc: "Exibe nas escalas vis�veis ao p�blico", val: mostrarNoPortal, set: setMostrarNoPortal },
+              { id: "exigir", label: "Exigir experiência", desc: "Somente membros com histórico prévio são sugeridos", val: exigirExperiencia, set: setExigirExperiencia },
+              { id: "portal", label: "Mostrar no portal público", desc: "Exibe nas escalas visíveis ao público", val: mostrarNoPortal, set: setMostrarNoPortal },
               { id: "auto", label: "Adicionar automaticamente", desc: "Adicionada automaticamente ao gerar escalas", val: autoAdicionar, set: setAutoAdicionar },
             ] as const).map(({ id, label, desc, val, set }) => (
               <div key={id} className="flex items-start justify-between gap-4">
@@ -1358,7 +1339,7 @@ function FuncaoDialog({
   );
 }
 
-// -- Sub-tab: Coordenadores ----------------------------------------------------
+// ── Sub-tab: Coordenadores ────────────────────────────────────────────────────
 
 function CoordenadesTab({ paroquiaId }: { paroquiaId: string }) {
   const qc = useQueryClient();
@@ -1445,7 +1426,7 @@ function CoordenadesTab({ paroquiaId }: { paroquiaId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Respons�veis pastorais e l�deres de minist�rio da par�quia.
+          Responsáveis pastorais e líderes de ministério da paróquia.
         </p>
         <Button size="sm" onClick={openCreate}>
           <Plus className="h-4 w-4 mr-1" /> Novo coordenador
@@ -1479,7 +1460,7 @@ function CoordenadesTab({ paroquiaId }: { paroquiaId: string }) {
                 {c.comunidade && <p className="text-xs text-muted-foreground">Comunidade: {c.comunidade}</p>}
                 {(c.email || c.telefone) && (
                   <p className="text-xs text-muted-foreground truncate">
-                    {[c.email, c.telefone].filter(Boolean).join(" � ")}
+                    {[c.email, c.telefone].filter(Boolean).join(" · ")}
                   </p>
                 )}
               </div>
@@ -1515,7 +1496,7 @@ function CoordenadesTab({ paroquiaId }: { paroquiaId: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover coordenador?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.nome}</strong> ser� removido permanentemente.
+              <strong>{deleteTarget?.nome}</strong> será removido permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1597,8 +1578,8 @@ function CoordenadorDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Fun��o pastoral (opcional)</Label>
-            <Input value={funcao} onChange={(e) => setFuncao(e.target.value)} placeholder="Ex: Coordenador de Ac�litos" />
+            <Label>Função pastoral (opcional)</Label>
+            <Input value={funcao} onChange={(e) => setFuncao(e.target.value)} placeholder="Ex: Coordenador de Acólitos" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -1606,22 +1587,22 @@ function CoordenadorDialog({
               <Label>Atua como (opcional)</Label>
               {atuacoesList.length > 0 ? (
                 <select value={atuaComo} onChange={(e) => setAtuaComo(e.target.value)} className={selectCls}>
-                  <option value="">Selecione�</option>
+                  <option value="">Selecione…</option>
                   {atuacoesList.map((a) => <option key={a.id} value={a.nome}>{a.nome}</option>)}
                 </select>
               ) : (
-                <Input value={atuaComo} onChange={(e) => setAtuaComo(e.target.value)} placeholder="Ex: Ac�lito, Leitor�" />
+                <Input value={atuaComo} onChange={(e) => setAtuaComo(e.target.value)} placeholder="Ex: Acólito, Leitor…" />
               )}
             </div>
             <div className="space-y-1.5">
               <Label>Comunidade (opcional)</Label>
               {comunidadesList.length > 0 ? (
                 <select value={comunidade} onChange={(e) => setComunidade(e.target.value)} className={selectCls}>
-                  <option value="">Selecione�</option>
+                  <option value="">Selecione…</option>
                   {comunidadesList.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
                 </select>
               ) : (
-                <Input value={comunidade} onChange={(e) => setComunidade(e.target.value)} placeholder="Ex: Capela S�o Jo�o" />
+                <Input value={comunidade} onChange={(e) => setComunidade(e.target.value)} placeholder="Ex: Capela São João" />
               )}
             </div>
           </div>
@@ -1638,8 +1619,8 @@ function CoordenadorDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Observa��es (opcional)</Label>
-            <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={2} placeholder="Informa��es adicionais sobre este coordenador" />
+            <Label>Observações (opcional)</Label>
+            <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={2} placeholder="Informações adicionais sobre este coordenador" />
           </div>
 
           <DialogFooter>
@@ -1654,7 +1635,7 @@ function CoordenadorDialog({
   );
 }
 
-// -- Tab: Tipos de Missa -------------------------------------------------------
+// ── Tab: Tipos de Missa ───────────────────────────────────────────────────────
 
 function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
   const qc = useQueryClient();
@@ -1692,10 +1673,10 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
-            Defina os tipos de celebra��o e as fun��es geradas automaticamente para cada um.
+            Defina os tipos de celebração e as funções geradas automaticamente para cada um.
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Ex: Missa Comum, Missa Solene, Missa com Bispo, Via Sacra, Adora��o.
+            Ex: Missa Comum, Missa Solene, Missa com Bispo, Via Sacra, Adoração.
           </p>
         </div>
         <Button size="sm" onClick={() => { setEditTarget(null); setDialogOpen(true); }}>
@@ -1728,10 +1709,10 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
                   </div>
                   {t.descricao && <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.descricao}</p>}
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {t.usa_turibulo && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Tur�bulo</span>}
+                    {t.usa_turibulo && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Turíbulo</span>}
                     {t.usa_naveta && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Naveta</span>}
-                    {t.usa_baculifero && <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">Bacul�fero</span>}
-                    {t.usa_mitrifero && <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">Mitr�fero</span>}
+                    {t.usa_baculifero && <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">Baculífero</span>}
+                    {t.usa_mitrifero && <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">Mitrífero</span>}
                     <span className="text-xs text-muted-foreground">Prio. {t.prioridade_liturgica}</span>
                   </div>
                 </div>
@@ -1749,7 +1730,7 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
         </div>
       )}
 
-      {/* Dialog criar/editar tipo + fun��es integradas */}
+      {/* Dialog criar/editar tipo + funções integradas */}
       <TipoMissaDialog
         open={dialogOpen}
         initial={editTarget}
@@ -1762,7 +1743,7 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover tipo de missa?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.nome}</strong> ser� removido. Missas que usam este tipo perder�o a refer�ncia.
+              <strong>{deleteTarget?.nome}</strong> será removido. Missas que usam este tipo perderão a referência.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1796,7 +1777,7 @@ function TipoMissaDialog({
 }) {
   const qc = useQueryClient();
 
-  // -- Campos b�sicos ----------------------------------------------------------
+  // ── Campos básicos ──────────────────────────────────────────────────────────
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [cor, setCor] = useState(CORES[0]);
@@ -1820,7 +1801,7 @@ function TipoMissaDialog({
     }
   }, [initial, open]);
 
-  // -- Fun��es dispon�veis -----------------------------------------------------
+  // ── Funções disponíveis ─────────────────────────────────────────────────────
   const { data: ministerios = [], isFetched: isMinFetched } = useQuery<{ id: string; nome: string; cor: string }[]>({
     queryKey: ["ministerios", paroquiaId],
     enabled: open,
@@ -1831,7 +1812,7 @@ function TipoMissaDialog({
     },
   });
 
-  // Fun��es j� associadas (apenas ao editar)
+  // Funções já associadas (apenas ao editar)
   const { data: funcoes = [], isFetched: isFuncoesFetched } = useQuery<TipoMissaFuncao[]>({
     queryKey: ["tipo_missa_funcoes", initial?.id ?? "new"],
     enabled: open && !!initial?.id,
@@ -1846,7 +1827,7 @@ function TipoMissaDialog({
     },
   });
 
-  // -- Estado do checklist -----------------------------------------------------
+  // ── Estado do checklist ─────────────────────────────────────────────────────
   const [configMap, setConfigMap] = useState<Record<string, FuncaoConfig>>({});
   const initialized = useRef(false);
 
@@ -1868,7 +1849,7 @@ function TipoMissaDialog({
     initialized.current = true;
   }, [canInit, funcoes, ministerios]);
 
-  // -- Mutation unificada ------------------------------------------------------
+  // ── Mutation unificada ──────────────────────────────────────────────────────
   const saveMutation = useMutation({
     mutationFn: async () => {
       const basicPayload = {
@@ -1890,7 +1871,7 @@ function TipoMissaDialog({
         tipoId = (data as { id: string }).id;
       }
 
-      // Sincronizar fun��es
+      // Sincronizar funções
       const toUpsert = ministerios
         .filter((m) => configMap[m.id]?.checked)
         .map((m) => ({
@@ -1941,29 +1922,29 @@ function TipoMissaDialog({
         </DialogHeader>
         <div className="max-h-[80vh] overflow-y-auto pr-1 space-y-5">
 
-          {/* -- Dados b�sicos ----------------------------------------------- */}
+          {/* ── Dados básicos ─────────────────────────────────────────────── */}
           <div className="space-y-4">
             <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
               <div className="space-y-1.5">
                 <Label>Nome *</Label>
                 <Input value={nome} onChange={(e) => setNome(e.target.value)}
-                  placeholder="Ex: Missa Solene, Missa com Bispo, Via Sacra�" />
+                  placeholder="Ex: Missa Solene, Missa com Bispo, Via Sacra…" />
               </div>
               <div className="space-y-1.5">
-                <Label>�cone</Label>
-                <Input value={icone} onChange={(e) => setIcone(e.target.value)} placeholder="?" className="w-20 text-center text-lg" />
+                <Label>Ícone</Label>
+                <Input value={icone} onChange={(e) => setIcone(e.target.value)} placeholder="⛪" className="w-20 text-center text-lg" />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Descri��o (opcional)</Label>
+              <Label>Descrição (opcional)</Label>
               <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2}
-                placeholder="Ex: Missa solene com di�cono e rito completo" />
+                placeholder="Ex: Missa solene com diácono e rito completo" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Cor de identifica��o</Label>
+                <Label>Cor de identificação</Label>
                 <div className="flex flex-wrap gap-2">
                   {CORES.map((c) => (
                     <button key={c} type="button"
@@ -1973,19 +1954,19 @@ function TipoMissaDialog({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Prioridade lit�rgica (1 = mais alta)</Label>
+                <Label>Prioridade litúrgica (1 = mais alta)</Label>
                 <Input type="number" min={1} max={10} value={prioridade}
                   onChange={(e) => setPrioridade(Math.max(1, Number(e.target.value)))} className="w-28" />
               </div>
             </div>
 
             <div className="rounded-lg border border-border p-4 space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens lit�rgicos especiais</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens litúrgicos especiais</p>
               {([
-                { id: "tur", label: "Tur�bulo", val: usaTuribulo, set: setUsaTuribulo },
+                { id: "tur", label: "Turíbulo", val: usaTuribulo, set: setUsaTuribulo },
                 { id: "nav", label: "Naveta", val: usaNaveta, set: setUsaNaveta },
-                { id: "bac", label: "Bacul�fero (portador do b�culo)", val: usaBaculifero, set: setUsaBaculifero },
-                { id: "mit", label: "Mitr�fero (portador da mitra)", val: usaMitrifero, set: setUsaMitrifero },
+                { id: "bac", label: "Baculífero (portador do báculo)", val: usaBaculifero, set: setUsaBaculifero },
+                { id: "mit", label: "Mitrífero (portador da mitra)", val: usaMitrifero, set: setUsaMitrifero },
               ] as const).map(({ id, label, val, set }) => (
                 <div key={id} className="flex items-center justify-between gap-4">
                   <Label className="font-normal">{label}</Label>
@@ -1995,15 +1976,15 @@ function TipoMissaDialog({
             </div>
           </div>
 
-          {/* -- Separador --------------------------------------------------- */}
+          {/* ── Separador ─────────────────────────────────────────────────── */}
           <div className="border-t border-border" />
 
-          {/* -- Fun��es lit�rgicas vinculadas ------------------------------- */}
+          {/* ── Funções litúrgicas vinculadas ─────────────────────────────── */}
           <div className="space-y-3">
             <div>
-              <p className="text-sm font-semibold">Fun��es lit�rgicas</p>
+              <p className="text-sm font-semibold">Funções litúrgicas</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Marque as fun��es inseridas automaticamente ao usar este tipo.
+                Marque as funções inseridas automaticamente ao usar este tipo.
                 {checkedCount > 0 && (
                   <span className="ml-1 font-medium text-foreground">
                     {checkedCount} selecionada{checkedCount !== 1 ? "s" : ""}.
@@ -2016,7 +1997,7 @@ function TipoMissaDialog({
               <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
             ) : ministerios.length === 0 ? (
               <p className="text-sm text-muted-foreground italic text-center py-4 rounded-lg border border-dashed border-border">
-                Cadastre Fun��es Lit�rgicas em Personaliza��o ? Fun��es primeiro.
+                Cadastre Funções Litúrgicas em Personalização → Funções primeiro.
               </p>
             ) : (
               <div className="space-y-1.5">
@@ -2031,7 +2012,7 @@ function TipoMissaDialog({
                         <span className="flex-1 text-sm font-medium">{m.nome}</span>
                         {cfg.checked && (
                           <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${cfg.tipo_vinculo === "obrigatoria" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                            {cfg.tipo_vinculo === "obrigatoria" ? "Obrigat�ria" : "Opcional"}
+                            {cfg.tipo_vinculo === "obrigatoria" ? "Obrigatória" : "Opcional"}
                           </span>
                         )}
                       </div>
@@ -2042,18 +2023,18 @@ function TipoMissaDialog({
                             <select value={cfg.tipo_vinculo}
                               onChange={(e) => updateConfig(m.id, { tipo_vinculo: e.target.value as "obrigatoria" | "opcional" })}
                               className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring">
-                              <option value="obrigatoria">Obrigat�ria</option>
+                              <option value="obrigatoria">Obrigatória</option>
                               <option value="opcional">Opcional</option>
                             </select>
                           </div>
                           <div>
-                            <Label className="text-xs">Qtd. m�n.</Label>
+                            <Label className="text-xs">Qtd. mín.</Label>
                             <Input type="number" min={1} value={cfg.quantidade_min}
                               onChange={(e) => { const v = Math.max(1, Number(e.target.value)); updateConfig(m.id, { quantidade_min: v, quantidade_max: Math.max(v, cfg.quantidade_max) }); }}
                               className="h-8 text-xs" />
                           </div>
                           <div>
-                            <Label className="text-xs">Qtd. m�x.</Label>
+                            <Label className="text-xs">Qtd. máx.</Label>
                             <Input type="number" min={cfg.quantidade_min} value={cfg.quantidade_max}
                               onChange={(e) => updateConfig(m.id, { quantidade_max: Math.max(cfg.quantidade_min, Number(e.target.value)) })}
                               className="h-8 text-xs" />
@@ -2086,7 +2067,7 @@ function TipoMissaDialog({
   );
 }
 
-// -- Tab: Missas Padr�o --------------------------------------------------------
+// ── Tab: Missas Padrão ────────────────────────────────────────────────────────
 
 function MissasTab({ paroquiaId }: { paroquiaId: string }) {
   const qc = useQueryClient();
@@ -2198,7 +2179,7 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
     setSheetMode("duplicate");
     setEditId(null);
     setForm({
-      nome: `${m.nome} (c�pia)`,
+      nome: `${m.nome} (cópia)`,
       dia_semana: m.dia_semana,
       hora_inicio: m.hora_inicio,
       hora_fim: m.hora_fim,
@@ -2239,8 +2220,8 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
       <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
-            <p className="font-medium text-sm">Missas Padr�o</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Templates semanais da par�quia.</p>
+            <p className="font-medium text-sm">Missas Padrão</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Templates semanais da paróquia.</p>
           </div>
           <Button size="sm" onClick={() => { setSheetMode("create"); setEditId(null); setForm(EMPTY_MISSA); setSheetOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nova missa
@@ -2250,7 +2231,7 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
         {missas.length === 0 ? (
           <div className="p-10 text-center">
             <Church className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">Nenhuma missa padr�o cadastrada.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma missa padrão cadastrada.</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -2308,7 +2289,7 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
   );
 }
 
-// -- SortableMissaRow ----------------------------------------------------------
+// ── SortableMissaRow ──────────────────────────────────────────────────────────
 
 function SortableMissaRow({
   m, onEdit, onDuplicate, onDelete, deleting,
@@ -2346,12 +2327,12 @@ function SortableMissaRow({
             </span>
           )}
           {m.solene && <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 border border-amber-500/25">Solene</span>}
-          {m.tem_adoracao && <Badge variant="secondary" className="text-xs">Adora��o</Badge>}
+          {m.tem_adoracao && <Badge variant="secondary" className="text-xs">Adoração</Badge>}
           {m.tem_bispo && <Badge variant="secondary" className="text-xs">Bispo</Badge>}
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
           {m.hora_inicio ? m.hora_inicio.slice(0, 5) : ""}
-          {m.local ? ` � ${m.local}` : ""}
+          {m.local ? ` · ${m.local}` : ""}
         </p>
       </div>
       <div className="flex items-center gap-1 shrink-0">
@@ -2415,7 +2396,7 @@ function MissaForm({
         <div>
           <FL label="Tipo de Missa" />
           <select value={form.tipo_missa_id ?? ""} onChange={(e) => f("tipo_missa_id", e.target.value || null)} className={selectCls2}>
-            <option value="">Selecione um tipo�</option>
+            <option value="">Selecione um tipo…</option>
             {tiposMissa.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
           </select>
           {tiposMissa.length === 0 && (
@@ -2424,14 +2405,14 @@ function MissaForm({
         </div>
       </div>
 
-      {/* Hor�rio */}
+      {/* Horário */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <FL label="In�cio" />
+          <FL label="Início" />
           <input type="time" value={form.hora_inicio ?? ""} onChange={(e) => f("hora_inicio", e.target.value || null)} className={inputCls} />
         </div>
         <div>
-          <FL label="T�rmino (opcional)" />
+          <FL label="Término (opcional)" />
           <input type="time" value={form.hora_fim ?? ""} onChange={(e) => f("hora_fim", e.target.value || null)} className={inputCls} />
         </div>
       </div>
@@ -2455,22 +2436,22 @@ function MissaForm({
             >
               <option value="">Sem local definido</option>
               {comunidades.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
-              <option value="_outro_">Outro local�</option>
+              <option value="_outro_">Outro local…</option>
             </select>
             {form.local !== null && !comunidades.some((c) => c.nome === form.local) && (
               <input value={form.local ?? ""} onChange={(e) => f("local", e.target.value)}
-                placeholder="Ex: Igreja Matriz, Sal�o Paroquial�" className={`mt-2 ${inputCls}`} />
+                placeholder="Ex: Igreja Matriz, Salão Paroquial…" className={`mt-2 ${inputCls}`} />
             )}
           </>
         ) : (
           <input value={form.local ?? ""} onChange={(e) => f("local", e.target.value || null)}
-            placeholder="Ex: Igreja Matriz, Sal�o Paroquial�" className={inputCls} />
+            placeholder="Ex: Igreja Matriz, Salão Paroquial…" className={inputCls} />
         )}
       </div>
 
-      {/* Recorr�ncia */}
+      {/* Recorrência */}
       <div>
-        <FL label="Recorr�ncia" />
+        <FL label="Recorrência" />
         <select value={form.recorrencia?.tipo ?? "semanal"}
           onChange={(e) => f("recorrencia", { ...form.recorrencia, tipo: e.target.value as Recorrencia["tipo"] })}
           className={selectCls2}>
@@ -2483,13 +2464,13 @@ function MissaForm({
         )}
       </div>
 
-      {/* Caracter�sticas */}
+      {/* Características */}
       <div className="rounded-lg border border-border p-4 space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Caracter�sticas</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Características</p>
         {([
           { key: "solene", label: "Missa solene" },
-          { key: "tem_adoracao", label: "Com Adora��o" },
-          { key: "tem_bispo", label: "Presen�a do Bispo" },
+          { key: "tem_adoracao", label: "Com Adoração" },
+          { key: "tem_bispo", label: "Presença do Bispo" },
         ] as const).map(({ key, label }) => (
           <div key={key} className="flex items-center justify-between">
             <span className="text-sm">{label}</span>
@@ -2498,14 +2479,14 @@ function MissaForm({
         ))}
       </div>
 
-      {/* Observa��es */}
+      {/* Observações */}
       <div>
-        <FL label="Observa��es (opcional)" />
+        <FL label="Observações (opcional)" />
         <textarea
           value={form.observacoes ?? ""}
           onChange={(e) => f("observacoes", e.target.value || null)}
           rows={2}
-          placeholder="Informa��es adicionais sobre esta missa�"
+          placeholder="Informações adicionais sobre esta missa…"
           className={`resize-none ${inputCls}`}
         />
       </div>
@@ -2521,7 +2502,7 @@ function MissaForm({
   );
 }
 
-// -- Tab: Imagens do PDF -------------------------------------------------------
+// ── Tab: Imagens do PDF ───────────────────────────────────────────────────────
 
 const BUCKET = "paroquia-imagens";
 
@@ -2561,7 +2542,7 @@ function PDFImagesTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () =
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) { toast.error("Selecione um arquivo de imagem."); return; }
-    if (file.size > 2 * 1024 * 1024) { toast.error("Imagem muito grande (m�x 2 MB)."); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error("Imagem muito grande (máx 2 MB)."); return; }
     await upload(file, slot);
     e.target.value = "";
   }
@@ -2625,7 +2606,7 @@ function PDFImagesTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () =
               <>
                 <Plus className="h-6 w-6 text-muted-foreground" />
                 <p className="text-xs text-muted-foreground">Clique para selecionar imagem</p>
-                <p className="text-xs text-muted-foreground/60">PNG, JPG ou SVG � m�x 2 MB</p>
+                <p className="text-xs text-muted-foreground/60">PNG, JPG ou SVG — máx 2 MB</p>
               </>
             )}
           </div>
@@ -2639,7 +2620,7 @@ function PDFImagesTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () =
             className="inline-flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-xs font-medium hover:bg-muted transition-colors disabled:opacity-60"
           >
             {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-            {isUploading ? "Enviando�" : "Selecionar imagem"}
+            {isUploading ? "Enviando…" : "Selecionar imagem"}
           </button>
         )}
 
@@ -2659,21 +2640,21 @@ function PDFImagesTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () =
       <div>
         <p className="text-xs text-muted-foreground">
           As imagens abaixo aparecem nos PDFs de escala gerados pelo sistema. Recomendado: fundo
-          transparente (PNG) ou imagem com propor��o 4:1 (ex: 800�200 px).
+          transparente (PNG) ou imagem com proporção 4:1 (ex: 800×200 px).
         </p>
       </div>
 
       <ImageSlot
-        label="Imagem do cabe�alho"
-        hint="Exibida no topo do PDF � ideal para o bras�o ou logotipo da par�quia"
+        label="Imagem do cabeçalho"
+        hint="Exibida no topo do PDF — ideal para o brasão ou logotipo da paróquia"
         url={cabecalhoUrl}
         slot="cabecalho"
         inputRef={cabecalhoRef}
       />
 
       <ImageSlot
-        label="Imagem do rodap�"
-        hint="Exibida na parte inferior do PDF � pode conter endere�o, telefone ou slogan"
+        label="Imagem do rodapé"
+        hint="Exibida na parte inferior do PDF — pode conter endereço, telefone ou slogan"
         url={rodapeUrl}
         slot="rodape"
         inputRef={rodapeRef}
@@ -2692,7 +2673,7 @@ function PDFImagesTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () =
   );
 }
 
-// -- Tab: Regras de Escala -----------------------------------------------------
+// ── Tab: Regras de Escala ─────────────────────────────────────────────────────
 
 function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () => void }) {
   const raw = paroquia.regras_escala as RegrasEscala | null;
@@ -2713,12 +2694,12 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
   return (
     <Card className="space-y-6">
       <p className="text-xs text-muted-foreground">
-        Estas regras guiam o motor de escalas ao sugerir atribui��es automaticamente.
+        Estas regras guiam o motor de escalas ao sugerir atribuições automaticamente.
       </p>
 
-      {/* Modo de confirma��o */}
+      {/* Modo de confirmação */}
       <div className="rounded-xl border border-border p-4 space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pol�tica de confirma��o</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Política de confirmação</p>
         <div className="space-y-3">
           <button
             type="button"
@@ -2734,8 +2715,8 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
               <div>
                 <p className="font-semibold text-sm">Escala Fixa <span className="text-xs text-emerald-600 font-normal ml-1">(Recomendado)</span></p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Escala publicada = presen�a esperada. Membros informam indisponibilidades antecipadamente.
-                  Faltas s�o registradas pelo coordenador ap�s o evento. Sem bot�o confirmar/recusar.
+                  Escala publicada = presença esperada. Membros informam indisponibilidades antecipadamente.
+                  Faltas são registradas pelo coordenador após o evento. Sem botão confirmar/recusar.
                 </p>
               </div>
             </div>
@@ -2752,9 +2733,9 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
             <div className="flex items-start gap-3">
               <div className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${regras.confirmacao_escala_ativa ? "border-primary bg-primary" : "border-muted-foreground"}`} />
               <div>
-                <p className="font-semibold text-sm">Confirma��o Ativa</p>
+                <p className="font-semibold text-sm">Confirmação Ativa</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Membro confirma ou justifica aus�ncia. Coordenador recebe notifica��o de cada resposta.
+                  Membro confirma ou justifica ausência. Coordenador recebe notificação de cada resposta.
                 </p>
               </div>
             </div>
@@ -2767,10 +2748,10 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Indisponibilidade</p>
         <div>
           <label className="text-xs text-muted-foreground">
-            Anteced�ncia m�nima para registrar indisponibilidade (dias)
+            Antecedência mínima para registrar indisponibilidade (dias)
           </label>
           <p className="text-[11px] text-muted-foreground/70 mt-0.5 mb-1.5">
-            Membros s� poder�o registrar indisponibilidade para datas com pelo menos esse n�mero de dias de anteced�ncia. 0 = sem restri��o.
+            Membros só poderão registrar indisponibilidade para datas com pelo menos esse número de dias de antecedência. 0 = sem restrição.
           </p>
           <input
             type="number"
@@ -2784,7 +2765,7 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
       </div>
 
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Limites de participa��o</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Limites de participação</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-xs text-muted-foreground">Limite semanal</label>
@@ -2806,8 +2787,8 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
         <div className="space-y-3">
           {([
             { key: "prioridade_score", label: "Priorizar por score", desc: "Membros com menor score servem primeiro" },
-            { key: "impedir_repeticao_consecutiva", label: "Impedir escala��o consecutiva", desc: "Evita escalar o mesmo membro em dois eventos seguidos" },
-            { key: "permitir_duplicidade", label: "Permitir mesmo membro em duas fun��es", desc: "Permite o mesmo membro em grupos diferentes na mesma escala" },
+            { key: "impedir_repeticao_consecutiva", label: "Impedir escalação consecutiva", desc: "Evita escalar o mesmo membro em dois eventos seguidos" },
+            { key: "permitir_duplicidade", label: "Permitir mesmo membro em duas funções", desc: "Permite o mesmo membro em grupos diferentes na mesma escala" },
           ] as const).map(({ key, label, desc }) => (
             <div key={key} className="flex items-start justify-between gap-4">
               <div>
@@ -2846,7 +2827,7 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
   );
 }
 
-// -- Tab: Tipos de Prioridade --------------------------------------------------
+// ── Tab: Tipos de Prioridade ──────────────────────────────────────────────────
 
 type TipoPrioridade = {
   id: string;
@@ -2920,7 +2901,7 @@ function TiposPrioridadeTab({ paroquiaId }: { paroquiaId: string }) {
           <div>
             <p className="font-medium text-sm">Tipos de Prioridade</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Define o peso de cada membro na distribui��o autom�tica da escala.
+              Define o peso de cada membro na distribuição automática da escala.
             </p>
           </div>
           <Button size="sm" onClick={() => { setEditTarget(null); setDialogOpen(true); }}>
@@ -2930,7 +2911,7 @@ function TiposPrioridadeTab({ paroquiaId }: { paroquiaId: string }) {
 
         {tipos.length === 0 ? (
           <div className="p-10 text-center text-sm text-muted-foreground">
-            Nenhuma prioridade cadastrada. Clique em "Nova prioridade" para come�ar.
+            Nenhuma prioridade cadastrada. Clique em "Nova prioridade" para começar.
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -2942,7 +2923,7 @@ function TiposPrioridadeTab({ paroquiaId }: { paroquiaId: string }) {
                     <span className="text-sm font-medium">{t.nome}</span>
                     <span className="text-xs text-muted-foreground">Peso: {t.peso_escala}</span>
                     {t.priorizar_solenes && <span className="text-xs px-1.5 py-0.5 bg-amber-500/10 text-amber-700 rounded-full">Solenes</span>}
-                    {t.frequencia_max && <span className="text-xs text-muted-foreground">Max: {t.frequencia_max}�/m�s</span>}
+                    {t.frequencia_max && <span className="text-xs text-muted-foreground">Max: {t.frequencia_max}×/mês</span>}
                   </div>
                   {t.descricao && <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.descricao}</p>}
                 </div>
@@ -2960,7 +2941,7 @@ function TiposPrioridadeTab({ paroquiaId }: { paroquiaId: string }) {
         )}
       </div>
 
-      {/* Di�logo */}
+      {/* Diálogo */}
       <TipoPrioridadeDialog
         open={dialogOpen}
         initial={editTarget}
@@ -2974,7 +2955,7 @@ function TiposPrioridadeTab({ paroquiaId }: { paroquiaId: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover prioridade?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.nome}</strong> ser� removida. Membros com essa prioridade ficam sem tipo vinculado.
+              <strong>{deleteTarget?.nome}</strong> será removida. Membros com essa prioridade ficam sem tipo vinculado.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -3045,11 +3026,11 @@ function TipoPrioridadeDialog({
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label>Nome *</Label>
-            <Input required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Cerimoni�rio Principal" />
+            <Input required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Cerimoniário Principal" />
           </div>
           <div className="space-y-1.5">
-            <Label>Descri��o (opcional)</Label>
-            <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Breve descri��o�" />
+            <Label>Descrição (opcional)</Label>
+            <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Breve descrição…" />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
@@ -3058,13 +3039,13 @@ function TipoPrioridadeDialog({
                 className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
             </div>
             <div className="space-y-1.5">
-              <Label>Freq. m�n. / m�s</Label>
-              <input type="number" min={0} placeholder="�" value={freqMin} onChange={(e) => setFreqMin(e.target.value)}
+              <Label>Freq. mín. / mês</Label>
+              <input type="number" min={0} placeholder="—" value={freqMin} onChange={(e) => setFreqMin(e.target.value)}
                 className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
             </div>
             <div className="space-y-1.5">
-              <Label>Freq. m�x. / m�s</Label>
-              <input type="number" min={0} placeholder="�" value={freqMax} onChange={(e) => setFreqMax(e.target.value)}
+              <Label>Freq. máx. / mês</Label>
+              <input type="number" min={0} placeholder="—" value={freqMax} onChange={(e) => setFreqMax(e.target.value)}
                 className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
             </div>
           </div>
@@ -3103,7 +3084,7 @@ function TipoPrioridadeDialog({
   );
 }
 
-// -- Tab: Pontua��o ------------------------------------------------------------
+// ── Tab: Pontuação ────────────────────────────────────────────────────────────
 
 const DEFAULT_PONTUACAO: PontuacaoConfig = {
   presenca_missa: 1,
@@ -3121,18 +3102,18 @@ const DEFAULT_PONTUACAO: PontuacaoConfig = {
 };
 
 const PONTUACAO_FIELDS: { key: keyof PontuacaoConfig; label: string; grupo: "positivo" | "negativo" }[] = [
-  { key: "presenca_missa",          label: "Presen�a em missa",            grupo: "positivo" },
-  { key: "presenca_missa_solene",   label: "Presen�a em missa solene",     grupo: "positivo" },
-  { key: "presenca_missa_bispo",    label: "Presen�a com bispo",           grupo: "positivo" },
-  { key: "presenca_formacao",       label: "Presen�a em forma��o",         grupo: "positivo" },
-  { key: "presenca_reuniao",        label: "Presen�a em reuni�o",          grupo: "positivo" },
-  { key: "presenca_retiro",         label: "Participa��o em retiro",       grupo: "positivo" },
-  { key: "presenca_adoracao",       label: "Participa��o em adora��o",     grupo: "positivo" },
+  { key: "presenca_missa",          label: "Presença em missa",            grupo: "positivo" },
+  { key: "presenca_missa_solene",   label: "Presença em missa solene",     grupo: "positivo" },
+  { key: "presenca_missa_bispo",    label: "Presença com bispo",           grupo: "positivo" },
+  { key: "presenca_formacao",       label: "Presença em formação",         grupo: "positivo" },
+  { key: "presenca_reuniao",        label: "Presença em reunião",          grupo: "positivo" },
+  { key: "presenca_retiro",         label: "Participação em retiro",       grupo: "positivo" },
+  { key: "presenca_adoracao",       label: "Participação em adoração",     grupo: "positivo" },
   { key: "presenca_evento_especial",label: "Evento especial",              grupo: "positivo" },
   { key: "falta_justificada",       label: "Falta justificada",            grupo: "negativo" },
   { key: "falta_sem_justificativa", label: "Falta sem justificativa",      grupo: "negativo" },
   { key: "atraso",                  label: "Atraso",                       grupo: "negativo" },
-  { key: "ocorrencia_grave",        label: "Ocorr�ncia grave",             grupo: "negativo" },
+  { key: "ocorrencia_grave",        label: "Ocorrência grave",             grupo: "negativo" },
 ];
 
 function PontuacaoConfigTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () => void }) {
@@ -3149,7 +3130,7 @@ function PontuacaoConfigTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved
     const { error } = await anyDb.from("paroquias").update({ pontuacao_config: config }).eq("id", paroquia.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Configura��o de pontua��o salva.");
+    toast.success("Configuração de pontuação salva.");
     onSaved();
   }
 
@@ -3159,15 +3140,15 @@ function PontuacaoConfigTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved
   return (
     <Card className="space-y-6">
       <div>
-        <p className="text-sm font-medium">Motor de Pontua��o</p>
+        <p className="text-sm font-medium">Motor de Pontuação</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Configure os pontos atribu�dos a cada a��o. Tudo � configur�vel por par�quia.
+          Configure os pontos atribuídos a cada ação. Tudo é configurável por paróquia.
         </p>
       </div>
 
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1">
-          <span className="text-emerald-500">+</span> Pontua��o positiva
+          <span className="text-emerald-500">+</span> Pontuação positiva
         </p>
         <div className="grid sm:grid-cols-2 gap-3">
           {positivos.map(({ key, label }) => (
@@ -3189,14 +3170,14 @@ function PontuacaoConfigTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved
 
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1">
-          <span className="text-red-500">-</span> Penalidades
+          <span className="text-red-500">−</span> Penalidades
         </p>
         <div className="grid sm:grid-cols-2 gap-3">
           {negativos.map(({ key, label }) => (
             <div key={key} className="flex items-center gap-3">
               <label className="text-sm flex-1 text-foreground/80">{label}</label>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-red-500 font-bold text-sm w-4">-</span>
+                <span className="text-red-500 font-bold text-sm w-4">−</span>
                 <input
                   type="number" min={0} max={100}
                   value={Math.abs(config[key])}
@@ -3211,7 +3192,7 @@ function PontuacaoConfigTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved
 
       <button type="button" disabled={saving} onClick={save}
         className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-2">
-        {saving && <Loader2 className="h-4 w-4 animate-spin" />} Salvar pontua��o
+        {saving && <Loader2 className="h-4 w-4 animate-spin" />} Salvar pontuação
       </button>
     </Card>
   );

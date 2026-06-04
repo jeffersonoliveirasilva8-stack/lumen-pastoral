@@ -79,6 +79,7 @@ type Membro = {
   auth_user_id: string | null;
   comunidade_id: string | null;
   sexo: string | null;
+  foto_url: string | null;
   ministerios: Ministerio[];
   atuacao_ids: string[];
 };
@@ -1826,7 +1827,7 @@ function MembrosPage() {
     queryFn: async () => {
       const { data: rawMembros, error } = await anyDb
         .from("membros")
-        .select("id, nome, email, telefone, data_nascimento, data_ingresso, observacoes, score, ativo, forcar_escalacao_solene, prioridade_escala, prioridade_id, tipo_acesso, token_acesso, auth_user_id, comunidade_id, sexo")
+        .select("id, nome, email, telefone, data_nascimento, data_ingresso, observacoes, score, ativo, forcar_escalacao_solene, prioridade_escala, prioridade_id, tipo_acesso, token_acesso, auth_user_id, comunidade_id, sexo, foto_url")
         .eq("paroquia_id", pid!).order("nome");
       if (error) throw error;
       const rows = (rawMembros ?? []) as any[];
@@ -1859,6 +1860,7 @@ function MembrosPage() {
         atuacao_ids: atuMap[m.id] ?? [],
         prioridade_id: m.prioridade_id ?? null,
         tipo_acesso: m.tipo_acesso ?? "membro",
+        foto_url: m.foto_url ?? null,
       })) as Membro[];
     },
   });
@@ -2448,88 +2450,98 @@ function MembrosPage() {
         </TabsList>
 
         <TabsContent value="membros">
-        {/* Filtros */}
-        <div className="mt-2 space-y-2">
-        <div className="flex gap-2">
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              className="pl-9 pr-8"
-              placeholder="Buscar nome, e-mail ou telefone…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {search && (
-              <button className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted" onClick={() => setSearch("")}>
-                <X className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            )}
-          </div>
-          <Select value={filterAtivo} onValueChange={(v) => { setFilterAtivo(v); setSelectedIds(new Set()); }}>
-            <SelectTrigger className="w-28 shrink-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ativos">Ativos</SelectItem>
-              <SelectItem value="inativos">Inativos</SelectItem>
-              <SelectItem value="todos">Todos</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Select value={filterMin} onValueChange={(v) => { setFilterMin(v); setSelectedIds(new Set()); }}>
-            <SelectTrigger className="flex-1 min-w-[140px] h-8 text-xs">
-              <SelectValue placeholder="Função litúrgica" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todas as funções</SelectItem>
-              {ministerios.filter((m) => !!m.id).map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          {atuacoes.length > 0 && (
-            <Select value={filterAtuacao} onValueChange={(v) => { setFilterAtuacao(v); setSelectedIds(new Set()); }}>
-              <SelectTrigger className="flex-1 min-w-[140px] h-8 text-xs">
-                <SelectValue placeholder="Atuação pastoral" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas as atuações</SelectItem>
-                {atuacoes.filter((a) => !!a.id).map((a) => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-          {comunidades.length > 0 && (
-            <Select value={filterComunidade} onValueChange={(v) => { setFilterComunidade(v); setSelectedIds(new Set()); }}>
-              <SelectTrigger className="flex-1 min-w-[140px] h-8 text-xs">
-                <SelectValue placeholder="Comunidade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas as comunidades</SelectItem>
-                {comunidades.filter((c) => !!c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
-          <Select value={filterPrioridade} onValueChange={(v) => { setFilterPrioridade(v); setSelectedIds(new Set()); }}>
-            <SelectTrigger className="flex-1 min-w-[140px] h-8 text-xs">
-              <SelectValue placeholder="Prioridade" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas as prioridades</SelectItem>
-              {PRIORIDADES.filter((p) => p.value !== "nenhuma").map((p) => (
-                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-              ))}
-              <SelectItem value="nenhuma">Sem prioridade</SelectItem>
-            </SelectContent>
-          </Select>
-          {(filterMin !== "todos" || filterAtuacao !== "todas" || filterComunidade !== "todas" || filterPrioridade !== "todas") && (
-            <button
-              className="text-xs text-muted-foreground hover:text-foreground underline h-8 px-1"
-              onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setSelectedIds(new Set()); }}
-            >
-              Limpar filtros
-            </button>
-          )}
-        </div>
-      </div>
+        {/* Busca + Filtros */}
+        {(() => {
+          const hasFilters = filterMin !== "todos" || filterAtuacao !== "todas" || filterComunidade !== "todas" || filterPrioridade !== "todas" || filterAtivo !== "ativos";
+          return (
+            <div className="mt-2 space-y-2">
+              {/* Linha principal: busca + status + botão filtros */}
+              <div className="flex gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-9 pr-8 h-10"
+                    placeholder="Buscar por nome, e-mail…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                  {search && (
+                    <button className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted" onClick={() => setSearch("")}>
+                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  )}
+                </div>
+                <Select value={filterAtivo} onValueChange={(v) => { setFilterAtivo(v); setSelectedIds(new Set()); }}>
+                  <SelectTrigger className="w-24 shrink-0 h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ativos">Ativos</SelectItem>
+                    <SelectItem value="inativos">Inativos</SelectItem>
+                    <SelectItem value="todos">Todos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Filtros adicionais — grid 2 colunas no mobile */}
+              {(ministerios.length > 0 || atuacoes.length > 0 || comunidades.length > 0) && (
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                  <Select value={filterMin} onValueChange={(v) => { setFilterMin(v); setSelectedIds(new Set()); }}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Função" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todas as funções</SelectItem>
+                      {ministerios.filter((m) => !!m.id).map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {atuacoes.length > 0 && (
+                    <Select value={filterAtuacao} onValueChange={(v) => { setFilterAtuacao(v); setSelectedIds(new Set()); }}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Atuação" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todas">Todas as atuações</SelectItem>
+                        {atuacoes.filter((a) => !!a.id).map((a) => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {comunidades.length > 0 && (
+                    <Select value={filterComunidade} onValueChange={(v) => { setFilterComunidade(v); setSelectedIds(new Set()); }}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Comunidade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todas">Todas</SelectItem>
+                        {comunidades.filter((c) => !!c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Select value={filterPrioridade} onValueChange={(v) => { setFilterPrioridade(v); setSelectedIds(new Set()); }}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Prioridade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas</SelectItem>
+                      {PRIORIDADES.filter((p) => p.value !== "nenhuma").map((p) => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                      <SelectItem value="nenhuma">Sem prioridade</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {hasFilters && (
+                    <button
+                      className="col-span-2 sm:col-span-1 text-xs text-muted-foreground hover:text-foreground h-8 px-2 rounded border border-dashed border-border hover:border-foreground/30 transition"
+                      onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setFilterAtivo("ativos"); setSelectedIds(new Set()); }}
+                    >
+                      <X className="h-3 w-3 inline mr-1" />Limpar filtros
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       {/* Lista */}
       {isLoading ? (
@@ -2592,7 +2604,7 @@ function MembrosPage() {
           </div>
 
           {/* Grid de cards */}
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((m) => {
               const initials = m.nome.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
               const comunidadeNome = comunidades.find((c) => c.id === m.comunidade_id)?.nome;
@@ -2622,8 +2634,12 @@ function MembrosPage() {
 
                   {/* Cabeçalho: avatar + nome + menu */}
                   <div className="flex items-start gap-3 pl-7">
-                    <div className={`h-10 w-10 shrink-0 rounded-full flex items-center justify-center text-sm font-bold tracking-wide ${m.ativo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                      {initials}
+                    <div className={`h-10 w-10 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-sm font-bold tracking-wide ${!m.foto_url ? (m.ativo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground") : ""}`}>
+                      {m.foto_url ? (
+                        <img src={m.foto_url} alt={m.nome} className="h-full w-full object-cover" />
+                      ) : (
+                        initials
+                      )}
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -2705,17 +2721,35 @@ function MembrosPage() {
                     </div>
                   </div>
 
+                  {/* Funções litúrgicas */}
+                  {m.ministerios.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {m.ministerios.slice(0, 3).map((min) => (
+                        <span
+                          key={min.id}
+                          className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{ backgroundColor: min.cor + "22", color: min.cor, border: `1px solid ${min.cor}44` }}
+                        >
+                          {min.nome}
+                        </span>
+                      ))}
+                      {m.ministerios.length > 3 && (
+                        <span className="text-[10px] text-muted-foreground">+{m.ministerios.length - 3}</span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Rodapé: score + atuações */}
-                  <div className="mt-3 pt-2.5 border-t border-border/50 flex items-end justify-between gap-2">
-                    <div className="flex flex-col leading-none">
-                      <span className="text-[9px] uppercase tracking-widest font-semibold text-muted-foreground/60 mb-0.5">Score</span>
-                      <span className="text-[28px] font-extrabold text-primary tabular-nums leading-none">{m.score}</span>
+                  <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between gap-2">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-lg font-extrabold text-primary tabular-nums leading-none">{m.score}</span>
+                      <span className="text-[10px] text-muted-foreground">pts</span>
                     </div>
                     {mAtuacoes.length > 0 && (
-                      <div className="flex flex-wrap gap-1 justify-end items-end">
-                        {mAtuacoes.map((a) => (
-                          <span key={a.id} className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/50">
-                            {a.icone && <span className="text-[9px]">{a.icone}</span>}
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {mAtuacoes.slice(0, 2).map((a) => (
+                          <span key={a.id} className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300">
+                            {a.icone && <span>{a.icone}</span>}
                             {a.nome}
                           </span>
                         ))}
