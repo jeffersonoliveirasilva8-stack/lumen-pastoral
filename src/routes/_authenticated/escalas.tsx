@@ -2455,6 +2455,29 @@ function EscalaDetail({
       return;
     }
 
+    // Diagnóstico detalhado no console para depuração
+    console.group("[MOTOR] Diagnóstico pré-geração");
+    console.log("Membros carregados:", membros.length, membros.map((m) => m.nome));
+    console.log("Funções da escala:", funcoes.map((f) => ({ nome: f.ministerio.nome, id: f.ministerio_id, qtd: f.quantidade })));
+    console.log("membroMinisterios (ministerio→membros):", membroMinisterios);
+    const linkCount = Object.values(membroMinisterios).flat().length;
+    console.log("Total de vínculos membro↔função:", linkCount);
+    funcoes.forEach((f) => {
+      const count = (membroMinisterios[f.ministerio_id] ?? []).length;
+      console.log(`  "${f.ministerio.nome}" (${f.ministerio_id}): ${count} membro(s) vinculado(s)`, membroMinisterios[f.ministerio_id] ?? []);
+    });
+    console.log("membroAtuacoes:", membroAtuacoes);
+    console.log("indisponibilidades:", indisponibilidades.length);
+    console.groupEnd();
+
+    if (linkCount === 0) {
+      toast.error(
+        "Nenhum membro tem funções vinculadas. Acesse Membros → edite cada membro → Funções Litúrgicas → marque as funções → Salvar.",
+        { duration: 10000 }
+      );
+      return;
+    }
+
     const regras = paroquiaConfig?.regras_escala ?? {};
     const config = {
       usa_tochas: paroquiaConfig?.usa_tochas ?? false,
@@ -2647,6 +2670,69 @@ function EscalaDetail({
           )}
         </>
       )}
+
+      {/* ── Diagnóstico automático do motor ─────────────────────────────────── */}
+      {funcoes.length > 0 && (() => {
+        const analise = funcoes.map((f) => ({
+          nome: f.ministerio.nome,
+          ministerio_id: f.ministerio_id,
+          membrosVinculados: (membroMinisterios[f.ministerio_id] ?? []).length,
+        }));
+        const semMembros = analise.filter((a) => a.membrosVinculados === 0);
+        const totalMembrosComAlgumVinculo = Object.values(membroMinisterios).flat();
+        const membrosAtivosComVinculo = [...new Set(totalMembrosComAlgumVinculo)].length;
+
+        if (semMembros.length === 0 && membrosAtivosComVinculo > 0) return null; // tudo OK
+
+        return (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
+                O motor não consegue distribuir — veja o que falta:
+              </p>
+            </div>
+
+            {membrosAtivosComVinculo === 0 && (
+              <div className="rounded-lg bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-800 p-2.5">
+                <p className="text-xs font-semibold text-red-700 dark:text-red-400">
+                  ❌ Nenhum membro tem funções vinculadas
+                </p>
+                <p className="text-xs text-red-600/80 dark:text-red-500/80 mt-1">
+                  Acesse <strong>Membros</strong> → edite cada membro → seção <strong>Funções Litúrgicas</strong> → marque as funções que ele pode exercer → Salvar.
+                </p>
+              </div>
+            )}
+
+            {membrosAtivosComVinculo > 0 && semMembros.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  {membrosAtivosComVinculo} membro(s) têm funções, mas as funções abaixo <strong>não têm membros vinculados</strong>:
+                </p>
+                {semMembros.map((a) => (
+                  <div key={a.ministerio_id} className="flex items-center gap-2 rounded-lg bg-white dark:bg-background border border-amber-200 dark:border-amber-800 px-3 py-1.5">
+                    <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                    <span className="text-xs font-medium">{a.nome}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">0 membros</span>
+                  </div>
+                ))}
+                <p className="text-xs text-amber-700 dark:text-amber-400 pt-1">
+                  Solução: em <strong>Membros</strong> → edite os membros que exercem essas funções → seção <strong>Funções Litúrgicas</strong> → marque as funções → Salvar.
+                </p>
+              </div>
+            )}
+
+            {/* Resumo do que está OK */}
+            {analise.filter((a) => a.membrosVinculados > 0).map((a) => (
+              <div key={a.ministerio_id} className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="font-medium">{a.nome}</span>
+                <span className="text-muted-foreground ml-auto">{a.membrosVinculados} membro(s)</span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Ministérios e atribuições */}
       <div>
