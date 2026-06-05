@@ -2374,6 +2374,8 @@ function EscalaDetail({
   const [addMembroMap, setAddMembroMap] = useState<Record<string, string>>({});
   const [suggestedAssignments, setSuggestedAssignments] = useState<{ ministerio_id: string; membro_id: string }[]>([]);
   const [generateNotice, setGenerateNotice] = useState<string | null>(null);
+  const [engineInsights, setEngineInsights] = useState<import("@/lib/escala-engine").InsightFuncao[]>([]);
+  const [showInsights, setShowInsights] = useState(false);
 
   // ── Presença pós-missa ──────────────────────────────────────────────────────
   const hoje = format(new Date(), "yyyy-MM-dd");
@@ -2501,17 +2503,16 @@ function EscalaDetail({
     );
 
     setSuggestedAssignments(resultado.sugestoes);
+    setEngineInsights(resultado.insights ?? []);
 
     const totalSlots = funcoes.reduce((sum, f) => sum + f.quantidade, 0);
 
     if (resultado.sugestoes.length === 0) {
-      // Mostra o primeiro alerta específico do motor, se houver
       const motivo = resultado.alertas[0] ?? "Verifique se os membros têm funções vinculadas e não estão indisponíveis.";
       setGenerateNotice(`Nenhuma sugestão gerada. ${motivo}`);
       return;
     }
 
-    // Mostra alertas de vagas não preenchidas
     if (resultado.alertas.length > 0) {
       resultado.alertas.forEach((a) => toast.warning(a, { duration: 6000 }));
     }
@@ -2519,17 +2520,22 @@ function EscalaDetail({
     if (resultado.sugestoes.length < totalSlots) {
       setGenerateNotice(
         `${resultado.sugestoes.length} de ${totalSlots} vagas preenchidas. ` +
-        `${resultado.detalhesPorFuncao.filter((d) => d.alocados < d.solicitados).map((d) => `"${d.ministerio_nome}" (${d.alocados}/${d.solicitados})`).join(", ")}`
+        resultado.detalhesPorFuncao
+          .filter((d) => d.alocados < d.solicitados)
+          .map((d) => `"${d.ministerio_nome}" (${d.alocados}/${d.solicitados})`)
+          .join(", "),
       );
       return;
     }
 
-    setGenerateNotice(`${resultado.sugestoes.length} sugestões geradas. Revise e aplique.`);
+    setGenerateNotice(`${resultado.sugestoes.length} sugestões geradas pelo motor inteligente. Revise e aplique.`);
   }
 
   function handleClearSuggestions() {
     setSuggestedAssignments([]);
     setGenerateNotice(null);
+    setEngineInsights([]);
+    setShowInsights(false);
   }
 
   async function handleApplySuggestions() {
@@ -2833,29 +2839,138 @@ function EscalaDetail({
               </div>
             </div>
             {suggestedAssignments.length > 0 ? (
-              <div className="space-y-3">
-                {suggestionsByMinisterio.map(({ funcao, assignments }) => (
-                  <div key={funcao.ministerio_id} className="rounded-lg border border-border bg-card p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{funcao.ministerio.nome}</span>
-                      <span className="text-xs text-muted-foreground">{assignments.length}/{funcao.quantidade}</span>
+              <div className="space-y-2">
+                {suggestionsByMinisterio.map(({ funcao, assignments }) => {
+                  const insight = engineInsights.find((i) => i.ministerio_id === funcao.ministerio_id);
+                  return (
+                    <div key={funcao.ministerio_id} className="rounded-lg border border-border bg-card p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm">{funcao.ministerio.nome}</span>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${assignments.length >= funcao.quantidade ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                          {assignments.length}/{funcao.quantidade}
+                        </span>
+                      </div>
+                      {assignments.length > 0 ? (
+                        <ul className="mt-2 space-y-1.5">
+                          {assignments.map((s) => {
+                            const member = membros.find((m) => m.id === s.membro_id);
+                            const ic = insight?.escolhidos.find((c) => c.membro_id === s.membro_id);
+                            return (
+                              <li key={`${s.ministerio_id}-${s.membro_id}`} className="flex items-start gap-2">
+                                <div className="h-5 w-5 mt-0.5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                  <span className="text-[9px] font-bold text-primary">{ic ? Math.round(ic.score_final) : "—"}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium">{member?.nome ?? s.membro_id}</p>
+                                  {ic && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {ic.dias_sem_servir >= 365 ? "membro novo" : `${ic.dias_sem_servir}d sem servir`}
+                                      {" · "}{ic.participacoes_30d === 0 ? "não serviu nos últimos 30d" : `${ic.participacoes_30d}× nos últimos 30d`}
+                                    </p>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <div className="mt-2">
+                          <p className="text-sm text-amber-700">Nenhum candidato disponível.</p>
+                          {insight?.motivo_vazio && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{insight.motivo_vazio}</p>
+                          )}
+                          {insight && (
+                            <p className="text-[11px] text-muted-foreground mt-1">
+                              {insight.candidatos_avaliados} avaliado(s) —
+                              {insight.excluidos.indisponibilidade > 0 && ` ${insight.excluidos.indisponibilidade} indisponível(eis);`}
+                              {insight.excluidos.ja_alocado > 0 && ` ${insight.excluidos.ja_alocado} já alocado(s);`}
+                              {insight.excluidos.funcao_nao_pode > 0 && ` ${insight.excluidos.funcao_nao_pode} bloqueado(s) pela função;`}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {assignments.length > 0 ? (
-                      <ul className="mt-2 space-y-1 text-sm">
-                        {assignments.map((suggestion) => {
-                          const member = membros.find((m) => m.id === suggestion.membro_id);
-                          return (
-                            <li key={`${suggestion.ministerio_id}-${suggestion.membro_id}`}>{member?.nome ?? suggestion.membro_id}</li>
-                          );
-                        })}
-                      </ul>
-                    ) : (
-                      <p className="mt-2 text-sm text-muted-foreground">Nenhum membro sugerido para esta função.</p>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
+
+            {/* Painel de insights detalhados */}
+            {engineInsights.length > 0 && (
+              <div className="border-t border-primary/20 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowInsights((v) => !v)}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  {showInsights ? "Ocultar" : "Ver"} diagnóstico do motor
+                  <ChevronDown className={`h-3 w-3 transition-transform ${showInsights ? "rotate-180" : ""}`} />
+                </button>
+                {showInsights && (
+                  <div className="mt-3 space-y-3">
+                    {engineInsights.map((insight) => (
+                      <div key={insight.ministerio_id} className="rounded-lg border border-border/60 bg-background p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wide">{insight.ministerio_nome}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {insight.candidatos_avaliados} candidato(s) avaliado(s)
+                          </span>
+                        </div>
+                        {(insight.excluidos.indisponibilidade + insight.excluidos.ja_alocado + insight.excluidos.funcao_nao_pode + insight.excluidos.atuacao + insight.excluidos.dia_semana + insight.excluidos.acima_limite) > 0 && (
+                          <div className="flex flex-wrap gap-1.5 text-[10px]">
+                            {insight.excluidos.indisponibilidade > 0 && (
+                              <span className="bg-red-50 text-red-700 border border-red-200 rounded-full px-2 py-0.5">
+                                {insight.excluidos.indisponibilidade} indisponível
+                              </span>
+                            )}
+                            {insight.excluidos.funcao_nao_pode > 0 && (
+                              <span className="bg-orange-50 text-orange-700 border border-orange-200 rounded-full px-2 py-0.5">
+                                {insight.excluidos.funcao_nao_pode} bloqueado pela função
+                              </span>
+                            )}
+                            {insight.excluidos.ja_alocado > 0 && (
+                              <span className="bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2 py-0.5">
+                                {insight.excluidos.ja_alocado} já alocado
+                              </span>
+                            )}
+                            {insight.excluidos.dia_semana > 0 && (
+                              <span className="bg-purple-50 text-purple-700 border border-purple-200 rounded-full px-2 py-0.5">
+                                {insight.excluidos.dia_semana} restrição de dia
+                              </span>
+                            )}
+                            {insight.excluidos.acima_limite > 0 && (
+                              <span className="bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+                                {insight.excluidos.acima_limite} acima do limite
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {insight.top_candidatos.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Top candidatos</p>
+                            {insight.top_candidatos.slice(0, 5).map((c) => (
+                              <div key={c.membro_id} className={`flex items-center justify-between gap-2 text-[11px] rounded px-2 py-1 ${c.escolhido ? "bg-emerald-50 border border-emerald-200" : "bg-muted/40"}`}>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {c.escolhido && <span className="text-emerald-600 font-bold shrink-0">✓</span>}
+                                  <span className={`truncate ${c.escolhido ? "font-semibold" : "text-muted-foreground"}`}>{c.nome}</span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 text-[10px] text-muted-foreground">
+                                  <span>{c.dias_sem_servir >= 365 ? "novo" : `${c.dias_sem_servir}d`}</span>
+                                  <span>{c.participacoes_30d}×/30d</span>
+                                  <span className={`font-bold px-1.5 py-0.5 rounded ${c.escolhido ? "bg-emerald-100 text-emerald-700" : "bg-muted text-foreground"}`}>
+                                    {c.score_final}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : null}
       </div>

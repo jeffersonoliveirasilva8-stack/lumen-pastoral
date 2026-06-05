@@ -1,7 +1,7 @@
 // Re-exporta o engine litúrgico completo
 export * from "../biblioteca/escala-engine";
 
-// ── Tipos de compatibilidade ──────────────────────────────────────────────────
+// ── Tipos de interface pública ────────────────────────────────────────────────
 
 export type EscalaEvent = {
   titulo: string;
@@ -32,7 +32,6 @@ export type EscalaFuncaoPedido = {
   ministerio_id: string;
   quantidade: number;
   ministerio: EscalaMinisterio;
-  // IDs de atuações exigidas para esta função (vazio = qualquer membro apto)
   atuacoes_exigidas?: string[];
 };
 
@@ -65,6 +64,7 @@ import {
   type ConfigParoquia,
   type HistoricoRecente,
   type DetalheFuncao,
+  type InsightFuncao,
 } from "../biblioteca/escala-engine";
 
 type AllocOptions = {
@@ -76,16 +76,13 @@ type AllocOptions = {
   solene?: boolean;
   tem_adoracao?: boolean;
   tem_bispo?: boolean;
-  // debug: true → loga no console; omitir ou false → silencioso
   debug?: boolean;
 };
 
 // ── Logging condicional ───────────────────────────────────────────────────────
-// Só loga quando debug === true explicitamente. Não loga em produção.
+
 function logDebug(msg: string, debug?: boolean) {
-  if (debug === true) {
-    console.log(`[ESCALA-ENGINE] ${msg}`);
-  }
+  if (debug === true) console.log(`[ESCALA-ENGINE] ${msg}`);
 }
 
 // ── _buildAndAllocate ─────────────────────────────────────────────────────────
@@ -104,44 +101,29 @@ function _buildAndAllocate(
 
   // ── Validações de entrada ──────────────────────────────────────────────────
   if (membros.length === 0) {
-    logDebug("❌ Sem membros ativos no sistema", debug);
-    return { alocacoes: [], alertas: ["Nenhum membro ativo cadastrado no sistema."], detalhesPorFuncao: [] };
+    return {
+      alocacoes: [], alertas: ["Nenhum membro ativo cadastrado no sistema."],
+      detalhesPorFuncao: [], insights: [],
+    };
   }
-
   if (funcoes.length === 0) {
-    logDebug("❌ Sem funções definidas", debug);
-    return { alocacoes: [], alertas: ["Nenhuma função definida para esta escala."], detalhesPorFuncao: [] };
+    return {
+      alocacoes: [], alertas: ["Nenhuma função definida para esta escala."],
+      detalhesPorFuncao: [], insights: [],
+    };
   }
-
   if (Object.keys(membroMinisterios).length === 0) {
-    logDebug("❌ membroMinisterios vazio — nenhum vínculo membro↔ministério encontrado", debug);
     return {
       alocacoes: [],
       alertas: [
         "Nenhum membro possui vínculo com funções litúrgicas. " +
         "Acesse Membros → edite cada membro → seção Funções e marque as funções que ele exerce.",
       ],
-      detalhesPorFuncao: [],
+      detalhesPorFuncao: [], insights: [],
     };
   }
 
-  // ── Diagnóstico de cobertura de funções ────────────────────────────────────
-  const minIdsRequeridos = funcoes.map((f) => f.ministerio_id);
-  const minIdsComMembros = new Set(Object.keys(membroMinisterios));
-  const minSemCobertura = minIdsRequeridos.filter((mid) => !minIdsComMembros.has(mid));
-
-  if (minSemCobertura.length > 0 && debug) {
-    minSemCobertura.forEach((mid) => {
-      const f = funcoes.find((x) => x.ministerio_id === mid);
-      logDebug(`⚠ Função sem membros vinculados: "${f?.ministerio.nome || mid}"`, debug);
-    });
-  }
-
-  const existing = new Set(
-    (options?.existingAssignments ?? []).map((a) => a.membro_id),
-  );
-
-  logDebug(`Atribuídos previamente: ${existing.size}`, debug);
+  const existing = new Set((options?.existingAssignments ?? []).map((a) => a.membro_id));
 
   // ── Inverter mapa ministerio→membros para membro→ministerios ──────────────
   const membroParaMinisterios: Record<string, string[]> = {};
@@ -159,28 +141,17 @@ function _buildAndAllocate(
   const membrosEngine: MembroEngine[] = membros
     .filter((m) => !existing.has(m.id))
     .map((m) => {
-      const naoPodemIds = restricoes
-        .filter((r) => r.membro_id === m.id && r.tipo === "nao_pode")
-        .map((r) => r.ministerio_id);
-
-      const podemIds = restricoes
-        .filter((r) => r.membro_id === m.id && r.tipo === "pode")
-        .map((r) => r.ministerio_id);
-
-      const ministerioIdsBase = membroParaMinisterios[m.id] ?? [];
-      const ministerioIdsEfetivo = [...new Set([...ministerioIdsBase, ...podemIds])];
-
-      if (ministerioIdsEfetivo.length === 0) {
-        logDebug(`⚠ Membro "${m.nome}" (${m.id}) sem ministérios — não será candidato`, debug);
-      }
-
+      const naoPodemIds = restricoes.filter((r) => r.membro_id === m.id && r.tipo === "nao_pode").map((r) => r.ministerio_id);
+      const podemIds    = restricoes.filter((r) => r.membro_id === m.id && r.tipo === "pode").map((r) => r.ministerio_id);
+      const base        = membroParaMinisterios[m.id] ?? [];
+      const efetivo     = [...new Set([...base, ...podemIds])];
       return {
         id: m.id,
         nome: m.nome,
         score: m.score ?? 0,
         ativo: true,
         forcar_escalacao_solene: m.forcar_escalacao_solene ?? false,
-        ministerio_ids: ministerioIdsEfetivo,
+        ministerio_ids: efetivo,
         restricoes_dia_semana: m.restricoes_dia_semana ?? [],
         funcoes_nao_pode_ids: naoPodemIds,
         sexo: (m.sexo === "M" || m.sexo === "F") ? m.sexo : null,
@@ -188,72 +159,49 @@ function _buildAndAllocate(
       };
     });
 
-  logDebug(`Candidatos após filtro de existentes: ${membrosEngine.length}`, debug);
-
   const funcoesEngine: FuncaoNecessaria[] = funcoes.map((f) => ({
-    ministerio_id: f.ministerio_id,
-    ministerio_nome: f.ministerio.nome,
-    quantidade: f.quantidade,
+    ministerio_id:    f.ministerio_id,
+    ministerio_nome:  f.ministerio.nome,
+    quantidade:       f.quantidade,
     atuacoes_exigidas: f.atuacoes_exigidas,
   }));
 
   const contexto: ContextoEscala = {
-    data: evento.data,
-    tipo: evento.tipo,
-    solene: options?.solene ?? false,
+    data:         evento.data,
+    tipo:         evento.tipo,
+    solene:       options?.solene       ?? false,
     tem_adoracao: options?.tem_adoracao ?? false,
-    tem_bispo: options?.tem_bispo ?? false,
+    tem_bispo:    options?.tem_bispo    ?? false,
   };
 
   const config: ConfigParoquia = options?.config ?? { usa_tochas: false };
 
   const historicoRecente: HistoricoRecente[] = (options?.history ?? [])
     .filter((h) => h.date != null)
-    .map((h) => ({
-      membro_id: h.memberId,
-      ministerio_id: h.ministerioId,
-      data: h.date!.slice(0, 10),
-    }));
+    .map((h) => ({ membro_id: h.memberId, ministerio_id: h.ministerioId, data: h.date!.slice(0, 10) }));
 
-  logDebug(`Histórico: ${historicoRecente.length} registros (6 meses)`, debug);
+  logDebug(`Histórico: ${historicoRecente.length} registros`, debug);
 
-  // ── Bloqueio de dupla escalação no mesmo dia ───────────────────────────────
+  // ── Bloqueia dupla escalação no mesmo dia em outra celebração ──────────────
   const sameDayBlocks: IndisponibilidadeEngine[] = historicoRecente
     .filter((h) => h.data === evento.data)
     .map((h) => ({ membro_id: h.membro_id, data: evento.data }));
 
-  logDebug(`Bloqueios do mesmo dia (outra escala): ${sameDayBlocks.length}`, debug);
-
-  // ── Normalização defensiva de datas ────────────────────────────────────────
   const indisponibilidades: IndisponibilidadeEngine[] = [
-    ...(options?.indisponibilidades ?? []).map((i) => ({
-      membro_id: i.membro_id,
-      data: i.data.slice(0, 10),
-    })),
+    ...(options?.indisponibilidades ?? []).map((i) => ({ membro_id: i.membro_id, data: i.data.slice(0, 10) })),
     ...sameDayBlocks,
   ];
 
-  logDebug(`Indisponibilidades totais (incluindo mesmo dia): ${indisponibilidades.length}`, debug);
+  logDebug(`Indisponibilidades + bloqueios mesmo dia: ${indisponibilidades.length}`, debug);
 
-  const resultado = alocarMembros(
-    funcoesEngine,
-    membrosEngine,
-    indisponibilidades,
-    contexto,
-    historicoRecente,
-    config,
-  );
-
-  logDebug(`Resultado: ${resultado.alocacoes.length} alocações | ${resultado.alertas.length} alertas`, debug);
-  resultado.alertas.forEach((a) => logDebug(`  ${a}`, debug));
+  const resultado = alocarMembros(funcoesEngine, membrosEngine, indisponibilidades, contexto, historicoRecente, config);
 
   if (debug) {
-    resultado.detalhesPorFuncao.forEach((d) => {
-      logDebug(
-        `  Função "${d.ministerio_nome}": ${d.alocados}/${d.solicitados}${d.motivo_vazio ? ` — ${d.motivo_vazio}` : ""}`,
-        debug,
-      );
-    });
+    logDebug(`Resultado: ${resultado.alocacoes.length} alocações | ${resultado.alertas.length} alertas`, debug);
+    resultado.alertas.forEach((a) => logDebug(`  ${a}`, debug));
+    resultado.detalhesPorFuncao.forEach((d) =>
+      logDebug(`  ${d.ministerio_nome}: ${d.alocados}/${d.solicitados}${d.motivo_vazio ? ` — ${d.motivo_vazio}` : ""}`, debug),
+    );
   }
 
   return resultado;
@@ -268,20 +216,17 @@ export function generateEscalaAssignments(
   membroMinisterios: Record<string, string[]>,
   options?: AllocOptions,
 ): EscalaAssignmentSuggestion[] {
-  const resultado = _buildAndAllocate(evento, funcoes, membros, membroMinisterios, options);
-  return resultado.alocacoes.map((a) => ({
-    ministerio_id: a.ministerio_id,
-    membro_id: a.membro_id,
-  }));
+  const r = _buildAndAllocate(evento, funcoes, membros, membroMinisterios, options);
+  return r.alocacoes.map((a) => ({ ministerio_id: a.ministerio_id, membro_id: a.membro_id }));
 }
 
 // ── generateEscalaWithAlertas ─────────────────────────────────────────────────
-// Igual a generateEscalaAssignments, mas devolve alertas e detalhe por função.
 
 export type ResultadoCompleto = {
   sugestoes: EscalaAssignmentSuggestion[];
   alertas: string[];
   detalhesPorFuncao: DetalheFuncao[];
+  insights: InsightFuncao[];
 };
 
 export function generateEscalaWithAlertas(
@@ -291,14 +236,11 @@ export function generateEscalaWithAlertas(
   membroMinisterios: Record<string, string[]>,
   options?: AllocOptions,
 ): ResultadoCompleto {
-  const resultado = _buildAndAllocate(evento, funcoes, membros, membroMinisterios, options);
+  const r = _buildAndAllocate(evento, funcoes, membros, membroMinisterios, options);
   return {
-    sugestoes: resultado.alocacoes.map((a) => ({
-      ministerio_id: a.ministerio_id,
-      membro_id: a.membro_id,
-      motivo: a.motivo,
-    })),
-    alertas: resultado.alertas,
-    detalhesPorFuncao: resultado.detalhesPorFuncao,
+    sugestoes: r.alocacoes.map((a) => ({ ministerio_id: a.ministerio_id, membro_id: a.membro_id, motivo: a.motivo })),
+    alertas:          r.alertas,
+    detalhesPorFuncao: r.detalhesPorFuncao,
+    insights:         r.insights,
   };
 }
