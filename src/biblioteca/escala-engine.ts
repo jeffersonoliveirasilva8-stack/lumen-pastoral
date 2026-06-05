@@ -103,6 +103,7 @@ export type InsightFuncao = {
   alocados: number;
   candidatos_avaliados: number;
   excluidos: {
+    sem_vinculo: number;       // sem membro_ministerios para esta função
     indisponibilidade: number;
     dia_semana: number;
     funcao_nao_pode: number;
@@ -439,7 +440,7 @@ export function alocarMembros(
     }
 
     // Contadores de exclusão para insights
-    const excluidos = { indisponibilidade: 0, dia_semana: 0, funcao_nao_pode: 0, atuacao: 0, ja_alocado: 0, acima_limite: 0 };
+    const excluidos = { sem_vinculo: 0, indisponibilidade: 0, dia_semana: 0, funcao_nao_pode: 0, atuacao: 0, ja_alocado: 0, acima_limite: 0 };
 
     // ── Fase 1: Filtrar candidatos base (sem considerar limite) ────────────
     const candidatosBase: MembroEngine[] = [];
@@ -447,7 +448,7 @@ export function alocarMembros(
 
     for (const m of membros) {
       // Verifica cada filtro individualmente para diagnóstico
-      if (!m.ministerio_ids.includes(funcao.ministerio_id)) continue;
+      if (!m.ministerio_ids.includes(funcao.ministerio_id)) { excluidos.sem_vinculo++; continue; }
       if (m.funcoes_nao_pode_ids?.includes(funcao.ministerio_id)) { excluidos.funcao_nao_pode++; continue; }
       if (funcao.atuacoes_exigidas?.length && !(funcao.atuacoes_exigidas.some((a) => (m.atuacao_ids ?? []).includes(a)))) { excluidos.atuacao++; continue; }
       if (ja_alocados.has(m.id)) { excluidos.ja_alocado++; continue; }
@@ -536,11 +537,13 @@ export function alocarMembros(
     if (faltando > 0) {
       const totalComVinculo = membros.filter((m) => m.ministerio_ids.includes(funcao.ministerio_id)).length;
       if (totalComVinculo === 0) {
-        motivoVazio = "Nenhum membro vinculado a esta função";
+        motivoVazio = `Nenhum dos ${membros.length} membros ativos possui vínculo com esta função (sem_vinculo=${excluidos.sem_vinculo})`;
       } else if (excluidos.indisponibilidade >= totalComVinculo) {
         motivoVazio = `Todos os ${totalComVinculo} membros desta função estão indisponíveis`;
       } else if (excluidos.atuacao >= totalComVinculo) {
         motivoVazio = "Nenhum membro tem a atuação exigida para esta função";
+      } else if (excluidos.funcao_nao_pode >= totalComVinculo) {
+        motivoVazio = `Todos os ${totalComVinculo} membros desta função têm restrição "não pode"`;
       } else if (excluidos.ja_alocado + excluidos.acima_limite >= candidatosBase.length + excluidos.ja_alocado) {
         motivoVazio = "Candidatos insuficientes (verifique indisponibilidades e limites)";
       } else {

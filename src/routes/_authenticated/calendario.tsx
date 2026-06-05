@@ -3,7 +3,8 @@ import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, BookOpen, RefreshCw, Sparkles, Clock3, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, BookOpen, RefreshCw, Sparkles, Clock3, Star, ExternalLink } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
@@ -232,16 +233,25 @@ function CalendarioPage() {
                 <h3 className="mt-2 text-lg font-semibold">{format(displayDate, "d 'de' MMMM", { locale: ptBR })}</h3>
                 <p className="mt-1 text-xs text-muted-foreground">Selecione um dia no calendário para ver detalhes.</p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setMonth(today);
-                  handleSelectDate(today);
-                }}
-              >
-                Hoje
-              </Button>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setMonth(today);
+                    handleSelectDate(today);
+                  }}
+                >
+                  Hoje
+                </Button>
+                <Link
+                  to="/espiritualidade"
+                  className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-semibold"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Leituras do dia
+                </Link>
+              </div>
             </div>
             <div className="mt-5">
               {displayResolution ? (

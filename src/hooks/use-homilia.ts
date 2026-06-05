@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { format, addDays } from "date-fns";
+import { format, addDays, subDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,12 +27,36 @@ export function useHomiliaHoje() {
   const today = format(new Date(), "yyyy-MM-dd");
   return useQuery<HomiliaRow | null>({
     queryKey: ["homilia-hoje", today],
-    staleTime: 60 * 60 * 1_000, // 1h
+    staleTime: 15 * 60 * 1_000, // 15 min — cron roda às 03:30 UTC
     queryFn: async () => {
       const { data } = await anyDb
         .from("homilias_diarias")
         .select(FIELDS)
         .eq("data", today)
+        .maybeSingle();
+      return data ?? null;
+    },
+  });
+}
+
+// ── Hook: homilia mais recente (hoje ou último disponível em até 7 dias) ─────
+// Fallback: se hoje não tem, mostra o mais recente da semana anterior.
+
+export function useHomiliaRecente() {
+  const today   = format(new Date(), "yyyy-MM-dd");
+  const weekAgo = format(subDays(new Date(), 7), "yyyy-MM-dd");
+
+  return useQuery<HomiliaRow | null>({
+    queryKey: ["homilia-recente", today],
+    staleTime: 15 * 60 * 1_000,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("homilias_diarias")
+        .select(FIELDS)
+        .lte("data", today)    // até hoje (não mostra futuro)
+        .gte("data", weekAgo)  // últimos 7 dias
+        .order("data", { ascending: false })
+        .limit(1)
         .maybeSingle();
       return data ?? null;
     },
@@ -47,7 +71,7 @@ export function useHomiliaProximos(days = 3) {
 
   return useQuery<HomiliaRow[]>({
     queryKey: ["homilia-proximos", today, days],
-    staleTime: 60 * 60 * 1_000,
+    staleTime: 15 * 60 * 1_000,
     queryFn: async () => {
       const { data } = await anyDb
         .from("homilias_diarias")

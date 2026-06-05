@@ -136,6 +136,17 @@ function _buildAndAllocate(
 
   logDebug(`Membros com vínculos: ${Object.keys(membroParaMinisterios).length} de ${membros.length}`, debug);
 
+  // ── DIAGNÓSTICO: membros sem nenhum vínculo ────────────────────────────────
+  if (debug) {
+    const semVinculo = membros.filter((m) => !membroParaMinisterios[m.id] || membroParaMinisterios[m.id].length === 0);
+    if (semVinculo.length > 0) {
+      console.warn(`[ENGINE] ⚠ ${semVinculo.length} membros SEM nenhum vínculo em membro_ministerios:`,
+        semVinculo.map((m) => `${m.nome} (${m.id})`));
+    }
+    console.log("[ENGINE] membroMinisterios (ministerio→membros):", membroMinisterios);
+    console.log("[ENGINE] membroParaMinisterios (membro→ministerios):", membroParaMinisterios);
+  }
+
   const restricoes = options?.restricoes ?? [];
 
   const membrosEngine: MembroEngine[] = membros
@@ -193,6 +204,22 @@ function _buildAndAllocate(
   ];
 
   logDebug(`Indisponibilidades + bloqueios mesmo dia: ${indisponibilidades.length}`, debug);
+
+  // ── DIAGNÓSTICO: candidatos por função ────────────────────────────────────
+  if (debug) {
+    console.group("[ENGINE] Candidatos por função (pré-alocação)");
+    for (const f of funcoesEngine) {
+      const comVinculo = membrosEngine.filter((m) => m.ministerio_ids.includes(f.ministerio_id));
+      const nomes = comVinculo.map((m) => m.nome);
+      if (comVinculo.length === 0) {
+        console.warn(`  ❌ "${f.ministerio_nome}" (${f.ministerio_id}): 0 candidatos`);
+        console.warn(`     ministerio_ids conhecidos:`, Object.keys(membroMinisterios));
+      } else {
+        console.log(`  ✓ "${f.ministerio_nome}": ${comVinculo.length} candidato(s):`, nomes);
+      }
+    }
+    console.groupEnd();
+  }
 
   const resultado = alocarMembros(funcoesEngine, membrosEngine, indisponibilidades, contexto, historicoRecente, config);
 

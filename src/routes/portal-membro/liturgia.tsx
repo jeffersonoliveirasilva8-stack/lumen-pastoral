@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   useLiturgiaProximos, refLeitura1, refSalmo, refLeitura2, refEvangelho,
 } from "@/hooks/use-liturgia";
-import { useHomiliaProximos } from "@/hooks/use-homilia";
+import { useHomiliaRecente } from "@/hooks/use-homilia";
 import type { LiturgiaRow } from "@/hooks/use-liturgia";
 import type { HomiliaRow } from "@/hooks/use-homilia";
 
@@ -257,15 +257,23 @@ function Aclamacao({ tempo, cor }: { tempo: string; cor: string }) {
 function HomiliaVideo({ homilia, cor }: { homilia: HomiliaRow | null; cor: string }) {
   const [player, setPlayer] = useState(false);
   const { hex } = getPaleta(cor);
-  const hoje = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
+  const hoje = format(new Date(), "yyyy-MM-dd");
+
+  // Determina se é de hoje ou fallback de dia anterior
+  const isHoje   = homilia?.data === hoje;
+  const dataLabel = homilia
+    ? isHoje
+      ? format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: ptBR })
+      : format(new Date(homilia.data + "T12:00:00"), "EEEE, d 'de' MMMM", { locale: ptBR })
+    : null;
 
   return (
     <section>
-      <SecaoLabel texto="Homilia do Dia" cor={cor} />
+      <SecaoLabel texto={isHoje ? "Homilia do Dia" : "Homilia Recente"} cor={cor} />
 
       {homilia ? (
         <div className="space-y-4">
-          {/* Autor */}
+          {/* Autor + data */}
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
               <Play className="h-3.5 w-3.5 text-muted-foreground" />
@@ -274,9 +282,16 @@ function HomiliaVideo({ homilia, cor }: { homilia: HomiliaRow | null; cor: strin
               <p className="text-sm font-semibold text-foreground leading-none">
                 {homilia.autor ?? "Padre Paulo Ricardo"}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">{hoje}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 capitalize">{dataLabel}</p>
             </div>
           </div>
+
+          {/* Badge quando for de dia anterior */}
+          {!isHoje && (
+            <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 inline-block">
+              Homilia de hoje ainda não disponível — exibindo a mais recente
+            </p>
+          )}
 
           {/* Vídeo */}
           <div className="rounded-2xl overflow-hidden border border-border/50">
@@ -319,7 +334,7 @@ function HomiliaVideo({ homilia, cor }: { homilia: HomiliaRow | null; cor: strin
             )}
           </div>
 
-          {/* Título + link */}
+          {/* Título */}
           {homilia.titulo && (
             <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">
               {homilia.titulo}
@@ -327,16 +342,15 @@ function HomiliaVideo({ homilia, cor }: { homilia: HomiliaRow | null; cor: strin
           )}
         </div>
       ) : (
-        /* Empty state útil */
         <div className="rounded-2xl border border-dashed border-border bg-background/60 p-6 text-center space-y-3">
           <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center mx-auto">
             <Play className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="text-sm font-medium text-foreground">
-            Homilia de hoje ainda não está disponível
+            Homilia indisponível
           </p>
           <p className="text-xs text-muted-foreground/70 max-w-xs mx-auto leading-relaxed">
-            A sincronização automática ocorre às 03:30 UTC.
+            Sincronização automática às 03:30 UTC (00:30 horário de Brasília).
           </p>
         </div>
       )}
@@ -417,7 +431,7 @@ function Skeleton_() {
 
 function LiturgiaDiariaPage() {
   const { data: liturgias = [], isLoading } = useLiturgiaProximos(3);
-  const { data: homilias = [] }             = useHomiliaProximos(3);
+  const { data: homiliaRecente }            = useHomiliaRecente();
 
   // Aba ativa do menu horizontal de leituras
   const [abaAtiva, setAbaAtiva] = useState<string>("ev");
@@ -428,10 +442,10 @@ function LiturgiaDiariaPage() {
   const amanha = format(addDays(new Date(), 1), "yyyy-MM-dd");
   const dep    = format(addDays(new Date(), 2), "yyyy-MM-dd");
 
-  const lit     = liturgias.find((l) => l.data === hoje)   ?? null;
-  const litAmn  = liturgias.find((l) => l.data === amanha) ?? null;
-  const litDep  = liturgias.find((l) => l.data === dep)    ?? null;
-  const homHoje = homilias.find((h) => h.data === hoje)    ?? null;
+  const lit    = liturgias.find((l) => l.data === hoje)   ?? null;
+  const litAmn = liturgias.find((l) => l.data === amanha) ?? null;
+  const litDep = liturgias.find((l) => l.data === dep)    ?? null;
+  const homHoje = homiliaRecente ?? null;
 
   const cor   = lit?.cor ?? "verde";
   const tempo = lit?.tempo_liturgico ?? "comum";

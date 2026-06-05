@@ -1,14 +1,14 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   BookOpen, Music, Play,
-  Loader2, AlertCircle, ChevronDown, ChevronUp,
+  Loader2, AlertCircle, ChevronDown, ChevronUp, CalendarDays, ChevronRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLiturgiaHoje, useLiturgiaProximos, refLeitura1, refSalmo, refLeitura2, refEvangelho } from "@/hooks/use-liturgia";
-import { useHomiliaHoje } from "@/hooks/use-homilia";
+import { useHomiliaRecente } from "@/hooks/use-homilia";
 import type { LiturgiaRow } from "@/hooks/use-liturgia";
 
 export const Route = createFileRoute("/_authenticated/espiritualidade")({
@@ -131,8 +131,10 @@ function ProximoDiaCard({ row }: { row: LiturgiaRow }) {
 function EspiritualidadePage() {
   const { data: liturgia, isLoading: loadingL, isError } = useLiturgiaHoje();
   const { data: proximos = [] }                           = useLiturgiaProximos(3);
-  const { data: homilia,  isLoading: loadingH }           = useHomiliaHoje();
+  const { data: homilia,  isLoading: loadingH }           = useHomiliaRecente();
   const [playerAberto, setPlayerAberto]                   = useState(false);
+  const hoje = format(new Date(), "yyyy-MM-dd");
+  const homiliaEHoje = homilia?.data === hoje;
 
   const cor  = liturgia?.cor ?? "verde";
   const hex  = COR_HEX[cor] ?? COR_HEX.verde;
@@ -252,11 +254,16 @@ function EspiritualidadePage() {
           {/* Homilia */}
           <div className="rounded-[1.75rem] border border-border bg-card overflow-hidden">
             <div className="p-4">
-              <div className="flex items-center gap-1.5 mb-3">
-                <Play className="h-3.5 w-3.5 text-red-500" />
+              <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+                <Play className="h-3.5 w-3.5 text-red-500 shrink-0" />
                 <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground font-semibold">
-                  Homilia do Dia
+                  {homiliaEHoje ? "Homilia do Dia" : "Homilia Recente"}
                 </p>
+                {homilia && !homiliaEHoje && (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                    {format(new Date(homilia.data + "T12:00:00"), "d/MM", { locale: ptBR })}
+                  </span>
+                )}
               </div>
 
               {loadingH ? (
@@ -326,6 +333,23 @@ function EspiritualidadePage() {
               ))}
             </div>
           )}
+
+          {/* Calendário Litúrgico */}
+          <Link
+            to="/calendario"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 text-sm font-semibold text-foreground transition hover:bg-muted/60 hover:border-primary/30 group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <CalendarDays className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold leading-tight">Calendário Litúrgico</p>
+                <p className="text-[11px] text-muted-foreground font-normal mt-0.5">Solenidades, festas e memoriais</p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+          </Link>
         </div>
       </div>
     </div>

@@ -127,7 +127,6 @@ function AuthLayout() {
     { to: "/escalas",                 label: "Escalas",         icon: Calendar },
     { to: "/formacoes",               label: "Agenda Pastoral", icon: CalendarRange },
     { to: "/espiritualidade",         label: "Liturgia",        icon: BookOpen },
-    { to: "/calendario",              label: "Calendário",      icon: BookOpen },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes }] : []),
     { to: "/ranking",                 label: "Ranking",         icon: Trophy },
     { to: "/notificacoes",            label: "Notificações",    icon: Bell },

@@ -514,7 +514,7 @@ function EscalasPage() {
           );
 
           if (sugestoes.length > 0) {
-            await anyDb.from("escala_membros").insert(
+            const { error: insertErr } = await anyDb.from("escala_membros").insert(
               sugestoes.map((s) => ({
                 escala_id: nova.id,
                 membro_id: s.membro_id,
@@ -522,9 +522,13 @@ function EscalasPage() {
                 status: "pendente",
               }))
             );
-            autoSugestoes = sugestoes.length;
+            if (insertErr) {
+              console.error("[ESCALA] Erro ao inserir membros auto:", insertErr);
+            } else {
+              autoSugestoes = sugestoes.length;
+            }
           } else {
-            console.warn("[ESCALA] Nenhuma sugestão foi gerada pelo motor. Verifique membros e ministérios.");
+            console.warn("[ESCALA] Nenhuma sugestão gerada — membros sem vínculo com as funções.");
           }
         }
       }
@@ -749,7 +753,7 @@ function EscalasPage() {
       );
 
       if (resultado.sugestoes.length > 0) {
-        await (supabase as any).from("escala_membros").insert(
+        const { error: reorganizarErr } = await (supabase as any).from("escala_membros").insert(
           resultado.sugestoes.map((s) => ({
             escala_id: escalaId,
             membro_id: s.membro_id,
@@ -757,6 +761,10 @@ function EscalasPage() {
             status: "pendente",
           }))
         );
+        if (reorganizarErr) {
+          console.error("[REORGANIZAR] Erro ao inserir membros:", reorganizarErr);
+          throw reorganizarErr;
+        }
       }
       return { count: resultado.sugestoes.length, alertas: resultado.alertas, detalhes: resultado.detalhesPorFuncao };
     },
@@ -961,7 +969,7 @@ function EscalasPage() {
               );
 
               if (sugestoes.length > 0) {
-                await (supabase as any).from("escala_membros").insert(
+                const { error: batchInsertErr } = await (supabase as any).from("escala_membros").insert(
                   sugestoes.map((s) => ({
                     escala_id: newEscala.id,
                     membro_id: s.membro_id,
@@ -969,9 +977,13 @@ function EscalasPage() {
                     status: "pendente",
                   }))
                 );
-                totalSugestoes += sugestoes.length;
-                // Registra no histórico do batch para as próximas escalas
-                sugestoes.forEach((s) => batchHistory.push({ memberId: s.membro_id, ministerioId: s.ministerio_id, date: dateStr }));
+                if (batchInsertErr) {
+                  console.error(`[BATCH] Erro ao inserir membros para "${missa.nome}" em ${dateStr}:`, batchInsertErr);
+                } else {
+                  totalSugestoes += sugestoes.length;
+                  // Registra no histórico do batch para as próximas escalas
+                  sugestoes.forEach((s) => batchHistory.push({ memberId: s.membro_id, ministerioId: s.ministerio_id, date: dateStr }));
+                }
               }
             }
           }
@@ -982,12 +994,16 @@ function EscalasPage() {
     },
     onSuccess: ({ created, skipped, totalSugestoes }) => {
       qc.invalidateQueries({ queryKey: ["escalas"] });
+      qc.invalidateQueries({ queryKey: ["escalas-counts"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros"] });
       qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       setGerarPeriodoOpen(false);
       if (created.length > 0) {
-        const sugestoesMsg = totalSugestoes > 0 ? ` · ${totalSugestoes} membro(s) sugerido(s).` : "";
-        toast.success(`${created.length} escala(s) criada(s).${sugestoesMsg}`);
+        const sugestoesMsg = totalSugestoes > 0
+          ? ` ${totalSugestoes} membro(s) distribuído(s) automaticamente.`
+          : " Nenhum membro distribuído — verifique os vínculos em Membros → Funções.";
+        toast.success(`${created.length} escala(s) criada(s).${sugestoesMsg}`, { duration: totalSugestoes > 0 ? 4000 : 8000 });
       } else {
         toast.info(skipped.length > 0 ? "Todas as escalas já existem ou foram puladas por recorrência." : "Nenhuma missa padrão ativa encontrada.");
       }
@@ -1237,7 +1253,7 @@ function EscalasPage() {
   .vaga{font-size:10px;color:#d1d5db;font-style:italic;align-self:center}
   .sem-funcoes{padding:12px 18px;font-size:11.5px;color:#9ca3af;font-style:italic}
 
-  /* ── Rodapé fixo na última página ── */
+  /* ── Rodapé — fluxo natural no final do documento (última página) ── */
   .doc-rodape{display:none}
   @media print{
     .doc-header{padding:18px 24px 14px}
@@ -1245,8 +1261,9 @@ function EscalasPage() {
     .escalas-grid{gap:14px}
     .doc-rodape{
       display:block;
-      position:fixed;bottom:0;left:0;right:0;
       width:100%;
+      page-break-inside:avoid;
+      margin-top:24px;
     }
     .doc-rodape img{width:100%;display:block}
   }
@@ -1344,7 +1361,7 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt="Rodapé" /><
             <Button
               size="sm" variant="outline" className="h-7 text-xs"
               onClick={() => exportarEscalasPDF([...selectedEscalaIds])}
-              title="Exportar PDF das escalas selecionadas"
+              title="Exportar PDF — Cards"
             >
               <FileText className="h-3 w-3 mr-1" />PDF
             </Button>
@@ -1781,8 +1798,6 @@ function ListaView({
   onExportPDF: (id: string) => void;
   onReorganizar: () => void;
 }) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-
   const allSelected = escalas.length > 0 && escalas.every((e) => selectedIds.has(e.id));
   const publishedCount = escalas.filter((e) => e.status === "publicada").length;
   const draftCount = escalas.filter((e) => e.status === "rascunho").length;
@@ -1972,7 +1987,6 @@ function ListaView({
             const isSelected = selectedIds.has(e.id);
             const counts = escalaCounts[e.id];
             const pct = counts && counts.needed > 0 ? Math.min(1, counts.filled / counts.needed) : null;
-            const expanded = expandedIds.has(e.id);
 
             return (
               <div
@@ -2062,20 +2076,6 @@ function ListaView({
                     >
                       <Check className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground sm:hidden"
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        const next = new Set(expandedIds);
-                        if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
-                        setExpandedIds(next);
-                      }}
-                      aria-label={expanded ? "Fechar detalhes" : "Ver detalhes"}
-                    >
-                      <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : "rotate-0"}`} />
-                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
@@ -2104,7 +2104,7 @@ function ListaView({
                   </div>
                 </div>
 
-                <div className={`${expanded ? "block" : "hidden sm:block"} border-t border-border/40 px-4 pb-4 pt-3`}>
+                <div className="border-t border-border/40 px-4 pb-4 pt-3">
                   {counts && counts.funcoes.length > 0 ? (
                     <div className="space-y-3">
                       {groupFuncoesByCategoria(counts.funcoes).map((group) => {
@@ -2376,6 +2376,8 @@ function EscalaDetail({
   const [generateNotice, setGenerateNotice] = useState<string | null>(null);
   const [engineInsights, setEngineInsights] = useState<import("@/lib/escala-engine").InsightFuncao[]>([]);
   const [showInsights, setShowInsights] = useState(false);
+  const [showDebugMotor, setShowDebugMotor] = useState(false);
+  const [debugInsights, setDebugInsights] = useState<import("@/lib/escala-engine").InsightFuncao[]>([]);
 
   // ── Presença pós-missa ──────────────────────────────────────────────────────
   const hoje = format(new Date(), "yyyy-MM-dd");
@@ -2397,25 +2399,34 @@ function EscalaDetail({
 
   const applySuggestionsMutation = useMutation({
     mutationFn: async ({ escalaId, assignments }: { escalaId: string; assignments: { membro_id: string; ministerio_id: string }[] }) => {
-      if (assignments.length === 0) return;
-      const { error } = await supabase.from("escala_membros").insert(
+      if (assignments.length === 0) return 0;
+      const { data: inserted, error } = await (supabase as any).from("escala_membros").insert(
         assignments.map((assignment) => ({
           escala_id: escalaId,
           membro_id: assignment.membro_id,
           ministerio_id: assignment.ministerio_id,
           status: "pendente",
         }))
-      );
+      ).select("id");
       if (error) throw error;
+      return (inserted as any[])?.length ?? assignments.length;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["escala-membros", escala.id] });
-      // Sincroniza com portal do membro quando sugestões são aplicadas
+    onSuccess: (count) => {
+      // refetchQueries força atualização imediata (não apenas marca como stale)
+      queryClient.refetchQueries({ queryKey: ["escala-membros", escala.id] });
       queryClient.invalidateQueries({ queryKey: ["pm-escalas"] });
       queryClient.invalidateQueries({ queryKey: ["portal-home-escalas"] });
-      toast.success("Sugestões aplicadas.");
+      queryClient.invalidateQueries({ queryKey: ["escala-historico"] });
+      toast.success(`${count ?? 0} membro(s) atribuído(s) com sucesso.`);
+      setSuggestedAssignments([]);
+      setGenerateNotice(null);
+      setEngineInsights([]);
+      setShowInsights(false);
     },
-    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+    onError: (e: unknown) => {
+      console.error("[APPLY] Erro ao aplicar sugestões:", e);
+      toast.error(supabaseErrorMessage(e));
+    },
   });
 
   const marcarPresencasMutation = useMutation({
@@ -2559,6 +2570,78 @@ function EscalaDetail({
     setGenerateNotice(null);
     setEngineInsights([]);
     setShowInsights(false);
+  }
+
+  function handleDebugMotor() {
+    // ── VERIFICAR 1: contagem de membros ──────────────────────────────────
+    const membrosComVinculoSet = new Set(Object.values(membroMinisterios).flat());
+    const semVinculo = membros.filter((m) => !membrosComVinculoSet.has(m.id));
+
+    console.group("[DEBUG MOTOR] Auditoria completa do motor de escalas");
+    console.log("=== VERIFICAR 1: CONTAGEM ===");
+    console.log(`Total ativos: ${membros.length}`);
+    console.log(`Com vínculo: ${membrosComVinculoSet.size}`);
+    console.log(`Sem vínculo: ${semVinculo.length}`, semVinculo.map((m) => m.nome));
+
+    // ── VERIFICAR 2: funções por membro ───────────────────────────────────
+    const membroParaMin: Record<string, string[]> = {};
+    for (const [minId, mids] of Object.entries(membroMinisterios)) {
+      for (const mid of mids) {
+        if (!membroParaMin[mid]) membroParaMin[mid] = [];
+        membroParaMin[mid].push(minId);
+      }
+    }
+    console.log("=== VERIFICAR 2: FUNÇÕES POR MEMBRO ===");
+    membros.forEach((m) => {
+      const fIds = membroParaMin[m.id] ?? [];
+      const fNomes = fIds.map((fid) => ministerios.find((mn) => mn.id === fid)?.nome ?? `[${fid.slice(0, 8)}...]`);
+      const atus = (membroAtuacoes[m.id] ?? []).length;
+      console.log(`  ${m.nome}: funções=[${fNomes.join(", ") || "NENHUMA"}] atuações=${atus}`);
+    });
+
+    // ── VERIFICAR 5: compatibilidade de IDs ──────────────────────────────
+    console.log("=== VERIFICAR 5: COMPATIBILIDADE DE IDs ===");
+    const idsEscala = funcoes.map((f) => f.ministerio_id);
+    const idsVinculo = Object.keys(membroMinisterios);
+    console.log("IDs na escala:", idsEscala);
+    console.log("IDs em membro_ministerios:", idsVinculo);
+    funcoes.forEach((f) => {
+      const cnt = (membroMinisterios[f.ministerio_id] ?? []).length;
+      if (cnt === 0) {
+        console.error(`  ❌ "${f.ministerio.nome}" (${f.ministerio_id}): NÃO MAPEADO — 0 membros`);
+      } else {
+        console.log(`  ✓ "${f.ministerio.nome}" (${f.ministerio_id}): ${cnt} membro(s)`);
+      }
+    });
+
+    // ── Rodar motor com debug=true ────────────────────────────────────────
+    const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+    const resultado = generateEscalaWithAlertas(
+      { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
+      funcoes,
+      membrosComAtuacoes,
+      membroMinisterios,
+      { history: assignmentHistory, indisponibilidades, restricoes: funcaoRestricoes, debug: true },
+    );
+
+    console.log("=== RESULTADO DO MOTOR ===");
+    console.log(`Sugestões: ${resultado.sugestoes.length} | Alertas: ${resultado.alertas.length}`);
+    resultado.alertas.forEach((a) => console.warn(`  ${a}`));
+    resultado.insights.forEach((ins) => {
+      console.group(`FUNÇÃO: ${ins.ministerio_nome}`);
+      console.log(`Candidatos avaliados: ${ins.candidatos_avaliados}`);
+      console.log(`Alocados: ${ins.alocados}/${ins.solicitados}`);
+      console.log("Excluídos:", ins.excluidos);
+      if (ins.motivo_vazio) console.error("MOTIVO VAZIO:", ins.motivo_vazio);
+      ins.top_candidatos.slice(0, 5).forEach((c) =>
+        console.log(`  ${c.escolhido ? "✓" : "·"} ${c.nome} score=${c.score_final}`),
+      );
+      console.groupEnd();
+    });
+    console.groupEnd();
+
+    setDebugInsights(resultado.insights);
+    setShowDebugMotor(true);
   }
 
   async function handleApplySuggestions() {
@@ -2736,7 +2819,17 @@ function EscalaDetail({
 
       {/* Ministérios e atribuições */}
       <div>
-        <h3 className="text-sm font-semibold mb-3">Funções e atribuições</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold">Funções e atribuições</h3>
+          <button
+            type="button"
+            onClick={handleDebugMotor}
+            className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-border hover:bg-muted/50 transition"
+          >
+            <AlertTriangle className="h-3 w-3" />
+            Debug do Motor
+          </button>
+        </div>
 
         {funcoes.length === 0 && (
           <p className="text-sm text-muted-foreground mb-3">
@@ -3143,6 +3236,192 @@ function EscalaDetail({
           <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Remover
         </Button>
       </div>
+
+      {/* ── Dialog: Debug do Motor ────────────────────────────────────────── */}
+      <Dialog open={showDebugMotor} onOpenChange={setShowDebugMotor}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              Debug do Motor — {escala.titulo}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="overflow-y-auto flex-1 space-y-4 pr-1">
+
+            {/* VERIFICAR 1: contagem */}
+            {(() => {
+              const comVinculo = new Set(Object.values(membroMinisterios).flat());
+              return (
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Verificar 1 — Contagem de Membros</p>
+                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                    <div className="p-2 bg-background rounded border space-y-0.5">
+                      <div className="text-lg font-bold">{membros.length}</div>
+                      <div className="text-[10px] text-muted-foreground">Total ativos</div>
+                    </div>
+                    <div className={`p-2 rounded border space-y-0.5 ${comVinculo.size > 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+                      <div className={`text-lg font-bold ${comVinculo.size > 0 ? "text-emerald-700" : "text-red-700"}`}>{comVinculo.size}</div>
+                      <div className="text-[10px] text-muted-foreground">Com vínculo</div>
+                    </div>
+                    <div className={`p-2 rounded border space-y-0.5 ${membros.length - comVinculo.size > 0 ? "bg-amber-50 border-amber-200" : "bg-background"}`}>
+                      <div className={`text-lg font-bold ${membros.length - comVinculo.size > 0 ? "text-amber-700" : ""}`}>{membros.length - comVinculo.size}</div>
+                      <div className="text-[10px] text-muted-foreground">Sem vínculo</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* VERIFICAR 2: por membro */}
+            {(() => {
+              const membroParaMin: Record<string, string[]> = {};
+              for (const [minId, mids] of Object.entries(membroMinisterios)) {
+                for (const mid of mids) {
+                  if (!membroParaMin[mid]) membroParaMin[mid] = [];
+                  membroParaMin[mid].push(minId);
+                }
+              }
+              return (
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Verificar 2 — Funções por Membro</p>
+                  <div className="space-y-1 max-h-44 overflow-y-auto">
+                    {membros.map((m) => {
+                      const fIds = membroParaMin[m.id] ?? [];
+                      const fNomes = fIds.map((fid) => ministerios.find((mn) => mn.id === fid)?.nome ?? `[${fid.slice(0, 8)}...]`);
+                      return (
+                        <div key={m.id} className={`flex items-start gap-2 text-xs p-1.5 rounded ${fIds.length === 0 ? "bg-red-50 border border-red-200" : "bg-background border"}`}>
+                          <span className="font-medium min-w-0 flex-1 truncate">{m.nome}</span>
+                          {fIds.length === 0
+                            ? <span className="text-red-600 font-semibold shrink-0">❌ SEM FUNÇÕES</span>
+                            : <span className="text-emerald-700 text-right shrink-0 max-w-[55%] truncate" title={fNomes.join(", ")}>{fNomes.join(", ")}</span>
+                          }
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* VERIFICAR 5: compatibilidade de IDs */}
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Verificar 5 — Compatibilidade de IDs</p>
+              <div className="space-y-1">
+                {funcoes.map((f) => {
+                  const cnt = (membroMinisterios[f.ministerio_id] ?? []).length;
+                  return (
+                    <div key={f.ministerio_id} className={`flex items-center gap-2 text-xs p-2 rounded border ${cnt === 0 ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"}`}>
+                      <span className={`font-semibold shrink-0 ${cnt === 0 ? "text-red-700" : "text-emerald-700"}`}>{cnt === 0 ? "❌" : "✓"}</span>
+                      <span className="font-medium flex-1 truncate">{f.ministerio.nome}</span>
+                      <span className="text-muted-foreground font-mono text-[10px] hidden sm:block">{f.ministerio_id.slice(0, 12)}…</span>
+                      <span className={`font-bold shrink-0 ${cnt === 0 ? "text-red-700" : "text-emerald-700"}`}>{cnt} membro(s)</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {funcoes.every((f) => (membroMinisterios[f.ministerio_id] ?? []).length === 0) && (
+                <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 mt-1">
+                  ❌ Nenhuma função da escala tem membros mapeados em <code>membro_ministerios</code>.
+                  Verifique se os membros foram vinculados às funções em <strong>Membros → editar → Funções Litúrgicas</strong>.
+                </p>
+              )}
+            </div>
+
+            {/* VERIFICAR 3 & 4: pipeline por função (insights do motor) */}
+            {debugInsights.length > 0 && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Verificar 3 & 4 — Pipeline por Função</p>
+                {debugInsights.map((ins) => (
+                  <div key={ins.ministerio_id} className="rounded border bg-background p-2.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold">{ins.ministerio_nome}</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${ins.alocados === 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>
+                        {ins.alocados}/{ins.solicitados} alocados
+                      </span>
+                    </div>
+
+                    {/* Funil de eliminação */}
+                    <div className="space-y-1 text-[11px]">
+                      <div className="flex items-center justify-between bg-muted/50 rounded px-2 py-1">
+                        <span className="text-muted-foreground">Total membros ativos</span>
+                        <span className="font-bold">{membros.length}</span>
+                      </div>
+                      <div className={`flex items-center justify-between rounded px-2 py-1 ${(ins.excluidos as any).sem_vinculo > 0 ? "bg-red-50 text-red-800" : "bg-muted/30"}`}>
+                        <span>❌ Sem vínculo (membro_ministerios)</span>
+                        <span className="font-bold">−{(ins.excluidos as any).sem_vinculo ?? 0}</span>
+                      </div>
+                      {ins.excluidos.funcao_nao_pode > 0 && (
+                        <div className="flex items-center justify-between bg-orange-50 text-orange-800 rounded px-2 py-1">
+                          <span>⛔ Restrição "não pode"</span>
+                          <span className="font-bold">−{ins.excluidos.funcao_nao_pode}</span>
+                        </div>
+                      )}
+                      {ins.excluidos.atuacao > 0 && (
+                        <div className="flex items-center justify-between bg-purple-50 text-purple-800 rounded px-2 py-1">
+                          <span>📋 Atuação exigida não atendida</span>
+                          <span className="font-bold">−{ins.excluidos.atuacao}</span>
+                        </div>
+                      )}
+                      {ins.excluidos.ja_alocado > 0 && (
+                        <div className="flex items-center justify-between bg-blue-50 text-blue-800 rounded px-2 py-1">
+                          <span>🔁 Já alocado em outra função</span>
+                          <span className="font-bold">−{ins.excluidos.ja_alocado}</span>
+                        </div>
+                      )}
+                      {ins.excluidos.indisponibilidade > 0 && (
+                        <div className="flex items-center justify-between bg-amber-50 text-amber-800 rounded px-2 py-1">
+                          <span>📅 Indisponível nesta data</span>
+                          <span className="font-bold">−{ins.excluidos.indisponibilidade}</span>
+                        </div>
+                      )}
+                      {ins.excluidos.dia_semana > 0 && (
+                        <div className="flex items-center justify-between bg-amber-50 text-amber-800 rounded px-2 py-1">
+                          <span>📆 Restrição de dia da semana</span>
+                          <span className="font-bold">−{ins.excluidos.dia_semana}</span>
+                        </div>
+                      )}
+                      <div className={`flex items-center justify-between rounded px-2 py-1 border font-semibold ${ins.candidatos_avaliados === 0 ? "bg-red-50 border-red-200 text-red-800" : "bg-emerald-50 border-emerald-200 text-emerald-800"}`}>
+                        <span>✅ Candidatos elegíveis</span>
+                        <span>{ins.candidatos_avaliados}</span>
+                      </div>
+                    </div>
+
+                    {ins.motivo_vazio && (
+                      <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                        ❌ Motivo vazio: {ins.motivo_vazio}
+                      </div>
+                    )}
+
+                    {ins.top_candidatos.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase text-muted-foreground">Candidatos encontrados:</p>
+                        {ins.top_candidatos.map((c) => (
+                          <div key={c.membro_id} className={`flex items-center justify-between text-[11px] rounded px-2 py-1 ${c.escolhido ? "bg-emerald-50 border border-emerald-200" : "bg-muted/40"}`}>
+                            <span className={c.escolhido ? "font-semibold" : "text-muted-foreground"}>{c.nome} {c.escolhido ? "✓ (selecionado)" : ""}</span>
+                            <span className="text-muted-foreground">score {c.score_final} · {c.dias_sem_servir >= 365 ? "novo" : `${c.dias_sem_servir}d`}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {debugInsights.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Clique em "Debug do Motor" novamente para executar a análise do pipeline.
+              </p>
+            )}
+
+          </div>
+
+          <DialogFooter className="shrink-0 mt-3">
+            <Button variant="outline" size="sm" onClick={() => setShowDebugMotor(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

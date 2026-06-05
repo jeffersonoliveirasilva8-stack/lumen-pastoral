@@ -816,11 +816,11 @@ function EscalaPortalCard({
                     return (
                       <div key={m.id} className="flex items-center gap-2 py-0.5 min-w-0">
                         <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ministerio_cor }} />
-                        <span className="text-[11px] text-muted-foreground shrink-0 truncate max-w-[90px]">
+                        <span className="text-[11px] text-muted-foreground shrink-0 truncate max-w-[130px]">
                           {ministerio_nome}
                         </span>
-                        <span className={`text-xs font-medium truncate flex-1 min-w-0 ${isMe ? "text-primary font-semibold" : "text-foreground/85"}`}>
-                          {isMe ? "Você" : nomeExibicao(m.nome)}
+                        <span className={`text-xs truncate flex-1 min-w-0 ${isMe ? "text-primary font-bold" : "text-foreground/85 font-medium"}`}>
+                          {isMe ? "✦ Você" : nomeExibicao(m.nome)}
                         </span>
                         <span
                           className="h-2 w-2 rounded-full shrink-0"

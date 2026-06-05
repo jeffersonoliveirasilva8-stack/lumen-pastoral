@@ -76,6 +76,7 @@ type AgendaEvent = {
   hora: string | null;
   local: string | null;
   cor: string;
+  status?: string;
 };
 
 
@@ -104,7 +105,6 @@ function ChartTooltip({ active, payload, label }: {
 function DashboardPage() {
   const { profile } = useAuth();
   const pid = profile?.paroquia_id;
-  const [expandirEscalas, setExpandirEscalas] = useState(false);
 
   // ── Liturgical (pure, no fetch) ───────────────────────────────────────────────
   const today = useMemo(() => new Date(), []);
@@ -448,7 +448,7 @@ function DashboardPage() {
       const [escalaResult, formacaoResult] = await Promise.all([
         supabase
           .from("escalas")
-          .select("id,titulo,data,hora_inicio,local,solene")
+          .select("id,titulo,data,hora_inicio,local,solene,status")
           .eq("paroquia_id", pid!)
           .gte("data", hoje)
           .lte("data", ate)
@@ -472,7 +472,8 @@ function DashboardPage() {
         data: item.data,
         hora: item.hora_inicio,
         local: item.local,
-        cor: item.solene ? "#f59e0b" : "#ec4899",
+        cor: item.solene ? "#f59e0b" : "#6366f1",
+        status: item.status,
       }));
 
       const formacoes = (formacaoResult.data ?? []).map((item: any) => ({
@@ -487,7 +488,7 @@ function DashboardPage() {
 
       return [...escalas, ...formacoes]
         .sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
-        .slice(0, 6);
+        .slice(0, 10);
     },
   });
 
@@ -948,118 +949,79 @@ function DashboardPage() {
 
       <div className="grid gap-6 xl:grid-cols-[2.2fr_1fr]">
         <div className="space-y-4">
+          {/* ── Agenda Pastoral (escalas + eventos unificados) ── */}
           <div className="rounded-3xl border border-border bg-card shadow-altar overflow-hidden">
             <div className="flex items-center justify-between gap-3 p-5 border-b border-border">
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Próximas Escalas</p>
-                <h2 className="mt-2 font-serif text-xl">Escalas agrupadas por data</h2>
+                <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Agenda Pastoral</p>
+                <h2 className="mt-1.5 font-serif text-xl">Próximas escalas e eventos</h2>
               </div>
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/escalas" search={{}}>Ver todas <ChevronRight className="h-4 w-4" /></Link>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/formacoes" search={{}}>Agenda <ChevronRight className="h-3.5 w-3.5 ml-0.5" /></Link>
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/escalas" search={{}}>Escalas <ChevronRight className="h-3.5 w-3.5 ml-0.5" /></Link>
+                </Button>
+              </div>
             </div>
-            {groupedEscalas.length === 0 ? (
+
+            {agendaItems.length === 0 ? (
               <div className="p-8 text-center">
-                <Calendar className="h-6 w-6 mx-auto text-muted-foreground" />
-                <p className="mt-3 text-sm text-muted-foreground">Nenhuma escala futura encontrada.</p>
+                <CalendarRange className="h-6 w-6 mx-auto text-muted-foreground" />
+                <p className="mt-3 text-sm text-muted-foreground">Nenhum evento ou escala nas próximas duas semanas.</p>
               </div>
             ) : (() => {
-              const MAX_DATAS = 3;
-              const visiveis = expandirEscalas ? groupedEscalas : groupedEscalas.slice(0, MAX_DATAS);
-              const restante = groupedEscalas.length - MAX_DATAS;
+              // Group by date
+              const dateGroups = new Map<string, AgendaEvent[]>();
+              agendaItems.forEach((ev) => {
+                const list = dateGroups.get(ev.data) ?? [];
+                list.push(ev);
+                dateGroups.set(ev.data, list);
+              });
+              const grouped = Array.from(dateGroups.entries()).sort(([a], [b]) => a.localeCompare(b));
               return (
-                <>
-                  <div className="divide-y divide-border">
-                    {visiveis.map((group) => (
-                      <div key={group.date} className="px-5 py-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                            {format(new Date(group.date + "T00:00:00"), "EEE, d 'de' MMM", { locale: ptBR })}
-                          </p>
-                          <span className="text-[11px] text-muted-foreground">
-                            {group.items.length} escala{group.items.length !== 1 ? "s" : ""}
-                          </span>
-                        </div>
-                        <div className="mt-3 space-y-2">
-                          {group.items.map((e) => {
-                            const cfg = STATUS_CONFIG[e.status] ?? STATUS_CONFIG.rascunho;
+                <div className="divide-y divide-border/60">
+                  {grouped.map(([date, items]) => {
+                    const d = new Date(date + "T00:00:00");
+                    const isToday = format(d, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
+                    return (
+                      <div key={date} className={`px-5 py-3.5 ${isToday ? "bg-primary/3" : ""}`}>
+                        <p className={`text-[11px] font-bold uppercase tracking-[0.2em] mb-2.5 ${isToday ? "text-primary" : "text-muted-foreground"}`}>
+                          {isToday ? "Hoje — " : ""}{format(d, "EEE, d 'de' MMM", { locale: ptBR })}
+                        </p>
+                        <div className="space-y-2">
+                          {items.map((ev) => {
+                            const escalaStatus = ev.status ? (STATUS_CONFIG[ev.status] ?? STATUS_CONFIG.rascunho) : null;
                             return (
-                              <div key={e.id} className="rounded-2xl border border-border bg-background p-3">
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className="font-semibold text-sm truncate">{e.titulo}</p>
-                                    <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                                      {e.hora_inicio && <span>{e.hora_inicio.slice(0, 5)}</span>}
-                                      {e.local && <span className="truncate max-w-[120px]">{e.local}</span>}
-                                    </div>
-                                  </div>
-                                  <Badge variant={cfg.variant} className="text-[10px] uppercase shrink-0">
-                                    {cfg.label}
-                                  </Badge>
+                              <div key={ev.id} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background px-3.5 py-2.5">
+                                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: ev.cor }} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate leading-snug">{ev.titulo}</p>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    {ev.hora ? ev.hora.slice(0,5) : ""}
+                                    {ev.local ? (ev.hora ? ` · ${ev.local}` : ev.local) : ""}
+                                  </p>
                                 </div>
+                                {ev.tipo === "Escala" && escalaStatus ? (
+                                  <Badge variant={escalaStatus.variant} className="text-[10px] uppercase shrink-0">
+                                    {escalaStatus.label}
+                                  </Badge>
+                                ) : (
+                                  <span className="inline-flex rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-blue-600 shrink-0">
+                                    {ev.tipo}
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                  {!expandirEscalas && restante > 0 && (
-                    <div className="border-t border-border">
-                      <button
-                        onClick={() => setExpandirEscalas(true)}
-                        className="w-full flex items-center justify-center gap-2 py-3 text-xs font-semibold text-primary hover:bg-primary/5 transition"
-                      >
-                        Ver mais {restante} data{restante !== 1 ? "s" : ""}
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                  {expandirEscalas && groupedEscalas.length > MAX_DATAS && (
-                    <div className="border-t border-border">
-                      <button
-                        onClick={() => setExpandirEscalas(false)}
-                        className="w-full flex items-center justify-center gap-2 py-3 text-xs font-semibold text-muted-foreground hover:bg-muted/40 transition"
-                      >
-                        Mostrar menos
-                      </button>
-                    </div>
-                  )}
-                </>
+                    );
+                  })}
+                </div>
               );
             })()}
-          </div>
-
-          <div className="rounded-3xl border border-border bg-card shadow-altar p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Agenda rápida</p>
-                <h2 className="mt-2 text-xl font-semibold text-foreground">Próximos eventos</h2>
-              </div>
-              <CalendarRange className="h-6 w-6 text-primary" />
-            </div>
-            <div className="mt-5 space-y-3">
-              {agendaItems.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum evento agendado para as próximas duas semanas.</p>
-              ) : (
-                agendaItems.slice(0, 5).map((event) => (
-                  <div key={event.id} className="rounded-3xl border border-border bg-background p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{event.titulo}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(event.data + "T00:00:00"), "d MMM", { locale: ptBR })}
-                          {event.hora ? ` · ${event.hora}` : ""}
-                        </p>
-                      </div>
-                      <span className="inline-flex rounded-full bg-primary/10 px-2 py-1 text-[10px] uppercase tracking-[0.24em] text-primary">
-                        {event.tipo}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         </div>
 

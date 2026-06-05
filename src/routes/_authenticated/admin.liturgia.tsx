@@ -1,13 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { format, addDays, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import {
   CalendarDays, Upload, AlertTriangle, Settings2, Plus,
   Trash2, Pencil, CheckCircle2, XCircle, Loader2, BookOpen,
-  FileSpreadsheet, Download,
+  FileSpreadsheet, Download, RefreshCw, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -235,10 +235,14 @@ function AdminLiturgiaPage() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="mt-6">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="personalizacao">
             <Settings2 className="h-3.5 w-3.5 mr-1.5" />
             Personalização
+          </TabsTrigger>
+          <TabsTrigger value="sincronizacao">
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Sincronização
           </TabsTrigger>
           <TabsTrigger value="planilha">
             <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
@@ -255,6 +259,11 @@ function AdminLiturgiaPage() {
             Conflitos
           </TabsTrigger>
         </TabsList>
+
+        {/* ── Tab: Sincronização ── */}
+        <TabsContent value="sincronizacao" className="mt-4">
+          <SincronizacaoTab />
+        </TabsContent>
 
         {/* ── Tab: Personalização ── */}
         <TabsContent value="personalizacao" className="mt-4">
@@ -451,6 +460,277 @@ node scripts/validar-liturgia.js --ano ${filterYear}`}
 }
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
+
+// ── Helper: extrai video ID do YouTube ────────────────────────────────────────
+function extractVideoId(url: string): string | null {
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  return m?.[1] ?? null;
+}
+
+// ── Sincronização ─────────────────────────────────────────────────────────────
+
+type HomiliaStatusRow = { data: string; titulo: string; video_id: string };
+
+function SincronizacaoTab() {
+  const qc = useQueryClient();
+  const [syncLog, setSyncLog] = useState<string[]>([]);
+  const [manualDate, setManualDate]   = useState(format(new Date(), "yyyy-MM-dd"));
+  const [manualUrl, setManualUrl]     = useState("");
+  const [manualTitulo, setManualTitulo] = useState("");
+
+  const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string;
+  const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+
+  function addLog(msg: string) {
+    setSyncLog((p) => [msg, ...p].slice(0, 20));
+  }
+
+  // ── Status homilia: últimos 7 dias ───────────────────────────────────────
+  const { data: homilias7 = [], refetch: refetchH } = useQuery<HomiliaStatusRow[]>({
+    queryKey: ["admin-homilias-7dias"],
+    queryFn: async () => {
+      const hoje   = format(new Date(), "yyyy-MM-dd");
+      const inicio = format(subDays(new Date(), 6), "yyyy-MM-dd");
+      const { data } = await anyDb.from("homilias_diarias")
+        .select("data, titulo, video_id")
+        .gte("data", inicio).lte("data", hoje)
+        .order("data", { ascending: false });
+      return (data ?? []) as HomiliaStatusRow[];
+    },
+  });
+
+  // ── Status liturgia: próximos 30 dias ────────────────────────────────────
+  const { data: litStatus, refetch: refetchL } = useQuery<{ total: number; maximo: string | null }>({
+    queryKey: ["admin-liturgia-30dias"],
+    queryFn: async () => {
+      const hoje = format(new Date(), "yyyy-MM-dd");
+      const fim  = format(addDays(new Date(), 29), "yyyy-MM-dd");
+      const { data } = await anyDb.from("liturgia_base")
+        .select("data").gte("data", hoje).lte("data", fim)
+        .order("data", { ascending: false }).limit(1);
+      const { count } = await anyDb.from("liturgia_base")
+        .select("id", { count: "exact", head: true })
+        .gte("data", hoje).lte("data", fim);
+      return { total: (count ?? 0) as number, maximo: (data as { data: string }[])?.[0]?.data ?? null };
+    },
+  });
+
+  const ultimos7 = Array.from({ length: 7 }, (_, i) => format(subDays(new Date(), i), "yyyy-MM-dd"));
+  const homiliaSet = new Map(homilias7.map((h) => [h.data, h]));
+
+  // ── Chama Edge Function via fetch ────────────────────────────────────────
+  async function callFn(name: string, params: Record<string, string>) {
+    const qs  = new URLSearchParams(params).toString();
+    const url = `${SUPA_URL}/functions/v1/${name}${qs ? "?" + qs : ""}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${SUPA_KEY}` } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    return res.json() as Promise<Record<string, unknown>>;
+  }
+
+  // ── Sync homilia para uma data ───────────────────────────────────────────
+  const syncHomilia = useMutation({
+    mutationFn: async (date: string) => callFn("homilia-diaria", { date }),
+    onSuccess: (r, date) => {
+      if (r.ok) {
+        addLog(`✅ Homilia ${date}: "${r.titulo}"`);
+      } else {
+        const amostra = (r.sample_titles as string[] | undefined)?.slice(0, 3).join(" | ") ?? "";
+        addLog(`⚠️ ${date}: ${r.motivo}${amostra ? ` — Feed: ${amostra}` : ""}`);
+      }
+      refetchH();
+      qc.invalidateQueries({ queryKey: ["homilia-recente"] });
+      qc.invalidateQueries({ queryKey: ["homilia-hoje"] });
+    },
+    onError: (e: Error) => addLog(`❌ Erro homilia: ${e.message}`),
+  });
+
+  // ── Sync liturgia ─────────────────────────────────────────────────────────
+  const syncLiturgia = useMutation({
+    mutationFn: async (days: number) => {
+      const date = format(new Date(), "yyyy-MM-dd");
+      return callFn("liturgia-diaria", { date, days: String(days) });
+    },
+    onSuccess: (r) => {
+      type R = { status: string; data: string; celebracao?: string; motivo?: string };
+      const ok = (r.resultados as R[] | undefined)?.filter((x) => x.status === "ok") ?? [];
+      const err = (r.resultados as R[] | undefined)?.filter((x) => x.status !== "ok") ?? [];
+      addLog(`✅ Liturgia: ${ok.length} dias ok${err.length ? `, ${err.length} falhou` : ""}`);
+      refetchL();
+      qc.invalidateQueries({ queryKey: ["liturgia-proximos"] });
+      qc.invalidateQueries({ queryKey: ["liturgia-hoje"] });
+    },
+    onError: (e: Error) => addLog(`❌ Erro liturgia: ${e.message}`),
+  });
+
+  // ── Inserção manual de homilia ────────────────────────────────────────────
+  const manualMutation = useMutation({
+    mutationFn: async () => {
+      const videoId = extractVideoId(manualUrl.trim());
+      if (!videoId) throw new Error("URL do YouTube inválida — use https://www.youtube.com/watch?v=XXXXXXXXXXX");
+      const titulo = manualTitulo.trim() ||
+        `Homilia — ${format(new Date(manualDate + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}`;
+      const { error } = await anyDb.from("homilias_diarias").upsert({
+        data:          manualDate,
+        titulo,
+        youtube_url:   `https://www.youtube.com/watch?v=${videoId}`,
+        video_id:      videoId,
+        thumbnail_url: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        autor:         "Padre Paulo Ricardo",
+        descricao:     null,
+      }, { onConflict: "data" });
+      if (error) throw error;
+      return titulo;
+    },
+    onSuccess: (titulo) => {
+      addLog(`✅ Manual ${manualDate}: "${titulo}"`);
+      setManualUrl("");
+      setManualTitulo("");
+      refetchH();
+      qc.invalidateQueries({ queryKey: ["homilia-recente"] });
+      qc.invalidateQueries({ queryKey: ["homilia-hoje"] });
+    },
+    onError: (e: Error) => addLog(`❌ ${e.message}`),
+  });
+
+  const isBusy = syncHomilia.isPending || syncLiturgia.isPending;
+
+  return (
+    <div className="space-y-4">
+
+      {/* Log de resultado */}
+      {syncLog.length > 0 && (
+        <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-1">
+          {syncLog.map((msg, i) => (
+            <p key={i} className="text-xs font-mono leading-relaxed">{msg}</p>
+          ))}
+        </div>
+      )}
+
+      {/* ── Bloco Liturgia ── */}
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold flex items-center gap-1.5">
+              <BookOpen className="h-4 w-4 text-muted-foreground" /> Liturgia Diária
+            </p>
+            {litStatus && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {litStatus.total < 30
+                  ? <span className="text-amber-600 font-medium">{litStatus.total}/30 dias cobertos</span>
+                  : <span className="text-green-700 font-medium">✓ {litStatus.total} dias cobertos</span>
+                }
+                {litStatus.maximo && ` — até ${litStatus.maximo}`}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" disabled={isBusy}
+              onClick={() => syncLiturgia.mutate(7)}>
+              {syncLiturgia.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              <span className="ml-1.5">7 dias</span>
+            </Button>
+            <Button size="sm" disabled={isBusy}
+              onClick={() => syncLiturgia.mutate(30)}>
+              {syncLiturgia.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              <span className="ml-1.5">30 dias</span>
+            </Button>
+          </div>
+        </div>
+        {litStatus && litStatus.total < 7 && (
+          <p className="text-xs text-amber-600 flex items-center gap-1">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Menos de 7 dias sincronizados. Clique em "30 dias" para normalizar.
+          </p>
+        )}
+      </div>
+
+      {/* ── Bloco Homilia ── */}
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <p className="text-sm font-semibold flex items-center gap-1.5">
+          <Play className="h-4 w-4 text-muted-foreground" /> Homilia — últimos 7 dias
+        </p>
+        <div className="divide-y divide-border">
+          {ultimos7.map((dia) => {
+            const h = homiliaSet.get(dia);
+            const d = new Date(dia + "T12:00:00");
+            return (
+              <div key={dia} className="flex items-center gap-3 py-2 text-xs">
+                <span className="w-32 shrink-0 text-muted-foreground capitalize">
+                  {format(d, "EEE, d MMM", { locale: ptBR })}
+                </span>
+                {h ? (
+                  <span className="text-green-700 flex items-center gap-1 truncate">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{h.titulo}</span>
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-600 flex items-center gap-1">
+                      <XCircle className="h-3.5 w-3.5" /> Faltando
+                    </span>
+                    <Button size="sm" variant="outline" className="h-6 text-[11px] px-2"
+                      disabled={syncHomilia.isPending}
+                      onClick={() => syncHomilia.mutate(dia)}>
+                      {syncHomilia.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Buscar"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <Button size="sm" variant="outline" disabled={isBusy}
+          onClick={() => {
+            const hoje = format(new Date(), "yyyy-MM-dd");
+            syncHomilia.mutate(hoje);
+          }}>
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          Buscar homilia de hoje agora
+        </Button>
+      </div>
+
+      {/* ── Entrada manual ── */}
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold">Inserção Manual</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Quando a busca automática falhar, cole a URL do vídeo e salve diretamente.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">Data</Label>
+            <Input type="date" className="mt-1" value={manualDate}
+              onChange={(e) => setManualDate(e.target.value)} />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs">URL do YouTube</Label>
+            <Input className="mt-1 font-mono text-xs"
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={manualUrl}
+              onChange={(e) => setManualUrl(e.target.value)} />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs">Título (opcional)</Label>
+            <Input className="mt-1"
+              placeholder="Deixe vazio para gerar automaticamente"
+              value={manualTitulo}
+              onChange={(e) => setManualTitulo(e.target.value)} />
+          </div>
+        </div>
+        <Button size="sm"
+          disabled={!manualUrl.trim() || !manualDate || manualMutation.isPending}
+          onClick={() => manualMutation.mutate()}>
+          {manualMutation.isPending
+            ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+            : <Plus className="h-4 w-4 mr-1.5" />}
+          Salvar homilia
+        </Button>
+      </div>
+
+    </div>
+  );
+}
 
 function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub: string }) {
   return (

@@ -1,10 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Trash2, GripVertical, Church, Pencil,
-  MapPin, Users, Layers, Tag, Copy,
+  MapPin, Users, Layers, Tag, Copy, BookOpen, ChevronRight,
+  Settings2, CalendarCheck, Award, FileImage, UserCheck, Gauge,
+  ListOrdered, Music2,
 } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -313,6 +315,9 @@ function PersonalizacaoPage() {
     },
   });
 
+  // Hook must be called before any early returns
+  const [activeSection, setActiveSection] = useState("dados");
+
   if (authLoading || isPending) {
     return (
       <div className="p-10 flex items-center gap-2 text-sm text-muted-foreground">
@@ -339,65 +344,115 @@ function PersonalizacaoPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["paroquia"] });
 
+  const NAV_GROUPS = [
+    {
+      label: "Paróquia",
+      items: [
+        { id: "dados",       label: "Dados da Paróquia",    icon: Church,       desc: "Nome, endereço e contato" },
+        { id: "comunidades", label: "Comunidades",          icon: MapPin,       desc: "Grupos e localidades" },
+      ],
+    },
+    {
+      label: "Ministérios",
+      items: [
+        { id: "atuacoes",    label: "Atuações",             icon: Layers,       desc: "Áreas de ministério" },
+        { id: "funcoes",     label: "Funções Litúrgicas",   icon: Music2,       desc: "Funções por ministério" },
+      ],
+    },
+    {
+      label: "Missas",
+      items: [
+        { id: "tipos",       label: "Tipos de Missa",       icon: Tag,          desc: "Categorias de celebração" },
+        { id: "missas",      label: "Missas Padrão",        icon: CalendarCheck,desc: "Horários regulares" },
+      ],
+    },
+    {
+      label: "Escalas",
+      items: [
+        { id: "coord",       label: "Coordenadores",        icon: UserCheck,    desc: "Responsáveis por escala" },
+        { id: "prioridades", label: "Prioridades",          icon: ListOrdered,  desc: "Ordem de alocação" },
+        { id: "regras",      label: "Regras da Escala",     icon: Settings2,    desc: "Limites e restrições" },
+      ],
+    },
+    {
+      label: "Avançado",
+      items: [
+        { id: "pontuacao",   label: "Pontuação",            icon: Award,        desc: "Gamificação pastoral" },
+        { id: "pdf",         label: "Imagens PDF",          icon: FileImage,    desc: "Cabeçalho e rodapé" },
+      ],
+    },
+  ];
+
+  const allItems = NAV_GROUPS.flatMap((g) => g.items);
+  const activeItem = allItems.find((i) => i.id === activeSection);
+
   return (
-    <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto">
-      <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-      <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Personalização</h1>
-
-      <Tabs defaultValue="dados" className="mt-6">
-        {/* Tabs scrolláveis — mobile e desktop */}
-        <div className="-mx-4 sm:-mx-6 lg:-mx-10 mb-6">
-          <div className="overflow-x-auto scrollbar-none px-4 sm:px-6 lg:px-10">
-            <TabsList className="inline-flex gap-0.5 h-auto bg-muted/50 p-1 rounded-xl flex-nowrap min-w-max">
-              <TabsTrigger value="dados"        className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Dados</TabsTrigger>
-              <TabsTrigger value="comunidades"  className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Comunidades</TabsTrigger>
-              <TabsTrigger value="atuacoes"     className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Atuações</TabsTrigger>
-              <TabsTrigger value="funcoes"      className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Funções</TabsTrigger>
-              <TabsTrigger value="tipos"        className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Tipos de Missa</TabsTrigger>
-              <TabsTrigger value="missas"       className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Missas Padrão</TabsTrigger>
-              <TabsTrigger value="coord"        className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Coordenadores</TabsTrigger>
-              <TabsTrigger value="prioridades"  className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Prioridades</TabsTrigger>
-              <TabsTrigger value="regras"       className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Regras</TabsTrigger>
-              <TabsTrigger value="pontuacao"    className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Pontuação</TabsTrigger>
-              <TabsTrigger value="pdf"          className="text-xs whitespace-nowrap shrink-0 px-3 py-1.5">Imagens PDF</TabsTrigger>
-            </TabsList>
-          </div>
+    <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto pb-24">
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div>
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
+          <h1 className="mt-1.5 font-serif text-2xl sm:text-4xl">Personalização</h1>
         </div>
+        <Link
+          to="/admin/liturgia"
+          className="inline-flex items-center gap-2 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted hover:border-primary/30 hover:text-primary"
+        >
+          <BookOpen className="h-4 w-4 text-primary shrink-0" />
+          Liturgia &amp; Sync
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-0.5 shrink-0" />
+        </Link>
+      </div>
 
-        <TabsContent value="dados">
-          <IdentidadeTab paroquia={paroquia} onSaved={invalidate} />
-        </TabsContent>
-        <TabsContent value="comunidades">
-          <ComunidadesTab paroquiaId={paroquia.id} />
-        </TabsContent>
-        <TabsContent value="atuacoes">
-          <AtuacoesSubTab paroquiaId={paroquia.id} />
-        </TabsContent>
-        <TabsContent value="funcoes">
-          <FuncoesLiturgicasTab paroquiaId={paroquia.id} />
-        </TabsContent>
-        <TabsContent value="tipos">
-          <TiposMissaTab paroquiaId={paroquia.id} />
-        </TabsContent>
-        <TabsContent value="missas">
-          <MissasTab paroquiaId={paroquia.id} />
-        </TabsContent>
-        <TabsContent value="coord">
-          <CoordenadesTab paroquiaId={paroquia.id} />
-        </TabsContent>
-        <TabsContent value="prioridades">
-          <TiposPrioridadeTab paroquiaId={paroquia.id} />
-        </TabsContent>
-        <TabsContent value="regras">
-          <RegrasEscalaTab paroquia={paroquia} onSaved={invalidate} />
-        </TabsContent>
-        <TabsContent value="pontuacao">
-          <PontuacaoConfigTab paroquia={paroquia} onSaved={invalidate} />
-        </TabsContent>
-        <TabsContent value="pdf">
-          <PDFImagesTab paroquia={paroquia} onSaved={invalidate} />
-        </TabsContent>
-      </Tabs>
+      <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+        {/* ── Sidebar nav ── */}
+        <aside className="space-y-1">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="mb-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground px-3 py-1.5">
+                {group.label}
+              </p>
+              {group.items.map((item) => {
+                const active = activeSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveSection(item.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition group ${
+                      active
+                        ? "bg-primary/10 text-primary"
+                        : "text-foreground/70 hover:bg-muted/60 hover:text-foreground"
+                    }`}
+                  >
+                    <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`} />
+                    <span className="text-sm font-medium truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </aside>
+
+        {/* ── Content area ── */}
+        <div className="min-w-0">
+          <div className="mb-5 pb-4 border-b border-border/60">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-medium">{activeItem?.label}</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{activeItem?.desc}</p>
+          </div>
+
+          {activeSection === "dados"       && <IdentidadeTab paroquia={paroquia} onSaved={invalidate} />}
+          {activeSection === "comunidades" && <ComunidadesTab paroquiaId={paroquia.id} />}
+          {activeSection === "atuacoes"    && <AtuacoesSubTab paroquiaId={paroquia.id} />}
+          {activeSection === "funcoes"     && <FuncoesLiturgicasTab paroquiaId={paroquia.id} />}
+          {activeSection === "tipos"       && <TiposMissaTab paroquiaId={paroquia.id} />}
+          {activeSection === "missas"      && <MissasTab paroquiaId={paroquia.id} />}
+          {activeSection === "coord"       && <CoordenadesTab paroquiaId={paroquia.id} />}
+          {activeSection === "prioridades" && <TiposPrioridadeTab paroquiaId={paroquia.id} />}
+          {activeSection === "regras"      && <RegrasEscalaTab paroquia={paroquia} onSaved={invalidate} />}
+          {activeSection === "pontuacao"   && <PontuacaoConfigTab paroquia={paroquia} onSaved={invalidate} />}
+          {activeSection === "pdf"         && <PDFImagesTab paroquia={paroquia} onSaved={invalidate} />}
+        </div>
+      </div>
     </div>
   );
 }
