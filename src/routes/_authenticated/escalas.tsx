@@ -1113,14 +1113,23 @@ function EscalasPage() {
     const cabecalhoUrl = paroquiaConfig?.pdf_cabecalho_url ?? null;
     const rodapeUrl    = paroquiaConfig?.pdf_rodape_url    ?? null;
 
+    // Period label from date range of selected escalas
+    const dates = selected.map((e) => new Date(e.data + "T00:00:00"));
+    const minDate = dates.reduce((a, b) => (a < b ? a : b));
+    const maxDate = dates.reduce((a, b) => (a > b ? a : b));
+    const periodoTitle =
+      format(minDate, "MMyyyy") === format(maxDate, "MMyyyy")
+        ? format(minDate, "MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()
+        : `${format(minDate, "MMM", { locale: ptBR })} – ${format(maxDate, "MMM 'de' yyyy", { locale: ptBR })}`.toUpperCase();
+
     const escalasSections = selected.map((e) => {
       const d = new Date(e.data + "T00:00:00");
       const diaSemana = format(d, "EEEE", { locale: ptBR });
-      const dataCompleta = format(d, "d 'de' MMMM 'de' yyyy", { locale: ptBR });
+      const dataCompleta = format(d, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
       const preview = escalaCounts[e.id];
       const funcoes = preview?.funcoes ?? [];
 
-      // group funcoes by categoria
+      // group by categoria
       const grouped: { categoria: string; funcoes: typeof funcoes }[] = [];
       const uncategorized: typeof funcoes = [];
       funcoes.forEach((f) => {
@@ -1134,167 +1143,105 @@ function EscalasPage() {
       });
       if (uncategorized.length > 0) grouped.push({ categoria: "", funcoes: uncategorized });
 
-      const renderFuncoesGrid = (fs: typeof funcoes) =>
-        `<div class="funcoes-grid">${fs.map((f) => {
-          const membrosNomes = f.membros.length > 0
-            ? f.membros.map((m) => `<span class="membro-chip">${nomeExibicao(m.nome)}</span>`).join("")
-            : `<span class="vaga">Vaga</span>`;
-          return `<div class="funcao-card">
-            <div class="funcao-header" style="border-top:3px solid ${f.cor}">
-              <span class="funcao-nome">${f.nome}</span>
-              <span class="funcao-qty">${f.membros.length}/${f.quantidade}</span>
-            </div>
-            <div class="membros-list">${membrosNomes}</div>
-          </div>`;
-        }).join("")}</div>`;
+      // 4-column paired table: funcao | membro | funcao | membro
+      const renderTabela = (fs: typeof funcoes) => {
+        const rows: string[] = [];
+        for (let i = 0; i < fs.length; i += 2) {
+          const f1 = fs[i];
+          const f2 = fs[i + 1];
+          const m1 = f1.membros.length > 0 ? f1.membros.map((m) => nomeExibicao(m.nome)).join(", ") : "—";
+          const v1 = f1.membros.length === 0;
+          if (f2) {
+            const m2 = f2.membros.length > 0 ? f2.membros.map((m) => nomeExibicao(m.nome)).join(", ") : "—";
+            const v2 = f2.membros.length === 0;
+            rows.push(`<tr><td class="td-f">${f1.nome}</td><td class="td-m${v1 ? " vaga" : ""}">${m1}</td><td class="td-f td-f2">${f2.nome}</td><td class="td-m${v2 ? " vaga" : ""}">${m2}</td></tr>`);
+          } else {
+            rows.push(`<tr><td class="td-f">${f1.nome}</td><td class="td-m${v1 ? " vaga" : ""}" colspan="3">${m1}</td></tr>`);
+          }
+        }
+        return `<table class="ft">${rows.join("")}</table>`;
+      };
 
-      const funcoesHtml = funcoes.length > 0
-        ? grouped.map((g) =>
-            g.categoria
-              ? `<div class="atuacao-section"><div class="atuacao-label">${g.categoria}</div>${renderFuncoesGrid(g.funcoes)}</div>`
-              : renderFuncoesGrid(g.funcoes)
-          ).join("")
-        : `<p class="sem-funcoes">Nenhuma função definida para esta escala.</p>`;
+      const funcoesHtml =
+        funcoes.length > 0
+          ? grouped
+              .map((g) =>
+                g.categoria
+                  ? `<div class="cat-label">${g.categoria}</div>${renderTabela(g.funcoes)}`
+                  : renderTabela(g.funcoes)
+              )
+              .join("")
+          : `<p class="sem-funcoes">Nenhuma função definida para esta escala.</p>`;
 
-      return `<div class="escala-section">
-  <div class="escala-header-row">
-    <div class="date-block">
-      <div class="date-day">${format(d, "d")}</div>
-      <div class="date-month">${format(d, "MMM", { locale: ptBR })}</div>
-      <div class="date-week">${format(d, "EEE", { locale: ptBR })}</div>
+      return `<div class="ec">
+  <div class="eh">
+    <div>
+      <div class="eh-day">${diaSemana.toUpperCase()}</div>
+      <div class="eh-title">${e.titulo}</div>
+      <div class="eh-date">${dataCompleta}</div>
+      ${e.hora_inicio ? `<div class="eh-time">Missa às ${e.hora_inicio.slice(0, 5)}${e.hora_fim ? ` – ${e.hora_fim.slice(0, 5)}` : ""}${e.local ? ` · ${e.local}` : ""}</div>` : ""}
     </div>
-    <div class="escala-info">
-      <h2 class="escala-title">${e.titulo}</h2>
-      <div class="escala-meta">
-        <span class="meta-item">${diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)}, ${dataCompleta}</span>
-        ${e.hora_inicio ? `<span class="meta-sep">·</span><span class="meta-item">${e.hora_inicio.slice(0,5)}${e.hora_fim ? `–${e.hora_fim.slice(0,5)}` : ""}</span>` : ""}
-        ${e.local ? `<span class="meta-sep">·</span><span class="meta-item">${e.local}</span>` : ""}
-      </div>
-    </div>
-    <div class="escala-badges">
-      <span class="escala-status status-${e.status}">${STATUS_CONFIG[e.status]?.label ?? e.status}</span>
-      ${e.solene ? `<span class="badge-solene">Solene</span>` : ""}
+    <div class="eh-badges">
+      ${e.solene ? `<span class="b-solene">Solene</span>` : ""}
+      <span class="b-status s-${e.status}">${STATUS_CONFIG[e.status]?.label ?? e.status}</span>
     </div>
   </div>
-  ${e.observacoes ? `<div class="obs-block">${e.observacoes}</div>` : ""}
+  ${e.observacoes ? `<div class="obs">${e.observacoes}</div>` : ""}
   ${funcoesHtml}
 </div>`;
-    }).join("");
+    }).join("\n");
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Escalas — ${nomeParoquia}</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{
-    font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
-    background:#fff;color:#111827;font-size:12.5px;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact;
-    ${rodapeUrl ? "padding-bottom:90px" : ""}
-  }
-
-  /* ── Header da paróquia ── */
-  .doc-header{
-    padding:24px 32px 18px;
-    display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
-    border-bottom:1px solid #e5e7eb;margin-bottom:20px;
-  }
-  .doc-paroquia{font-size:18px;font-weight:700;color:#111827;line-height:1.2;margin-bottom:3px}
-  .doc-subtitle{font-size:10.5px;font-weight:500;color:#9ca3af;text-transform:uppercase;letter-spacing:.1em}
-  .doc-header-right{text-align:right;flex-shrink:0}
-  .doc-emit{font-size:9.5px;color:#9ca3af;line-height:1.7}
-
-  /* ── Cabeçalho da paróquia (imagem) ── */
-  .doc-cabecalho{width:100%;display:block}
-
-  /* ── Layout ── */
-  .content{padding:0 32px 24px}
-  .escalas-grid{display:grid;grid-template-columns:1fr;gap:16px}
-
-  /* ── Card de escala ── */
-  .escala-section{border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;page-break-inside:avoid;background:#fff}
-  .escala-header-row{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;background:#f9fafb;border-bottom:1px solid #e5e7eb}
-  .date-block{min-width:48px;text-align:center;flex-shrink:0;background:#111827;border-radius:7px;padding:9px 5px}
-  .date-day{font-size:24px;font-weight:700;line-height:1;color:#fff}
-  .date-month{font-size:8.5px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);margin-top:2px;font-weight:600}
-  .date-week{font-size:7.5px;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.35);margin-top:1px}
-  .escala-info{flex:1;min-width:0}
-  .escala-title{font-size:14px;font-weight:700;color:#111827;margin-bottom:5px;line-height:1.3}
-  .escala-meta{display:flex;flex-wrap:wrap;gap:3px 8px;align-items:center}
-  .meta-item{font-size:11px;color:#6b7280}
-  .meta-sep{color:#d1d5db}
-  .escala-badges{display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0}
-  .escala-status{
-    padding:2px 9px;border-radius:99px;
-    font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;
-  }
-  .status-publicada{background:#d1fae5;color:#065f46}
-  .status-rascunho{background:#f3f4f6;color:#4b5563}
-  .status-arquivada{background:#e5e7eb;color:#9ca3af}
-  .badge-solene{background:#fef3c7;color:#92400e;border-radius:99px;padding:2px 9px;font-size:9.5px;font-weight:600}
-
-  .obs-block{padding:8px 18px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:11px;color:#78350f;font-style:italic;line-height:1.5}
-
-  /* ── Grupos de atuação ── */
-  .atuacao-section + .atuacao-section{border-top:1px solid #f3f4f6}
-  .atuacao-label{padding:6px 18px 3px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:#9ca3af;background:#f9fafb;border-bottom:1px solid #f3f4f6}
-
-  /* ── Grid de funções ── */
-  .funcoes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 18px;background:#fff}
-  .funcao-card{border:1px solid #e5e7eb;border-radius:7px;overflow:hidden}
-  .funcao-header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#f9fafb;border-bottom:1px solid #f3f4f6}
-  .funcao-nome{font-size:10.5px;font-weight:700;color:#111827}
-  .funcao-qty{font-size:9.5px;color:#9ca3af;font-variant-numeric:tabular-nums}
-  .membros-list{padding:8px 10px;display:flex;flex-wrap:wrap;gap:4px;min-height:30px;align-content:flex-start}
-  .membro-chip{background:#f3f4f6;color:#374151;border-radius:99px;padding:2px 8px;font-size:10px;font-weight:600}
-  .vaga{font-size:10px;color:#d1d5db;font-style:italic;align-self:center}
-  .sem-funcoes{padding:12px 18px;font-size:11.5px;color:#9ca3af;font-style:italic}
-
-  /* ── Rodapé — fluxo natural no final do documento (última página) ── */
-  .doc-rodape{display:none}
-  @media print{
-    .doc-header{padding:18px 24px 14px}
-    .content{padding:0 24px 20px}
-    .escalas-grid{gap:14px}
-    .doc-rodape{
-      display:block;
-      width:100%;
-      page-break-inside:avoid;
-      margin-top:24px;
-    }
-    .doc-rodape img{width:100%;display:block}
-  }
-  @media (max-width:640px){
-    .doc-header{padding:14px 16px 12px;flex-direction:column;gap:6px}
-    .doc-header-right{text-align:left}
-    .funcoes-grid{grid-template-columns:1fr 1fr;gap:6px;padding:10px 12px}
-    .content{padding:0 16px 16px}
-  }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#fff;color:#111827;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-cabecalho{width:100%;display:block}
+.periodo-bar{background:#1a1a2e;color:#f59e0b;text-align:center;padding:13px 24px;font-size:14px;font-weight:800;letter-spacing:.22em;text-transform:uppercase}
+.doc-emit{text-align:right;padding:7px 32px 0;font-size:10px;color:#9ca3af}
+.content{padding:18px 32px 28px}
+.ec{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;page-break-inside:avoid;margin-bottom:18px}
+.eh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:#1a1a2e;color:#fff;padding:14px 20px}
+.eh-day{font-size:9px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:#f59e0b;margin-bottom:3px}
+.eh-title{font-size:14px;font-weight:700;line-height:1.3;margin-bottom:3px}
+.eh-date{font-size:10px;color:rgba(255,255,255,.55);text-transform:capitalize}
+.eh-time{margin-top:7px;display:inline-block;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#fbbf24;border-radius:4px;padding:2px 10px;font-size:9.5px;font-weight:700;letter-spacing:.04em}
+.eh-badges{display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;padding-top:2px}
+.b-status{padding:2px 9px;border-radius:99px;font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+.s-publicada{background:#d1fae5;color:#065f46}
+.s-rascunho{background:rgba(255,255,255,.15);color:rgba(255,255,255,.75)}
+.s-arquivada{background:rgba(255,255,255,.08);color:rgba(255,255,255,.4)}
+.b-solene{background:#fef3c7;color:#92400e;border-radius:99px;padding:2px 9px;font-size:8.5px;font-weight:700}
+.obs{padding:8px 18px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:10.5px;color:#78350f;font-style:italic;line-height:1.5}
+.cat-label{padding:5px 18px;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:#94a3b8}
+.ft{width:100%;border-collapse:collapse}
+.ft tr+tr td{border-top:1px solid #f1f5f9}
+.ft td{padding:8px 16px;font-size:11.5px;vertical-align:middle}
+.td-f{color:#64748b;font-weight:600;background:#f8fafc;width:26%;border-right:1px solid #e2e8f0;white-space:nowrap}
+.td-f2{border-left:2px solid #e2e8f0}
+.td-m{color:#111827;font-weight:700}
+.td-m.vaga{color:#cbd5e1;font-weight:400;font-style:italic}
+.sem-funcoes{padding:14px 18px;font-size:11px;color:#9ca3af;font-style:italic}
+.doc-rodape{display:none}
+@media print{
+  .content{padding:14px 24px 24px}
+  .doc-emit{padding:5px 24px 0}
+  .doc-rodape{display:block;width:100%;page-break-inside:avoid;margin-top:28px}
+  .doc-rodape img{width:100%;display:block}
+}
 </style>
 </head>
 <body>
-${cabecalhoUrl ? `<img class="doc-cabecalho" src="${cabecalhoUrl}" alt="Cabeçalho" />` : ""}
-<div class="doc-header">
-  <div>
-    <div class="doc-paroquia">${nomeParoquia}</div>
-    <div class="doc-subtitle">Escalas de Serviço · Pastoral Litúrgica</div>
-  </div>
-  <div class="doc-header-right">
-    <div class="doc-emit">
-      ${selected.length} escala${selected.length !== 1 ? "s" : ""}<br>
-      Emitido em ${hoje}
-    </div>
-  </div>
-</div>
+${cabecalhoUrl ? `<img class="doc-cabecalho" src="${cabecalhoUrl}" alt="">` : ""}
+<div class="periodo-bar">ESCALA ${periodoTitle}</div>
+<div class="doc-emit">${selected.length} escala${selected.length !== 1 ? "s" : ""} · Emitido em ${hoje}</div>
 <div class="content">
-  <div class="escalas-grid">
 ${escalasSections}
-  </div>
 </div>
-${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt="Rodapé" /></div>` : ""}
+${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : ""}
 </body></html>`;
 
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
