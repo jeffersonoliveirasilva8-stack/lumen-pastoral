@@ -2404,28 +2404,35 @@ function MembrosPage() {
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Membros</p>
           <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Membros e funções</h1>
         </div>
-        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
-          <Button
-            variant="outline" size="sm"
-            disabled={syncMissaRestricoesMutation.isPending || missasPadrao.length === 0}
-            onClick={() => syncMissaRestricoesMutation.mutate()}
-            title="Lê o texto de restrições de todos os membros e detecta automaticamente quais missas padrão eles não podem servir"
-          >
-            {syncMissaRestricoesMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            <span className="hidden sm:inline ml-1">Auto-detectar todos</span>
-          </Button>
-          <Button
-            variant="outline" size="sm"
-            disabled={syncRestricoesMutation.isPending}
-            onClick={() => syncRestricoesMutation.mutate()}
-            title="Lê as restrições de horário de todos os membros e preenche os dias da semana automaticamente"
-          >
-            {syncRestricoesMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            <span className="hidden sm:inline ml-1">Sincronizar dias</span>
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-            <Upload className="h-4 w-4" /> <span className="hidden sm:inline ml-1">Importar</span>
-          </Button>
+        <div className="flex gap-2 shrink-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MoreVertical className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1">Mais ações</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                disabled={syncMissaRestricoesMutation.isPending || missasPadrao.length === 0}
+                onClick={() => syncMissaRestricoesMutation.mutate()}
+              >
+                {syncMissaRestricoesMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-2" />}
+                Auto-detectar restrições
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={syncRestricoesMutation.isPending}
+                onClick={() => syncRestricoesMutation.mutate()}
+              >
+                {syncRestricoesMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-2" />}
+                Sincronizar dias
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setImportOpen(true)}>
+                <Upload className="h-3.5 w-3.5 mr-2" />Importar planilha
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" /> <span className="hidden sm:inline ml-1">Novo membro</span>
           </Button>
@@ -2454,25 +2461,27 @@ function MembrosPage() {
         {(() => {
           const hasFilters = filterMin !== "todos" || filterAtuacao !== "todas" || filterComunidade !== "todas" || filterPrioridade !== "todas" || filterAtivo !== "ativos";
           return (
-            <div className="mt-2 space-y-2">
-              {/* Linha principal: busca + status + botão filtros */}
-              <div className="flex gap-2">
-                <div className="relative flex-1 min-w-0">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    className="pl-9 pr-8 h-10"
-                    placeholder="Buscar por nome, e-mail…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                  {search && (
-                    <button className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted" onClick={() => setSearch("")}>
-                      <X className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-                  )}
-                </div>
+            <div className="mt-3 space-y-2.5">
+              {/* Barra de busca destacada */}
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  className="pl-10 pr-9 h-11 rounded-2xl border-border/80 bg-card shadow-sm text-sm placeholder:text-muted-foreground/60"
+                  placeholder="Buscar por nome, e-mail ou telefone…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                {search && (
+                  <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted transition" onClick={() => setSearch("")}>
+                    <X className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filtros — chips horizontais roláveis */}
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
                 <Select value={filterAtivo} onValueChange={(v) => { setFilterAtivo(v); setSelectedIds(new Set()); }}>
-                  <SelectTrigger className="w-24 shrink-0 h-10">
+                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border ${filterAtivo !== "ativos" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2481,13 +2490,10 @@ function MembrosPage() {
                     <SelectItem value="todos">Todos</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
 
-              {/* Filtros adicionais — grid 2 colunas no mobile */}
-              {(ministerios.length > 0 || atuacoes.length > 0 || comunidades.length > 0) && (
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                {ministerios.length > 0 && (
                   <Select value={filterMin} onValueChange={(v) => { setFilterMin(v); setSelectedIds(new Set()); }}>
-                    <SelectTrigger className="h-8 text-xs">
+                    <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterMin !== "todos" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
                       <SelectValue placeholder="Função" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2495,50 +2501,54 @@ function MembrosPage() {
                       {ministerios.filter((m) => !!m.id).map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {atuacoes.length > 0 && (
-                    <Select value={filterAtuacao} onValueChange={(v) => { setFilterAtuacao(v); setSelectedIds(new Set()); }}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Atuação" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todas">Todas as atuações</SelectItem>
-                        {atuacoes.filter((a) => !!a.id).map((a) => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {comunidades.length > 0 && (
-                    <Select value={filterComunidade} onValueChange={(v) => { setFilterComunidade(v); setSelectedIds(new Set()); }}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Comunidade" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todas">Todas</SelectItem>
-                        {comunidades.filter((c) => !!c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <Select value={filterPrioridade} onValueChange={(v) => { setFilterPrioridade(v); setSelectedIds(new Set()); }}>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Prioridade" />
+                )}
+
+                {atuacoes.length > 0 && (
+                  <Select value={filterAtuacao} onValueChange={(v) => { setFilterAtuacao(v); setSelectedIds(new Set()); }}>
+                    <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterAtuacao !== "todas" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
+                      <SelectValue placeholder="Atuação" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas as atuações</SelectItem>
+                      {atuacoes.filter((a) => !!a.id).map((a) => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {comunidades.length > 0 && (
+                  <Select value={filterComunidade} onValueChange={(v) => { setFilterComunidade(v); setSelectedIds(new Set()); }}>
+                    <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterComunidade !== "todas" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
+                      <SelectValue placeholder="Comunidade" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todas">Todas</SelectItem>
-                      {PRIORIDADES.filter((p) => p.value !== "nenhuma").map((p) => (
-                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                      ))}
-                      <SelectItem value="nenhuma">Sem prioridade</SelectItem>
+                      {comunidades.filter((c) => !!c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {hasFilters && (
-                    <button
-                      className="col-span-2 sm:col-span-1 text-xs text-muted-foreground hover:text-foreground h-8 px-2 rounded border border-dashed border-border hover:border-foreground/30 transition"
-                      onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setFilterAtivo("ativos"); setSelectedIds(new Set()); }}
-                    >
-                      <X className="h-3 w-3 inline mr-1" />Limpar filtros
-                    </button>
-                  )}
-                </div>
-              )}
+                )}
+
+                <Select value={filterPrioridade} onValueChange={(v) => { setFilterPrioridade(v); setSelectedIds(new Set()); }}>
+                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterPrioridade !== "todas" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
+                    <SelectValue placeholder="Prioridade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas</SelectItem>
+                    {PRIORIDADES.filter((p) => p.value !== "nenhuma").map((p) => (
+                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                    ))}
+                    <SelectItem value="nenhuma">Sem prioridade</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {hasFilters && (
+                  <button
+                    className="h-8 shrink-0 flex items-center gap-1 rounded-full px-3 text-xs text-destructive border border-destructive/30 bg-destructive/5 hover:bg-destructive/10 transition whitespace-nowrap"
+                    onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setFilterAtivo("ativos"); setSelectedIds(new Set()); }}
+                  >
+                    <X className="h-3 w-3" />Limpar
+                  </button>
+                )}
+              </div>
             </div>
           );
         })()}
@@ -2587,7 +2597,7 @@ function MembrosPage() {
       ) : (
         <>
           {/* Barra de meta + selecionar todos */}
-          <div className="mt-5 flex items-center justify-between px-1 pb-3 border-b border-border/40">
+          <div className="mt-4 flex items-center justify-between px-1 pb-3 border-b border-border/40">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <Checkbox
                 checked={filtered.length > 0 && filtered.every((m) => selectedIds.has(m.id))}
@@ -2598,9 +2608,18 @@ function MembrosPage() {
               />
               <span className="text-xs text-muted-foreground">Selecionar todos</span>
             </label>
-            <span className="text-xs text-muted-foreground">
-              {filtered.length} membro(s) · {membros.filter((m) => m.ativo).length} ativo(s)
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-foreground">{filtered.length}</span>
+              <span className="text-xs text-muted-foreground">
+                {filtered.length === membros.length ? "membros" : `de ${membros.length}`}
+              </span>
+              {filtered.length !== membros.filter((m) => m.ativo).length && (
+                <>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span className="text-xs text-muted-foreground">{membros.filter((m) => m.ativo).length} ativos</span>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Grid de cards */}
@@ -2613,11 +2632,11 @@ function MembrosPage() {
               return (
                 <div
                   key={m.id}
-                  className={`relative rounded-2xl border p-4 transition-all hover:shadow-md cursor-pointer ${
+                  className={`relative rounded-2xl border p-4 transition-all duration-150 hover:shadow-sm cursor-pointer group ${
                     isSelected
                       ? "border-primary/50 bg-primary/[0.03] shadow-sm ring-1 ring-primary/20"
-                      : "border-border bg-card hover:border-muted-foreground/25"
-                  } ${!m.ativo ? "opacity-60" : ""}`}
+                      : "border-border bg-card hover:border-border/80 hover:bg-muted/20"
+                  } ${!m.ativo ? "opacity-55" : ""}`}
                   onClick={() => openEdit(m)}
                 >
                   {/* Checkbox seleção */}
@@ -2634,31 +2653,50 @@ function MembrosPage() {
 
                   {/* Cabeçalho: avatar + nome + menu */}
                   <div className="flex items-start gap-3 pl-7">
-                    <div className={`h-10 w-10 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-sm font-bold tracking-wide ${!m.foto_url ? (m.ativo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground") : ""}`}>
+                    <div className={`h-11 w-11 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-sm font-bold tracking-wide ring-2 ring-border/50 ${!m.foto_url ? (m.ativo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground") : ""}`}>
                       {m.foto_url ? (
                         <img src={m.foto_url} alt={m.nome} className="h-full w-full object-cover" />
                       ) : (
                         initials
                       )}
                     </div>
-                    <div className="flex-1 min-w-0 pt-0.5">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-semibold text-sm leading-tight">{m.nome}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-sm leading-snug truncate">{m.nome}</span>
                         {m.auth_user_id && (
                           <span title="Conta vinculada ao portal" className="h-4 w-4 rounded-full bg-green-500/15 text-green-600 flex items-center justify-center shrink-0">
-                            <Star className="h-2.5 w-2.5" />
+                            <UserCheck className="h-2.5 w-2.5" />
                           </span>
                         )}
-                        <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${m.ativo ? "bg-green-500" : "bg-muted-foreground/40"}`} />
                       </div>
-                      {m.email && <p className="text-xs text-muted-foreground truncate">{m.email}</p>}
-                      {!m.email && m.telefone && <p className="text-xs text-muted-foreground">{m.telefone}</p>}
-                      {comunidadeNome && <p className="text-[11px] text-muted-foreground/60 mt-0.5">{comunidadeNome}</p>}
+                      {m.email ? (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{m.email}</p>
+                      ) : m.telefone ? (
+                        <p className="text-xs text-muted-foreground mt-0.5">{m.telefone}</p>
+                      ) : null}
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${m.ativo ? "text-green-600" : "text-muted-foreground/60"}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${m.ativo ? "bg-green-500" : "bg-muted-foreground/40"}`} />
+                          {m.ativo ? "Ativo" : "Inativo"}
+                        </span>
+                        {m.tipo_acesso !== "membro" && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                            m.tipo_acesso === "coordenador"
+                              ? "bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300"
+                              : "bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/40 dark:text-blue-300"
+                          }`}>
+                            {m.tipo_acesso === "coordenador" ? "Coord." : "Admin."}
+                          </span>
+                        )}
+                        {comunidadeNome && (
+                          <span className="text-[10px] text-muted-foreground/60 truncate">{comunidadeNome}</span>
+                        )}
+                      </div>
                     </div>
                     <div onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 -mt-0.5 -mr-1 text-muted-foreground hover:text-foreground">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 -mt-0.5 -mr-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
                           <MoreVertical className="h-3.5 w-3.5" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -2723,7 +2761,7 @@ function MembrosPage() {
 
                   {/* Funções litúrgicas */}
                   {m.ministerios.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
+                    <div className="mt-2.5 flex flex-wrap gap-1">
                       {m.ministerios.slice(0, 3).map((min) => (
                         <span
                           key={min.id}
@@ -2734,15 +2772,17 @@ function MembrosPage() {
                         </span>
                       ))}
                       {m.ministerios.length > 3 && (
-                        <span className="text-[10px] text-muted-foreground">+{m.ministerios.length - 3}</span>
+                        <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded-full bg-muted">
+                          +{m.ministerios.length - 3}
+                        </span>
                       )}
                     </div>
                   )}
 
                   {/* Rodapé: score + atuações */}
-                  <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between gap-2">
+                  <div className="mt-2.5 pt-2.5 border-t border-border/40 flex items-center justify-between gap-2">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-lg font-extrabold text-primary tabular-nums leading-none">{m.score}</span>
+                      <span className="text-base font-bold text-primary tabular-nums leading-none">{m.score}</span>
                       <span className="text-[10px] text-muted-foreground">pts</span>
                     </div>
                     {mAtuacoes.length > 0 && (
@@ -2753,6 +2793,9 @@ function MembrosPage() {
                             {a.nome}
                           </span>
                         ))}
+                        {mAtuacoes.length > 2 && (
+                          <span className="text-[9px] text-muted-foreground">+{mAtuacoes.length - 2}</span>
+                        )}
                       </div>
                     )}
                   </div>
