@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Trash2, GripVertical, Church, Pencil,
-  MapPin, Users, Layers, Tag, Copy, BookOpen, ChevronRight,
+  MapPin, Users, Layers, Tag, Copy, BookOpen, ChevronRight, ChevronLeft,
   Settings2, CalendarCheck, Award, FileImage, UserCheck, Gauge,
   ListOrdered, Music2,
 } from "lucide-react";
@@ -315,8 +315,9 @@ function PersonalizacaoPage() {
     },
   });
 
-  // Hook must be called before any early returns
+  // Hooks must be called before any early returns
   const [activeSection, setActiveSection] = useState("dados");
+  const [mobileView, setMobileView] = useState<"list" | "content">("list");
 
   if (authLoading || isPending) {
     return (
@@ -386,71 +387,143 @@ function PersonalizacaoPage() {
   const allItems = NAV_GROUPS.flatMap((g) => g.items);
   const activeItem = allItems.find((i) => i.id === activeSection);
 
+  const ContentPanel = () => (
+    <>
+      {activeSection === "dados"       && <IdentidadeTab paroquia={paroquia} onSaved={invalidate} />}
+      {activeSection === "comunidades" && <ComunidadesTab paroquiaId={paroquia.id} />}
+      {activeSection === "atuacoes"    && <AtuacoesSubTab paroquiaId={paroquia.id} />}
+      {activeSection === "funcoes"     && <FuncoesLiturgicasTab paroquiaId={paroquia.id} />}
+      {activeSection === "tipos"       && <TiposMissaTab paroquiaId={paroquia.id} />}
+      {activeSection === "missas"      && <MissasTab paroquiaId={paroquia.id} />}
+      {activeSection === "coord"       && <CoordenadesTab paroquiaId={paroquia.id} />}
+      {activeSection === "prioridades" && <TiposPrioridadeTab paroquiaId={paroquia.id} />}
+      {activeSection === "regras"      && <RegrasEscalaTab paroquia={paroquia} onSaved={invalidate} />}
+      {activeSection === "pontuacao"   && <PontuacaoConfigTab paroquia={paroquia} onSaved={invalidate} />}
+      {activeSection === "pdf"         && <PDFImagesTab paroquia={paroquia} onSaved={invalidate} />}
+    </>
+  );
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto pb-24">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-        <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-          <h1 className="mt-1.5 font-serif text-2xl sm:text-4xl">Personalização</h1>
-        </div>
-        <Link
-          to="/admin/liturgia"
-          className="inline-flex items-center gap-2 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted hover:border-primary/30 hover:text-primary"
-        >
-          <BookOpen className="h-4 w-4 text-primary shrink-0" />
-          Liturgia &amp; Sync
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-0.5 shrink-0" />
-        </Link>
-      </div>
 
-      <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-        {/* ── Sidebar nav ── */}
-        <aside className="space-y-1">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="mb-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground px-3 py-1.5">
-                {group.label}
-              </p>
-              {group.items.map((item) => {
-                const active = activeSection === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveSection(item.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition group ${
-                      active
-                        ? "bg-primary/10 text-primary"
-                        : "text-foreground/70 hover:bg-muted/60 hover:text-foreground"
-                    }`}
-                  >
-                    <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`} />
-                    <span className="text-sm font-medium truncate">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </aside>
-
-        {/* ── Content area ── */}
-        <div className="min-w-0">
+      {/* ── Mobile: tela de conteúdo com back button ── */}
+      {mobileView === "content" && (
+        <div className="lg:hidden">
+          <button
+            onClick={() => setMobileView("list")}
+            className="mb-5 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Personalização
+          </button>
           <div className="mb-5 pb-4 border-b border-border/60">
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-medium">{activeItem?.label}</p>
             <p className="text-sm text-muted-foreground mt-0.5">{activeItem?.desc}</p>
           </div>
+          <ContentPanel />
+        </div>
+      )}
 
-          {activeSection === "dados"       && <IdentidadeTab paroquia={paroquia} onSaved={invalidate} />}
-          {activeSection === "comunidades" && <ComunidadesTab paroquiaId={paroquia.id} />}
-          {activeSection === "atuacoes"    && <AtuacoesSubTab paroquiaId={paroquia.id} />}
-          {activeSection === "funcoes"     && <FuncoesLiturgicasTab paroquiaId={paroquia.id} />}
-          {activeSection === "tipos"       && <TiposMissaTab paroquiaId={paroquia.id} />}
-          {activeSection === "missas"      && <MissasTab paroquiaId={paroquia.id} />}
-          {activeSection === "coord"       && <CoordenadesTab paroquiaId={paroquia.id} />}
-          {activeSection === "prioridades" && <TiposPrioridadeTab paroquiaId={paroquia.id} />}
-          {activeSection === "regras"      && <RegrasEscalaTab paroquia={paroquia} onSaved={invalidate} />}
-          {activeSection === "pontuacao"   && <PontuacaoConfigTab paroquia={paroquia} onSaved={invalidate} />}
-          {activeSection === "pdf"         && <PDFImagesTab paroquia={paroquia} onSaved={invalidate} />}
+      {/* ── Mobile: lista de cards (estilo iPhone Settings) ── */}
+      {mobileView === "list" && (
+        <div className="lg:hidden">
+          <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
+              <h1 className="mt-1.5 font-serif text-2xl">Personalização</h1>
+            </div>
+            <Link
+              to="/admin/liturgia"
+              className="inline-flex items-center gap-2 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted hover:border-primary/30 hover:text-primary"
+            >
+              <BookOpen className="h-4 w-4 text-primary shrink-0" />
+              Liturgia
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-0.5 shrink-0" />
+            </Link>
+          </div>
+          <div className="space-y-5">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.label}>
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground mb-2 px-1">
+                  {group.label}
+                </p>
+                <div className="rounded-2xl border border-border overflow-hidden">
+                  {group.items.map((item, idx) => {
+                    const isLast = idx === group.items.length - 1;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => { setActiveSection(item.id); setMobileView("content"); }}
+                        className={`w-full flex items-center gap-4 px-4 py-3.5 text-left transition active:bg-muted/70 hover:bg-muted/40 ${!isLast ? "border-b border-border/50" : ""}`}
+                      >
+                        <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          <item.icon className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground">{item.label}</p>
+                          <p className="text-xs text-muted-foreground truncate">{item.desc}</p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Desktop: sidebar + content ── */}
+      <div className="hidden lg:block">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+          <div>
+            <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
+            <h1 className="mt-1.5 font-serif text-4xl">Personalização</h1>
+          </div>
+          <Link
+            to="/admin/liturgia"
+            className="inline-flex items-center gap-2 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted hover:border-primary/30 hover:text-primary"
+          >
+            <BookOpen className="h-4 w-4 text-primary shrink-0" />
+            Liturgia &amp; Sync
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-0.5 shrink-0" />
+          </Link>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+          <aside className="space-y-1">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.label} className="mb-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground px-3 py-1.5">
+                  {group.label}
+                </p>
+                {group.items.map((item) => {
+                  const active = activeSection === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveSection(item.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition group ${
+                        active
+                          ? "bg-primary/10 text-primary"
+                          : "text-foreground/70 hover:bg-muted/60 hover:text-foreground"
+                      }`}
+                    >
+                      <item.icon className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`} />
+                      <span className="text-sm font-medium truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </aside>
+          <div className="min-w-0">
+            <div className="mb-5 pb-4 border-b border-border/60">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-medium">{activeItem?.label}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{activeItem?.desc}</p>
+            </div>
+            <ContentPanel />
+          </div>
         </div>
       </div>
     </div>

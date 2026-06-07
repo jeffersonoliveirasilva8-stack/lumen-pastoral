@@ -70,22 +70,22 @@ function AdminRanking() {
 
       {/* Summary */}
       {membros.length > 0 && !isLoading && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl border border-border bg-card px-4 py-3 text-center">
-            <p className="text-2xl font-serif">{membros.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">servidores</p>
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="rounded-2xl border border-border bg-card px-3 py-3 sm:px-4 text-center">
+            <p className="text-xl sm:text-2xl font-serif">{membros.length}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">servidores</p>
           </div>
-          <div className="rounded-xl border border-border bg-card px-4 py-3 text-center">
-            <p className="text-2xl font-serif">{membros[0]?.score ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">maior pontuação</p>
+          <div className="rounded-2xl border border-border bg-card px-3 py-3 sm:px-4 text-center">
+            <p className="text-xl sm:text-2xl font-serif">{membros[0]?.score ?? 0}</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">maior score</p>
           </div>
-          <div className="rounded-xl border border-border bg-card px-4 py-3 text-center">
-            <p className="text-2xl font-serif">
+          <div className="rounded-2xl border border-border bg-card px-3 py-3 sm:px-4 text-center">
+            <p className="text-xl sm:text-2xl font-serif">
               {membros.length > 0
                 ? Math.round(membros.reduce((s, m) => s + m.score, 0) / membros.length)
                 : 0}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">média</p>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">média</p>
           </div>
         </div>
       )}

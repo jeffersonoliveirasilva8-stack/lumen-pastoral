@@ -839,7 +839,7 @@ function DashboardPage() {
               />
             </div>
           </div>
-          <div className="hidden sm:grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted-foreground shrink-0">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted-foreground mt-3 sm:mt-0 shrink-0">
             <div className="flex items-center justify-between gap-2">
               <span>Preenchimento</span>
               <span className="font-semibold text-foreground">{saudePastoral.compPreenchimento}%</span>
@@ -1098,7 +1098,7 @@ function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="hidden sm:grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
           <h2 className="font-serif text-lg mb-1">Participação por membro</h2>
           <p className="text-xs text-muted-foreground mb-5">Top 10 servidores por pontuação acumulada</p>

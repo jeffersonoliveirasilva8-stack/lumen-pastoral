@@ -118,8 +118,6 @@ function AuthLayout() {
   if (pathname === "/onboarding") return <Outlet />;
 
   // ── Fonte única de navegação ─────────────────────────────────────────
-  // Desktop sidebar e drawer mobile consomem a mesma lista.
-  // Bottom nav mobile = primeiros 4 itens marcados com inBottom.
   type NavItem = { to: string; label: string; icon: React.ElementType; badge?: number };
 
   const allNav: NavItem[] = [
@@ -131,19 +129,18 @@ function AuthLayout() {
     { to: "/ranking",                 label: "Ranking",         icon: Trophy },
     { to: "/notificacoes",            label: "Notificações",    icon: Bell },
     ...(!isLimitedCoord ? [{ to: "/configuracoes/paroquia", label: "Personalização", icon: Settings }] : []),
+    { to: "/minha-conta",             label: "Perfil",          icon: UserCircle },
   ];
 
-  // Sidebar desktop = todos os itens (exceto Notificações, já no header)
-  const sidebarNav = allNav.filter(i => i.to !== "/notificacoes");
+  // Sidebar desktop = todos exceto Notificações (no header) e Perfil (já no rodapé)
+  const sidebarNav = allNav.filter(i => i.to !== "/notificacoes" && i.to !== "/minha-conta");
 
-  // Drawer mobile = todos os itens + Minha Conta
-  const drawerNav = [...allNav, { to: "/minha-conta", label: "Minha Conta", icon: UserCircle }];
-
-  // Bottom nav = 4 itens prioritários
-  const BOTTOM_ROUTES = isLimitedCoord
-    ? ["/painel", "/escalas", "/formacoes", "/espiritualidade"]
-    : ["/painel", "/escalas", "/formacoes", "/membros"];
+  // Bottom nav: Painel | Escalas | [FAB] | Agenda | Perfil (sempre igual)
+  const BOTTOM_ROUTES = ["/painel", "/escalas", "/formacoes", "/minha-conta"];
   const bottomNav = allNav.filter(i => BOTTOM_ROUTES.includes(i.to));
+
+  // Drawer grid: itens que NÃO estão no bottom nav nem são o FAB
+  const drawerGridItems = allNav.filter(i => !BOTTOM_ROUTES.includes(i.to) && i.to !== "/minha-conta");
 
   async function logout() {
     await supabase.auth.signOut();
@@ -293,49 +290,68 @@ function AuthLayout() {
           </div>
         </main>
 
-        {/* "Mais" drawer — acessível pelo botão Mais no nav mobile */}
+        {/* "Mais" drawer — grade de navegação premium */}
         <Drawer open={menuOpen} onOpenChange={setMenuOpen}>
-          <DrawerContent>
-            <DrawerHeader className="text-left">
-              <DrawerTitle className="font-serif">Mais opções</DrawerTitle>
-            </DrawerHeader>
-            <nav className="px-4 pb-2 space-y-1">
-              {drawerNav.map((item) => {
-                const active = pathname === item.to || pathname.startsWith(item.to + "/");
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setMenuOpen(false)}
-                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-                      active
-                        ? "bg-primary/10 text-primary"
-                        : "text-foreground/70 hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="flex-1">{item.label}</span>
-                    {(item as NavItem).badge != null && (item as NavItem).badge! > 0 && (
-                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5 shrink-0">
-                        {(item as NavItem).badge! > 9 ? "9+" : (item as NavItem).badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </nav>
-            <DrawerFooter>
-              <div className="rounded-2xl border border-border/70 bg-muted/40 p-3 mb-2">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Conectado como</p>
-                <p className="mt-1 text-sm font-semibold text-foreground truncate">{profile?.nome_completo}</p>
-                <p className="text-[11px] text-muted-foreground truncate">{profile?.email}</p>
+          <DrawerContent className="max-h-[82vh]">
+            {/* Header: perfil do usuário */}
+            <div className="px-5 pt-5 pb-4 border-b border-border/60">
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0 ring-2 ring-primary/20">
+                  {(profile?.nome_completo ?? "?").split(" ").filter(Boolean).slice(0, 2).map((n: string) => n[0]).join("").toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm leading-tight truncate">{profile?.nome_completo}</p>
+                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">{profile?.email}</p>
+                </div>
+                <Link
+                  to="/minha-conta"
+                  onClick={() => setMenuOpen(false)}
+                  className="shrink-0 rounded-xl bg-muted/70 px-3 py-1.5 text-xs font-semibold text-foreground/70 hover:bg-muted hover:text-foreground transition"
+                >
+                  Editar
+                </Link>
               </div>
+            </div>
+
+            {/* Grade de itens */}
+            <div className="px-4 py-4 overflow-y-auto">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground mb-3 px-1">Navegar</p>
+              <div className="grid grid-cols-3 gap-2.5">
+                {drawerGridItems.map((item) => {
+                  const active = pathname === item.to || pathname.startsWith(item.to + "/");
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setMenuOpen(false)}
+                      className={`relative flex flex-col items-center gap-2 rounded-2xl px-2 py-4 text-center transition active:scale-[0.96] ${
+                        active
+                          ? "bg-primary/10 text-primary"
+                          : "bg-muted/40 text-foreground/70 hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      <item.icon className={`h-5 w-5 ${active ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="text-xs font-medium leading-tight">
+                        {item.label === "Agenda Pastoral" ? "Agenda" : item.label}
+                      </span>
+                      {(item as NavItem).badge != null && (item as NavItem).badge! > 0 && (
+                        <span className="absolute top-2 right-2 h-4 min-w-[1rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold px-0.5">
+                          {(item as NavItem).badge! > 9 ? "9+" : (item as NavItem).badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            <DrawerFooter className="pt-0 pb-5">
               <button
                 onClick={() => { setMenuOpen(false); logout(); }}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive transition hover:bg-destructive/15"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive transition hover:bg-destructive/15 active:scale-[0.98]"
               >
                 <LogOut className="h-4 w-4" />
-                Sair
+                Sair da conta
               </button>
             </DrawerFooter>
           </DrawerContent>
@@ -390,7 +406,7 @@ function AuthLayout() {
               </span>
             </div>
 
-            {/* ── 2 itens direita: Agenda, Membros ── */}
+            {/* ── 2 itens direita: Agenda, Perfil ── */}
             {bottomNav.slice(2).map((item) => {
               const active = pathname === item.to || pathname.startsWith(item.to + "/");
               return (
