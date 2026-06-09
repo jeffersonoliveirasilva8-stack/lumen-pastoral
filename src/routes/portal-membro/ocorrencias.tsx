@@ -103,11 +103,19 @@ function PortalMembroOcorrencias() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await anyDb
+      if (!membro?.id) throw new Error("Não autenticado.");
+      const { data: deleted, error } = await anyDb
         .from("ocorrencias_membros")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("membro_id", membro.id)
+        .eq("status", "aberta")
+        .is("resposta", null)
+        .select("id");
       if (error) throw error;
+      if (!deleted?.length) {
+        throw new Error("Não foi possível excluir. A ocorrência pode já ter sido respondida ou alterada.");
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-ocorrencias", membro?.id] });

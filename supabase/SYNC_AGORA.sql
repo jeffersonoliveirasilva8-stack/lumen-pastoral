@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- SYNC_AGORA.sql — Execute INTEIRO no SQL Editor do Supabase
 -- https://supabase.com/dashboard/project/cusuoggmlhtvrclrzvfr/sql/new
 -- ============================================================
@@ -41,7 +41,7 @@ LIMIT 20;
 -- 4a. Forçar sync da LITURGIA (próximos 30 dias)
 /*
 SELECT net.http_post(
-  url     := 'https://hbbkdebuhueqjyrdeyyc.supabase.co/functions/v1/liturgia-diaria?days=30',
+  url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/liturgia-diaria?days=30',
   headers := jsonb_build_object(
     'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8',
     'Content-Type', 'application/json'
@@ -53,7 +53,7 @@ SELECT net.http_post(
 -- 4b. Forçar sync da HOMILIA de HOJE
 /*
 SELECT net.http_post(
-  url     := 'https://hbbkdebuhueqjyrdeyyc.supabase.co/functions/v1/homilia-diaria',
+  url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/homilia-diaria',
   headers := jsonb_build_object(
     'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8',
     'Content-Type', 'application/json'
@@ -65,7 +65,7 @@ SELECT net.http_post(
 -- 4c. Forçar sync da HOMILIA para data específica (ontem)
 /*
 SELECT net.http_post(
-  url     := 'https://hbbkdebuhueqjyrdeyyc.supabase.co/functions/v1/homilia-diaria?date=2026-06-04',
+  url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/homilia-diaria?date=2026-06-04',
   headers := jsonb_build_object(
     'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8',
     'Content-Type', 'application/json'

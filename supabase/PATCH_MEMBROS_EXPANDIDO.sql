@@ -1,9 +1,9 @@
--- ============================================================
+﻿-- ============================================================
 -- PATCH_MEMBROS_EXPANDIDO.sql
 -- 1. Corrige recursão infinita em auth_member_paroquia_id()
 -- 2. Adiciona colunas: família, logística, disponibilidade
 -- 3. Bucket de fotos no Supabase Storage
--- Execute no SQL Editor: https://supabase.com/dashboard/project/hbbkdebuhueqjyrdeyyc/sql/new
+-- Execute no SQL Editor: https://supabase.com/dashboard/project/cusuoggmlhtvrclrzvfr/sql/new
 -- ============================================================
 
 -- ── 1. FIX: auth_member_paroquia_id() sem recursão ───────────────────

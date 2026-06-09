@@ -13,7 +13,7 @@ type Mode = "otp" | "senha";
 
 function MembroLoginPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<Mode>("otp");
+  const [mode, setMode] = useState<Mode>("senha");
   // Verificação única de sessão — evita re-renders do hook completo na tela de login
   const [checking, setChecking] = useState(true);
 
@@ -94,21 +94,21 @@ function MembroLoginPage() {
           <div className="flex rounded-xl border border-border bg-muted/40 p-1 mb-6">
             <button
               type="button"
+              onClick={() => setMode("senha")}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition ${
+                mode === "senha" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <KeyRound className="h-3.5 w-3.5" /> E-mail e senha
+            </button>
+            <button
+              type="button"
               onClick={() => setMode("otp")}
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition ${
                 mode === "otp" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <Mail className="h-3.5 w-3.5" /> Link por e-mail
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("senha")}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition ${
-                mode === "senha" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <KeyRound className="h-3.5 w-3.5" /> Senha
             </button>
           </div>
 
@@ -118,7 +118,13 @@ function MembroLoginPage() {
             <SenhaForm />
           )}
 
-          <p className="mt-8 text-center text-xs text-muted-foreground">
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Ainda não tem acesso?{" "}
+            <Link to="/login" className="text-primary hover:underline font-medium">
+              Solicitar inscrição
+            </Link>
+          </p>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
             É coordenador?{" "}
             <Link to="/login" className="text-primary hover:underline font-medium">
               Acessar painel admin
@@ -256,49 +262,58 @@ function SenhaForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          E-mail
-        </label>
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mt-1.5 w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-          placeholder="seu@email.com"
-          autoComplete="email"
-        />
-      </div>
-      <div>
-        <div className="flex items-baseline justify-between mb-1.5">
+    <div className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Senha
+            E-mail
           </label>
-          <Link to="/esqueci-senha" className="text-xs text-primary hover:underline">
-            Esqueci a senha
-          </Link>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1.5 w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+            placeholder="seu@email.com"
+            autoComplete="email"
+          />
         </div>
-        <input
-          type="password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-          placeholder="••••••••"
-          autoComplete="current-password"
-        />
-      </div>
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Senha
+            </label>
+          </div>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+            placeholder="••••••••"
+            autoComplete="current-password"
+          />
+        </div>
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full flex justify-center items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60 transition"
-      >
-        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-        Entrar
-      </button>
-    </form>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full flex justify-center items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60 transition"
+        >
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+          Entrar
+        </button>
+      </form>
+
+      <div className="border-t border-border pt-4 space-y-2.5">
+        <p className="text-xs text-muted-foreground text-center">Primeiro acesso ou esqueceu a senha?</p>
+        <a
+          href="/esqueci-senha?from=membro"
+          className="w-full flex justify-center items-center gap-1.5 rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-medium text-foreground/70 hover:bg-muted hover:text-foreground transition"
+        >
+          Criar / recuperar senha
+        </a>
+      </div>
+    </div>
   );
 }

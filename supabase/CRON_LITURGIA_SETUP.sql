@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- CRON_LITURGIA_SETUP.sql
 -- Configura atualização automática diária da liturgia via
 -- Supabase pg_cron + pg_net → chama a Edge Function liturgia-diaria
@@ -23,7 +23,7 @@ SELECT cron.schedule(
   '30 2 * * *',
   $$
   SELECT net.http_post(
-    url     := 'https://hbbkdebuhueqjyrdeyyc.supabase.co/functions/v1/liturgia-diaria?days=3',
+    url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/liturgia-diaria?days=3',
     headers := jsonb_build_object(
       'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8',
       'Content-Type',  'application/json'
@@ -44,7 +44,7 @@ WHERE jobname = 'liturgia-diaria-sync';
 -- Para testar agora sem esperar o cron, execute:
 --
 -- SELECT net.http_post(
---   url     := 'https://hbbkdebuhueqjyrdeyyc.supabase.co/functions/v1/liturgia-diaria?days=7',
+--   url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/liturgia-diaria?days=7',
 --   headers := jsonb_build_object(
 --     'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8',
 --     'Content-Type',  'application/json'
@@ -54,7 +54,7 @@ WHERE jobname = 'liturgia-diaria-sync';
 --
 -- Ou via curl:
 -- curl -X GET \
---   "https://hbbkdebuhueqjyrdeyyc.supabase.co/functions/v1/liturgia-diaria?days=7" \
+--   "https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/liturgia-diaria?days=7" \
 --   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8"
 -- ============================================================
 

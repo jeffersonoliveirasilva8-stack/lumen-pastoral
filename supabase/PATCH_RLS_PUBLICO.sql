@@ -1,9 +1,9 @@
--- ============================================================
+﻿-- ============================================================
 -- PATCH: Corrige políticas de leitura pública
 -- Problema: as policies sem auth.uid() IS NULL se aplicavam
 -- também a admins autenticados, expondo dados de outras paróquias.
 -- Cole no Supabase SQL Editor e execute.
--- URL: https://supabase.com/dashboard/project/hbbkdebuhueqjyrdeyyc/sql/new
+-- URL: https://supabase.com/dashboard/project/cusuoggmlhtvrclrzvfr/sql/new
 -- ============================================================
 
 -- escalas: apenas anônimos leem escalas publicadas

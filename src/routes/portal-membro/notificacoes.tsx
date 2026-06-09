@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
@@ -44,12 +44,14 @@ const TIPO_CONFIG: Record<string, {
 function PortalMembroNotificacoes() {
   const { membro } = useMembroAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [historicoOpen, setHistoricoOpen] = useState(false);
 
   const { data: notifs = [], isLoading } = useQuery<Notificacao[]>({
     queryKey: ["pm-notificacoes", membro?.paroquia_id, membro?.id],
     enabled: !!membro?.paroquia_id,
     queryFn: async () => {
+      // Tenta com filtro de destinatário; cai no fallback se a coluna não existir
       const { data, error } = await anyDb
         .from("notificacoes")
         .select("id, titulo, mensagem, tipo, lida, created_at, link_referencia")
@@ -58,7 +60,22 @@ function PortalMembroNotificacoes() {
         .or(`destinatario_id.is.null,destinatario_id.eq.${membro!.id}`)
         .order("created_at", { ascending: false })
         .limit(50);
-      if (error) throw error;
+
+      if (error) {
+        // destinatario_id ainda não existe — fallback sem filtro de destinatário
+        if (error.message?.toLowerCase().includes("destinatario_id") || error.code === "42703") {
+          const { data: d2, error: e2 } = await anyDb
+            .from("notificacoes")
+            .select("id, titulo, mensagem, tipo, lida, created_at, link_referencia")
+            .eq("paroquia_id", membro!.paroquia_id)
+            .in("tipo", ["aviso", "alerta", "urgente", "sistema"])
+            .order("created_at", { ascending: false })
+            .limit(50);
+          if (e2) throw e2;
+          return d2 ?? [];
+        }
+        throw error;
+      }
       return data ?? [];
     },
   });
@@ -178,7 +195,12 @@ function PortalMembroNotificacoes() {
                   return (
                     <button
                       key={n.id}
-                      onClick={() => marcarLidaMutation.mutate(n.id)}
+                      onClick={() => {
+                        marcarLidaMutation.mutate(n.id);
+                        if (n.link_referencia) {
+                          navigate({ to: n.link_referencia as never });
+                        }
+                      }}
                       disabled={marcarLidaMutation.isPending}
                       className={`w-full text-left rounded-2xl border px-4 py-4 shadow-sm transition active:scale-[0.99] ${cfg.color}`}
                     >
@@ -202,7 +224,7 @@ function PortalMembroNotificacoes() {
                             </span>
                           </div>
                           <p className="mt-1.5 text-[11px] text-foreground/50 underline underline-offset-2">
-                            Toque para marcar como lida
+                            {n.link_referencia ? "Toque para abrir" : "Toque para marcar como lida"}
                           </p>
                         </div>
                       </div>

@@ -1,7 +1,7 @@
--- ============================================================
+﻿-- ============================================================
 -- LITURGIA SaaS — Melhorias 005
 -- Atuações Pastorais · Restrições de Função · Prioridade
--- Execute no SQL Editor: https://supabase.com/dashboard/project/hbbkdebuhueqjyrdeyyc/sql/new
+-- Execute no SQL Editor: https://supabase.com/dashboard/project/cusuoggmlhtvrclrzvfr/sql/new
 -- ============================================================
 
 -- ── 1. Prioridade de escalação em membros ────────────────────

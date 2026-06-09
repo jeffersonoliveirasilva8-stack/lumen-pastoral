@@ -1,7 +1,7 @@
--- ============================================================
+﻿-- ============================================================
 -- LITURGIA SaaS — Schema Completo (do zero)
 -- Cole TODO este arquivo no Supabase SQL Editor e execute.
--- URL: https://supabase.com/dashboard/project/hbbkdebuhueqjyrdeyyc/sql/new
+-- URL: https://supabase.com/dashboard/project/cusuoggmlhtvrclrzvfr/sql/new
 -- ============================================================
 
 -- ════════════════════════════════════════════════════════════

@@ -165,18 +165,19 @@ function SolicitacoesPage() {
         } catch { /* tabela pode não existir — não-fatal */ }
       }
 
-      // 3. Envia magic link (cria auth user + notifica por e-mail)
+      // 3. Envia link de acesso (cria auth user se não existir)
+      // O link leva ao primeiro-acesso onde o membro pode definir sua senha
       if (sol.email) {
         try {
           await supabase.auth.signInWithOtp({
             email: sol.email,
             options: {
               shouldCreateUser: true,
-              emailRedirectTo: window.location.origin + "/portal-membro/home",
+              emailRedirectTo: window.location.origin + "/membro/primeiro-acesso",
             },
           });
         } catch {
-          // Não-fatal: o membro pode logar via /membro/login
+          // Não-fatal: membro pode usar /membro/login → Criar senha
         }
       }
 

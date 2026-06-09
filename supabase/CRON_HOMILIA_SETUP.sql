@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- CRON_HOMILIA_SETUP.sql
 -- Agenda busca automática diária da Homilia do Padre Paulo Ricardo
 -- via Edge Function homilia-diaria.
@@ -17,7 +17,7 @@ SELECT cron.schedule(
   '30 3 * * *',
   $$
   SELECT net.http_post(
-    url     := 'https://hbbkdebuhueqjyrdeyyc.supabase.co/functions/v1/homilia-diaria',
+    url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/homilia-diaria',
     headers := jsonb_build_object(
       'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8',
       'Content-Type',  'application/json'

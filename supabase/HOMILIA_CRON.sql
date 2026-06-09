@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- HOMILIA DIÁRIA — CRON AUTOMÁTICO v2
 -- Execute no SQL Editor do Supabase
 --
@@ -58,7 +58,7 @@ DECLARE
   v_req_id bigint;
   v_hoje   date;
 BEGIN
-  v_url  := 'https://hbbkdebuhueqjyrdeyyc.supabase.co/functions/v1/homilia-diaria';
+  v_url  := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/homilia-diaria';
   v_key  := current_setting('app.service_role_key', true);
   v_hoje := (now() AT TIME ZONE 'America/Sao_Paulo')::date;
 

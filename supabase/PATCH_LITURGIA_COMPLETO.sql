@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- PATCH_LITURGIA_COMPLETO.sql
 -- 1. Índices e constraints nas tabelas de liturgia (005_calendario_liturgico.sql)
 -- 2. RLS para todas as tabelas litúrgicas
@@ -6,7 +6,7 @@
 -- 4. Tabela regioes_liturgicas
 -- 5. Constraint UNIQUE para evitar duplicatas em liturgia_base
 -- 6. Tabela calendario_overrides (multi-diocese)
--- Execute no SQL Editor: https://supabase.com/dashboard/project/hbbkdebuhueqjyrdeyyc/sql/new
+-- Execute no SQL Editor: https://supabase.com/dashboard/project/cusuoggmlhtvrclrzvfr/sql/new
 -- ============================================================
 
 -- ── 1. Constraint UNIQUE em liturgia_base (data única por origem) ─────────────

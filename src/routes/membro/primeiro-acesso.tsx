@@ -1,7 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Flame, Loader2, CheckCircle2, ArrowRight, UserCircle2, Phone, Calendar } from "lucide-react";
+import { Flame, Loader2, CheckCircle2, ArrowRight, UserCircle2, Phone, Calendar, KeyRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 
@@ -237,6 +237,17 @@ function PrimeiroAcessoPage() {
             >
               <ArrowRight className="h-4 w-4" /> Acessar meu portal
             </button>
+            <div className="border-t border-border pt-4">
+              <p className="text-xs text-muted-foreground mb-3">
+                Quer entrar com e-mail e senha na próxima vez?
+              </p>
+              <a
+                href="/esqueci-senha?from=membro"
+                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-medium"
+              >
+                <KeyRound className="h-3.5 w-3.5" /> Criar minha senha
+              </a>
+            </div>
           </div>
         )}
       </div>
