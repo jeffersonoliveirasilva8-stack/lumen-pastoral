@@ -1926,8 +1926,8 @@ function ListaView({
           <span className="text-xs text-muted-foreground">{escalas.length} escala(s)</span>
         </div>
 
-        <div className="space-y-3 p-4">
-          {escalas.map((e) => {
+        <div className="space-y-3 p-4 animate-fade-in">
+          {escalas.map((e, idx) => {
             const cfg = STATUS_CONFIG[e.status] ?? STATUS_CONFIG.rascunho;
             const borderColor = STATUS_BORDER[e.status] ?? STATUS_BORDER.rascunho;
             const d = new Date(e.data + "T00:00:00");
@@ -1941,7 +1941,7 @@ function ListaView({
                 className={`rounded-3xl border bg-background transition-all ${
                   isSelected ? "border-primary/50 shadow-sm ring-1 ring-primary/20" : "border-border"
                 }`}
-                style={{ borderLeftColor: borderColor, borderLeftWidth: "4px" }}
+                style={{ borderLeftColor: borderColor, borderLeftWidth: "4px", animationDelay: `${Math.min(idx * 25, 200)}ms` }}
               >
                 <div className="grid gap-3 px-4 py-4 sm:grid-cols-[auto_1fr_auto] sm:items-start">
                   <div className="text-center min-w-[3rem] shrink-0">

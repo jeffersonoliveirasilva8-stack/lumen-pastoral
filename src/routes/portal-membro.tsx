@@ -16,11 +16,21 @@ export const Route = createFileRoute("/portal-membro")({
   component: PortalMembroLayout,
 });
 
-// Nav principal — sidebar desktop + bottom nav mobile (sem Ocorrências e Notificações, que ficam no cabeçalho)
-const NAV = [
+// Nav principal — sidebar desktop + bottom nav mobile
+// Sidebar desktop mantém todos os 6 itens; bottom nav mobile usa 5 itens (Eventos acessível via Início)
+const NAV_ALL = [
   { to: "/portal-membro/home",     label: "Início",   icon: Home },
   { to: "/portal-membro/escalas",  label: "Escalas",  icon: Calendar },
   { to: "/portal-membro/eventos",  label: "Eventos",  icon: CalendarDays },
+  { to: "/portal-membro/liturgia", label: "Liturgia", icon: BookOpen },
+  { to: "/portal-membro/ranking",  label: "Ranking",  icon: Trophy },
+  { to: "/portal-membro/perfil",   label: "Perfil",   icon: User },
+] as const;
+
+// Bottom nav mobile: apenas 5 itens principais
+const NAV_MOBILE = [
+  { to: "/portal-membro/home",     label: "Início",   icon: Home },
+  { to: "/portal-membro/escalas",  label: "Escalas",  icon: Calendar },
   { to: "/portal-membro/liturgia", label: "Liturgia", icon: BookOpen },
   { to: "/portal-membro/ranking",  label: "Ranking",  icon: Trophy },
   { to: "/portal-membro/perfil",   label: "Perfil",   icon: User },
@@ -83,7 +93,7 @@ function PortalMembroLayout() {
   return (
     <div className="flex flex-col bg-background/70 lg:flex-row lg:h-screen lg:overflow-hidden">
       {/* ── Sidebar desktop ── */}
-      <aside className="hidden lg:flex flex-col w-64 bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border shrink-0 shadow-altar lg:h-screen lg:overflow-y-auto">
+      <aside className="hidden lg:flex flex-col w-56 bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border shrink-0 shadow-altar lg:h-screen lg:overflow-y-auto">
         <div className="flex items-center gap-2 p-5 border-b border-sidebar-border">
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sidebar-accent text-gold">
             <Flame className="h-4 w-4" />
@@ -95,7 +105,7 @@ function PortalMembroLayout() {
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {NAV.map((item) => {
+          {NAV_ALL.map((item) => {
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             return (
               <Link
@@ -234,20 +244,26 @@ function PortalMembroLayout() {
       </div>
 
       {/* ── Bottom tab bar mobile ── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-card/98 backdrop-blur border-t border-border/80 safe-area-pb shadow-[0_-1px_8px_rgba(0,0,0,0.06)]">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-card/98 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-t border-border/80 safe-area-pb shadow-[0_-1px_8px_rgba(0,0,0,0.06)]">
         <div className="flex items-stretch h-[60px]">
-          {NAV.map((item) => {
+          {NAV_MOBILE.map((item) => {
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 transition-colors min-w-0 ${
-                  active ? "text-primary" : "text-muted-foreground"
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 transition-colors relative ${
+                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <item.icon className={`h-[22px] w-[22px] shrink-0 ${active ? "stroke-[2.2]" : "stroke-[1.6]"}`} />
-                <span className={`text-[10px] leading-none truncate px-0.5 ${active ? "font-bold" : "font-medium"}`}>
+                {/* Indicador ativo no topo */}
+                <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-b-full transition-all duration-200 ${
+                  active ? "w-8 bg-primary" : "w-0 bg-transparent"
+                }`} />
+                <div className="relative mt-2">
+                  <item.icon className={`h-5 w-5 shrink-0 transition-all duration-150 ${active ? "stroke-[2.2] scale-110" : "stroke-[1.7]"}`} />
+                </div>
+                <span className={`text-[10px] leading-none truncate max-w-full px-0.5 mt-0.5 ${active ? "font-semibold" : "font-medium"}`}>
                   {item.label}
                 </span>
               </Link>

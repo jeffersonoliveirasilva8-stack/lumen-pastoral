@@ -348,38 +348,43 @@ function PersonalizacaoPage() {
   const NAV_GROUPS = [
     {
       label: "Paróquia",
+      color: "bg-blue-500",
       items: [
-        { id: "dados",       label: "Dados da Paróquia",    icon: Church,       desc: "Nome, endereço e contato" },
-        { id: "comunidades", label: "Comunidades",          icon: MapPin,       desc: "Grupos e localidades" },
+        { id: "dados",       label: "Dados da Paróquia",    icon: Church,       desc: "Nome, endereço e contato",  color: "bg-blue-500" },
+        { id: "comunidades", label: "Comunidades",          icon: MapPin,       desc: "Grupos e localidades",      color: "bg-teal-500" },
       ],
     },
     {
       label: "Ministérios",
+      color: "bg-purple-500",
       items: [
-        { id: "atuacoes",    label: "Atuações",             icon: Layers,       desc: "Áreas de ministério" },
-        { id: "funcoes",     label: "Funções Litúrgicas",   icon: Music2,       desc: "Funções por ministério" },
+        { id: "atuacoes",    label: "Atuações",             icon: Layers,       desc: "Áreas de ministério",       color: "bg-purple-500" },
+        { id: "funcoes",     label: "Funções Litúrgicas",   icon: Music2,       desc: "Funções por ministério",    color: "bg-indigo-500" },
       ],
     },
     {
       label: "Missas",
+      color: "bg-amber-500",
       items: [
-        { id: "tipos",       label: "Tipos de Missa",       icon: Tag,          desc: "Categorias de celebração" },
-        { id: "missas",      label: "Missas Padrão",        icon: CalendarCheck,desc: "Horários regulares" },
+        { id: "tipos",       label: "Tipos de Missa",       icon: Tag,          desc: "Categorias de celebração",  color: "bg-amber-500" },
+        { id: "missas",      label: "Missas Padrão",        icon: CalendarCheck,desc: "Horários regulares",        color: "bg-orange-500" },
       ],
     },
     {
       label: "Escalas",
+      color: "bg-green-600",
       items: [
-        { id: "coord",       label: "Coordenadores",        icon: UserCheck,    desc: "Responsáveis por escala" },
-        { id: "prioridades", label: "Prioridades",          icon: ListOrdered,  desc: "Ordem de alocação" },
-        { id: "regras",      label: "Regras da Escala",     icon: Settings2,    desc: "Limites e restrições" },
+        { id: "coord",       label: "Coordenadores",        icon: UserCheck,    desc: "Responsáveis por escala",   color: "bg-green-600" },
+        { id: "prioridades", label: "Prioridades",          icon: ListOrdered,  desc: "Ordem de alocação",         color: "bg-emerald-500" },
+        { id: "regras",      label: "Regras da Escala",     icon: Settings2,    desc: "Limites e restrições",      color: "bg-cyan-600" },
       ],
     },
     {
       label: "Avançado",
+      color: "bg-slate-600",
       items: [
-        { id: "pontuacao",   label: "Pontuação",            icon: Award,        desc: "Gamificação pastoral" },
-        { id: "pdf",         label: "Imagens PDF",          icon: FileImage,    desc: "Cabeçalho e rodapé" },
+        { id: "pontuacao",   label: "Pontuação",            icon: Award,        desc: "Gamificação pastoral",      color: "bg-pink-500" },
+        { id: "pdf",         label: "Imagens PDF",          icon: FileImage,    desc: "Cabeçalho e rodapé",        color: "bg-slate-600" },
       ],
     },
   ];
@@ -408,7 +413,7 @@ function PersonalizacaoPage() {
 
       {/* ── Mobile: tela de conteúdo com back button ── */}
       {mobileView === "content" && (
-        <div className="lg:hidden">
+        <div className="lg:hidden animate-slide-up">
           <button
             onClick={() => setMobileView("list")}
             className="mb-5 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition"
@@ -454,16 +459,16 @@ function PersonalizacaoPage() {
                       <button
                         key={item.id}
                         onClick={() => { setActiveSection(item.id); setMobileView("content"); }}
-                        className={`w-full flex items-center gap-4 px-4 py-3.5 text-left transition active:bg-muted/70 hover:bg-muted/40 ${!isLast ? "border-b border-border/50" : ""}`}
+                        className={`w-full flex items-center gap-3.5 px-4 py-3.5 text-left transition active:scale-[0.98] active:bg-muted/60 hover:bg-muted/30 ${!isLast ? "border-b border-border/50" : ""}`}
                       >
-                        <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                          <item.icon className="h-4 w-4 text-muted-foreground" />
+                        <div className={`h-9 w-9 rounded-xl ${item.color} flex items-center justify-center shrink-0 shadow-sm`}>
+                          <item.icon className="h-4 w-4 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground">{item.label}</p>
                           <p className="text-xs text-muted-foreground truncate">{item.desc}</p>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                       </button>
                     );
                   })}

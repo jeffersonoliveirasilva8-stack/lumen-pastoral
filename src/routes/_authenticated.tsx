@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
-  Flame, BookOpen, CalendarRange, Bell, Trophy, UserCircle,
+  Flame, BookOpen, CalendarRange, Bell, Trophy, UserCircle, X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -317,20 +317,25 @@ function AuthLayout() {
             <div className="px-4 py-4 overflow-y-auto">
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground mb-3 px-1">Navegar</p>
               <div className="grid grid-cols-3 gap-2.5">
-                {drawerGridItems.map((item) => {
+                {drawerGridItems.map((item, i) => {
                   const active = pathname === item.to || pathname.startsWith(item.to + "/");
                   return (
                     <Link
                       key={item.to}
                       to={item.to}
                       onClick={() => setMenuOpen(false)}
-                      className={`relative flex flex-col items-center gap-2 rounded-2xl px-2 py-4 text-center transition active:scale-[0.96] ${
+                      style={{ animationDelay: `${i * 30}ms` }}
+                      className={`relative flex flex-col items-center gap-2 rounded-2xl px-2 py-4 text-center transition-all duration-150 active:scale-[0.93] animate-slide-up ${
                         active
-                          ? "bg-primary/10 text-primary"
-                          : "bg-muted/40 text-foreground/70 hover:bg-muted hover:text-foreground"
+                          ? "bg-primary/10 text-primary ring-1 ring-primary/20"
+                          : "bg-muted/40 text-foreground/70 hover:bg-muted hover:text-foreground hover:scale-[1.03]"
                       }`}
                     >
-                      <item.icon className={`h-5 w-5 ${active ? "text-primary" : "text-muted-foreground"}`} />
+                      <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${
+                        active ? "bg-primary/15" : "bg-background/60"
+                      }`}>
+                        <item.icon className={`h-5 w-5 ${active ? "text-primary" : "text-muted-foreground"}`} />
+                      </div>
                       <span className="text-xs font-medium leading-tight">
                         {item.label === "Agenda Pastoral" ? "Agenda" : item.label}
                       </span>
@@ -368,12 +373,16 @@ function AuthLayout() {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pt-2 pb-1 min-w-0 transition-colors relative ${
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 transition-colors relative ${
                     active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <div className="relative">
-                    <item.icon className={`h-5 w-5 shrink-0 ${active ? "stroke-[2.2]" : "stroke-[1.7]"}`} />
+                  {/* Indicador ativo no topo */}
+                  <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-b-full transition-all duration-200 ${
+                    active ? "w-8 bg-primary" : "w-0 bg-transparent"
+                  }`} />
+                  <div className="relative mt-2">
+                    <item.icon className={`h-5 w-5 shrink-0 transition-all duration-150 ${active ? "stroke-[2.2] scale-110" : "stroke-[1.7]"}`} />
                     {item.badge != null && item.badge > 0 && (
                       <span className="absolute -top-1 -right-1.5 h-3.5 min-w-[0.875rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
                         {item.badge > 9 ? "9+" : item.badge}
@@ -390,19 +399,24 @@ function AuthLayout() {
             {/* ── Centro: FAB "Mais" elevado ── */}
             <div className="flex-1 relative flex flex-col items-center justify-end pb-1.5">
               <button
-                onClick={() => setMenuOpen(true)}
+                onClick={() => setMenuOpen(!menuOpen)}
                 className={`absolute -top-4 h-[52px] w-[52px] rounded-full bg-primary text-primary-foreground
                   flex items-center justify-center shadow-[0_6px_24px_oklch(0.22_0.03_260/0.45)]
                   transition-all duration-200 active:scale-95
-                  ${menuOpen ? "scale-95 shadow-sm" : "scale-100 hover:opacity-90"}`}
+                  ${menuOpen ? "scale-95 shadow-sm" : "scale-100 hover:scale-105"}`}
                 aria-label="Menu"
               >
-                <Flame className="h-[22px] w-[22px]" />
+                <span className={`transition-all duration-200 ${menuOpen ? "rotate-90 scale-90" : "rotate-0 scale-100"}`}>
+                  {menuOpen
+                    ? <X className="h-[22px] w-[22px]" />
+                    : <Flame className="h-[22px] w-[22px]" />
+                  }
+                </span>
               </button>
-              <span className={`text-[9px] font-semibold leading-none ${
+              <span className={`text-[9px] font-semibold leading-none transition-colors duration-150 ${
                 menuOpen ? "text-primary" : "text-muted-foreground"
               }`}>
-                Menu
+                Mais
               </span>
             </div>
 
@@ -413,12 +427,16 @@ function AuthLayout() {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pt-2 pb-1 min-w-0 transition-colors relative ${
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 transition-colors relative ${
                     active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <div className="relative">
-                    <item.icon className={`h-5 w-5 shrink-0 ${active ? "stroke-[2.2]" : "stroke-[1.7]"}`} />
+                  {/* Indicador ativo no topo */}
+                  <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-b-full transition-all duration-200 ${
+                    active ? "w-8 bg-primary" : "w-0 bg-transparent"
+                  }`} />
+                  <div className="relative mt-2">
+                    <item.icon className={`h-5 w-5 shrink-0 transition-all duration-150 ${active ? "stroke-[2.2] scale-110" : "stroke-[1.7]"}`} />
                     {item.badge != null && item.badge > 0 && (
                       <span className="absolute -top-1 -right-1.5 h-3.5 min-w-[0.875rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
                         {item.badge > 9 ? "9+" : item.badge}

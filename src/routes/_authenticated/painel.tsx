@@ -951,17 +951,17 @@ function DashboardPage() {
         <div className="space-y-4">
           {/* ── Agenda Pastoral (escalas + eventos unificados) ── */}
           <div className="rounded-3xl border border-border bg-card shadow-altar overflow-hidden">
-            <div className="flex items-center justify-between gap-3 p-5 border-b border-border">
-              <div>
+            <div className="flex items-start justify-between gap-3 p-5 border-b border-border">
+              <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Agenda Pastoral</p>
-                <h2 className="mt-1.5 font-serif text-xl">Próximas escalas e eventos</h2>
+                <h2 className="mt-1.5 font-serif text-xl leading-snug">Próximas escalas e eventos</h2>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/formacoes" search={{}}>Agenda <ChevronRight className="h-3.5 w-3.5 ml-0.5" /></Link>
+              <div className="flex items-center gap-1 shrink-0 mt-1">
+                <Button variant="ghost" size="sm" className="h-8 text-xs px-2.5" asChild>
+                  <Link to="/formacoes" search={{}}>Agenda <ChevronRight className="h-3 w-3 ml-0.5" /></Link>
                 </Button>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link to="/escalas" search={{}}>Escalas <ChevronRight className="h-3.5 w-3.5 ml-0.5" /></Link>
+                <Button variant="ghost" size="sm" className="h-8 text-xs px-2.5" asChild>
+                  <Link to="/escalas" search={{}}>Escalas <ChevronRight className="h-3 w-3 ml-0.5" /></Link>
                 </Button>
               </div>
             </div>

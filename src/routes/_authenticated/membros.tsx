@@ -2623,7 +2623,7 @@ function MembrosPage() {
           </div>
 
           {/* Grid de cards */}
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 animate-fade-in">
             {filtered.map((m) => {
               const initials = m.nome.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
               const comunidadeNome = comunidades.find((c) => c.id === m.comunidade_id)?.nome;
