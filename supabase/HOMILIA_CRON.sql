@@ -53,27 +53,16 @@ SECURITY DEFINER
 SET search_path = public
 AS $func$
 DECLARE
-  v_url    text;
-  v_key    text;
+  v_url    text    := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/homilia-diaria';
+  v_anon   text    := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1c3VvZ2dtbGh0dnJjbHJ6dmZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzk1OTUsImV4cCI6MjA5NDg1NTU5NX0.14p2eZ2SLHYLlJ5mWsOyxAR_cGNbxHSZ9E9kmEbuI5I';
   v_req_id bigint;
-  v_hoje   date;
+  v_hoje   date    := (now() AT TIME ZONE 'America/Sao_Paulo')::date;
 BEGIN
-  v_url  := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/homilia-diaria';
-  v_key  := current_setting('app.service_role_key', true);
-  v_hoje := (now() AT TIME ZONE 'America/Sao_Paulo')::date;
-
-  IF v_key IS NULL OR v_key = '' THEN
-    RAISE WARNING '[homilia-diaria] app.service_role_key não configurado';
-    INSERT INTO public.homilia_sync_logs(data_alvo, sucesso, erro)
-    VALUES (v_hoje, false, 'app.service_role_key não configurado');
-    RETURN;
-  END IF;
-
   SELECT net.http_post(
     url     := v_url,
     headers := jsonb_build_object(
       'Content-Type',  'application/json',
-      'Authorization', 'Bearer ' || v_key
+      'Authorization', 'Bearer ' || v_anon
     ),
     body    := jsonb_build_object('date', to_char(v_hoje, 'YYYY-MM-DD'))
   ) INTO v_req_id;
