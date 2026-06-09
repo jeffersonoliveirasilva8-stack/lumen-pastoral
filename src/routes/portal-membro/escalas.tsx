@@ -1164,6 +1164,16 @@ function IndisponibilidadeTab({
 
   function handleAdd() {
     if (!canAdd) return;
+    if (diasAntecedencia > 0) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selected = new Date(newData + "T12:00:00");
+      const diffDays = Math.floor((selected.getTime() - today.getTime()) / 86400000);
+      if (diffDays < diasAntecedencia) {
+        toast.error(`Registre com pelo menos ${diasAntecedencia} dia${diasAntecedencia > 1 ? "s" : ""} de antecedência.`);
+        return;
+      }
+    }
     onAdd(newData, newMotivo.trim());
     setNewData("");
     setNewMotivo("");

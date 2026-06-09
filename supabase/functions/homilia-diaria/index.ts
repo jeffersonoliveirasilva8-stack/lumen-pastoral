@@ -1,38 +1,42 @@
-// Edge Function — homilia-diaria v2
+// @ts-nocheck
+// Edge Function — homilia-diaria v3 (Deno runtime — Supabase Edge Functions)
 // Busca a homilia do dia no canal do Padre Paulo Ricardo via YouTube RSS
 // e persiste em homilias_diarias.
 //
-// Chamada: GET /functions/v1/homilia-diaria?date=YYYY-MM-DD
-// Sem parâmetros → data de hoje
+// Chamada: POST /functions/v1/homilia-diaria          (sem parâmetro → hoje)
+//          GET  /functions/v1/homilia-diaria?date=YYYY-MM-DD
+//          POST /functions/v1/homilia-diaria  body: { "date": "YYYY-MM-DD" }
 //
-// Env vars opcionais:
+// Env vars:
 //   YOUTUBE_CHANNEL_USER  (padrão: PadrePauloRicardo)
-//   YOUTUBE_CHANNEL_ID    (quando fornecido, usa channel_id= no feed)
+//   YOUTUBE_CHANNEL_ID    (ID UCxxxx — preferido se fornecido)
+//   HOMILIA_WINDOW_DAYS   (padrão: 7 — dias antes/depois da data alvo)
 
-// @ts-ignore — import de URL válido no runtime Deno
+// @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const DEFAULT_USER = "PadrePauloRicardo";
+const DEFAULT_USER   = "PadrePauloRicardo";
+const DEFAULT_WINDOW = 7; // dias ±
 
-// ── RSS feed ──────────────────────────────────────────────────────────────────
+// ── RSS ───────────────────────────────────────────────────────────────────────
+
 async function fetchRss(param: string, byId: boolean): Promise<string> {
   const key = byId ? `channel_id=${param}` : `user=${param}`;
   const url  = `https://www.youtube.com/feeds/videos.xml?${key}`;
   const res  = await fetch(url, {
-    headers: { "User-Agent": "PortalPastoral/2.0" },
-    signal:  AbortSignal.timeout(12_000),
+    headers: { "User-Agent": "LumenPastoral/3.0" },
+    signal:  AbortSignal.timeout(15_000),
   });
-  if (!res.ok) throw new Error(`RSS fetch failed: ${res.status} for ${url}`);
+  if (!res.ok) throw new Error(`RSS ${res.status} → ${url}`);
   return res.text();
 }
 
-// Tenta múltiplas estratégias de RSS, retorna o conjunto de entradas maior
-async function fetchEntriesRobust(channelUser: string, channelId: string): Promise<ReturnType<typeof parseEntries>> {
+async function fetchEntriesRobust(
+  channelUser: string,
+  channelId:   string,
+): Promise<ReturnType<typeof parseEntries>> {
   const strategies: Array<() => Promise<string>> = [];
-
-  // Estratégia 1: channel_id (mais confiável se fornecido)
   if (channelId) strategies.push(() => fetchRss(channelId, true));
-  // Estratégia 2: user= (padrão legado)
   strategies.push(() => fetchRss(channelUser, false));
 
   let best: ReturnType<typeof parseEntries> = [];
@@ -40,100 +44,121 @@ async function fetchEntriesRobust(channelUser: string, channelId: string): Promi
 
   for (const fn of strategies) {
     try {
-      const xml     = await fn();
-      const entries = parseEntries(xml);
+      const entries = parseEntries(await fn());
       if (entries.length > best.length) best = entries;
-      if (best.length >= 5) break; // suficiente
+      if (best.length >= 5) break;
     } catch (e) {
       errors.push(String(e));
     }
   }
 
   if (best.length === 0 && errors.length > 0) {
-    throw new Error(`Todas as tentativas de RSS falharam: ${errors.join(" | ")}`);
+    throw new Error(`Todas as tentativas RSS falharam: ${errors.join(" | ")}`);
   }
-
   return best;
 }
 
-// ── Parser XML minimalista ────────────────────────────────────────────────────
-function parseEntries(xml: string): Array<{
+// ── Parser XML ────────────────────────────────────────────────────────────────
+
+type Entry = {
   videoId:     string;
   titulo:      string;
   descricao:   string;
-  publishedAt: string;
+  publishedAt: string;   // YYYY-MM-DD
   thumbnail:   string;
   url:         string;
-}> {
-  const entries: ReturnType<typeof parseEntries> = [];
+};
+
+function parseEntries(xml: string): Entry[] {
+  const entries: Entry[] = [];
   const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
   let m: RegExpExecArray | null;
 
   while ((m = entryRegex.exec(xml)) !== null) {
-    const block = m[1];
+    const b = m[1];
+    const videoId = (b.match(/<yt:videoId>([^<]+)<\/yt:videoId>/) ?? [])[1] ?? "";
+    if (!videoId) continue;
 
-    const videoId = (block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/) ?? [])[1] ?? "";
-    const titulo  = strip((block.match(/<title>([^<]+)<\/title>/) ?? [])[1] ?? "");
-    const desc    = strip((block.match(/<media:description>([\s\S]*?)<\/media:description>/) ?? [])[1] ?? "");
-    const pub     = (block.match(/<published>([^<]+)<\/published>/) ?? [])[1] ?? "";
-    const thumb   = (block.match(/url="([^"]+hqdefault[^"]*)"/) ?? block.match(/url="([^"]+)"/) ?? [])[1]
-                    ?? (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "");
+    const titulo = strip((b.match(/<title>([^<]+)<\/title>/) ?? [])[1] ?? "");
+    const desc   = strip((b.match(/<media:description>([\s\S]*?)<\/media:description>/) ?? [])[1] ?? "");
+    const pub    = (b.match(/<published>([^<]+)<\/published>/) ?? [])[1] ?? "";
+    const thumb  = (
+      b.match(/url="([^"]+hqdefault[^"]*)"/) ??
+      b.match(/url="([^"]+mqdefault[^"]*)"/) ??
+      b.match(/url="([^"]+)"/)
+    )?.[1] ?? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-    if (videoId) {
-      entries.push({
-        videoId,
-        titulo,
-        descricao:   desc.slice(0, 500),
-        publishedAt: pub.slice(0, 10), // YYYY-MM-DD
-        thumbnail:   thumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        url:         `https://www.youtube.com/watch?v=${videoId}`,
-      });
-    }
+    entries.push({
+      videoId,
+      titulo,
+      descricao:   desc.slice(0, 500),
+      publishedAt: pub.slice(0, 10),
+      thumbnail:   thumb || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      url:         `https://www.youtube.com/watch?v=${videoId}`,
+    });
   }
-
   return entries;
 }
 
 function strip(s: string): string {
-  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+  return s
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ").trim();
 }
 
-// ── Verifica se um título corresponde a uma homilia ───────────────────────────
-// Aceita variações comuns de título que o Padre Paulo Ricardo usa.
+// ── Detecção de homilia ───────────────────────────────────────────────────────
+
 function isHomilia(titulo: string, targetDate: string): boolean {
   const t = titulo.toLowerCase();
 
-  // Padrão: "homilia" ou "homília"
+  // Palavras-chave primárias
   if (t.includes("homilia") || t.includes("homília")) return true;
-
-  // Comentário / reflexão / meditação sobre o evangelho
   if (t.includes("comentário ao evangelho") || t.includes("comentario ao evangelho")) return true;
   if (t.includes("reflexão do evangelho")   || t.includes("reflexao do evangelho"))   return true;
   if (t.includes("meditação do dia")        || t.includes("meditacao do dia"))        return true;
   if (t.includes("palavra do dia"))                                                    return true;
   if (t.includes("evangelho do dia"))                                                  return true;
+  if (t.includes("leitura do dia"))                                                    return true;
+  if (t.includes("liturgia do dia"))                                                   return true;
 
-  // Domingo: aceita títulos de Missa Dominical
-  const dow = new Date(targetDate + "T12:00:00Z").getUTCDay(); // 0 = domingo
+  // Domingo: aceita Missa Dominical
+  const dow = new Date(targetDate + "T12:00:00Z").getUTCDay();
   if (dow === 0) {
     return (
       t.includes("missa dominical")  ||
       t.includes("missa do domingo") ||
       t.includes("domingo de")       ||
-      (t.includes("domingo") && (
-        t.includes("missa")       ||
-        t.includes("festa")       ||
-        t.includes("solenidade")  ||
-        t.includes("solene")
-      ))
+      (t.includes("domingo") && (t.includes("missa") || t.includes("solenidade") || t.includes("festa")))
     );
   }
 
   return false;
 }
 
+// Qualquer vídeo que possivelmente seja conteúdo pastoral diário (fallback)
+function isPossibleHomilia(titulo: string): boolean {
+  const t = titulo.toLowerCase();
+  return (
+    isHomilia(titulo, new Date().toISOString().slice(0, 10)) ||
+    t.includes("missa") ||
+    t.includes("liturgia") ||
+    t.includes("catequese") ||
+    t.includes("reflexão") ||
+    t.includes("reflexao")
+  );
+}
+
+// ── Distância em dias entre duas datas YYYY-MM-DD ─────────────────────────────
+function diffDays(a: string, b: string): number {
+  return Math.abs(
+    new Date(a + "T12:00:00Z").getTime() -
+    new Date(b + "T12:00:00Z").getTime()
+  ) / 86_400_000;
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -148,91 +173,99 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // @ts-ignore
   const anyDb = supabase as any;
 
-  const urlParams  = new URL(req.url).searchParams;
-  const targetDate = urlParams.get("date") ?? new Date().toISOString().split("T")[0];
+  // Data alvo: parâmetro GET ou body JSON ou hoje
+  let targetDate = new Date().toISOString().split("T")[0];
+  try {
+    const urlParam = new URL(req.url).searchParams.get("date");
+    if (urlParam) {
+      targetDate = urlParam;
+    } else if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      if (body?.date) targetDate = body.date;
+    }
+  } catch { /* usa hoje */ }
 
+  const windowDays = parseInt(Deno.env.get("HOMILIA_WINDOW_DAYS") ?? String(DEFAULT_WINDOW), 10);
   const channelId   = Deno.env.get("YOUTUBE_CHANNEL_ID")   ?? "";
   const channelUser = Deno.env.get("YOUTUBE_CHANNEL_USER") ?? DEFAULT_USER;
 
+  console.log(`[homilia-diaria] Iniciando para data=${targetDate}, window=±${windowDays}d`);
+
   try {
     const entries = await fetchEntriesRobust(channelUser, channelId);
+    console.log(`[homilia-diaria] RSS: ${entries.length} vídeos`);
 
-    console.log(`[homilia-diaria] RSS ok: ${entries.length} vídeos para data alvo ${targetDate}`);
+    // ── Estratégia 1: homilia no janela ±windowDays ───────────────────────────
+    const candidatos = entries
+      .filter((e) => isHomilia(e.titulo, targetDate) && diffDays(e.publishedAt, targetDate) <= windowDays)
+      .sort((a, b) => diffDays(a.publishedAt, targetDate) - diffDays(b.publishedAt, targetDate));
 
-    // Procura homilia: aceita vídeos publicados em até ±3 dias da data alvo
-    // (cobre publicações antecipadas de até 3 dias e o delay de horário UTC)
-    const candidatos = entries.filter((e) => {
-      if (!isHomilia(e.titulo, targetDate)) return false;
-      const diff = Math.abs(
-        new Date(e.publishedAt + "T12:00:00Z").getTime() -
-        new Date(targetDate    + "T12:00:00Z").getTime()
-      );
-      return diff <= 86_400_000 * 3; // ≤ 3 dias
-    });
+    // ── Estratégia 2: qualquer homilia no feed (sem restrição de data) ────────
+    const fallbackCandidatos = entries
+      .filter((e) => isHomilia(e.titulo, targetDate))
+      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 
-    if (candidatos.length === 0) {
-      const titulos = entries.slice(0, 5).map((e) => `"${e.titulo}" (${e.publishedAt})`).join(", ");
-      console.warn(`[homilia-diaria] 0 candidatos para ${targetDate}. Primeiros títulos no feed: ${titulos}`);
-      return new Response(
-        JSON.stringify({
-          ok:     false,
-          motivo: "Nenhuma homilia encontrada no RSS para esta data",
-          data:   targetDate,
-          feed_entries: entries.length,
-          sample_titles: entries.slice(0, 5).map((e) => e.titulo),
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      );
+    // ── Estratégia 3: conteúdo pastoral genérico mais recente ─────────────────
+    const genericCandidatos = entries
+      .filter((e) => isPossibleHomilia(e.titulo))
+      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+
+    const best     = candidatos[0] ?? fallbackCandidatos[0] ?? genericCandidatos[0];
+    const strategy = candidatos[0]      ? "janela_exata"
+                   : fallbackCandidatos[0] ? "fallback_homilia_recente"
+                   : genericCandidatos[0]  ? "fallback_conteudo_pastoral"
+                   : null;
+
+    if (!best) {
+      const sample = entries.slice(0, 5).map((e) => `"${e.titulo}" (${e.publishedAt})`).join(", ");
+      console.warn(`[homilia-diaria] Sem candidatos para ${targetDate}. Títulos: ${sample}`);
+      return new Response(JSON.stringify({
+        ok:           false,
+        motivo:       "Nenhum vídeo adequado encontrado no RSS",
+        data:         targetDate,
+        feed_total:   entries.length,
+        sample_titles: entries.slice(0, 5).map((e) => e.titulo),
+      }), { headers: { "Content-Type": "application/json" } });
     }
 
-    // Prefere o vídeo publicado mais próximo da data alvo
-    candidatos.sort((a, b) =>
-      Math.abs(new Date(a.publishedAt + "T12:00:00Z").getTime() - new Date(targetDate + "T12:00:00Z").getTime()) -
-      Math.abs(new Date(b.publishedAt + "T12:00:00Z").getTime() - new Date(targetDate + "T12:00:00Z").getTime())
-    );
-
-    const best = candidatos[0];
+    const upsertData = {
+      data:          targetDate,
+      titulo:        best.titulo,
+      descricao:     best.descricao || null,
+      youtube_url:   best.url,
+      video_id:      best.videoId,
+      thumbnail_url: best.thumbnail,
+      autor:         "Padre Paulo Ricardo",
+    };
 
     const { error: upsertErr } = await anyDb
       .from("homilias_diarias")
-      .upsert({
-        data:          targetDate,
-        titulo:        best.titulo,
-        descricao:     best.descricao || null,
-        youtube_url:   best.url,
-        video_id:      best.videoId,
-        thumbnail_url: best.thumbnail,
-        autor:         "Padre Paulo Ricardo",
-      }, { onConflict: "data" });
+      .upsert(upsertData, { onConflict: "data" });
 
     if (upsertErr) {
-      console.error("[homilia-diaria] Erro ao salvar no banco:", upsertErr);
-      return new Response(
-        JSON.stringify({ ok: false, erro: upsertErr.message }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
+      console.error("[homilia-diaria] Erro upsert:", upsertErr);
+      return new Response(JSON.stringify({ ok: false, erro: upsertErr.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } });
     }
 
-    console.log(`[homilia-diaria] Salvo: ${best.titulo} (${best.publishedAt}) → data ${targetDate}`);
+    console.log(`[homilia-diaria] OK — estratégia=${strategy} título="${best.titulo}" publicado=${best.publishedAt}`);
 
-    return new Response(
-      JSON.stringify({
-        ok:          true,
-        data:        targetDate,
-        videoId:     best.videoId,
-        titulo:      best.titulo,
-        publishedAt: best.publishedAt,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({
+      ok:          true,
+      strategy,
+      data:        targetDate,
+      videoId:     best.videoId,
+      titulo:      best.titulo,
+      publishedAt: best.publishedAt,
+      url:         best.url,
+    }), { headers: { "Content-Type": "application/json" } });
+
   } catch (err) {
     console.error("[homilia-diaria] Erro geral:", err);
-    return new Response(
-      JSON.stringify({ ok: false, erro: String(err) }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ ok: false, erro: String(err) }),
+      { status: 500, headers: { "Content-Type": "application/json" } });
   }
 });

@@ -1,12 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  BookOpen, Music, Play,
+  BookOpen, Music, Play, RefreshCw,
   Loader2, AlertCircle, ChevronDown, ChevronUp, CalendarDays, ChevronRight,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
 import { useLiturgiaHoje, useLiturgiaProximos, refLeitura1, refSalmo, refLeitura2, refEvangelho } from "@/hooks/use-liturgia";
 import { useHomiliaRecente } from "@/hooks/use-homilia";
 import type { LiturgiaRow } from "@/hooks/use-liturgia";
@@ -136,6 +139,20 @@ function EspiritualidadePage() {
   const hoje = format(new Date(), "yyyy-MM-dd");
   const homiliaEHoje = homilia?.data === hoje;
 
+  const qc = useQueryClient();
+  const sincronizarMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.functions.invoke("homilia-diaria");
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["homilia-recente"] });
+      qc.invalidateQueries({ queryKey: ["homilia-hoje"] });
+      toast.success("Homilia sincronizada com sucesso.");
+    },
+    onError: (e: Error) => toast.error("Erro ao sincronizar: " + e.message),
+  });
+
   const cor  = liturgia?.cor ?? "verde";
   const hex  = COR_HEX[cor] ?? COR_HEX.verde;
   const tempo = liturgia?.tempo_liturgico ?? "comum";
@@ -254,9 +271,9 @@ function EspiritualidadePage() {
           {/* Homilia */}
           <div className="rounded-[1.75rem] border border-border bg-card overflow-hidden">
             <div className="p-4">
-              <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              <div className="flex items-center gap-1.5 mb-3">
                 <Play className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground font-semibold">
+                <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground font-semibold flex-1">
                   {homiliaEHoje ? "Homilia do Dia" : "Homilia Recente"}
                 </p>
                 {homilia && !homiliaEHoje && (
@@ -264,6 +281,17 @@ function EspiritualidadePage() {
                     {format(new Date(homilia.data + "T12:00:00"), "d/MM", { locale: ptBR })}
                   </span>
                 )}
+                <button
+                  onClick={() => sincronizarMutation.mutate()}
+                  disabled={sincronizarMutation.isPending}
+                  title="Sincronizar homilia do dia"
+                  className="ml-1 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition"
+                >
+                  {sincronizarMutation.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <RefreshCw className="h-3.5 w-3.5" />
+                  }
+                </button>
               </div>
 
               {loadingH ? (

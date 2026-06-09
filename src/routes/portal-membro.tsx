@@ -1,11 +1,11 @@
 import { createFileRoute, Outlet, useNavigate, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Loader2, Home, Calendar, Trophy, User, LogOut, Flame,
   CalendarDays, MessageSquare, Bell, BookOpen, X,
-  CalendarRange, History,
+  CalendarRange, Zap,
 } from "lucide-react";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,7 @@ import { getLiturgicalDays } from "@/lib/liturgical-calendar";
 import {
   Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle,
 } from "@/components/ui/drawer";
+
 
 const LITURGICAL_COLOR_HEX: Record<string, string> = {
   branco: "#d1d5db", roxo: "#9333ea", vermelho: "#dc2626",
@@ -50,7 +51,7 @@ const DRAWER_ITEMS = [
   { to: "/portal-membro/liturgia",     label: "Liturgia",      icon: BookOpen,      color: "bg-purple-500" },
   { to: "/portal-membro/ocorrencias",  label: "Ocorrências",   icon: MessageSquare, color: "bg-orange-500" },
   { to: "/portal-membro/calendario",   label: "Calendário",    icon: CalendarRange, color: "bg-teal-500" },
-  { to: "/portal-membro/escalas",      label: "Histórico",     icon: History,       color: "bg-slate-500" },
+  { to: "/portal-membro/escalas",      label: "Escalas",       icon: Calendar,      color: "bg-slate-500" },
 ] as const;
 
 function PortalMembroLayout() {
@@ -66,6 +67,25 @@ function PortalMembroLayout() {
   }, [today]);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [urgentDismissed, setUrgentDismissed] = useState(false);
+
+  const { data: urgentNotifs = [] } = useQuery<{ id: string; titulo: string; mensagem: string | null }[]>({
+    queryKey: ["urgent-notifs", membro?.id],
+    enabled: !!membro?.paroquia_id,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const db = supabase as any;
+      const { data } = await db
+        .from("notificacoes")
+        .select("id, titulo, mensagem")
+        .eq("paroquia_id", membro!.paroquia_id)
+        .eq("tipo", "urgente")
+        .eq("lida", false)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      return data ?? [];
+    },
+  });
 
   // Realtime global: score muda → invalida ranking queries
   useEffect(() => {
@@ -111,6 +131,50 @@ function PortalMembroLayout() {
 
   return (
     <div className="flex flex-col bg-background/70 lg:flex-row lg:h-screen lg:overflow-hidden">
+
+      {/* ── Popup avisos urgentes ── */}
+      {!urgentDismissed && urgentNotifs.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl border border-destructive/30">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                <Zap className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <h2 className="font-serif text-lg font-semibold">Avisos Urgentes</h2>
+                <p className="text-xs text-muted-foreground">
+                  {urgentNotifs.length} aviso{urgentNotifs.length !== 1 ? "s" : ""} não lido{urgentNotifs.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2.5 mb-5 max-h-56 overflow-y-auto">
+              {urgentNotifs.map((n) => (
+                <div key={n.id} className="rounded-xl bg-destructive/5 border border-destructive/15 p-3">
+                  <p className="text-sm font-semibold">{n.titulo}</p>
+                  {n.mensagem && (
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-3">{n.mensagem}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setUrgentDismissed(true)}
+                className="flex-1 rounded-xl bg-muted px-4 py-2.5 text-sm font-medium hover:bg-muted/80 transition"
+              >
+                Fechar
+              </button>
+              <Link
+                to="/portal-membro/notificacoes"
+                onClick={() => setUrgentDismissed(true)}
+                className="flex-1 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-white text-center hover:bg-destructive/90 transition"
+              >
+                Ver todos
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Sidebar desktop ── */}
       <aside className="hidden lg:flex flex-col w-56 bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border shrink-0 shadow-altar lg:h-screen lg:overflow-y-auto">

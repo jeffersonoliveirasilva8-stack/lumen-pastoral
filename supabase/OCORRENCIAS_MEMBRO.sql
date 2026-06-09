@@ -30,7 +30,7 @@ CREATE INDEX IF NOT EXISTS ocorrencias_membros_status_idx   ON public.ocorrencia
 
 -- Trigger para updated_at automático
 CREATE OR REPLACE FUNCTION public._ocorrencia_membro_updated_at()
-RETURNS trigger LANGUAGE plpgsql AS $$
+RETURNS trigger LANGUAGE plpgsql AS $$1
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;

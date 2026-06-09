@@ -5,8 +5,13 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Loader2, AlertTriangle, CheckCircle2, Clock, Plus, X,
-  ChevronDown, ChevronUp, MessageSquare,
+  ChevronDown, ChevronUp, MessageSquare, Trash2,
 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,6 +56,7 @@ function PortalMembroOcorrencias() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     tipo: "problema_pastoral",
@@ -88,11 +94,28 @@ function PortalMembroOcorrencias() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-ocorrencias", membro?.id] });
-      setForm({ tipo: "problema_escala", titulo: "", descricao: "" });
+      setForm({ tipo: "problema_pastoral", titulo: "", descricao: "" });
       setShowForm(false);
       toast.success("Ocorrência registrada. A coordenação foi notificada.");
     },
     onError: (e: Error) => toast.error("Erro ao registrar: " + e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await anyDb
+        .from("ocorrencias_membros")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pm-ocorrencias", membro?.id] });
+      setDeleteId(null);
+      setExpandedId(null);
+      toast.success("Ocorrência excluída.");
+    },
+    onError: (e: Error) => toast.error("Erro ao excluir: " + e.message),
   });
 
   const canSubmit = form.titulo.trim().length >= 3 && form.descricao.trim().length >= 10;
@@ -272,6 +295,15 @@ function PortalMembroOcorrencias() {
                         <p className="text-sm text-green-900 dark:text-green-200 leading-relaxed">{oc.resposta}</p>
                       </div>
                     )}
+                    {oc.status === "aberta" && !oc.resposta && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeleteId(oc.id); }}
+                        className="flex items-center gap-1.5 text-xs text-destructive hover:text-destructive/80 transition mt-1"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Excluir ocorrência
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -279,6 +311,27 @@ function PortalMembroOcorrencias() {
           })}
         </div>
       )}
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => { if (!o) setDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir ocorrência?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A ocorrência será removida permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteId && deleteMutation.mutate(deleteId)}
+            >
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

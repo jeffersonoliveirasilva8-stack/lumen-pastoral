@@ -54,7 +54,7 @@ function PortalMembroNotificacoes() {
         .from("notificacoes")
         .select("id, titulo, mensagem, tipo, lida, created_at, link_referencia")
         .eq("paroquia_id", membro!.paroquia_id)
-        .in("tipo", ["aviso", "urgente"])
+        .in("tipo", ["aviso", "alerta", "urgente", "sistema"])
         .or(`destinatario_id.is.null,destinatario_id.eq.${membro!.id}`)
         .order("created_at", { ascending: false })
         .limit(50);
