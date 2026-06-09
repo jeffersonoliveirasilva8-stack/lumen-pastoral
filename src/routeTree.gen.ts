@@ -38,6 +38,7 @@ import { Route as AuthenticatedSacristiaRouteImport } from './routes/_authentica
 import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
 import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authenticated/planejamento'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
+import { Route as AuthenticatedOcorrenciasRouteImport } from './routes/_authenticated/ocorrencias'
 import { Route as AuthenticatedNotificacoesRouteImport } from './routes/_authenticated/notificacoes'
 import { Route as AuthenticatedMinisteriosRouteImport } from './routes/_authenticated/ministerios'
 import { Route as AuthenticatedMinhaContaRouteImport } from './routes/_authenticated/minha-conta'
@@ -48,6 +49,7 @@ import { Route as AuthenticatedEscalasRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
 import { Route as AuthenticatedConfiguracoesParoquiaRouteImport } from './routes/_authenticated/configuracoes.paroquia'
 import { Route as AuthenticatedAdminLiturgiaRouteImport } from './routes/_authenticated/admin.liturgia'
+import { Route as AuthenticatedAdminParoquiasRouteImport } from './routes/_authenticated/admin.paroquias'
 
 const ResetSenhaRoute = ResetSenhaRouteImport.update({
   id: '/reset-senha',
@@ -196,6 +198,12 @@ const AuthenticatedPainelRoute = AuthenticatedPainelRouteImport.update({
   path: '/painel',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedOcorrenciasRoute =
+  AuthenticatedOcorrenciasRouteImport.update({
+    id: '/ocorrencias',
+    path: '/ocorrencias',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedNotificacoesRoute =
   AuthenticatedNotificacoesRouteImport.update({
     id: '/notificacoes',
@@ -251,6 +259,12 @@ const AuthenticatedAdminLiturgiaRoute =
     path: '/admin/liturgia',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedAdminParoquiasRoute =
+  AuthenticatedAdminParoquiasRouteImport.update({
+    id: '/admin/paroquias',
+    path: '/admin/paroquias',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -268,6 +282,7 @@ export interface FileRoutesByFullPath {
   '/minha-conta': typeof AuthenticatedMinhaContaRoute
   '/ministerios': typeof AuthenticatedMinisteriosRoute
   '/notificacoes': typeof AuthenticatedNotificacoesRoute
+  '/ocorrencias': typeof AuthenticatedOcorrenciasRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/ranking': typeof AuthenticatedRankingRoute
@@ -290,6 +305,7 @@ export interface FileRoutesByFullPath {
   '/portal-membro/ranking': typeof PortalMembroRankingRoute
   '/portal/$token': typeof PortalTokenRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
+  '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 export interface FileRoutesByTo {
@@ -308,6 +324,7 @@ export interface FileRoutesByTo {
   '/minha-conta': typeof AuthenticatedMinhaContaRoute
   '/ministerios': typeof AuthenticatedMinisteriosRoute
   '/notificacoes': typeof AuthenticatedNotificacoesRoute
+  '/ocorrencias': typeof AuthenticatedOcorrenciasRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/ranking': typeof AuthenticatedRankingRoute
@@ -330,6 +347,7 @@ export interface FileRoutesByTo {
   '/portal-membro/ranking': typeof PortalMembroRankingRoute
   '/portal/$token': typeof PortalTokenRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
+  '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 export interface FileRoutesById {
@@ -350,6 +368,7 @@ export interface FileRoutesById {
   '/_authenticated/minha-conta': typeof AuthenticatedMinhaContaRoute
   '/_authenticated/ministerios': typeof AuthenticatedMinisteriosRoute
   '/_authenticated/notificacoes': typeof AuthenticatedNotificacoesRoute
+  '/_authenticated/ocorrencias': typeof AuthenticatedOcorrenciasRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/_authenticated/ranking': typeof AuthenticatedRankingRoute
@@ -372,6 +391,7 @@ export interface FileRoutesById {
   '/portal-membro/ranking': typeof PortalMembroRankingRoute
   '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
+  '/_authenticated/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
   '/_authenticated/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 export interface FileRouteTypes {
@@ -392,6 +412,7 @@ export interface FileRouteTypes {
     | '/minha-conta'
     | '/ministerios'
     | '/notificacoes'
+    | '/ocorrencias'
     | '/painel'
     | '/planejamento'
     | '/ranking'
@@ -414,6 +435,7 @@ export interface FileRouteTypes {
     | '/portal-membro/ranking'
     | '/portal/$token'
     | '/admin/liturgia'
+    | '/admin/paroquias'
     | '/configuracoes/paroquia'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -432,6 +454,7 @@ export interface FileRouteTypes {
     | '/minha-conta'
     | '/ministerios'
     | '/notificacoes'
+    | '/ocorrencias'
     | '/painel'
     | '/planejamento'
     | '/ranking'
@@ -454,6 +477,7 @@ export interface FileRouteTypes {
     | '/portal-membro/ranking'
     | '/portal/$token'
     | '/admin/liturgia'
+    | '/admin/paroquias'
     | '/configuracoes/paroquia'
   id:
     | '__root__'
@@ -473,6 +497,7 @@ export interface FileRouteTypes {
     | '/_authenticated/minha-conta'
     | '/_authenticated/ministerios'
     | '/_authenticated/notificacoes'
+    | '/_authenticated/ocorrencias'
     | '/_authenticated/painel'
     | '/_authenticated/planejamento'
     | '/_authenticated/ranking'
@@ -495,6 +520,7 @@ export interface FileRouteTypes {
     | '/portal-membro/ranking'
     | '/portal/$token'
     | '/_authenticated/admin/liturgia'
+    | '/_authenticated/admin/paroquias'
     | '/_authenticated/configuracoes/paroquia'
   fileRoutesById: FileRoutesById
 }
@@ -721,6 +747,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPainelRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/ocorrencias': {
+      id: '/_authenticated/ocorrencias'
+      path: '/ocorrencias'
+      fullPath: '/ocorrencias'
+      preLoaderRoute: typeof AuthenticatedOcorrenciasRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/notificacoes': {
       id: '/_authenticated/notificacoes'
       path: '/notificacoes'
@@ -791,6 +824,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminLiturgiaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/admin/paroquias': {
+      id: '/_authenticated/admin/paroquias'
+      path: '/admin/paroquias'
+      fullPath: '/admin/paroquias'
+      preLoaderRoute: typeof AuthenticatedAdminParoquiasRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
@@ -803,12 +843,14 @@ interface AuthenticatedRouteChildren {
   AuthenticatedMinhaContaRoute: typeof AuthenticatedMinhaContaRoute
   AuthenticatedMinisteriosRoute: typeof AuthenticatedMinisteriosRoute
   AuthenticatedNotificacoesRoute: typeof AuthenticatedNotificacoesRoute
+  AuthenticatedOcorrenciasRoute: typeof AuthenticatedOcorrenciasRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedPlanejamentoRoute: typeof AuthenticatedPlanejamentoRoute
   AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
   AuthenticatedSacristiaRoute: typeof AuthenticatedSacristiaRoute
   AuthenticatedSolicitacoesRoute: typeof AuthenticatedSolicitacoesRoute
   AuthenticatedAdminLiturgiaRoute: typeof AuthenticatedAdminLiturgiaRoute
+  AuthenticatedAdminParoquiasRoute: typeof AuthenticatedAdminParoquiasRoute
   AuthenticatedConfiguracoesParoquiaRoute: typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 
@@ -821,12 +863,14 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedMinhaContaRoute: AuthenticatedMinhaContaRoute,
   AuthenticatedMinisteriosRoute: AuthenticatedMinisteriosRoute,
   AuthenticatedNotificacoesRoute: AuthenticatedNotificacoesRoute,
+  AuthenticatedOcorrenciasRoute: AuthenticatedOcorrenciasRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedPlanejamentoRoute: AuthenticatedPlanejamentoRoute,
   AuthenticatedRankingRoute: AuthenticatedRankingRoute,
   AuthenticatedSacristiaRoute: AuthenticatedSacristiaRoute,
   AuthenticatedSolicitacoesRoute: AuthenticatedSolicitacoesRoute,
   AuthenticatedAdminLiturgiaRoute: AuthenticatedAdminLiturgiaRoute,
+  AuthenticatedAdminParoquiasRoute: AuthenticatedAdminParoquiasRoute,
   AuthenticatedConfiguracoesParoquiaRoute:
     AuthenticatedConfiguracoesParoquiaRoute,
 }

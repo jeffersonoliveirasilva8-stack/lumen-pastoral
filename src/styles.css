@@ -206,4 +206,7 @@
   .animate-fade-in  { animation: fade-in 0.2s ease-out both; }
   /* Garantia global contra scroll horizontal */
   .no-overflow-x { overflow-x: hidden; max-width: 100vw; }
+  /* Oculta scrollbar mas mantém funcionalidade de scroll */
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
 }

@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -47,17 +47,10 @@ type Ocorrencia = {
 };
 
 function PortalMembroOcorrencias() {
-  const { membro, isAdministrador } = useMembroAuth();
-  const navigate = useNavigate();
+  const { membro } = useMembroAuth();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (membro && !isAdministrador) {
-      navigate({ to: "/portal-membro/home" });
-    }
-  }, [membro, isAdministrador, navigate]);
 
   const [form, setForm] = useState({
     tipo: "problema_pastoral",

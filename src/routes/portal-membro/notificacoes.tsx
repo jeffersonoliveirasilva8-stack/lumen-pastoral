@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   BellOff, Info, AlertTriangle, Zap, Settings2, CheckCheck, Loader2,
+  Clock, History, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
@@ -43,6 +44,7 @@ const TIPO_CONFIG: Record<string, {
 function PortalMembroNotificacoes() {
   const { membro } = useMembroAuth();
   const qc = useQueryClient();
+  const [historicoOpen, setHistoricoOpen] = useState(false);
 
   const { data: notifs = [], isLoading } = useQuery<Notificacao[]>({
     queryKey: ["pm-notificacoes", membro?.paroquia_id, membro?.id],
@@ -52,10 +54,7 @@ function PortalMembroNotificacoes() {
         .from("notificacoes")
         .select("id, titulo, mensagem, tipo, lida, created_at, link_referencia")
         .eq("paroquia_id", membro!.paroquia_id)
-        // Membros recebem: aviso (nova escala, evento) + urgente (comunicados críticos)
-        // Tipo 'alerta' e 'sistema' são exclusivos da coordenação
         .in("tipo", ["aviso", "urgente"])
-        // destinatario_id referencia membros(id) — usa membro.id, não auth.uid()
         .or(`destinatario_id.is.null,destinatario_id.eq.${membro!.id}`)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -106,11 +105,13 @@ function PortalMembroNotificacoes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
       toast.success("Todas as notificações marcadas como lidas.");
+      setHistoricoOpen(true);
     },
     onError: (e: Error) => toast.error("Erro: " + e.message),
   });
 
-  const naoLidas = notifs.filter((n) => !n.lida).length;
+  const pendentes = notifs.filter((n) => !n.lida);
+  const lidas = notifs.filter((n) => n.lida);
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-24 space-y-5">
@@ -121,14 +122,14 @@ function PortalMembroNotificacoes() {
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Portal</p>
           <h1 className="mt-1.5 font-serif text-3xl flex items-center gap-2">
             Notificações
-            {naoLidas > 0 && (
+            {pendentes.length > 0 && (
               <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold px-2">
-                {naoLidas}
+                {pendentes.length}
               </span>
             )}
           </h1>
         </div>
-        {naoLidas > 0 && (
+        {pendentes.length > 0 && (
           <Button
             variant="outline"
             size="sm"
@@ -140,8 +141,7 @@ function PortalMembroNotificacoes() {
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
               : <CheckCheck className="h-3.5 w-3.5" />
             }
-            <span className="hidden xs:inline">Marcar todas como lidas</span>
-            <span className="xs:hidden">Marcar lidas</span>
+            Marcar todas como lidas
           </Button>
         )}
       </div>
@@ -150,58 +150,137 @@ function PortalMembroNotificacoes() {
         <div className="flex justify-center py-12">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-      ) : notifs.length === 0 ? (
-        <div className="rounded-[1.75rem] border border-dashed border-border p-14 text-center">
-          <BellOff className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhuma notificação ainda.</p>
-        </div>
       ) : (
-        <div className="space-y-2.5">
-          {notifs.map((n) => {
-            const cfg = TIPO_CONFIG[n.tipo] ?? TIPO_CONFIG.aviso;
-            const Icon = cfg.icon;
-            return (
+        <div className="space-y-4">
+
+          {/* ── PENDENTES ──────────────────────────────────────────────── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="h-4 w-4 text-primary" />
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground/60">Pendentes</h2>
+              {pendentes.length > 0 && (
+                <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                  {pendentes.length}
+                </span>
+              )}
+            </div>
+
+            {pendentes.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border p-10 text-center">
+                <CheckCheck className="h-7 w-7 mx-auto text-muted-foreground/30 mb-2" />
+                <p className="text-sm text-muted-foreground">Você está em dia! Nenhuma pendência.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {pendentes.map((n) => {
+                  const cfg = TIPO_CONFIG[n.tipo] ?? TIPO_CONFIG.aviso;
+                  const Icon = cfg.icon;
+                  return (
+                    <button
+                      key={n.id}
+                      onClick={() => marcarLidaMutation.mutate(n.id)}
+                      disabled={marcarLidaMutation.isPending}
+                      className={`w-full text-left rounded-2xl border px-4 py-4 shadow-sm transition active:scale-[0.99] ${cfg.color}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="shrink-0 mt-0.5 rounded-full p-1.5">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold leading-snug">{n.titulo}</p>
+                            <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />
+                          </div>
+                          {n.mensagem && (
+                            <p className="text-xs mt-1 leading-relaxed text-foreground/80">{n.mensagem}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className="text-[10px] font-medium text-foreground/50">{cfg.label}</span>
+                            <span className="text-[10px] text-foreground/40">·</span>
+                            <span className="text-[10px] capitalize text-foreground/50">
+                              {format(parseISO(n.created_at), "d 'de' MMM, HH:mm", { locale: ptBR })}
+                            </span>
+                          </div>
+                          <p className="mt-1.5 text-[11px] text-foreground/50 underline underline-offset-2">
+                            Toque para marcar como lida
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* ── HISTÓRICO ──────────────────────────────────────────────── */}
+          {lidas.length > 0 && (
+            <section>
               <button
-                key={n.id}
-                onClick={() => { if (!n.lida) marcarLidaMutation.mutate(n.id); }}
-                className={`w-full text-left rounded-2xl border px-4 py-4 transition ${
-                  n.lida
-                    ? "border-border bg-card opacity-70"
-                    : `${cfg.color} shadow-sm`
-                }`}
+                type="button"
+                className="flex items-center gap-2 mb-3 w-full group"
+                onClick={() => setHistoricoOpen((o) => !o)}
               >
-                <div className="flex items-start gap-3">
-                  <div className={`shrink-0 mt-0.5 rounded-full p-1.5 ${n.lida ? "bg-muted" : ""}`}>
-                    <Icon className={`h-4 w-4 ${n.lida ? "text-muted-foreground" : ""}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-sm font-semibold leading-snug ${n.lida ? "text-foreground/70" : ""}`}>
-                        {n.titulo}
-                      </p>
-                      {!n.lida && (
-                        <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />
-                      )}
-                    </div>
-                    {n.mensagem && (
-                      <p className={`text-xs mt-1 leading-relaxed ${n.lida ? "text-muted-foreground" : "text-foreground/80"}`}>
-                        {n.mensagem}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <span className={`text-[10px] font-medium ${n.lida ? "text-muted-foreground/60" : "text-foreground/50"}`}>
-                        {cfg.label}
-                      </span>
-                      <span className={`text-[10px] ${n.lida ? "text-muted-foreground/40" : "text-foreground/40"}`}>·</span>
-                      <span className={`text-[10px] capitalize ${n.lida ? "text-muted-foreground/60" : "text-foreground/50"}`}>
-                        {format(parseISO(n.created_at), "d 'de' MMM, HH:mm", { locale: ptBR })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <History className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground/40 group-hover:text-foreground/60 transition">
+                  Histórico
+                </h2>
+                <span className="text-xs text-muted-foreground/50 bg-muted rounded-full px-2 py-0.5">
+                  {lidas.length}
+                </span>
+                <span className="ml-auto text-muted-foreground">
+                  {historicoOpen
+                    ? <ChevronUp className="h-3.5 w-3.5" />
+                    : <ChevronDown className="h-3.5 w-3.5" />
+                  }
+                </span>
               </button>
-            );
-          })}
+
+              {historicoOpen && (
+                <div className="space-y-2">
+                  {lidas.map((n) => {
+                    const cfg = TIPO_CONFIG[n.tipo] ?? TIPO_CONFIG.aviso;
+                    const Icon = cfg.icon;
+                    return (
+                      <div
+                        key={n.id}
+                        className="rounded-2xl border border-border bg-card/50 px-4 py-3 opacity-60"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="shrink-0 mt-0.5 rounded-full p-1.5 bg-muted">
+                            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground/70 leading-snug">{n.titulo}</p>
+                            {n.mensagem && (
+                              <p className="text-xs mt-0.5 leading-relaxed text-muted-foreground line-clamp-2">
+                                {n.mensagem}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] text-muted-foreground/60">{cfg.label}</span>
+                              <span className="text-[10px] text-muted-foreground/40">·</span>
+                              <span className="text-[10px] capitalize text-muted-foreground/60">
+                                {format(parseISO(n.created_at), "d 'de' MMM, HH:mm", { locale: ptBR })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Estado vazio total */}
+          {notifs.length === 0 && (
+            <div className="rounded-[1.75rem] border border-dashed border-border p-14 text-center">
+              <BellOff className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">Nenhuma notificação ainda.</p>
+            </div>
+          )}
         </div>
       )}
     </div>

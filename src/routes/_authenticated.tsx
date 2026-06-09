@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
-  Flame, BookOpen, CalendarRange, Bell, Trophy, UserCircle, X,
+  Flame, BookOpen, CalendarRange, Bell, Trophy, UserCircle, X, MessageSquare, Church,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -120,6 +120,8 @@ function AuthLayout() {
   // ── Fonte única de navegação ─────────────────────────────────────────
   type NavItem = { to: string; label: string; icon: React.ElementType; badge?: number };
 
+  const isSuperAdmin = roles.includes("super_admin");
+
   const allNav: NavItem[] = [
     { to: "/painel",                  label: "Painel",          icon: LayoutDashboard },
     { to: "/escalas",                 label: "Escalas",         icon: Calendar },
@@ -127,8 +129,10 @@ function AuthLayout() {
     { to: "/espiritualidade",         label: "Liturgia",        icon: BookOpen },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes }] : []),
     { to: "/ranking",                 label: "Ranking",         icon: Trophy },
+    { to: "/ocorrencias",             label: "Ocorrências",     icon: MessageSquare },
     { to: "/notificacoes",            label: "Notificações",    icon: Bell },
     ...(!isLimitedCoord ? [{ to: "/configuracoes/paroquia", label: "Personalização", icon: Settings }] : []),
+    ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church }] : []),
     { to: "/minha-conta",             label: "Perfil",          icon: UserCircle },
   ];
 

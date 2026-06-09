@@ -2479,7 +2479,7 @@ function MembrosPage() {
               </div>
 
               {/* Filtros — chips horizontais roláveis */}
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
                 <Select value={filterAtivo} onValueChange={(v) => { setFilterAtivo(v); setSelectedIds(new Set()); }}>
                   <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border ${filterAtivo !== "ativos" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
                     <SelectValue />
