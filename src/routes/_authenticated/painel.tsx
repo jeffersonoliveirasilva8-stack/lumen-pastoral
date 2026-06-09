@@ -123,6 +123,7 @@ function DashboardPage() {
   const { data: paroquia } = useQuery({
     queryKey: ["paroquia", pid],
     enabled: !!pid,
+    staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const { data } = await supabase.from("paroquias").select("nome, diocese").eq("id", pid!).maybeSingle();
       return data;
@@ -132,6 +133,7 @@ function DashboardPage() {
   const { data: totalMembros = 0 } = useQuery({
     queryKey: ["stats-membros", pid],
     enabled: !!pid,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { count } = await supabase
         .from("membros").select("*", { count: "exact", head: true })
@@ -143,6 +145,7 @@ function DashboardPage() {
   const { data: escalasDoMes = 0 } = useQuery({
     queryKey: ["stats-escalas-mes", pid],
     enabled: !!pid,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const now = new Date();
       const inicio = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
@@ -157,6 +160,7 @@ function DashboardPage() {
   const { data: totalMinisterios = 0 } = useQuery({
     queryKey: ["stats-ministerios", pid],
     enabled: !!pid,
+    staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const { count } = await supabase
         .from("ministerios").select("*", { count: "exact", head: true })
@@ -168,6 +172,7 @@ function DashboardPage() {
   const { data: taxaPreenchimento = null } = useQuery({
     queryKey: ["stats-taxa", pid],
     enabled: !!pid,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const now = new Date();
       const inicio = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
@@ -190,6 +195,7 @@ function DashboardPage() {
   const { data: proximasEscalas = [] } = useQuery({
     queryKey: ["proximas-escalas", pid],
     enabled: !!pid,
+    staleTime: 3 * 60 * 1000,
     queryFn: async () => {
       const { data } = await supabase
         .from("escalas")
@@ -209,6 +215,7 @@ function DashboardPage() {
   const { data: membrosOciosos = [] } = useQuery<{ id: string; nome: string }[]>({
     queryKey: ["insights-ociosos", pid],
     enabled: !!pid,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { data: todos } = await supabase.from("membros").select("id,nome").eq("paroquia_id", pid!).eq("ativo", true);
       if (!todos?.length) return [];
@@ -226,6 +233,7 @@ function DashboardPage() {
   const { data: membrosNovos = [] } = useQuery<{ id: string; nome: string }[]>({
     queryKey: ["insights-novos", pid],
     enabled: !!pid,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const trinta = format(addDays(new Date(), -30), "yyyy-MM-dd");
       const { data: novos } = await supabase.from("membros").select("id,nome").eq("paroquia_id", pid!).eq("ativo", true).gte("data_ingresso", trinta);
@@ -242,6 +250,7 @@ function DashboardPage() {
   const { data: conflitos = [] } = useQuery<Conflito[]>({
     queryKey: ["insights-conflitos", pid],
     enabled: !!pid,
+    staleTime: 3 * 60 * 1000,
     queryFn: async () => {
       const hoje = format(new Date(), "yyyy-MM-dd");
       const em7 = format(addDays(new Date(), 7), "yyyy-MM-dd");
@@ -279,6 +288,7 @@ function DashboardPage() {
   const { data: escalasIncompletas = [] } = useQuery({
     queryKey: ["insights-incompletas", pid],
     enabled: !!pid,
+    staleTime: 3 * 60 * 1000,
     queryFn: async () => {
       const hoje = format(new Date(), "yyyy-MM-dd");
       const em14 = format(addDays(new Date(), 14), "yyyy-MM-dd");
@@ -314,6 +324,7 @@ function DashboardPage() {
   const { data: funcaoDistrib = [] } = useQuery({
     queryKey: ["stats-funcao-distrib", pid],
     enabled: !!pid,
+    staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const { data: ministerios } = await supabase
         .from("ministerios")
@@ -338,6 +349,7 @@ function DashboardPage() {
   const { data: aniversariantes = [] } = useQuery<{ id: string; nome: string; data_nascimento: string }[]>({
     queryKey: ["aniversariantes", pid, mesAtual],
     enabled: !!pid,
+    staleTime: 60 * 60 * 1000,
     queryFn: async () => {
       const { data } = await supabase
         .from("membros")
@@ -387,6 +399,7 @@ function DashboardPage() {
   const { data: membrosSemFuncao = 0 } = useQuery<number>({
     queryKey: ["insights-sem-funcao", pid],
     enabled: !!pid,
+    staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const { data: todos } = await supabase
         .from("membros").select("id").eq("paroquia_id", pid!).eq("ativo", true);

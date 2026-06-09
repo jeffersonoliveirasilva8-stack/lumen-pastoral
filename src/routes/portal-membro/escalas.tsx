@@ -590,6 +590,7 @@ function EscalaPortalCard({
   const [recusando, setRecusando] = useState(false);
   const [justificativa, setJustificativa] = useState("");
   const [showPresenca, setShowPresenca] = useState(false);
+  const [showMembros, setShowMembros] = useState(false);
 
   const myMembro = escala.membrosEscalados.find((m) => m.membro_id === membroId);
   const isAssigned   = !!myMembro;
@@ -796,44 +797,60 @@ function EscalaPortalCard({
         </div>
       )}
 
-      {/* ── Lista de membros (sempre visível) ── */}
-      {!showPresenca && (
-        <div className="border-t border-border/40 bg-muted/20 px-4 py-3 space-y-3">
-          {grouped.map(({ categoria, ministerios }) => (
-            <div key={categoria ?? "__sem__"}>
-              {categoria && (
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground mb-1.5">{categoria}</p>
-              )}
-              <div className="space-y-1">
-                {ministerios.flatMap(({ ministerio_nome, ministerio_cor, membros: ms }) =>
-                  ms.map((m) => {
-                    const isMe = m.membro_id === membroId;
-                    const dotColor: Record<string, string> = {
-                      confirmado: "#22c55e", presente: "#22c55e",
-                      pendente: "#f59e0b",
-                      recusado: "#ef4444", faltou: "#ef4444", ausente: "#ef4444",
-                    };
-                    return (
-                      <div key={m.id} className="flex items-center gap-2 py-0.5 min-w-0">
-                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ministerio_cor }} />
-                        <span className="text-[11px] text-muted-foreground shrink-0 truncate max-w-[130px]">
-                          {ministerio_nome}
-                        </span>
-                        <span className={`text-xs truncate flex-1 min-w-0 ${isMe ? "text-primary font-bold" : "text-foreground/85 font-medium"}`}>
-                          {isMe ? "✦ Você" : nomeExibicao(m.nome)}
-                        </span>
-                        <span
-                          className="h-2 w-2 rounded-full shrink-0"
-                          style={{ backgroundColor: dotColor[m.status] ?? "#9ca3af" }}
-                          title={STATUS_LABEL[m.status] ?? m.status}
-                        />
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+      {/* ── Lista de membros — colapsável ── */}
+      {!showPresenca && escala.membrosEscalados.length > 0 && (
+        <div className="border-t border-border/40">
+          <button
+            type="button"
+            onClick={() => setShowMembros((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 transition"
+          >
+            <span className="font-medium">
+              {showMembros ? "Ocultar escalados" : `Ver escalados (${escala.membrosEscalados.length})`}
+            </span>
+            {showMembros
+              ? <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+              : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
+          </button>
+          {showMembros && (
+            <div className="bg-muted/20 px-4 pb-3 pt-1 space-y-3">
+              {grouped.map(({ categoria, ministerios }) => (
+                <div key={categoria ?? "__sem__"}>
+                  {categoria && (
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground mb-1.5">{categoria}</p>
+                  )}
+                  <div className="space-y-1">
+                    {ministerios.flatMap(({ ministerio_nome, ministerio_cor, membros: ms }) =>
+                      ms.map((m) => {
+                        const isMe = m.membro_id === membroId;
+                        const dotColor: Record<string, string> = {
+                          confirmado: "#22c55e", presente: "#22c55e",
+                          pendente: "#f59e0b",
+                          recusado: "#ef4444", faltou: "#ef4444", ausente: "#ef4444",
+                        };
+                        return (
+                          <div key={m.id} className="flex items-center gap-2 py-0.5 min-w-0">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ministerio_cor }} />
+                            <span className="text-[11px] text-muted-foreground min-w-0 truncate" style={{ maxWidth: "38%" }}>
+                              {ministerio_nome}
+                            </span>
+                            <span className={`text-xs truncate flex-1 min-w-0 ${isMe ? "text-primary font-bold" : "text-foreground/85 font-medium"}`}>
+                              {isMe ? "✦ Você" : nomeExibicao(m.nome)}
+                            </span>
+                            <span
+                              className="h-2 w-2 rounded-full shrink-0"
+                              style={{ backgroundColor: dotColor[m.status] ?? "#9ca3af" }}
+                              title={STATUS_LABEL[m.status] ?? m.status}
+                            />
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 

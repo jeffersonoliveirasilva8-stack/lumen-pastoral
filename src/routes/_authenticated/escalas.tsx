@@ -1197,45 +1197,51 @@ function EscalasPage() {
 <meta charset="UTF-8">
 <title>Escalas — ${nomeParoquia}</title>
 <style>
+@page{margin:1.8cm 1.5cm}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#fff;color:#111827;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#fff;color:#111827;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .doc-cabecalho{width:100%;display:block}
-.periodo-bar{background:#1a1a2e;color:#f59e0b;text-align:center;padding:13px 24px;font-size:14px;font-weight:800;letter-spacing:.22em;text-transform:uppercase}
-.doc-emit{text-align:right;padding:7px 32px 0;font-size:10px;color:#9ca3af}
-.content{padding:18px 32px 28px}
-.ec{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;page-break-inside:avoid;margin-bottom:18px}
-.eh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:#1a1a2e;color:#fff;padding:14px 20px}
-.eh-day{font-size:9px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:#f59e0b;margin-bottom:3px}
-.eh-title{font-size:14px;font-weight:700;line-height:1.3;margin-bottom:3px}
-.eh-date{font-size:10px;color:rgba(255,255,255,.55);text-transform:capitalize}
-.eh-time{margin-top:7px;display:inline-block;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#fbbf24;border-radius:4px;padding:2px 10px;font-size:9.5px;font-weight:700;letter-spacing:.04em}
+.doc-header-text{background:#1a1a2e;color:#fff;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.doc-header-text .nome{font-size:16px;font-weight:800;letter-spacing:.02em}
+.doc-header-text .diocese{font-size:10px;color:rgba(255,255,255,.55);margin-top:3px}
+.periodo-bar{background:#111827;color:#f59e0b;text-align:center;padding:10px 24px;font-size:13px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;border-top:2px solid rgba(245,158,11,.4)}
+.doc-emit{text-align:right;padding:6px 28px 0;font-size:10px;color:#9ca3af}
+.content{padding:16px 0 24px}
+.ec{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;page-break-inside:avoid;margin-bottom:16px}
+.eh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:#1a1a2e;color:#fff;padding:12px 18px}
+.eh-day{font-size:9px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:#f59e0b;margin-bottom:3px}
+.eh-title{font-size:14px;font-weight:700;line-height:1.3;margin-bottom:2px}
+.eh-date{font-size:10px;color:rgba(255,255,255,.5);text-transform:capitalize}
+.eh-time{margin-top:6px;display:inline-block;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#fbbf24;border-radius:4px;padding:2px 9px;font-size:9.5px;font-weight:700;letter-spacing:.04em}
 .eh-badges{display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;padding-top:2px}
 .b-status{padding:2px 9px;border-radius:99px;font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
 .s-publicada{background:#d1fae5;color:#065f46}
 .s-rascunho{background:rgba(255,255,255,.15);color:rgba(255,255,255,.75)}
 .s-arquivada{background:rgba(255,255,255,.08);color:rgba(255,255,255,.4)}
 .b-solene{background:#fef3c7;color:#92400e;border-radius:99px;padding:2px 9px;font-size:8.5px;font-weight:700}
-.obs{padding:8px 18px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:10.5px;color:#78350f;font-style:italic;line-height:1.5}
+.obs{padding:7px 18px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:10.5px;color:#78350f;font-style:italic;line-height:1.5}
 .cat-label{padding:5px 18px;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:#94a3b8}
 .ft{width:100%;border-collapse:collapse}
 .ft tr+tr td{border-top:1px solid #f1f5f9}
-.ft td{padding:8px 16px;font-size:11.5px;vertical-align:middle}
+.ft td{padding:7px 14px;font-size:11.5px;vertical-align:middle}
 .td-f{color:#64748b;font-weight:600;background:#f8fafc;width:26%;border-right:1px solid #e2e8f0;white-space:nowrap}
 .td-f2{border-left:2px solid #e2e8f0}
 .td-m{color:#111827;font-weight:700}
 .td-m.vaga{color:#cbd5e1;font-weight:400;font-style:italic}
-.sem-funcoes{padding:14px 18px;font-size:11px;color:#9ca3af;font-style:italic}
+.sem-funcoes{padding:12px 18px;font-size:11px;color:#9ca3af;font-style:italic}
 .doc-rodape{display:none}
 @media print{
-  .content{padding:14px 24px 24px}
-  .doc-emit{padding:5px 24px 0}
-  .doc-rodape{display:block;width:100%;page-break-inside:avoid;margin-top:28px}
+  @page{margin:1.5cm 1.2cm}
+  .doc-rodape{display:block;width:100%;page-break-inside:avoid;margin-top:24px}
   .doc-rodape img{width:100%;display:block}
+  .ec{margin-bottom:12px}
 }
 </style>
 </head>
 <body>
-${cabecalhoUrl ? `<img class="doc-cabecalho" src="${cabecalhoUrl}" alt="">` : ""}
+${cabecalhoUrl
+  ? `<img class="doc-cabecalho" src="${cabecalhoUrl}" alt="">`
+  : `<div class="doc-header-text"><div><div class="nome">${nomeParoquia}</div><div class="diocese">Pastoral Litúrgica</div></div></div>`}
 <div class="periodo-bar">ESCALA ${periodoTitle}</div>
 <div class="doc-emit">${selected.length} escala${selected.length !== 1 ? "s" : ""} · Emitido em ${hoje}</div>
 <div class="content">
