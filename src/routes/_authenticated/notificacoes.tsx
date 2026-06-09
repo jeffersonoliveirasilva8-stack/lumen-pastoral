@@ -106,6 +106,7 @@ function NotificacoesPage() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notificacoes", pid] }),
+    onError: (e: unknown) => toast.error((e as Error).message),
   });
 
   const marcarTodasMutation = useMutation({
@@ -118,6 +119,7 @@ function NotificacoesPage() {
       toast.success("Todas marcadas como lidas.");
       setHistoricoOpen(true);
     },
+    onError: (e: unknown) => toast.error((e as Error).message),
   });
 
   const deleteMutation = useMutation({
@@ -129,6 +131,7 @@ function NotificacoesPage() {
       qc.invalidateQueries({ queryKey: ["notificacoes", pid] });
       toast.success("Notificação removida."); setDeleteTarget(null);
     },
+    onError: (e: unknown) => toast.error("Erro ao remover: " + (e as Error).message),
   });
 
   const criarMutation = useMutation({
@@ -325,11 +328,13 @@ function NotificacoesPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground"
+              disabled={deleteMutation.isPending}
               onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
             >
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
               Remover
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -420,7 +425,7 @@ function NovaNotificacaoDialog({
 
   function reset() { setTitulo(""); setMensagem(""); setTipo("aviso"); }
 
-  function submit(e: React.FormEvent) {
+  function submit(e: { preventDefault(): void }) {
     e.preventDefault();
     if (!titulo.trim()) return;
     onSave({ titulo: titulo.trim(), mensagem, tipo });

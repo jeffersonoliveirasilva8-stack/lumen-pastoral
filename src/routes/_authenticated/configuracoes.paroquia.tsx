@@ -299,7 +299,8 @@ function SaveBtn({ saving, label = "Salvar alterações" }: { saving: boolean; l
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 function PersonalizacaoPage() {
-  const { profile, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading, isAdmin, isCoordenador } = useAuth();
+  const isLimitedCoord = isCoordenador && !isAdmin;
   const qc = useQueryClient();
 
   const { data: paroquia, isPending, error: paroquiaError } = useQuery<Paroquia | null>({
@@ -323,6 +324,14 @@ function PersonalizacaoPage() {
     return (
       <div className="p-10 flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
+      </div>
+    );
+  }
+
+  if (isLimitedCoord) {
+    return (
+      <div className="p-10 text-center text-muted-foreground">
+        Acesso restrito a administradores.
       </div>
     );
   }

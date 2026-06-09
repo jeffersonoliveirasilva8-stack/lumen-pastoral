@@ -1716,7 +1716,8 @@ const EMPTY_BULK_EDIT: BulkEditForm = {
 // ── MembrosPage ───────────────────────────────────────────────────────────────
 
 function MembrosPage() {
-  const { profile } = useAuth();
+  const { profile, isAdmin, isCoordenador } = useAuth();
+  const isLimitedCoord = isCoordenador && !isAdmin;
   const qc = useQueryClient();
   const { abrir: abrirMembroId } = Route.useSearch();
 
@@ -2394,6 +2395,14 @@ function MembrosPage() {
     setSheetOpen(false);
     setEditId(null);
     setForm(EMPTY_FORM);
+  }
+
+  if (isLimitedCoord) {
+    return (
+      <div className="p-10 text-center text-muted-foreground">
+        Acesso restrito a administradores.
+      </div>
+    );
   }
 
   return (
