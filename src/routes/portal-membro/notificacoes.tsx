@@ -85,16 +85,16 @@ function PortalMembroNotificacoes() {
     },
   });
 
-  // Realtime: novas notificações
+  // Realtime: INSERT, UPDATE e DELETE de notificações
   useEffect(() => {
     if (!membro?.paroquia_id) return;
     const ch = supabase
       .channel(`pm-notif-rt-${membro.paroquia_id}`)
       .on("postgres_changes", {
-        event: "INSERT", schema: "public", table: "notificacoes",
+        event: "*", schema: "public", table: "notificacoes",
         filter: `paroquia_id=eq.${membro.paroquia_id}`,
       }, () => {
-        qc.invalidateQueries({ queryKey: ["pm-notificacoes", membro.paroquia_id] });
+        qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -216,7 +216,9 @@ function PortalMembroNotificacoes() {
                         type="button"
                         onClick={() => {
                           marcarLidaMutation.mutate(n.id);
-                          if (n.link_referencia) navigate({ to: n.link_referencia as never });
+                          if (n.link_referencia?.startsWith("/portal-membro/")) {
+                            navigate({ to: n.link_referencia as never });
+                          }
                         }}
                         disabled={marcarLidaMutation.isPending}
                         className="flex-1 text-left px-4 py-4 transition active:scale-[0.99]"
