@@ -16,6 +16,9 @@ import {
 } from "@/components/ui/drawer";
 
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const anyDb = supabase as any;
+
 const LITURGICAL_COLOR_HEX: Record<string, string> = {
   branco: "#d1d5db", roxo: "#9333ea", vermelho: "#dc2626",
   verde: "#16a34a", preto: "#374151", dourado: "#f59e0b", rosa: "#ec4899",
@@ -109,7 +112,8 @@ function PortalMembroLayout() {
       !profileCompleteness.complete &&
       pathname !== COMPLETAR_CADASTRO_PATH
     ) {
-      navigate({ to: COMPLETAR_CADASTRO_PATH });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      navigate({ to: COMPLETAR_CADASTRO_PATH } as any);
     }
   }, [completenessLoaded, profileCompleteness, pathname, navigate]);
 
@@ -256,7 +260,7 @@ function PortalMembroLayout() {
           {/* Indicador de completude — sidebar */}
           {profileCompleteness && !profileCompleteness.complete && (
             <Link
-              to={COMPLETAR_CADASTRO_PATH}
+              to={COMPLETAR_CADASTRO_PATH as any}
               className="flex items-center gap-2 mb-2 rounded-xl bg-amber-500/10 border border-amber-500/25 px-3 py-2 hover:bg-amber-500/15 transition"
             >
               <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
