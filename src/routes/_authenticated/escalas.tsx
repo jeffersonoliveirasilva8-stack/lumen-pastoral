@@ -1949,12 +1949,12 @@ function ListaView({
                 }`}
                 style={{ borderLeftColor: borderColor, borderLeftWidth: "4px", animationDelay: `${Math.min(idx * 25, 200)}ms` }}
               >
-                <div className="grid gap-3 px-4 py-4 sm:grid-cols-[auto_1fr_auto] sm:items-start">
-                  <div className="text-center min-w-[3rem] shrink-0">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider leading-none">
+                <div className="flex items-start gap-3 px-4 py-4">
+                  <div className="text-center min-w-[2.75rem] shrink-0">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider leading-none">
                       {format(d, "MMM", { locale: ptBR })}
                     </p>
-                    <p className="text-3xl font-serif leading-none mt-0.5">
+                    <p className="text-2xl font-serif leading-none mt-0.5">
                       {format(d, "d")}
                     </p>
                     <p className="text-[10px] text-muted-foreground/70 mt-0.5 capitalize">
@@ -1963,10 +1963,10 @@ function ListaView({
                   </div>
 
                   <div
-                    className="min-w-0 cursor-pointer"
+                    className="flex-1 min-w-0 cursor-pointer"
                     onClick={(ev) => { ev.stopPropagation(); onOpenDetail(e); }}
                   >
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-semibold text-sm leading-tight truncate hover:text-primary transition-colors">{e.titulo}</p>
                         <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -1983,7 +1983,7 @@ function ListaView({
                           )}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border ${
                           e.status === "publicada"
                             ? "bg-green-50 text-green-700 border-green-200"
@@ -1994,7 +1994,7 @@ function ListaView({
                           {cfg.label}
                         </span>
                         {e.solene && (
-                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 border border-amber-200">
+                          <span className="hidden sm:inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 border border-amber-200">
                             Solene
                           </span>
                         )}
@@ -2016,7 +2016,7 @@ function ListaView({
                     )}
                   </div>
 
-                  <div className="flex flex-col items-end gap-2 sm:items-start">
+                  <div className="flex flex-col items-end gap-2 shrink-0">
                     <Button
                       variant="ghost"
                       size="icon"

@@ -704,28 +704,43 @@ function EscalaPortalCard({
               </div>
             )}
 
-            {/* Rodapé: contagem + botão de presença (admin) */}
-            <div className="mt-2.5 flex items-center gap-3 flex-wrap">
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Users className="h-3 w-3" />
-                {escala.membrosEscalados.length} escalado{escala.membrosEscalados.length !== 1 ? "s" : ""}
-              </span>
-
-              {/* Botão de presença — somente Admin escalado */}
-              {isAdministrador && isAssigned && (
-                <button
-                  onClick={() => setShowPresenca(v => !v)}
-                  className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 min-h-[36px] border transition ${
-                    showPresenca
-                      ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300/50"
-                      : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Presenças
-                  {showPresenca ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                </button>
-              )}
+            {/* Rodapé: progress bar + contagem + botão de presença */}
+            <div className="mt-3 space-y-2">
+              {/* Progress bar de presenças confirmadas */}
+              {escala.membrosEscalados.length > 0 && (() => {
+                const confirmados = escala.membrosEscalados.filter(
+                  (m) => m.status === "confirmado" || m.status === "presente"
+                ).length;
+                const total = escala.membrosEscalados.length;
+                const pct = total > 0 ? confirmados / total : 0;
+                return (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${pct >= 1 ? "bg-green-500" : pct >= 0.5 ? "bg-amber-400" : "bg-muted-foreground/30"}`}
+                        style={{ width: `${Math.round(pct * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                      {confirmados}/{total}
+                    </span>
+                    {isAdministrador && isAssigned && (
+                      <button
+                        onClick={() => setShowPresenca(v => !v)}
+                        className={`inline-flex items-center gap-1 text-[11px] font-semibold rounded-lg px-2.5 py-1.5 border transition ${
+                          showPresenca
+                            ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300/50"
+                            : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        Presenças
+                        {showPresenca ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -797,7 +812,7 @@ function EscalaPortalCard({
         </div>
       )}
 
-      {/* ── Lista de membros — colapsável ── */}
+      {/* ── Lista de membros — colapsável, grid estilo admin ── */}
       {!showPresenca && escala.membrosEscalados.length > 0 && (
         <div className="border-t border-border/40">
           <button
@@ -813,39 +828,55 @@ function EscalaPortalCard({
               : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
           </button>
           {showMembros && (
-            <div className="bg-muted/20 px-4 pb-3 pt-1 space-y-3">
+            <div className="bg-muted/20 px-4 pb-4 pt-2 space-y-3">
               {grouped.map(({ categoria, ministerios }) => (
                 <div key={categoria ?? "__sem__"}>
                   {categoria && (
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground mb-1.5">{categoria}</p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground shrink-0">{categoria}</p>
+                      <div className="flex-1 h-px bg-border/50" />
+                    </div>
                   )}
-                  <div className="space-y-1">
-                    {ministerios.flatMap(({ ministerio_nome, ministerio_cor, membros: ms }) =>
-                      ms.map((m) => {
-                        const isMe = m.membro_id === membroId;
-                        const dotColor: Record<string, string> = {
-                          confirmado: "#22c55e", presente: "#22c55e",
-                          pendente: "#f59e0b",
-                          recusado: "#ef4444", faltou: "#ef4444", ausente: "#ef4444",
-                        };
-                        return (
-                          <div key={m.id} className="flex items-center gap-2 py-0.5 min-w-0">
-                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ministerio_cor }} />
-                            <span className="text-[11px] text-muted-foreground min-w-0 truncate" style={{ maxWidth: "38%" }}>
-                              {ministerio_nome}
-                            </span>
-                            <span className={`text-xs truncate flex-1 min-w-0 ${isMe ? "text-primary font-bold" : "text-foreground/85 font-medium"}`}>
-                              {isMe ? "✦ Você" : nomeExibicao(m.nome)}
-                            </span>
-                            <span
-                              className="h-2 w-2 rounded-full shrink-0"
-                              style={{ backgroundColor: dotColor[m.status] ?? "#9ca3af" }}
-                              title={STATUS_LABEL[m.status] ?? m.status}
-                            />
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {ministerios.map(({ ministerio_nome, ministerio_cor, membros: ms }) => {
+                      const STATUS_DOT: Record<string, string> = {
+                        confirmado: "#22c55e", presente: "#22c55e",
+                        pendente: "#f59e0b",
+                        recusado: "#ef4444", faltou: "#ef4444", ausente: "#ef4444",
+                      };
+                      return (
+                        <div
+                          key={ministerio_nome}
+                          className="rounded-xl border border-border bg-background px-2.5 py-2"
+                          style={{ borderLeftColor: ministerio_cor, borderLeftWidth: "3px" }}
+                        >
+                          <p className="text-[11px] font-semibold truncate mb-1.5" style={{ color: ministerio_cor }}>
+                            {ministerio_nome}
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {ms.map((m) => {
+                              const isMe = m.membro_id === membroId;
+                              return (
+                                <span
+                                  key={m.id}
+                                  className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                                    isMe
+                                      ? "bg-primary/15 text-primary border border-primary/30"
+                                      : "bg-muted/60 text-foreground/70"
+                                  }`}
+                                >
+                                  <span
+                                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: STATUS_DOT[m.status] ?? "#9ca3af" }}
+                                  />
+                                  {isMe ? "Você" : nomeExibicao(m.nome)}
+                                </span>
+                              );
+                            })}
                           </div>
-                        );
-                      })
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
