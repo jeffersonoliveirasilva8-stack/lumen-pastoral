@@ -138,14 +138,19 @@ CREATE POLICY "membro_atuacoes_self" ON membro_atuacoes
     )
   );
 
--- Admins/coordenadores: policy separada usando current_paroquia_id()
+-- Admins/coordenadores: policy separada — join via membros (não depende de
+-- membro_atuacoes.paroquia_id, que pode não existir em todas as versões do schema).
 CREATE POLICY "membro_atuacoes_admin" ON membro_atuacoes
   FOR ALL TO authenticated
   USING (
-    paroquia_id = current_paroquia_id()
+    membro_id IN (
+      SELECT id FROM membros WHERE paroquia_id = current_paroquia_id()
+    )
   )
   WITH CHECK (
-    paroquia_id = current_paroquia_id()
+    membro_id IN (
+      SELECT id FROM membros WHERE paroquia_id = current_paroquia_id()
+    )
   );
 
 -- ── 7. Verificação final ───────────────────────────────────────────────────
