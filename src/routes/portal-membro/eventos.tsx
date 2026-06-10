@@ -192,6 +192,7 @@ function PortalMembroEventos() {
                     onConfirmar={() => confirmarMutation.mutate(evento.id)}
                     onDeclinar={(just) => declinarMutation.mutate({ eventoId: evento.id, justificativa: just })}
                     isPast={false}
+                    mutationPending={confirmarMutation.isPending || declinarMutation.isPending}
                   />
                 ))}
               </div>
@@ -214,6 +215,7 @@ function PortalMembroEventos() {
                     onConfirmar={() => confirmarMutation.mutate(evento.id)}
                     onDeclinar={(just) => declinarMutation.mutate({ eventoId: evento.id, justificativa: just })}
                     isPast={true}
+                    mutationPending={confirmarMutation.isPending || declinarMutation.isPending}
                   />
                 ))}
               </div>
@@ -235,6 +237,7 @@ function EventoCard({
   onConfirmar,
   onDeclinar,
   isPast,
+  mutationPending,
 }: {
   evento: Evento;
   presenca: MinhaPresenca | undefined;
@@ -243,6 +246,7 @@ function EventoCard({
   onConfirmar: () => void;
   onDeclinar: (just: string) => void;
   isPast: boolean;
+  mutationPending: boolean;
 }) {
   const [just, setJust] = useState("");
   const tipo = TIPOS[evento.tipo] ?? TIPOS.outro;
@@ -376,6 +380,7 @@ function EventoCard({
                 size="sm"
                 className="flex-1 text-xs"
                 onClick={onConfirmar}
+                disabled={mutationPending}
               >
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
                 Vou participar
@@ -385,6 +390,7 @@ function EventoCard({
                 variant="outline"
                 className="flex-1 text-xs"
                 onClick={() => onExpandJust(isJustExpanded ? null : evento.id)}
+                disabled={mutationPending}
               >
                 <XCircle className="h-3.5 w-3.5 mr-1.5" />
                 Não poderei
@@ -406,8 +412,10 @@ function EventoCard({
                 placeholder="Justificativa obrigatória…"
                 value={just}
                 onChange={(e) => setJust(e.target.value)}
+                maxLength={300}
                 autoFocus
               />
+              <p className="text-[10px] text-muted-foreground text-right">{just.length}/300</p>
               {!just.trim() && (
                 <p className="text-[11px] text-destructive">A justificativa é obrigatória para registrar ausência.</p>
               )}

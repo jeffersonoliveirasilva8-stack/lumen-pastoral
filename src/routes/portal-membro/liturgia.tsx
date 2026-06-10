@@ -112,7 +112,6 @@ function BlocoTexto({
   tipo: "leitura" | "salmo" | "evangelho";
   cor: string;
 }) {
-  const [aberto, setAberto] = useState(true); // todas abertas por padrão
   const { hex } = getPaleta(cor);
   const temTexto = !!texto;
   const isSalmo  = tipo === "salmo";
@@ -164,7 +163,7 @@ function BlocoTexto({
 
       {/* Texto */}
       <div className={isGospel ? "px-5 py-5" : ""}>
-        {temTexto && aberto ? (
+        {temTexto ? (
           <>
             {isSalmo && salmoData ? (
               <div className="space-y-5">
@@ -219,15 +218,6 @@ function BlocoTexto({
               </p>
             </div>
           </>
-        ) : temTexto ? (
-          <button
-            type="button"
-            onClick={() => setAberto(true)}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-border/60 py-3 text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground transition group"
-          >
-            <BookOpen className="h-4 w-4 group-hover:text-foreground/80" />
-            Ler texto completo
-          </button>
         ) : (
           <p className="text-sm italic text-muted-foreground/50 py-2">
             Texto em breve — sincronização ocorre às 02:30 UTC.
@@ -300,7 +290,7 @@ function HomiliaVideo({ homilia, cor }: { homilia: HomiliaRow | null; cor: strin
                 <iframe
                   src={`https://www.youtube.com/embed/${homilia.video_id}?autoplay=1&rel=0&modestbranding=1`}
                   title={homilia.titulo}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                   allowFullScreen
                   className="w-full h-full"
                   loading="lazy"

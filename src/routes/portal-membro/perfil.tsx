@@ -77,6 +77,7 @@ function PortalMembroPerfil() {
 
   async function handleSenha(e: React.FormEvent) {
     e.preventDefault();
+    if (savingSenha) return;
     if (senha.nova.length < 6) { toast.error("A senha deve ter pelo menos 6 caracteres."); return; }
     if (senha.nova !== senha.confirmar) { toast.error("As senhas não coincidem."); return; }
     setSavingSenha(true);
@@ -89,7 +90,9 @@ function PortalMembroPerfil() {
 
   async function handleEmail(e: React.FormEvent) {
     e.preventDefault();
-    if (!novoEmail.includes("@")) { toast.error("Informe um e-mail válido."); return; }
+    if (savingEmail) return;
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(novoEmail.trim());
+    if (!emailOk) { toast.error("Informe um e-mail válido."); return; }
     setSavingEmail(true);
     const { error } = await supabase.auth.updateUser({ email: novoEmail.trim() });
     setSavingEmail(false);
@@ -153,10 +156,15 @@ function PortalMembroPerfil() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (!form.nome.trim()) throw new Error("Nome é obrigatório.");
+      if (form.data_nascimento) {
+        const hoje = new Date().toISOString().slice(0, 10);
+        if (form.data_nascimento > hoje) throw new Error("Data de nascimento não pode ser no futuro.");
+      }
       const { error } = await anyDb
         .from("membros")
         .update({
-          nome: form.nome.trim() || undefined,
+          nome: form.nome.trim(),
           telefone: form.telefone || null,
           data_nascimento: form.data_nascimento || null,
           cpf: form.cpf || null,
@@ -170,8 +178,7 @@ function PortalMembroPerfil() {
           telefone_emergencia: form.telefone_emergencia || null,
           observacoes: form.observacoes || null,
         })
-        .eq("id", membro!.id)
-        .eq("auth_user_id", (await supabase.auth.getUser()).data.user?.id);
+        .eq("id", membro!.id);
       if (error) throw error;
     },
     onSuccess: () => {

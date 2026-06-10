@@ -82,7 +82,7 @@ function PortalMembroRanking() {
   const top3 = membros.slice(0, 3);
 
   // Pontos ganhos no mês atual
-  const inicioMes = startOfMonth(new Date()).toISOString().slice(0, 10);
+  const inicioMes = format(startOfMonth(new Date()), "yyyy-MM-dd");
   const pontosEsteMes = historico
     .filter((h) => h.escala_data >= inicioMes)
     .reduce((acc, h) => acc + h.pontos, 0);
