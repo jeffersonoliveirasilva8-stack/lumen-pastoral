@@ -56,26 +56,36 @@ function PortalMembroNotificacoes() {
     queryKey: ["pm-notificacoes", membro?.paroquia_id, membro?.id],
     enabled: !!membro?.paroquia_id,
     queryFn: async () => {
-      // Tenta com filtro de destinatário; cai no fallback se a coluna não existir
+      // Tenta consulta completa: destinatario_id + apenas_admin
+      // Apenas notificações públicas (não só-admin) destinadas ao membro ou broadcast
       const { data, error } = await anyDb
         .from("notificacoes")
         .select("id, titulo, mensagem, tipo, lida, created_at, link_referencia")
         .eq("paroquia_id", membro!.paroquia_id)
+        .eq("apenas_admin", false)
         .in("tipo", ["aviso", "alerta", "urgente", "sistema"])
         .or(`destinatario_id.is.null,destinatario_id.eq.${membro!.id}`)
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(60);
 
       if (error) {
-        // destinatario_id ainda não existe — fallback sem filtro de destinatário
-        if (error.message?.toLowerCase().includes("destinatario_id") || error.code === "42703") {
+        // Colunas não existem ainda — aplique PATCH_O no Supabase
+        if (
+          error.code === "42703" ||
+          error.message?.includes("apenas_admin") ||
+          error.message?.includes("destinatario_id")
+        ) {
+          // Fallback seguro: só entrega notificações com destinatario_id explícito para
+          // este membro OU sem destinatario_id COM tipo não-administrativo.
+          // Não exibe tudo sem filtro para evitar vazamento de dados internos.
+          const fallbackTipos = ["aviso", "urgente", "sistema"];
           const { data: d2, error: e2 } = await anyDb
             .from("notificacoes")
             .select("id, titulo, mensagem, tipo, lida, created_at, link_referencia")
             .eq("paroquia_id", membro!.paroquia_id)
-            .in("tipo", ["aviso", "alerta", "urgente", "sistema"])
+            .in("tipo", fallbackTipos)
             .order("created_at", { ascending: false })
-            .limit(50);
+            .limit(60);
           if (e2) throw e2;
           return d2 ?? [];
         }

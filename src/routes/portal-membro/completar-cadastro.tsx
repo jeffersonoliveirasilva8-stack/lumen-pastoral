@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Loader2, Phone, Calendar, User, MapPin, Users,
   Clock, CheckCircle2, ChevronRight, ChevronLeft, Flame,
+  AlertCircle,
 } from "lucide-react";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +23,16 @@ type AtuacaoOpt   = { id: string; nome: string; cor: string };
 type MissaOpt     = { id: string; nome: string; dia_semana: number; hora_inicio: string };
 
 const DIAS = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+
+const MOTIVOS_RESTRICAO = [
+  "Trabalho",
+  "Faculdade",
+  "Escola",
+  "Curso",
+  "Saúde",
+  "Compromisso familiar",
+  "Outro",
+] as const;
 
 const STEP_LABELS = [
   "Dados Pessoais",
@@ -50,6 +61,7 @@ function CompletarCadastroPage() {
   // ── Etapa 3 ───────────────────────────────────────────────────────────────
   const [disponibilidade,   setDisponibilidade]   = useState<"todos" | "restricoes" | "">("");
   const [missaRestricaoIds, setMissaRestricaoIds] = useState<string[]>([]);
+  const [motivoRestricao,   setMotivoRestricao]   = useState("");
 
   // ── Carga inicial de dados existentes ─────────────────────────────────────
   const { data: extra, isLoading: loadingExtra } = useQuery({
@@ -58,15 +70,27 @@ function CompletarCadastroPage() {
     staleTime: 0,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      console.log("[completar-cadastro] auth.user.id:", user?.id);
-      console.log("[completar-cadastro] membro.id:", membro!.id, "paroquia_id:", membro!.paroquia_id);
+      console.log("[completar-cadastro] ── DIAGNÓSTICO DE SINCRONIZAÇÃO ──");
+      console.log("[completar-cadastro] auth.user.id:", user?.id ?? "NULL");
+      console.log("[completar-cadastro] membro.id:", membro!.id, "| paroquia_id:", membro!.paroquia_id);
 
-      const [membroRes, atuacoesRes, restricoesRes] = await Promise.all([
-        anyDb
-          .from("membros")
-          .select("sexo, comunidade_id, telefone, data_nascimento")
-          .eq("id", membro!.id)
-          .single(),
+      // Verifica profiles row para confirmar current_paroquia_id()
+      const { data: profileData } = await anyDb
+        .from("profiles")
+        .select("id, paroquia_id")
+        .eq("id", user?.id)
+        .maybeSingle();
+      console.log("[completar-cadastro] profile.id:", profileData?.id ?? "NULL", "| profile.paroquia_id:", profileData?.paroquia_id ?? "NULL");
+
+      // Verifica auth_user_id real no banco (confirma que o link está ativo)
+      const { data: membroDb } = await anyDb
+        .from("membros")
+        .select("auth_user_id, paroquia_id, sexo, comunidade_id, telefone, data_nascimento, motivo_disponibilidade")
+        .eq("id", membro!.id)
+        .maybeSingle();
+      console.log("[completar-cadastro] membros.auth_user_id:", membroDb?.auth_user_id ?? "NULL", "| membros.paroquia_id:", membroDb?.paroquia_id ?? "NULL");
+
+      const [atuacoesRes, restricoesRes] = await Promise.all([
         anyDb
           .from("membro_atuacoes")
           .select("atuacao_id")
@@ -77,17 +101,17 @@ function CompletarCadastroPage() {
           .eq("membro_id", membro!.id),
       ]);
 
-      if (membroRes.error) console.error("[completar-cadastro] membros SELECT error:", membroRes.error.message);
-      if (atuacoesRes.error) console.error("[completar-cadastro] membro_atuacoes error:", atuacoesRes.error?.message);
-      if (restricoesRes.error) console.error("[completar-cadastro] membro_missa_restricoes error:", restricoesRes.error?.message);
+      if (atuacoesRes.error) console.error("[completar-cadastro] membro_atuacoes error:", atuacoesRes.error?.message, "code:", atuacoesRes.error?.code);
+      if (restricoesRes.error) console.error("[completar-cadastro] membro_missa_restricoes error:", restricoesRes.error?.message, "code:", restricoesRes.error?.code);
 
       return {
-        telefone:        (membroRes.data?.telefone        ?? "") as string,
-        data_nascimento: (membroRes.data?.data_nascimento ?? "") as string,
-        sexo:            (membroRes.data?.sexo            ?? "") as "M" | "F" | "",
-        comunidade_id:   (membroRes.data?.comunidade_id   ?? "") as string,
-        atuacao_ids:     (atuacoesRes.data ?? []).map((a: { atuacao_id: string }) => a.atuacao_id) as string[],
-        restricao_ids:   (restricoesRes.data ?? []).map((r: { missa_padrao_id: string }) => r.missa_padrao_id) as string[],
+        telefone:              (membroDb?.telefone              ?? "") as string,
+        data_nascimento:       (membroDb?.data_nascimento       ?? "") as string,
+        sexo:                  (membroDb?.sexo                  ?? "") as "M" | "F" | "",
+        comunidade_id:         (membroDb?.comunidade_id         ?? "") as string,
+        motivo_disponibilidade:(membroDb?.motivo_disponibilidade ?? "") as string,
+        atuacao_ids:           (atuacoesRes.data ?? []).map((a: { atuacao_id: string }) => a.atuacao_id) as string[],
+        restricao_ids:         (restricoesRes.data ?? []).map((r: { missa_padrao_id: string }) => r.missa_padrao_id) as string[],
       };
     },
   });
@@ -106,6 +130,7 @@ function CompletarCadastroPage() {
       setDisponibilidade("restricoes");
       setMissaRestricaoIds(extra.restricao_ids);
     }
+    if (extra.motivo_disponibilidade) setMotivoRestricao(extra.motivo_disponibilidade);
   }, [extra, membro, populated]);
 
   // ── Opções de seletores ────────────────────────────────────────────────────
@@ -118,7 +143,8 @@ function CompletarCadastroPage() {
         .select("id, nome")
         .eq("paroquia_id", membro!.paroquia_id)
         .order("nome");
-      console.log("[completar-cadastro] comunidades encontradas:", data?.length ?? 0, error ? "RLS-ERROR:" + error.message : "");
+      console.log("[completar-cadastro] comunidades encontradas:", data?.length ?? 0,
+        error ? "❌ RLS-ERROR code=" + error.code + " msg=" + error.message : "✓ OK");
       return data ?? [];
     },
   });
@@ -133,7 +159,8 @@ function CompletarCadastroPage() {
         .eq("paroquia_id", membro!.paroquia_id)
         .eq("ativo", true)
         .order("ordem", { ascending: true });
-      console.log("[completar-cadastro] atuacoes encontradas:", data?.length ?? 0, error ? "RLS-ERROR:" + error.message : "");
+      console.log("[completar-cadastro] atuacoes encontradas:", data?.length ?? 0,
+        error ? "❌ RLS-ERROR code=" + error.code + " msg=" + error.message : "✓ OK");
       return data ?? [];
     },
   });
@@ -142,13 +169,15 @@ function CompletarCadastroPage() {
     queryKey: ["completar-missas", membro?.paroquia_id],
     enabled:  !!membro?.paroquia_id,
     queryFn:  async () => {
-      const { data } = await anyDb
+      const { data, error } = await anyDb
         .from("missas_padrao")
         .select("id, nome, dia_semana, hora_inicio")
         .eq("paroquia_id", membro!.paroquia_id)
         .eq("ativo", true)
         .order("dia_semana", { ascending: true })
         .order("hora_inicio", { ascending: true });
+      console.log("[completar-cadastro] missas encontradas:", data?.length ?? 0,
+        error ? "❌ RLS-ERROR code=" + error.code + " msg=" + error.message : "✓ OK");
       return data ?? [];
     },
   });
@@ -196,12 +225,17 @@ function CompletarCadastroPage() {
   }
 
   function validarEtapa3(): boolean {
-    if (missas.length === 0) return true; // Paróquia sem missas cadastradas — pular
+    if (missas.length === 0) return true;
     if (!disponibilidade) {
       toast.error("Informe sua disponibilidade de horários."); return false;
     }
-    if (disponibilidade === "restricoes" && missaRestricaoIds.length === 0) {
-      toast.error("Selecione ao menos um horário com restrição."); return false;
+    if (disponibilidade === "restricoes") {
+      if (missaRestricaoIds.length === 0) {
+        toast.error("Selecione ao menos um horário com restrição."); return false;
+      }
+      if (!motivoRestricao.trim()) {
+        toast.error("Informe o motivo da indisponibilidade."); return false;
+      }
     }
     return true;
   }
@@ -222,12 +256,13 @@ function CompletarCadastroPage() {
     setSaving(true);
     try {
       const { data: result, error } = await anyDb.rpc("completar_perfil_membro", {
-        p_telefone:            telefone.trim() || null,
-        p_data_nascimento:     dataNasc        || null,
-        p_sexo:                sexo            || null,
-        p_comunidade_id:       comunidadeId    || null,
-        p_atuacao_ids:         atuacaoIds,
-        p_missa_restricao_ids: disponibilidade === "restricoes" ? missaRestricaoIds : [],
+        p_telefone:               telefone.trim() || null,
+        p_data_nascimento:        dataNasc        || null,
+        p_sexo:                   sexo            || null,
+        p_comunidade_id:          comunidadeId    || null,
+        p_atuacao_ids:            atuacaoIds,
+        p_missa_restricao_ids:    disponibilidade === "restricoes" ? missaRestricaoIds : [],
+        p_motivo_disponibilidade: disponibilidade === "restricoes" ? (motivoRestricao || null) : null,
       });
 
       if (error) {
@@ -265,6 +300,9 @@ function CompletarCadastroPage() {
       </div>
     );
   }
+
+  // ── Diagnóstico visível quando comunidades/atuações estão vazias ──────────
+  const showDiagnostic = !loadingExtra && (comunidades.length === 0 || atuacoes.length === 0) && step === 2;
 
   // ── Indicador de progresso ─────────────────────────────────────────────────
   function StepIndicator() {
@@ -376,6 +414,25 @@ function CompletarCadastroPage() {
             possa incluí-lo nas escalas corretas.
           </p>
 
+          {/* Painel de diagnóstico de sincronização */}
+          {showDiagnostic && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 px-4 py-3 text-xs space-y-1">
+              <div className="flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-400 mb-1.5">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Dados da paróquia não carregados
+              </div>
+              <p className="text-amber-700/80 dark:text-amber-400/80">
+                paroquia_id: <span className="font-mono">{membro.paroquia_id}</span>
+              </p>
+              <p className="text-amber-700/80 dark:text-amber-400/80">
+                Verifique o console do navegador para diagnóstico completo.
+              </p>
+              <p className="text-amber-600/70 dark:text-amber-500/70 mt-1">
+                Se o problema persistir após recarregar a página, entre em contato com o coordenador para verificar as policies de acesso.
+              </p>
+            </div>
+          )}
+
           {/* Comunidade */}
           {comunidades.length > 0 ? (
             <div>
@@ -471,7 +528,10 @@ function CompletarCadastroPage() {
                     type="button"
                     onClick={() => {
                       setDisponibilidade(opt);
-                      if (opt === "todos") setMissaRestricaoIds([]);
+                      if (opt === "todos") {
+                        setMissaRestricaoIds([]);
+                        setMotivoRestricao("");
+                      }
                     }}
                     className={`w-full text-left rounded-xl border px-4 py-3.5 transition ${
                       disponibilidade === opt
@@ -504,51 +564,83 @@ function CompletarCadastroPage() {
                 ))}
               </div>
 
-              {/* Grid de missas (apenas quando "restricoes") */}
+              {/* Campos de restrição (apenas quando "restricoes") */}
               {disponibilidade === "restricoes" && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                    Selecione os horários em que <strong className="text-destructive">NÃO</strong> pode servir:
-                  </p>
-                  <div className="space-y-4">
-                    {missasPorDia.map(({ dia, list }) => (
-                      <div key={dia}>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                          {DIAS[dia]}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {list.map((m) => {
-                            const sel = missaRestricaoIds.includes(m.id);
-                            return (
-                              <button
-                                key={m.id}
-                                type="button"
-                                onClick={() => toggleMissaRestricao(m.id)}
-                                className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition ${
-                                  sel
-                                    ? "border-destructive bg-destructive/10 text-destructive"
-                                    : "border-border text-muted-foreground hover:bg-muted"
-                                }`}
-                              >
-                                {sel && <CheckCircle2 className="h-3 w-3" />}
-                                {m.hora_inicio.slice(0, 5)}
-                                {m.nome && m.nome !== m.hora_inicio && (
-                                  <span className="text-[10px] opacity-70 ml-1">
-                                    {m.nome.length > 20 ? m.nome.slice(0, 20) + "…" : m.nome}
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
+                <div className="space-y-4">
+                  {/* Motivo da indisponibilidade — obrigatório */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                      <AlertCircle className="h-3 w-3" /> Motivo da indisponibilidade *
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {MOTIVOS_RESTRICAO.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setMotivoRestricao(m)}
+                          className={`h-8 px-3 rounded-full text-xs font-medium border transition ${
+                            motivoRestricao === m
+                              ? "bg-primary/10 border-primary text-primary"
+                              : "border-border text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {motivoRestricao === m && <span className="mr-1">✓</span>}
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                    {!motivoRestricao && (
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        Selecione o motivo para continuar.
+                      </p>
+                    )}
                   </div>
-                  {missaRestricaoIds.length > 0 && (
-                    <p className="mt-3 text-xs text-destructive font-medium">
-                      {missaRestricaoIds.length} horário{missaRestricaoIds.length !== 1 ? "s" : ""} com restrição selecionado{missaRestricaoIds.length !== 1 ? "s" : ""}.
+
+                  {/* Grid de missas */}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                      Selecione os horários em que <strong className="text-destructive">NÃO</strong> pode servir:
                     </p>
-                  )}
+                    <div className="space-y-4">
+                      {missasPorDia.map(({ dia, list }) => (
+                        <div key={dia}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                            {DIAS[dia]}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {list.map((m) => {
+                              const sel = missaRestricaoIds.includes(m.id);
+                              return (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  onClick={() => toggleMissaRestricao(m.id)}
+                                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                                    sel
+                                      ? "border-destructive bg-destructive/10 text-destructive"
+                                      : "border-border text-muted-foreground hover:bg-muted"
+                                  }`}
+                                >
+                                  {sel && <CheckCircle2 className="h-3 w-3" />}
+                                  {m.hora_inicio.slice(0, 5)}
+                                  {m.nome && m.nome !== m.hora_inicio && (
+                                    <span className="text-[10px] opacity-70 ml-1">
+                                      {m.nome.length > 20 ? m.nome.slice(0, 20) + "…" : m.nome}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {missaRestricaoIds.length > 0 && (
+                      <p className="mt-3 text-xs text-destructive font-medium">
+                        {missaRestricaoIds.length} horário{missaRestricaoIds.length !== 1 ? "s" : ""} com restrição selecionado{missaRestricaoIds.length !== 1 ? "s" : ""}.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
             </>
@@ -645,8 +737,14 @@ function CompletarCadastroPage() {
                   <span className="font-medium">Disponível para todos os horários</span>
                 </div>
               ) : (
-                <div>
-                  <p className="text-destructive font-medium mb-2">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+                    <p className="font-medium text-amber-700 dark:text-amber-400">
+                      Motivo: {motivoRestricao || "—"}
+                    </p>
+                  </div>
+                  <p className="text-destructive font-medium">
                     {missaRestricaoIds.length} restrição{missaRestricaoIds.length !== 1 ? "ões" : ""} de horário
                   </p>
                   <div className="flex flex-wrap gap-1.5">

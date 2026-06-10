@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, ShieldCheck, ShieldOff, ShieldAlert } from "lucide-react";
+import { Loader2, ShieldCheck, ShieldOff, ShieldAlert, Copy, Check, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ type Step = "idle" | "enrolling" | "verifying" | "disabling";
 
 type EnrollData = {
   factorId: string;
-  qrCode: string;  // SVG data URI
+  qrCode: string;
   secret: string;
 };
 
@@ -21,6 +21,7 @@ export function MfaSetup() {
   const [enrollData, setEnrollData] = useState<EnrollData | null>(null);
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     checkStatus();
@@ -34,7 +35,7 @@ export function MfaSetup() {
       const totpFactors = data?.totp ?? [];
       setHasMfa(totpFactors.some((f) => f.status === "verified"));
     } catch {
-      // silently fallback — UI shows "inactive" state
+      // silently fallback
     } finally {
       setLoading(false);
     }
@@ -136,6 +137,18 @@ export function MfaSetup() {
     }
   }
 
+  async function copySecret() {
+    if (!enrollData?.secret) return;
+    try {
+      await navigator.clipboard.writeText(enrollData.secret);
+      setCopied(true);
+      toast.success("Chave copiada!");
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      toast.error("Não foi possível copiar. Copie manualmente a chave acima.");
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
@@ -144,8 +157,6 @@ export function MfaSetup() {
       </div>
     );
   }
-
-  // ── Status atual ─────────────────────────────────────────────────────
 
   if (step === "idle" && !hasMfa) {
     return (
@@ -184,49 +195,98 @@ export function MfaSetup() {
     );
   }
 
-  // ── Enrollment: QR code + verificação ───────────────────────────────
-
   if (step === "verifying" && enrollData) {
     return (
-      <form onSubmit={handleVerify} className="space-y-4">
+      <form onSubmit={handleVerify} className="space-y-5">
         <div className="flex items-center gap-2 text-sm font-medium">
           <ShieldAlert className="h-4 w-4 text-amber-500" />
           Configure seu app autenticador
         </div>
-        <p className="text-xs text-muted-foreground">
-          1. Abra Google Authenticator, Authy ou similar.<br />
-          2. Leia o QR code abaixo.<br />
-          3. Digite o código de 6 dígitos gerado pelo app.
-        </p>
-        {enrollData.qrCode && (
-          <div className="flex justify-center">
-            <img
-              src={enrollData.qrCode}
-              alt="QR Code para autenticador"
-              className="w-40 h-40 rounded-lg border border-border"
-            />
+
+        {/* Instruções para celular — destaque */}
+        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            <Smartphone className="h-3.5 w-3.5" />
+            Configurando pelo celular?
           </div>
-        )}
-        <div className="rounded-lg bg-muted/40 border border-border px-3 py-2">
-          <p className="text-xs text-muted-foreground mb-1">Chave manual (se o QR não funcionar):</p>
-          <code className="text-xs font-mono break-all text-foreground/70">{enrollData.secret}</code>
+          <ol className="text-xs text-muted-foreground space-y-1 list-none">
+            <li>1. Instale um app autenticador: <span className="font-medium text-foreground">Google Authenticator</span> ou <span className="font-medium text-foreground">Authy</span></li>
+            <li>2. No app, escolha <strong>Adicionar conta manualmente</strong></li>
+            <li>3. Copie a chave abaixo e cole no campo "Chave"</li>
+            <li>4. Digite o código de 6 dígitos gerado pelo app</li>
+          </ol>
         </div>
+
+        {/* Chave secreta — destaque para mobile */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Chave secreta (copiar e colar no app)
+          </p>
+          <div className="flex gap-2">
+            <div className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 font-mono text-sm break-all select-all text-foreground/80">
+              {enrollData.secret}
+            </div>
+            <button
+              type="button"
+              onClick={copySecret}
+              className="shrink-0 flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-xs font-medium hover:bg-muted transition"
+              title="Copiar chave"
+            >
+              {copied
+                ? <><Check className="h-3.5 w-3.5 text-green-500" /> Copiado</>
+                : <><Copy className="h-3.5 w-3.5" /> Copiar</>
+              }
+            </button>
+          </div>
+        </div>
+
+        {/* QR Code — opcional para desktop */}
+        {enrollData.qrCode && (
+          <details className="group">
+            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition list-none flex items-center gap-1.5">
+              <span className="text-[10px] border border-border rounded px-1.5 py-0.5 font-mono group-open:hidden">▶</span>
+              <span className="text-[10px] border border-border rounded px-1.5 py-0.5 font-mono hidden group-open:inline">▼</span>
+              Mostrar QR Code (para scanner de câmera)
+            </summary>
+            <div className="pt-3 flex flex-col items-center gap-2">
+              <img
+                src={enrollData.qrCode}
+                alt="QR Code para autenticador"
+                className="w-36 h-36 rounded-lg border border-border"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Escaneie com a câmera do app autenticador.
+              </p>
+            </div>
+          </details>
+        )}
+
+        {/* Código */}
         <div>
-          <Label htmlFor="mfa-code">Código do autenticador</Label>
+          <Label htmlFor="mfa-code">Código do autenticador (6 dígitos)</Label>
           <Input
             id="mfa-code"
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
             placeholder="000000"
-            className="mt-1 text-center text-lg tracking-widest font-mono"
+            className="mt-1 text-center text-2xl tracking-[0.5em] font-mono h-14"
             maxLength={6}
             inputMode="numeric"
             autoComplete="one-time-code"
             autoFocus
           />
+          <p className="text-xs text-muted-foreground mt-1">
+            O código muda a cada 30 segundos. Digite assim que aparecer no app.
+          </p>
         </div>
+
         <div className="flex gap-2">
-          <Button type="button" variant="outline" className="flex-1" onClick={() => { setStep("idle"); setEnrollData(null); setCode(""); }}>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={() => { setStep("idle"); setEnrollData(null); setCode(""); }}
+          >
             Cancelar
           </Button>
           <Button type="submit" disabled={submitting || code.length < 6} className="flex-1">
@@ -237,8 +297,6 @@ export function MfaSetup() {
       </form>
     );
   }
-
-  // ── Desativação ──────────────────────────────────────────────────────
 
   if (step === "disabling") {
     return (
@@ -257,7 +315,7 @@ export function MfaSetup() {
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
             placeholder="000000"
-            className="mt-1 text-center text-lg tracking-widest font-mono"
+            className="mt-1 text-center text-2xl tracking-[0.5em] font-mono h-14"
             maxLength={6}
             inputMode="numeric"
             autoComplete="one-time-code"
@@ -265,7 +323,12 @@ export function MfaSetup() {
           />
         </div>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" className="flex-1" onClick={() => { setStep("idle"); setCode(""); }}>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={() => { setStep("idle"); setCode(""); }}
+          >
             Cancelar
           </Button>
           <Button

@@ -105,17 +105,14 @@ export function useMembroAuth(): UseMembroAuth {
 
     if (byEmail) {
       console.log("[use-membro-auth] ✓ membro por email:", byEmail.id, "paroquia:", byEmail.paroquia_id, "auth_user_id:", byEmail.auth_user_id ?? "NULL");
-      setMembro(mapMembro(byEmail));
 
-      // ── CORREÇÃO CRÍTICA: link SÍNCRONO via RPC SECURITY DEFINER ──────────
-      // Anteriormente era fire-and-forget (race condition: as queries de
-      // comunidades/atuações disparavam ANTES de auth_user_id estar definido).
-      // portal_auto_link_by_email() garante atomicamente:
-      //   • auth_user_id = auth.uid() no registro membros
-      //   • profiles row com paroquia_id (current_paroquia_id() passa a funcionar)
-      //   • user_roles entry com role = 'membro'
-      // Sem isso, todas as políticas RLS que dependem de auth_user_id ou
-      // current_paroquia_id() retornam vazio para o membro recém-vinculado.
+      // ── CORREÇÃO CRÍTICA: link SÍNCRONO via RPC, setMembro APÓS o link ────
+      // IMPORTANTE: setMembro() é chamado DEPOIS do RPC, não antes.
+      // Se setMembro() fosse chamado primeiro, React re-renderizaria imediatamente
+      // com auth_user_id=NULL no banco → as queries de comunidades/atuações
+      // disparariam antes do link estar concluído → RLS retornaria vazio.
+      // Chamando o RPC primeiro, garantimos que quando React re-renderizar,
+      // auth_user_id já está definido no banco e as políticas RLS passam.
       try {
         const { data: linkData, error: linkError } = await anyDb.rpc("portal_auto_link_by_email");
         if (linkError) {
@@ -124,7 +121,6 @@ export function useMembroAuth(): UseMembroAuth {
           console.log("[use-membro-auth] ✓ auto-link RPC:", linkData);
         }
       } catch (rpcErr) {
-        // RPC pode não existir em ambientes de desenvolvimento — fallback direto
         console.warn("[use-membro-auth] ⚠ RPC falhou, fallback direto:", rpcErr);
         await anyDb
           .from("membros")
@@ -133,6 +129,16 @@ export function useMembroAuth(): UseMembroAuth {
           .catch((e: unknown) => console.error("[use-membro-auth] ✗ fallback update falhou:", e));
       }
 
+      // Re-fetch após o link: auth_user_id já está definido → policies RLS passam
+      const { data: refreshed } = await anyDb
+        .from("membros")
+        .select(MEMBRO_SELECT)
+        .eq("auth_user_id", userId)
+        .eq("ativo", true)
+        .maybeSingle();
+
+      console.log("[use-membro-auth] ✓ re-fetch pós-link:", refreshed ? "OK auth_user_id=" + userId : "não encontrado por auth_user_id — usando byEmail");
+      setMembro(mapMembro(refreshed ?? byEmail));
       return true;
     }
 

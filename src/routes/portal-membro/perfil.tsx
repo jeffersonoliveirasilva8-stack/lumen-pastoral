@@ -162,25 +162,25 @@ function PortalMembroPerfil() {
         const hoje = new Date().toISOString().slice(0, 10);
         if (form.data_nascimento > hoje) throw new Error("Data de nascimento não pode ser no futuro.");
       }
-      const { error } = await anyDb
-        .from("membros")
-        .update({
-          nome: form.nome.trim(),
-          telefone: form.telefone || null,
-          data_nascimento: form.data_nascimento || null,
-          cpf: form.cpf || null,
-          rg: form.rg || null,
-          endereco: form.endereco || null,
-          cidade: form.cidade || null,
-          cep: form.cep || null,
-          nome_pai: form.nome_pai || null,
-          nome_mae: form.nome_mae || null,
-          nome_emergencia: form.nome_emergencia || null,
-          telefone_emergencia: form.telefone_emergencia || null,
-          observacoes: form.observacoes || null,
-        })
-        .eq("id", membro!.id);
+      // Usa RPC SECURITY DEFINER para garantir que o update ocorre mesmo quando
+      // auth_user_id não está configurado corretamente (resolve sincronização Admin ↔ Membro).
+      const { data: result, error } = await anyDb.rpc("atualizar_perfil_membro", {
+        p_nome:                form.nome.trim()            || null,
+        p_telefone:            form.telefone               || null,
+        p_data_nascimento:     form.data_nascimento        || null,
+        p_cpf:                 form.cpf                    || null,
+        p_rg:                  form.rg                     || null,
+        p_endereco:            form.endereco               || null,
+        p_cidade:              form.cidade                 || null,
+        p_cep:                 form.cep                    || null,
+        p_nome_pai:            form.nome_pai               || null,
+        p_nome_mae:            form.nome_mae               || null,
+        p_nome_emergencia:     form.nome_emergencia        || null,
+        p_telefone_emergencia: form.telefone_emergencia    || null,
+        p_observacoes:         form.observacoes            || null,
+      });
       if (error) throw error;
+      if (result && !result.success) throw new Error(result.error ?? "Erro ao salvar perfil.");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-perfil"] });
