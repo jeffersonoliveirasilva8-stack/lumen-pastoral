@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Flame, Loader2, LogIn, Mail, KeyRound, CheckCircle2 } from "lucide-react";
+import { Flame, Loader2, LogIn, Mail, CheckCircle2, ChevronLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getPostLoginRoute } from "@/lib/auth-redirect";
 
@@ -10,11 +10,9 @@ export const Route = createFileRoute("/membro/login")({
   head: () => ({ meta: [{ title: "Entrar — Portal do Servidor" }] }),
 });
 
-type Mode = "otp" | "senha";
-
 function MembroLoginPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<Mode>("senha");
+  const [showOtp, setShowOtp] = useState(false);
   // Verificação única de sessão — evita re-renders do hook completo na tela de login
   const [checking, setChecking] = useState(true);
 
@@ -95,32 +93,19 @@ function MembroLoginPage() {
             </p>
           </div>
 
-          {/* Toggle de modo */}
-          <div className="flex rounded-xl border border-border bg-muted/40 p-1 mb-6">
-            <button
-              type="button"
-              onClick={() => setMode("senha")}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition ${
-                mode === "senha" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <KeyRound className="h-3.5 w-3.5" /> E-mail e senha
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("otp")}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition ${
-                mode === "otp" ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Mail className="h-3.5 w-3.5" /> Link por e-mail
-            </button>
-          </div>
-
-          {mode === "otp" ? (
-            <OtpForm />
+          {showOtp ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowOtp(false)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-5 transition"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Voltar ao login com senha
+              </button>
+              <OtpForm />
+            </>
           ) : (
-            <SenhaForm />
+            <SenhaForm onShowOtp={() => setShowOtp(true)} />
           )}
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
@@ -239,7 +224,7 @@ const LOCKOUT_SECONDS = 60;
 
 // ── Senha Form ─────────────────────────────────────────────────────────
 
-function SenhaForm() {
+function SenhaForm({ onShowOtp }: { onShowOtp: () => void }) {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -350,14 +335,20 @@ function SenhaForm() {
         )}
       </form>
 
-      <div className="border-t border-border pt-4 space-y-2.5">
-        <p className="text-xs text-muted-foreground text-center">Primeiro acesso ou esqueceu a senha?</p>
+      <div className="border-t border-border pt-4 space-y-3">
         <a
           href="/esqueci-senha?from=membro"
+          className="block text-center text-xs text-primary hover:underline font-medium"
+        >
+          Esqueceu sua senha?
+        </a>
+        <button
+          type="button"
+          onClick={onShowOtp}
           className="w-full flex justify-center items-center gap-1.5 rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-medium text-foreground/70 hover:bg-muted hover:text-foreground transition"
         >
-          Criar / recuperar senha
-        </a>
+          <Mail className="h-3.5 w-3.5" /> Prefiro entrar com link por e-mail
+        </button>
       </div>
     </div>
   );

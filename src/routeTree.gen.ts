@@ -32,6 +32,7 @@ import { Route as PortalMembroCalendarioRouteImport } from './routes/portal-memb
 import { Route as ParoquiaSlugRouteImport } from './routes/paroquia.$slug'
 import { Route as MembroPrimeiroAcessoRouteImport } from './routes/membro/primeiro-acesso'
 import { Route as MembroLoginRouteImport } from './routes/membro/login'
+import { Route as MembroAtivarContaRouteImport } from './routes/membro/ativar-conta'
 import { Route as MembroTokenRouteImport } from './routes/membro.$token'
 import { Route as InscricaoSlugRouteImport } from './routes/inscricao.$slug'
 import { Route as EscalaTokenRouteImport } from './routes/escala.$token'
@@ -170,6 +171,11 @@ const MembroPrimeiroAcessoRoute = MembroPrimeiroAcessoRouteImport.update({
 const MembroLoginRoute = MembroLoginRouteImport.update({
   id: '/membro/login',
   path: '/membro/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MembroAtivarContaRoute = MembroAtivarContaRouteImport.update({
+  id: '/membro/ativar-conta',
+  path: '/membro/ativar-conta',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MembroTokenRoute = MembroTokenRouteImport.update({
@@ -326,6 +332,7 @@ export interface FileRoutesByFullPath {
   '/escala/$token': typeof EscalaTokenRoute
   '/inscricao/$slug': typeof InscricaoSlugRoute
   '/membro/$token': typeof MembroTokenRoute
+  '/membro/ativar-conta': typeof MembroAtivarContaRoute
   '/membro/login': typeof MembroLoginRoute
   '/membro/primeiro-acesso': typeof MembroPrimeiroAcessoRoute
   '/paroquia/$slug': typeof ParoquiaSlugRoute
@@ -373,6 +380,7 @@ export interface FileRoutesByTo {
   '/escala/$token': typeof EscalaTokenRoute
   '/inscricao/$slug': typeof InscricaoSlugRoute
   '/membro/$token': typeof MembroTokenRoute
+  '/membro/ativar-conta': typeof MembroAtivarContaRoute
   '/membro/login': typeof MembroLoginRoute
   '/membro/primeiro-acesso': typeof MembroPrimeiroAcessoRoute
   '/paroquia/$slug': typeof ParoquiaSlugRoute
@@ -422,6 +430,7 @@ export interface FileRoutesById {
   '/escala/$token': typeof EscalaTokenRoute
   '/inscricao/$slug': typeof InscricaoSlugRoute
   '/membro/$token': typeof MembroTokenRoute
+  '/membro/ativar-conta': typeof MembroAtivarContaRoute
   '/membro/login': typeof MembroLoginRoute
   '/membro/primeiro-acesso': typeof MembroPrimeiroAcessoRoute
   '/paroquia/$slug': typeof ParoquiaSlugRoute
@@ -471,6 +480,7 @@ export interface FileRouteTypes {
     | '/escala/$token'
     | '/inscricao/$slug'
     | '/membro/$token'
+    | '/membro/ativar-conta'
     | '/membro/login'
     | '/membro/primeiro-acesso'
     | '/paroquia/$slug'
@@ -518,6 +528,7 @@ export interface FileRouteTypes {
     | '/escala/$token'
     | '/inscricao/$slug'
     | '/membro/$token'
+    | '/membro/ativar-conta'
     | '/membro/login'
     | '/membro/primeiro-acesso'
     | '/paroquia/$slug'
@@ -566,6 +577,7 @@ export interface FileRouteTypes {
     | '/escala/$token'
     | '/inscricao/$slug'
     | '/membro/$token'
+    | '/membro/ativar-conta'
     | '/membro/login'
     | '/membro/primeiro-acesso'
     | '/paroquia/$slug'
@@ -600,6 +612,7 @@ export interface RootRouteChildren {
   EscalaTokenRoute: typeof EscalaTokenRoute
   InscricaoSlugRoute: typeof InscricaoSlugRoute
   MembroTokenRoute: typeof MembroTokenRoute
+  MembroAtivarContaRoute: typeof MembroAtivarContaRoute
   MembroLoginRoute: typeof MembroLoginRoute
   MembroPrimeiroAcessoRoute: typeof MembroPrimeiroAcessoRoute
   ParoquiaSlugRoute: typeof ParoquiaSlugRoute
@@ -767,6 +780,13 @@ declare module '@tanstack/react-router' {
       path: '/membro/login'
       fullPath: '/membro/login'
       preLoaderRoute: typeof MembroLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/membro/ativar-conta': {
+      id: '/membro/ativar-conta'
+      path: '/membro/ativar-conta'
+      fullPath: '/membro/ativar-conta'
+      preLoaderRoute: typeof MembroAtivarContaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/membro/$token': {
@@ -1025,6 +1045,7 @@ const rootRouteChildren: RootRouteChildren = {
   EscalaTokenRoute: EscalaTokenRoute,
   InscricaoSlugRoute: InscricaoSlugRoute,
   MembroTokenRoute: MembroTokenRoute,
+  MembroAtivarContaRoute: MembroAtivarContaRoute,
   MembroLoginRoute: MembroLoginRoute,
   MembroPrimeiroAcessoRoute: MembroPrimeiroAcessoRoute,
   ParoquiaSlugRoute: ParoquiaSlugRoute,

@@ -6,6 +6,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Loader2, UserCheck, UserX, Copy, ExternalLink,
   Clock, CheckCircle2, XCircle, ChevronDown, ChevronUp,
+  Send, ShieldCheck, AlertCircle, CircleDot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -46,12 +47,33 @@ const STATUS_CFG = {
 } as const;
 
 
+type MembroStatus = {
+  email: string;
+  conta_ativada: boolean;
+  perfil_completo: boolean;
+  ativacao_enviada_em: string | null;
+  ativo: boolean;
+};
+
+function getStatusMembro(email: string | null, membrosStatus: MembroStatus[]): {
+  label: string;
+  icon: typeof ShieldCheck;
+  classes: string;
+} {
+  if (!email) return { label: "Ativação pendente", icon: CircleDot, classes: "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300" };
+  const m = membrosStatus.find((ms) => ms.email?.toLowerCase() === email.toLowerCase());
+  if (!m || !m.conta_ativada) return { label: "Ativação pendente", icon: CircleDot, classes: "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300" };
+  if (!m.perfil_completo) return { label: "Cadastro incompleto", icon: AlertCircle, classes: "bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-300" };
+  return { label: "Ativo", icon: ShieldCheck, classes: "bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300" };
+}
+
 function SolicitacoesPage() {
   const { profile } = useAuth();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<Solicitacao | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [showMotivo, setShowMotivo] = useState(false);
+  const [reenviando, setReenviando] = useState<string | null>(null);
 
   // ── Paróquia (para o link de inscrição) ────────────────────────────────
   const { data: paroquia } = useQuery<{ nome: string; slug: string | null; id: string } | null>({
@@ -89,6 +111,22 @@ function SolicitacoesPage() {
   const pendentes  = solicitacoes.filter((s) => s.status === "pendente");
   const aprovadas  = solicitacoes.filter((s) => s.status === "aprovado");
   const rejeitadas = solicitacoes.filter((s) => s.status === "rejeitado");
+
+  // ── Status dos membros aprovados (conta_ativada / perfil_completo) ─────
+  const { data: membrosStatus = [] } = useQuery<MembroStatus[]>({
+    queryKey: ["membros-status", profile?.paroquia_id, aprovadas.map((s) => s.email).join(",")],
+    enabled: aprovadas.length > 0,
+    staleTime: 30 * 1000,
+    queryFn: async () => {
+      const emails = aprovadas.map((s) => s.email).filter(Boolean) as string[];
+      if (!emails.length) return [];
+      const { data } = await anyDb
+        .from("membros")
+        .select("email, conta_ativada, perfil_completo, ativacao_enviada_em, ativo")
+        .in("email", emails);
+      return data ?? [];
+    },
+  });
 
   // ── Mutation: Aprovar ──────────────────────────────────────────────────
   const aprovarMutation = useMutation({
@@ -165,19 +203,24 @@ function SolicitacoesPage() {
         } catch { /* tabela pode não existir — não-fatal */ }
       }
 
-      // 3. Envia link de acesso (cria auth user se não existir)
-      // O link leva ao primeiro-acesso onde o membro pode definir sua senha
+      // 3. Envia e-mail de ativação (cria auth user se não existir)
+      // O link leva a /membro/ativar-conta onde o membro cria sua senha obrigatória.
       if (sol.email) {
         try {
           await supabase.auth.signInWithOtp({
             email: sol.email,
             options: {
               shouldCreateUser: true,
-              emailRedirectTo: window.location.origin + "/membro/primeiro-acesso",
+              emailRedirectTo: window.location.origin + "/membro/ativar-conta",
             },
           });
+          // Registra quando o e-mail de ativação foi enviado
+          await anyDb
+            .from("membros")
+            .update({ ativacao_enviada_em: new Date().toISOString() })
+            .eq("email", sol.email);
         } catch {
-          // Não-fatal: membro pode usar /membro/login → Criar senha
+          // Não-fatal: coordenador pode reenviar pelo botão "Reenviar ativação"
         }
       }
 
@@ -225,6 +268,35 @@ function SolicitacoesPage() {
     },
     onError: (e: Error) => toast.error("Erro ao rejeitar: " + e.message),
   });
+
+  // ── Reenviar e-mail de ativação ────────────────────────────────────────
+  async function reenviarAtivacao(email: string) {
+    setReenviando(email);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: window.location.origin + "/membro/ativar-conta",
+        },
+      });
+      if (error) {
+        const isRateLimit = error.message.toLowerCase().includes("rate") || error.message.toLowerCase().includes("many");
+        toast.error(isRateLimit ? "Aguarde alguns minutos antes de reenviar." : "Erro ao reenviar: " + error.message);
+        return;
+      }
+      await anyDb
+        .from("membros")
+        .update({ ativacao_enviada_em: new Date().toISOString() })
+        .eq("email", email);
+      qc.invalidateQueries({ queryKey: ["membros-status", profile?.paroquia_id] });
+      toast.success("E-mail de ativação reenviado!");
+    } catch {
+      toast.error("Erro de conexão ao reenviar.");
+    } finally {
+      setReenviando(null);
+    }
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
@@ -303,6 +375,7 @@ function SolicitacoesPage() {
                 itens={aprovadas}
                 vazio="Nenhuma solicitação aprovada ainda."
                 onSelecionar={setSelected}
+                membrosStatus={membrosStatus}
               />
             </TabsContent>
             <TabsContent value="rejeitadas" className="mt-4">
@@ -484,17 +557,54 @@ function SolicitacoesPage() {
                   </div>
                 )}
 
-                {selected.status === "aprovado" && (
-                  <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span>
-                      Aprovado em{" "}
-                      {selected.aprovado_em
-                        ? format(new Date(selected.aprovado_em), "d 'de' MMMM 'de' yyyy", { locale: ptBR })
-                        : "data desconhecida"}
-                    </span>
-                  </div>
-                )}
+                {selected.status === "aprovado" && (() => {
+                  const status = getStatusMembro(selected.email, membrosStatus);
+                  const mStatus = membrosStatus.find((ms) => ms.email?.toLowerCase() === selected.email?.toLowerCase());
+                  const StatusIcon = status.icon;
+                  return (
+                    <div className="space-y-3 pt-4 border-t border-border">
+                      {/* Status da conta */}
+                      <div className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${status.classes}`}>
+                        <StatusIcon className="h-4 w-4 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium">{status.label}</span>
+                          {mStatus?.ativacao_enviada_em && (
+                            <span className="block text-xs opacity-70 mt-0.5">
+                              Ativação enviada em{" "}
+                              {format(new Date(mStatus.ativacao_enviada_em), "d MMM yyyy 'às' HH:mm", { locale: ptBR })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Aprovado em */}
+                      <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                        <span>
+                          Aprovado em{" "}
+                          {selected.aprovado_em
+                            ? format(new Date(selected.aprovado_em), "d 'de' MMMM 'de' yyyy", { locale: ptBR })
+                            : "data desconhecida"}
+                        </span>
+                      </div>
+
+                      {/* Reenviar ativação — só quando conta não foi ativada */}
+                      {selected.email && (!mStatus || !mStatus.conta_ativada) && (
+                        <Button
+                          variant="outline"
+                          className="w-full rounded-xl border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                          disabled={reenviando === selected.email}
+                          onClick={() => reenviarAtivacao(selected.email!)}
+                        >
+                          {reenviando === selected.email
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Send className="h-4 w-4" />}
+                          Reenviar ativação
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {selected.status === "rejeitado" && (
                   <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive space-y-1">
@@ -519,11 +629,12 @@ function SolicitacoesPage() {
 // ── Lista de solicitações ──────────────────────────────────────────────
 
 function Lista({
-  itens, vazio, onSelecionar,
+  itens, vazio, onSelecionar, membrosStatus = [],
 }: {
   itens: Solicitacao[];
   vazio: string;
   onSelecionar: (s: Solicitacao) => void;
+  membrosStatus?: MembroStatus[];
 }) {
   if (itens.length === 0) {
     return (
@@ -575,6 +686,16 @@ function Lista({
               <Badge variant={cfg.variant} className="text-[10px]">
                 {cfg.label}
               </Badge>
+              {sol.status === "aprovado" && membrosStatus.length > 0 && (() => {
+                const ms = getStatusMembro(sol.email, membrosStatus);
+                const MsIcon = ms.icon;
+                return (
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${ms.classes}`}>
+                    <MsIcon className="h-2.5 w-2.5 shrink-0" />
+                    {ms.label}
+                  </span>
+                );
+              })()}
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground rotate-[-90deg]" />
             </div>
           </button>

@@ -157,8 +157,19 @@ function PortalMembroLayout() {
   }, [loading, user, navigate]);
 
   useEffect(() => {
-    if (!loading && !linking && user && membro === null) navigate({ to: "/membro/primeiro-acesso" });
+    if (!loading && !linking && user && membro === null) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      navigate({ to: "/membro/ativar-conta" as any });
+    }
   }, [loading, linking, user, membro, navigate]);
+
+  // Guard: conta não ativada → forçar criação de senha
+  useEffect(() => {
+    if (!loading && !linking && membro && !membro.conta_ativada) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      navigate({ to: "/membro/ativar-conta" as any });
+    }
+  }, [loading, linking, membro, navigate]);
 
   useEffect(() => {
     if (pathname === "/portal-membro" || pathname === "/portal-membro/") navigate({ to: "/portal-membro/home" });

@@ -18,6 +18,7 @@ export type MembroAuth = {
   paroquia_slug: string | null;
   foto_url: string | null;
   tipo_acesso: string;
+  conta_ativada: boolean;
   ministerios: { id: string; nome: string; cor: string }[];
 };
 
@@ -36,7 +37,7 @@ type UseMembroAuth = {
 
 const MEMBRO_SELECT = `
   id, nome, email, telefone, data_nascimento, data_ingresso,
-  score, paroquia_id, foto_url, tipo_acesso,
+  score, paroquia_id, foto_url, tipo_acesso, conta_ativada,
   paroquias(nome, slug),
   membro_ministerios(ministerios(id, nome, cor))
 `;
@@ -56,6 +57,7 @@ function mapMembro(data: any): MembroAuth {
     paroquia_slug: data.paroquias?.slug ?? null,
     foto_url: data.foto_url,
     tipo_acesso: data.tipo_acesso ?? "membro",
+    conta_ativada: data.conta_ativada ?? false,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ministerios: (data.membro_ministerios ?? []).map((mm: any) => mm.ministerios).filter(Boolean),
   };
