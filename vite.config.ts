@@ -35,6 +35,8 @@ export default defineConfig(async ({ command }) => {
 
   return {
     plugins,
+    // Remove console.log e debugger do bundle de produção
+    esbuild: command === "build" ? { drop: ["console", "debugger"] } : {},
     // Injeta constante de build: true = Vercel SPA, false = Cloudflare SSR
     define: {
       __IS_SPA__: JSON.stringify(isVercel),

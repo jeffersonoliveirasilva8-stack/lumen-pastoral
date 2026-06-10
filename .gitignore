@@ -35,3 +35,6 @@ dist-ssr
 .env
 .env.*
 env
+
+# Supabase local state (contém project-ref, organization_id, connection strings)
+supabase/.temp/

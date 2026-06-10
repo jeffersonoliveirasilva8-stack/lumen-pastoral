@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Flame, Loader2, LogIn, Mail, KeyRound, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getPostLoginRoute } from "@/lib/auth-redirect";
 
 export const Route = createFileRoute("/membro/login")({
   component: MembroLoginPage,
@@ -19,14 +20,18 @@ function MembroLoginPage() {
 
   useEffect(() => {
     // Listener para capturar tokens processados assincronamente (magic link implicit flow)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) navigate({ to: "/portal-membro/home" });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const route = await getPostLoginRoute(supabase);
+        navigate({ to: route, replace: true });
+      }
     });
 
     supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+      .then(async ({ data: { session } }) => {
         if (session?.user) {
-          navigate({ to: "/portal-membro/home" });
+          const route = await getPostLoginRoute(supabase);
+          navigate({ to: route, replace: true });
         } else {
           setChecking(false);
         }
@@ -153,7 +158,7 @@ function OtpForm() {
         email: normalizedEmail,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: window.location.origin + "/portal-membro/home",
+          emailRedirectTo: window.location.origin + "/auth/callback",
         },
       });
       if (error) {
@@ -229,6 +234,9 @@ function OtpForm() {
   );
 }
 
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECONDS = 60;
+
 // ── Senha Form ─────────────────────────────────────────────────────────
 
 function SenhaForm() {
@@ -236,9 +244,39 @@ function SenhaForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!lockedUntil) return;
+    timerRef.current = setInterval(() => {
+      const remaining = Math.ceil((lockedUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setLockedUntil(null);
+        setAttempts(0);
+        setCountdown(0);
+        if (timerRef.current) clearInterval(timerRef.current);
+      } else {
+        setCountdown(remaining);
+      }
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [lockedUntil]);
+
+  function recordFailedAttempt() {
+    const next = attempts + 1;
+    setAttempts(next);
+    if (next >= MAX_ATTEMPTS) {
+      setLockedUntil(Date.now() + LOCKOUT_SECONDS * 1000);
+      setCountdown(LOCKOUT_SECONDS);
+    }
+  }
 
   async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
+    if (lockedUntil && Date.now() < lockedUntil) return;
     setSubmitting(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -246,14 +284,14 @@ function SenhaForm() {
         password,
       });
       if (error) {
-        toast.error(
-          error.message === "Invalid login credentials"
-            ? "E-mail ou senha incorretos."
-            : error.message
-        );
+        recordFailedAttempt();
+        const isInvalidCreds = error.message === "Invalid login credentials"
+          || error.message.toLowerCase().includes("invalid login");
+        toast.error(isInvalidCreds ? "E-mail ou senha incorretos." : "Erro ao autenticar. Tente novamente.");
         return;
       }
-      navigate({ to: "/portal-membro/home" });
+      const route = await getPostLoginRoute(supabase);
+      navigate({ to: route, replace: true });
     } catch {
       toast.error("Erro de conexão. Verifique sua internet e tente novamente.");
     } finally {
@@ -297,12 +335,19 @@ function SenhaForm() {
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || (!!lockedUntil && Date.now() < lockedUntil)}
           className="w-full flex justify-center items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60 transition"
         >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-          Entrar
+          {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+          {lockedUntil && Date.now() < lockedUntil
+            ? `Aguarde ${countdown}s`
+            : submitting ? null : <><LogIn className="h-4 w-4" /> Entrar</>}
         </button>
+        {attempts > 0 && !lockedUntil && (
+          <p className="text-xs text-destructive text-center">
+            {MAX_ATTEMPTS - attempts} tentativa{MAX_ATTEMPTS - attempts !== 1 ? "s" : ""} restante{MAX_ATTEMPTS - attempts !== 1 ? "s" : ""}
+          </p>
+        )}
       </form>
 
       <div className="border-t border-border pt-4 space-y-2.5">

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Loader2, Lock, Mail, Phone, Camera, User, Eye, EyeOff, Save } from "lucide-react";
+import { Loader2, Lock, Mail, Phone, Camera, User, Eye, EyeOff, Save, ShieldCheck } from "lucide-react";
+import { MfaSetup } from "@/components/security/MfaSetup";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -190,6 +191,14 @@ function MinhaConta() {
             Alterar senha
           </Button>
         </form>
+      </section>
+
+      {/* Segurança — 2FA */}
+      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4 text-muted-foreground" /> Segurança
+        </h2>
+        <MfaSetup />
       </section>
     </div>
   );

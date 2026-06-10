@@ -101,6 +101,13 @@ function AuthLayout() {
     }
   }, [loading, user, roles, navigate]);
 
+  // Roles carregadas mas sem acesso a painel nem portal → conta corrompida/desativada
+  useEffect(() => {
+    if (!loading && user && roles.length > 0 && !hasAdminAccess && !isServidor) {
+      navigate({ to: "/acesso-negado" });
+    }
+  }, [loading, user, roles, hasAdminAccess, isServidor, navigate]);
+
   useEffect(() => {
     if (!loading && user && profile && !profile.paroquia_id && pathname !== "/onboarding" && hasAdminAccess) {
       navigate({ to: "/onboarding" });

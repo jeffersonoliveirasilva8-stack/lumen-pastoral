@@ -4,7 +4,7 @@
 -- Supabase pg_cron + pg_net → chama a Edge Function liturgia-diaria
 --
 -- Executar no Supabase Dashboard → SQL Editor
--- Substitua eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8 pela sua chave pública (Settings → API)
+-- Substitua <OBSOLETO:projeto-antigo-hbbkdebuhueqjyrdeyyc> pela sua chave pública (Settings → API)
 -- ============================================================
 
 -- 1. Habilitar extensões (pg_net já vem habilitado no Supabase)
@@ -25,7 +25,7 @@ SELECT cron.schedule(
   SELECT net.http_post(
     url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/liturgia-diaria?days=3',
     headers := jsonb_build_object(
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8',
+      'Authorization', 'Bearer <OBSOLETO:projeto-antigo-hbbkdebuhueqjyrdeyyc>',
       'Content-Type',  'application/json'
     ),
     body    := '{}'::jsonb
@@ -46,7 +46,7 @@ WHERE jobname = 'liturgia-diaria-sync';
 -- SELECT net.http_post(
 --   url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/liturgia-diaria?days=7',
 --   headers := jsonb_build_object(
---     'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8',
+--     'Authorization', 'Bearer <OBSOLETO:projeto-antigo-hbbkdebuhueqjyrdeyyc>',
 --     'Content-Type',  'application/json'
 --   ),
 --   body    := '{}'::jsonb
@@ -55,7 +55,7 @@ WHERE jobname = 'liturgia-diaria-sync';
 -- Ou via curl:
 -- curl -X GET \
 --   "https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/liturgia-diaria?days=7" \
---   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhiYmtkZWJ1aHVlcWp5cmRleXljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMDgwMzYsImV4cCI6MjA5NDY4NDAzNn0.G1JW_iZzehO6usN3kebUEhBxiWCsRaxUywJ66nO74V8"
+--   -H "Authorization: Bearer <OBSOLETO:projeto-antigo-hbbkdebuhueqjyrdeyyc>"
 -- ============================================================
 
 -- 5. Monitoramento — últimas execuções do cron

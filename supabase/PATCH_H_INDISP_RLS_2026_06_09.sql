@@ -15,9 +15,13 @@
 --   DELETE → membro deleta apenas as suas; admin deleta qualquer uma
 -- ============================================================
 
--- Remove a policy antiga permissiva
+-- Remove policies antigas e as novas (idempotência total)
 DROP POLICY IF EXISTS "indisponibilidades_rls"      ON public.indisponibilidades;
 DROP POLICY IF EXISTS "indisponibilidades_paroquia" ON public.indisponibilidades;
+DROP POLICY IF EXISTS "indisp_membro_read"          ON public.indisponibilidades;
+DROP POLICY IF EXISTS "indisp_membro_insert"        ON public.indisponibilidades;
+DROP POLICY IF EXISTS "indisp_membro_delete"        ON public.indisponibilidades;
+DROP POLICY IF EXISTS "indisp_admin_update"         ON public.indisponibilidades;
 
 -- Membro lê apenas as próprias indisponibilidades futuras
 -- Admin vê todas da paróquia

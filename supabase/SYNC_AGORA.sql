@@ -43,7 +43,7 @@ LIMIT 20;
 SELECT net.http_post(
   url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/liturgia-diaria?days=30',
   headers := jsonb_build_object(
-    'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1c3VvZ2dtbGh0dnJjbHJ6dmZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzk1OTUsImV4cCI6MjA5NDg1NTU5NX0.14p2eZ2SLHYLlJ5mWsOyxAR_cGNbxHSZ9E9kmEbuI5I',
+    'Authorization', 'Bearer <VAULT:homilia_anon_key>',
     'Content-Type', 'application/json'
   ),
   body := '{}'::jsonb
@@ -55,7 +55,7 @@ SELECT net.http_post(
 SELECT net.http_post(
   url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/homilia-diaria',
   headers := jsonb_build_object(
-    'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1c3VvZ2dtbGh0dnJjbHJ6dmZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzk1OTUsImV4cCI6MjA5NDg1NTU5NX0.14p2eZ2SLHYLlJ5mWsOyxAR_cGNbxHSZ9E9kmEbuI5I',
+    'Authorization', 'Bearer <VAULT:homilia_anon_key>',
     'Content-Type', 'application/json'
   ),
   body := '{}'::jsonb
@@ -67,7 +67,7 @@ SELECT net.http_post(
 SELECT net.http_post(
   url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/homilia-diaria?date=2026-06-04',
   headers := jsonb_build_object(
-    'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1c3VvZ2dtbGh0dnJjbHJ6dmZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzk1OTUsImV4cCI6MjA5NDg1NTU5NX0.14p2eZ2SLHYLlJ5mWsOyxAR_cGNbxHSZ9E9kmEbuI5I',
+    'Authorization', 'Bearer <VAULT:homilia_anon_key>',
     'Content-Type', 'application/json'
   ),
   body := '{}'::jsonb

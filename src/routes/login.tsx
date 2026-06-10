@@ -1,76 +1,84 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Flame, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const anyDb = supabase as any;
+import { getPostLoginRoute } from "@/lib/auth-redirect";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
   head: () => ({ meta: [{ title: "Entrar — Lumen Pastoral" }] }),
 });
 
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECONDS = 60;
+
 function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Countdown timer quando bloqueado
+  useEffect(() => {
+    if (!lockedUntil) return;
+    timerRef.current = setInterval(() => {
+      const remaining = Math.ceil((lockedUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setLockedUntil(null);
+        setAttempts(0);
+        setCountdown(0);
+        if (timerRef.current) clearInterval(timerRef.current);
+      } else {
+        setCountdown(remaining);
+      }
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [lockedUntil]);
+
+  function recordFailedAttempt() {
+    const next = attempts + 1;
+    setAttempts(next);
+    if (next >= MAX_ATTEMPTS) {
+      const until = Date.now() + LOCKOUT_SECONDS * 1000;
+      setLockedUntil(until);
+      setCountdown(LOCKOUT_SECONDS);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (lockedUntil && Date.now() < lockedUntil) return;
     setLoading(true);
 
-    const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setLoading(false);
-      toast.error(error.message === "Invalid login credentials" ? "Credenciais inválidas." : error.message);
+      recordFailedAttempt();
+      const isInvalidCreds = error.message === "Invalid login credentials"
+        || error.message.toLowerCase().includes("invalid login");
+      toast.error(isInvalidCreds ? "E-mail ou senha incorretos." : "Erro ao autenticar. Tente novamente.");
       return;
     }
 
-    const userId = authData.user?.id;
-    if (!userId) {
-      setLoading(false);
-      navigate({ to: "/painel" });
-      return;
-    }
-
-    // Verifica a role do usuário para redirecionar corretamente
-    const { data: rolesData } = await anyDb
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
-
-    const roles: string[] = (rolesData ?? []).map((r: { role: string }) => r.role);
-    const isMembro = roles.some((r) => r === "membro" || r === "servidor");
-
-    if (isMembro) {
-      toast.success("Bem-vindo de volta.");
-      navigate({ to: "/portal-membro/home" });
-      return;
-    }
-
-    // Sem roles ainda — tenta auto-link (pode ser membro sem role ainda)
-    if (roles.length === 0) {
-      const { data: linkResult } = await anyDb.rpc("portal_auto_link_by_email");
-      if (linkResult?.success) {
-        toast.success(`Bem-vindo, ${linkResult.nome ?? ""}!`);
-        navigate({ to: "/portal-membro/home" });
-        return;
-      }
-    }
-
-    // Administrador
+    // Redireciona para o portal correto conforme role
+    const route = await getPostLoginRoute(supabase);
     toast.success("Bem-vindo de volta.");
-    navigate({ to: "/painel" });
+    navigate({ to: route, replace: true });
     setLoading(false);
   }
 
   async function handleGoogle() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin + "/painel" },
+      options: {
+        // Callback inteligente: detecta role e redireciona para o portal correto
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
     if (error) toast.error("Falha no login com Google.");
   }
@@ -122,9 +130,21 @@ function LoginPage() {
                 placeholder="••••••••"
               />
             </div>
-            <button type="submit" disabled={loading} className="w-full flex justify-center items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60">
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />} Entrar
+            <button
+              type="submit"
+              disabled={loading || (!!lockedUntil && Date.now() < lockedUntil)}
+              className="w-full flex justify-center items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60"
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {lockedUntil && Date.now() < lockedUntil
+                ? `Aguarde ${countdown}s`
+                : "Entrar"}
             </button>
+            {attempts > 0 && !lockedUntil && (
+              <p className="text-xs text-destructive text-center">
+                {MAX_ATTEMPTS - attempts} tentativa{MAX_ATTEMPTS - attempts !== 1 ? "s" : ""} restante{MAX_ATTEMPTS - attempts !== 1 ? "s" : ""}
+              </p>
+            )}
           </form>
 
           <div className="my-6 flex items-center gap-3">

@@ -17,8 +17,9 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public AS $func$
 DECLARE
   v_url    text    := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/homilia-diaria';
-  -- Anon key: chave pública, segura para uso aqui (já está no .env do cliente)
-  v_anon   text    := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1c3VvZ2dtbGh0dnJjbHJ6dmZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzk1OTUsImV4cCI6MjA5NDg1NTU5NX0.14p2eZ2SLHYLlJ5mWsOyxAR_cGNbxHSZ9E9kmEbuI5I';
+  -- VAULT: chave removida — auditoria de segurança 2026-06-10
+  -- Use PATCH_I_HOMILIA_RESILIENTE_2026_06_10.sql (lê do vault.decrypted_secrets)
+  v_anon   text    := '<VAULT:homilia_anon_key>';
   v_req_id bigint;
   v_hoje   date    := (now() AT TIME ZONE 'America/Sao_Paulo')::date;
 BEGIN

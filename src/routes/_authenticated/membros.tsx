@@ -35,13 +35,17 @@ const anyDb = supabase as any;
 
 function logDbError(context: string, error: unknown) {
   const e = error as Record<string, unknown>;
-  console.error(`[DB ERROR] ${context}`, {
-    message: e?.message,
-    code: e?.code,
-    details: e?.details,
-    hint: e?.hint,
-    full: error,
-  });
+  if (import.meta.env.DEV) {
+    console.error(`[DB ERROR] ${context}`, {
+      message: e?.message,
+      code: e?.code,
+      details: e?.details,
+      hint: e?.hint,
+      full: error,
+    });
+  } else {
+    console.error(`[DB ERROR] ${context}: ${e?.code ?? "unknown"}`);
+  }
   return `${context}: ${e?.message ?? String(error)}`;
 }
 

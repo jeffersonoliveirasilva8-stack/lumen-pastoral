@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { MfaSetup } from "@/components/security/MfaSetup";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const anyDb = supabase as any;
@@ -516,6 +517,14 @@ function PortalMembroPerfil() {
             Alterar senha
           </Button>
         </form>
+
+        {/* Segurança — 2FA */}
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <p className="text-xs font-semibold flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5 text-muted-foreground" /> Segurança
+          </p>
+          <MfaSetup />
+        </div>
       </div>
     </div>
   );
