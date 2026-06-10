@@ -5,12 +5,16 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   BellOff, Info, AlertTriangle, Zap, Settings2, CheckCheck, Loader2,
-  Clock, History, ChevronDown, ChevronUp,
+  Clock, History, ChevronDown, ChevronUp, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const anyDb = supabase as any;
@@ -46,6 +50,7 @@ function PortalMembroNotificacoes() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [historicoOpen, setHistoricoOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: notifs = [], isLoading } = useQuery<Notificacao[]>({
     queryKey: ["pm-notificacoes", membro?.paroquia_id, membro?.id],
@@ -94,6 +99,19 @@ function PortalMembroNotificacoes() {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [membro?.paroquia_id, qc]);
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await anyDb.from("notificacoes").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
+      setDeleteId(null);
+      toast.success("Notificação removida.");
+    },
+    onError: (e: Error) => toast.error("Erro ao remover: " + e.message),
+  });
 
   const marcarLidaMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -193,42 +211,50 @@ function PortalMembroNotificacoes() {
                   const cfg = TIPO_CONFIG[n.tipo] ?? TIPO_CONFIG.aviso;
                   const Icon = cfg.icon;
                   return (
-                    <button
-                      key={n.id}
-                      onClick={() => {
-                        marcarLidaMutation.mutate(n.id);
-                        if (n.link_referencia) {
-                          navigate({ to: n.link_referencia as never });
-                        }
-                      }}
-                      disabled={marcarLidaMutation.isPending}
-                      className={`w-full text-left rounded-2xl border px-4 py-4 shadow-sm transition active:scale-[0.99] ${cfg.color}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="shrink-0 mt-0.5 rounded-full p-1.5">
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-sm font-semibold leading-snug">{n.titulo}</p>
-                            <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />
+                    <div key={n.id} className={`flex items-stretch rounded-2xl border shadow-sm ${cfg.color}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          marcarLidaMutation.mutate(n.id);
+                          if (n.link_referencia) navigate({ to: n.link_referencia as never });
+                        }}
+                        disabled={marcarLidaMutation.isPending}
+                        className="flex-1 text-left px-4 py-4 transition active:scale-[0.99]"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="shrink-0 mt-0.5 rounded-full p-1.5">
+                            <Icon className="h-4 w-4" />
                           </div>
-                          {n.mensagem && (
-                            <p className="text-xs mt-1 leading-relaxed text-foreground/80">{n.mensagem}</p>
-                          )}
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <span className="text-[10px] font-medium text-foreground/50">{cfg.label}</span>
-                            <span className="text-[10px] text-foreground/40">·</span>
-                            <span className="text-[10px] capitalize text-foreground/50">
-                              {format(parseISO(n.created_at), "d 'de' MMM, HH:mm", { locale: ptBR })}
-                            </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold leading-snug">{n.titulo}</p>
+                              <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />
+                            </div>
+                            {n.mensagem && (
+                              <p className="text-xs mt-1 leading-relaxed text-foreground/80">{n.mensagem}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <span className="text-[10px] font-medium text-foreground/50">{cfg.label}</span>
+                              <span className="text-[10px] text-foreground/40">·</span>
+                              <span className="text-[10px] capitalize text-foreground/50">
+                                {format(parseISO(n.created_at), "d 'de' MMM, HH:mm", { locale: ptBR })}
+                              </span>
+                            </div>
+                            <p className="mt-1.5 text-[11px] text-foreground/50 underline underline-offset-2">
+                              {n.link_referencia ? "Toque para abrir" : "Toque para marcar como lida"}
+                            </p>
                           </div>
-                          <p className="mt-1.5 text-[11px] text-foreground/50 underline underline-offset-2">
-                            {n.link_referencia ? "Toque para abrir" : "Toque para marcar como lida"}
-                          </p>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteId(n.id)}
+                        className="px-3 border-l border-current/20 rounded-r-2xl hover:bg-black/10 transition shrink-0"
+                        title="Remover notificação"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 opacity-40 hover:opacity-80" />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -266,9 +292,9 @@ function PortalMembroNotificacoes() {
                     return (
                       <div
                         key={n.id}
-                        className="rounded-2xl border border-border bg-card/50 px-4 py-3 opacity-60"
+                        className="flex items-stretch rounded-2xl border border-border bg-card/50 opacity-60"
                       >
-                        <div className="flex items-start gap-3">
+                        <div className="flex-1 flex items-start gap-3 px-4 py-3">
                           <div className="shrink-0 mt-0.5 rounded-full p-1.5 bg-muted">
                             <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
@@ -288,6 +314,14 @@ function PortalMembroNotificacoes() {
                             </div>
                           </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteId(n.id)}
+                          className="px-3 border-l border-border/50 rounded-r-2xl hover:bg-destructive/10 hover:text-destructive transition shrink-0"
+                          title="Remover notificação"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 opacity-50" />
+                        </button>
                       </div>
                     );
                   })}
@@ -305,6 +339,26 @@ function PortalMembroNotificacoes() {
           )}
         </div>
       )}
+
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover notificação?</AlertDialogTitle>
+            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteId && deleteMutation.mutate(deleteId)}
+            >
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Loader2, MessageSquare, Clock, CheckCircle2, AlertTriangle, X,
@@ -36,6 +36,8 @@ type Ocorrencia = {
   created_at: string;
   updated_at: string;
   membro: { nome: string } | null;
+  // campos vindos do RPC get_ocorrencias_paroquia
+  membro_nome?: string | null;
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -86,23 +88,17 @@ function OcorrenciasPage() {
     queryKey: ["adm-ocorrencias", pid, statusFiltro],
     enabled: !!pid,
     queryFn: async () => {
-      let q = anyDb
-        .from("ocorrencias_membros")
-        .select(`
-          id, tipo, titulo, descricao, status, resposta,
-          created_at, updated_at,
-          membro:membros(nome)
-        `)
-        .eq("paroquia_id", pid)
-        .order("created_at", { ascending: false });
-
-      if (statusFiltro !== "todas") {
-        q = q.eq("status", statusFiltro);
-      }
-
-      const { data, error } = await q;
+      // SECURITY DEFINER RPC: bypassa RLS, verifica acesso internamente
+      const { data, error } = await anyDb.rpc("get_ocorrencias_paroquia", {
+        p_paroquia_id: pid,
+        p_status: statusFiltro,
+      });
       if (error) throw error;
-      return (data ?? []) as Ocorrencia[];
+      // Normaliza: RPC retorna membro_nome flat, componentes esperam membro.nome
+      return ((data ?? []) as (Ocorrencia & { membro_nome?: string | null })[]).map((row) => ({
+        ...row,
+        membro: row.membro_nome ? { nome: row.membro_nome } : null,
+      }));
     },
   });
 
