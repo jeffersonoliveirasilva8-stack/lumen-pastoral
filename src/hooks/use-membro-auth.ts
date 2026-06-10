@@ -81,6 +81,7 @@ export function useMembroAuth(): UseMembroAuth {
       .maybeSingle();
 
     if (byId) {
+      console.log("[use-membro-auth] ✓ membro por auth_user_id:", byId.id, "paroquia:", byId.paroquia_id);
       setMembro(mapMembro(byId));
       return true;
     }
@@ -88,6 +89,7 @@ export function useMembroAuth(): UseMembroAuth {
     // 2. Busca por email — funciona para primeiro acesso (requer política "membro_read_own")
     const email = userEmail ?? (await supabase.auth.getUser()).data.user?.email;
     if (!email) {
+      console.warn("[use-membro-auth] ✗ sem email para busca de fallback");
       setMembro(null);
       return false;
     }
@@ -100,16 +102,39 @@ export function useMembroAuth(): UseMembroAuth {
       .maybeSingle();
 
     if (byEmail) {
+      console.log("[use-membro-auth] ✓ membro por email:", byEmail.id, "paroquia:", byEmail.paroquia_id, "auth_user_id:", byEmail.auth_user_id ?? "NULL");
       setMembro(mapMembro(byEmail));
-      // Vincula auth_user_id em background (requer política "membro_self_link")
-      anyDb
-        .from("membros")
-        .update({ auth_user_id: userId })
-        .eq("id", byEmail.id)
-        .then(() => {/* best-effort */});
+
+      // ── CORREÇÃO CRÍTICA: link SÍNCRONO via RPC SECURITY DEFINER ──────────
+      // Anteriormente era fire-and-forget (race condition: as queries de
+      // comunidades/atuações disparavam ANTES de auth_user_id estar definido).
+      // portal_auto_link_by_email() garante atomicamente:
+      //   • auth_user_id = auth.uid() no registro membros
+      //   • profiles row com paroquia_id (current_paroquia_id() passa a funcionar)
+      //   • user_roles entry com role = 'membro'
+      // Sem isso, todas as políticas RLS que dependem de auth_user_id ou
+      // current_paroquia_id() retornam vazio para o membro recém-vinculado.
+      try {
+        const { data: linkData, error: linkError } = await anyDb.rpc("portal_auto_link_by_email");
+        if (linkError) {
+          console.warn("[use-membro-auth] ⚠ portal_auto_link_by_email erro:", linkError.message);
+        } else {
+          console.log("[use-membro-auth] ✓ auto-link RPC:", linkData);
+        }
+      } catch (rpcErr) {
+        // RPC pode não existir em ambientes de desenvolvimento — fallback direto
+        console.warn("[use-membro-auth] ⚠ RPC falhou, fallback direto:", rpcErr);
+        await anyDb
+          .from("membros")
+          .update({ auth_user_id: userId })
+          .eq("id", byEmail.id)
+          .catch((e: unknown) => console.error("[use-membro-auth] ✗ fallback update falhou:", e));
+      }
+
       return true;
     }
 
+    console.warn("[use-membro-auth] ✗ membro não encontrado. userId:", userId, "email:", email);
     setMembro(null);
     return false;
   }

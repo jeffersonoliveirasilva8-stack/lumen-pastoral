@@ -57,6 +57,10 @@ function CompletarCadastroPage() {
     enabled:  !!membro?.id,
     staleTime: 0,
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log("[completar-cadastro] auth.user.id:", user?.id);
+      console.log("[completar-cadastro] membro.id:", membro!.id, "paroquia_id:", membro!.paroquia_id);
+
       const [membroRes, atuacoesRes, restricoesRes] = await Promise.all([
         anyDb
           .from("membros")
@@ -72,6 +76,11 @@ function CompletarCadastroPage() {
           .select("missa_padrao_id")
           .eq("membro_id", membro!.id),
       ]);
+
+      if (membroRes.error) console.error("[completar-cadastro] membros SELECT error:", membroRes.error.message);
+      if (atuacoesRes.error) console.error("[completar-cadastro] membro_atuacoes error:", atuacoesRes.error?.message);
+      if (restricoesRes.error) console.error("[completar-cadastro] membro_missa_restricoes error:", restricoesRes.error?.message);
+
       return {
         telefone:        (membroRes.data?.telefone        ?? "") as string,
         data_nascimento: (membroRes.data?.data_nascimento ?? "") as string,
@@ -104,11 +113,12 @@ function CompletarCadastroPage() {
     queryKey: ["completar-comunidades", membro?.paroquia_id],
     enabled:  !!membro?.paroquia_id,
     queryFn:  async () => {
-      const { data } = await anyDb
+      const { data, error } = await anyDb
         .from("comunidades")
         .select("id, nome")
         .eq("paroquia_id", membro!.paroquia_id)
         .order("nome");
+      console.log("[completar-cadastro] comunidades encontradas:", data?.length ?? 0, error ? "RLS-ERROR:" + error.message : "");
       return data ?? [];
     },
   });
@@ -117,12 +127,13 @@ function CompletarCadastroPage() {
     queryKey: ["completar-atuacoes", membro?.paroquia_id],
     enabled:  !!membro?.paroquia_id,
     queryFn:  async () => {
-      const { data } = await anyDb
+      const { data, error } = await anyDb
         .from("atuacoes_pastorais")
         .select("id, nome, cor")
         .eq("paroquia_id", membro!.paroquia_id)
         .eq("ativo", true)
         .order("ordem", { ascending: true });
+      console.log("[completar-cadastro] atuacoes encontradas:", data?.length ?? 0, error ? "RLS-ERROR:" + error.message : "");
       return data ?? [];
     },
   });
