@@ -34,6 +34,7 @@ dist-ssr
 # Local environment files
 .env
 .env.*
+!.env.example
 env
 
 # Supabase local state (contém project-ref, organization_id, connection strings)
