@@ -6,7 +6,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Loader2, Calendar, MapPin, CheckCircle2, XCircle,
   CalendarOff, History, ChevronDown, ChevronUp, Plus, X,
-  Shield, Users, AlertTriangle, Save,
+  Shield, Users, AlertTriangle, Save, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
@@ -14,6 +14,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const anyDb = supabase as any;
@@ -1198,92 +1202,206 @@ function IndisponibilidadeTab({
 }) {
   const [newData, setNewData] = useState("");
   const [newMotivo, setNewMotivo] = useState("");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const minDate = (() => {
-    if (diasAntecedencia > 0) {
-      const d = new Date();
-      d.setDate(d.getDate() + diasAntecedencia);
-      return d.toISOString().slice(0, 10);
-    }
-    return new Date().toISOString().slice(0, 10);
-  })();
+  const minDate = diasAntecedencia > 0
+    ? (() => { const d = new Date(); d.setDate(d.getDate() + diasAntecedencia); return d.toISOString().slice(0, 10); })()
+    : new Date().toISOString().slice(0, 10);
 
-  const canAdd = !!newData && newMotivo.trim().length > 0;
+  const canAdd = !!newData;
 
   function handleAdd() {
     if (!canAdd) return;
-    if (diasAntecedencia > 0) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const selected = new Date(newData + "T12:00:00");
-      const diffDays = Math.floor((selected.getTime() - today.getTime()) / 86400000);
-      if (diffDays < diasAntecedencia) {
-        toast.error(`Registre com pelo menos ${diasAntecedencia} dia${diasAntecedencia > 1 ? "s" : ""} de antecedência.`);
-        return;
-      }
+    if (indisps.some((i) => i.data === newData)) {
+      toast.error("Essa data já está bloqueada.");
+      return;
     }
     onAdd(newData, newMotivo.trim());
     setNewData("");
     setNewMotivo("");
   }
 
+  // Agrupa por mês (key = "2026-06")
+  const byMonth: Record<string, IndispItem[]> = {};
+  for (const ind of indisps) {
+    const key = ind.data.slice(0, 7);
+    if (!byMonth[key]) byMonth[key] = [];
+    byMonth[key].push(ind);
+  }
+
+  const deleteTarget = indisps.find((i) => i.id === deleteConfirmId);
+
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Registre datas em que não poderá servir. O sistema vai respeitá-las ao gerar escalas.
-      </p>
-      {diasAntecedencia > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-          Indisponibilidades devem ser registradas com pelo menos <strong>{diasAntecedencia} dia{diasAntecedencia > 1 ? "s" : ""}</strong> de antecedência.
-        </div>
-      )}
-      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Adicionar indisponibilidade</p>
-        <div className="space-y-2">
-          <input
-            type="date"
-            value={newData}
-            min={minDate}
-            onChange={(e) => setNewData(e.target.value)}
-            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-          />
-          <input
-            placeholder="Motivo obrigatório"
-            value={newMotivo}
-            onChange={(e) => setNewMotivo(e.target.value)}
-            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
-          />
-        </div>
-        <Button size="sm" disabled={!canAdd || saving} onClick={handleAdd} className="w-full">
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-          Registrar
-        </Button>
+    <div className="space-y-5">
+
+      {/* Header */}
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground">Escalas</p>
+        <h2 className="mt-1 font-serif text-2xl">Minhas indisponibilidades</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Registre as datas em que não poderá servir. O motor de escalas vai respeitá-las.
+        </p>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-      ) : indisps.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center">
-          <CalendarOff className="h-7 w-7 mx-auto text-muted-foreground mb-2" />
-          <p className="text-sm text-muted-foreground">Nenhuma indisponibilidade registrada.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {indisps.map((ind) => (
-            <div key={ind.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
-              <div>
-                <p className="text-sm font-medium capitalize">
-                  {format(new Date(ind.data + "T12:00:00"), "EEEE, d 'de' MMMM", { locale: ptBR })}
-                </p>
-                {ind.motivo && <p className="text-xs text-muted-foreground mt-0.5">{ind.motivo}</p>}
-              </div>
-              <button onClick={() => onRemove(ind.id)} className="text-muted-foreground hover:text-destructive shrink-0">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
+      {/* Regra de antecedência */}
+      {diasAntecedencia > 0 && (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3.5">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Regra de antecedência</p>
+            <p className="text-xs text-amber-800 dark:text-amber-400 mt-0.5">
+              Registre com pelo menos{" "}
+              <strong>{diasAntecedencia} dia{diasAntecedencia !== 1 ? "s" : ""}</strong>{" "}
+              de antecedência. Datas mais próximas estão bloqueadas pelo calendário.
+            </p>
+          </div>
         </div>
       )}
+
+      {/* Formulário */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nova indisponibilidade</p>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground/70">Data <span className="text-destructive">*</span></label>
+            <input
+              type="date"
+              value={newData}
+              min={minDate}
+              onChange={(e) => setNewData(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground/70">
+              Motivo <span className="text-muted-foreground/40">(opcional)</span>
+            </label>
+            <input
+              placeholder="Ex: viagem, compromisso…"
+              value={newMotivo}
+              onChange={(e) => setNewMotivo(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+            />
+          </div>
+          <Button
+            size="sm"
+            disabled={!canAdd || saving}
+            onClick={handleAdd}
+            className="h-[42px] px-4 sm:self-end"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            <span className="ml-1">Registrar</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <CalendarOff className="h-3.5 w-3.5 text-muted-foreground" />
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Registradas{indisps.length > 0 ? ` (${indisps.length})` : ""}
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : indisps.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border p-10 text-center">
+            <CalendarOff className="h-7 w-7 mx-auto text-muted-foreground/30 mb-2" />
+            <p className="text-sm text-muted-foreground">Nenhuma data bloqueada.</p>
+            <p className="text-xs text-muted-foreground/50 mt-1">
+              Use o formulário acima para registrar suas indisponibilidades.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {Object.entries(byMonth).map(([monthKey, items]) => {
+              const monthDate = new Date(monthKey + "-01T12:00:00");
+              const monthLabel = format(monthDate, "MMMM 'de' yyyy", { locale: ptBR });
+              return (
+                <div key={monthKey}>
+                  {/* Separador de mês */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground shrink-0 capitalize">
+                      {monthLabel}
+                    </p>
+                    <div className="flex-1 h-px bg-border/50" />
+                    <span className="text-[10px] text-muted-foreground/50 shrink-0">{items.length}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {items.map((ind) => {
+                      const dateObj = new Date(ind.data + "T12:00:00");
+                      const isToday = ind.data === new Date().toISOString().slice(0, 10);
+                      return (
+                        <div
+                          key={ind.id}
+                          className={`flex items-center justify-between gap-3 rounded-2xl border bg-card px-4 py-3 ${
+                            isToday
+                              ? "border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 dark:border-amber-800"
+                              : "border-border"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium capitalize leading-snug">
+                              {format(dateObj, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                            </p>
+                            {ind.motivo ? (
+                              <p className="text-xs text-muted-foreground mt-0.5">{ind.motivo}</p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground/35 mt-0.5 italic">Sem motivo</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(ind.id)}
+                            className="shrink-0 p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                            title="Remover data"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Confirmação de exclusão */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(o) => !o && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover indisponibilidade?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `${format(new Date(deleteTarget.data + "T12:00:00"), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })} será liberada para escalas novamente.`
+                : "Esta ação não pode ser desfeita."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteConfirmId) {
+                  onRemove(deleteConfirmId);
+                  setDeleteConfirmId(null);
+                }
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
