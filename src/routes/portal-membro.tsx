@@ -5,11 +5,12 @@ import { format } from "date-fns";
 import {
   Loader2, Home, Calendar, Trophy, User, LogOut, Flame,
   CalendarDays, MessageSquare, Bell, BookOpen, X,
-  CalendarRange, Zap,
+  CalendarRange, Zap, AlertCircle,
 } from "lucide-react";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { getLiturgicalDays } from "@/lib/liturgical-calendar";
+import { checkProfileCompleteness } from "@/lib/profile-completeness";
 import {
   Drawer, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle,
 } from "@/components/ui/drawer";
@@ -19,6 +20,8 @@ const LITURGICAL_COLOR_HEX: Record<string, string> = {
   branco: "#d1d5db", roxo: "#9333ea", vermelho: "#dc2626",
   verde: "#16a34a", preto: "#374151", dourado: "#f59e0b", rosa: "#ec4899",
 };
+
+const COMPLETAR_CADASTRO_PATH = "/portal-membro/completar-cadastro";
 
 export const Route = createFileRoute("/portal-membro")({
   component: PortalMembroLayout,
@@ -68,6 +71,47 @@ function PortalMembroLayout() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [urgentDismissed, setUrgentDismissed] = useState(false);
+
+  // ── Completude de perfil ──────────────────────────────────────────────────
+  const { data: profileCompleteness, isSuccess: completenessLoaded } = useQuery({
+    queryKey: ["profile-completeness", membro?.id],
+    enabled: !!membro?.id,
+    staleTime: 2 * 60 * 1000, // 2 minutos de cache
+    queryFn: async () => {
+      const [membroRes, atuacoesRes] = await Promise.all([
+        anyDb
+          .from("membros")
+          .select("sexo, comunidade_id")
+          .eq("id", membro!.id)
+          .single(),
+        anyDb
+          .from("membro_atuacoes")
+          .select("id")
+          .eq("membro_id", membro!.id)
+          .limit(1),
+      ]);
+      return checkProfileCompleteness({
+        nome: membro!.nome,
+        telefone: membro!.telefone,
+        data_nascimento: membro!.data_nascimento,
+        sexo: membroRes.data?.sexo ?? null,
+        comunidade_id: membroRes.data?.comunidade_id ?? null,
+        has_atuacao: (atuacoesRes.data ?? []).length > 0,
+      });
+    },
+  });
+
+  // Redirect automático para completar cadastro quando perfil incompleto
+  useEffect(() => {
+    if (
+      completenessLoaded &&
+      profileCompleteness &&
+      !profileCompleteness.complete &&
+      pathname !== COMPLETAR_CADASTRO_PATH
+    ) {
+      navigate({ to: COMPLETAR_CADASTRO_PATH });
+    }
+  }, [completenessLoaded, profileCompleteness, pathname, navigate]);
 
   const { data: urgentNotifs = [] } = useQuery<{ id: string; titulo: string; mensagem: string | null }[]>({
     queryKey: ["urgent-notifs", membro?.id],
@@ -209,6 +253,23 @@ function PortalMembroLayout() {
         </nav>
 
         <div className="p-3 border-t border-sidebar-border">
+          {/* Indicador de completude — sidebar */}
+          {profileCompleteness && !profileCompleteness.complete && (
+            <Link
+              to={COMPLETAR_CADASTRO_PATH}
+              className="flex items-center gap-2 mb-2 rounded-xl bg-amber-500/10 border border-amber-500/25 px-3 py-2 hover:bg-amber-500/15 transition"
+            >
+              <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 leading-tight">
+                  Perfil {profileCompleteness.percentage}% completo
+                </p>
+                <p className="text-[9px] text-amber-600/80 leading-tight truncate">
+                  Clique para completar
+                </p>
+              </div>
+            </Link>
+          )}
           <div className="px-3 py-2 mb-2">
             <p className="text-xs font-semibold truncate">{membro.nome}</p>
             <p className="text-[11px] text-sidebar-foreground/50 truncate">{membro.email}</p>

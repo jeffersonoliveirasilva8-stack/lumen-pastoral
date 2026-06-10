@@ -57,11 +57,13 @@ function PrimeiroAcessoPage() {
   async function handleSalvarPerfil(e: React.FormEvent) {
     e.preventDefault();
     if (!membro) return;
+    if (!telefone.trim()) { toast.error("Telefone é obrigatório."); return; }
+    if (!dataNasc) { toast.error("Data de nascimento é obrigatória."); return; }
     setSaving(true);
     const { error } = await anyDb
       .from("membros")
       .update({
-        telefone: telefone || null,
+        telefone: telefone.trim() || null,
         data_nascimento: dataNasc || null,
       })
       .eq("id", membro.id);
@@ -71,10 +73,6 @@ function PrimeiroAcessoPage() {
       return;
     }
     await refreshMembro();
-    setStep("ok");
-  }
-
-  async function handlePularPerfil() {
     setStep("ok");
   }
 
@@ -178,27 +176,33 @@ function PrimeiroAcessoPage() {
             <form onSubmit={handleSalvarPerfil} className="space-y-4">
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  <Phone className="h-3 w-3" /> Telefone <span className="normal-case text-muted-foreground/60">(opcional)</span>
+                  <Phone className="h-3 w-3" /> Telefone / WhatsApp *
                 </label>
                 <input
                   type="tel"
                   value={telefone}
                   onChange={(e) => setTelefone(e.target.value)}
                   placeholder="(11) 99999-9999"
+                  required
                   className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
                 />
               </div>
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  <Calendar className="h-3 w-3" /> Data de nascimento <span className="normal-case text-muted-foreground/60">(opcional)</span>
+                  <Calendar className="h-3 w-3" /> Data de nascimento *
                 </label>
                 <input
                   type="date"
                   value={dataNasc}
                   onChange={(e) => setDataNasc(e.target.value)}
+                  max={new Date().toISOString().slice(0, 10)}
+                  required
                   className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
                 />
               </div>
+              <p className="text-[11px] text-muted-foreground">
+                Esses dados são necessários para o funcionamento do Motor de Escalas.
+              </p>
 
               <button
                 type="submit"
@@ -207,13 +211,6 @@ function PrimeiroAcessoPage() {
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                 Salvar e continuar
-              </button>
-              <button
-                type="button"
-                onClick={handlePularPerfil}
-                className="w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted transition"
-              >
-                Pular por agora
               </button>
             </form>
           </div>

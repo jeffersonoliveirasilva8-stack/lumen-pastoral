@@ -70,8 +70,10 @@ type FormData = {
   atuacao_nomes: string[];
   ingresso_mes: string;
   ingresso_ano: string;
-  missas_nao_pode_ids: string[];   // IDs de missas_padrao que não consegue servir
-  motivo_indisponibilidade: string; // Obrigatório quando alguma missa é selecionada
+  // "todos" = sem restrições | "restricoes" = selecionar missas que não pode
+  disponibilidade_opcao: "todos" | "restricoes" | "";
+  missas_nao_pode_ids: string[];
+  motivo_indisponibilidade: string;
   nome_mae: string;
   contato_mae: string;
   nome_pai: string;
@@ -101,6 +103,7 @@ const FORM_INICIAL: FormData = {
   comunidade_id: "", comunidade_nome: "",
   atuacao_ids: [], atuacao_nomes: [],
   ingresso_mes: "", ingresso_ano: "",
+  disponibilidade_opcao: "",
   missas_nao_pode_ids: [], motivo_indisponibilidade: "",
   nome_mae: "", contato_mae: "", nome_pai: "", contato_pai: "",
   possui_conducao: "", observacoes: "",
@@ -242,14 +245,28 @@ function InscricaoPage() {
     if (!form.email.trim()) { toast.error("E-mail é obrigatório."); return false; }
     if (!form.telefone.trim()) { toast.error("Telefone é obrigatório."); return false; }
     if (!form.sexo) { toast.error("Selecione o sexo."); return false; }
+    if (!form.data_nascimento) { toast.error("Data de nascimento é obrigatória."); return false; }
     if (!form.cidade.trim()) { toast.error("Cidade é obrigatória."); return false; }
     return true;
   }
 
   function validarStep2(): boolean {
-    if (form.missas_nao_pode_ids.length > 0 && !form.motivo_indisponibilidade.trim()) {
-      toast.error("Informe o motivo para as missas em que não pode servir.");
-      return false;
+    if (comunidades.length > 0 && !form.comunidade_id) {
+      toast.error("Selecione a comunidade que participa."); return false;
+    }
+    if (atuacoes.length > 0 && form.atuacao_ids.length === 0) {
+      toast.error("Selecione ao menos uma atuação pastoral."); return false;
+    }
+    if (!form.disponibilidade_opcao) {
+      toast.error("Informe sua situação de disponibilidade."); return false;
+    }
+    if (form.disponibilidade_opcao === "restricoes") {
+      if (form.missas_nao_pode_ids.length === 0) {
+        toast.error("Selecione ao menos um horário em que não consegue servir."); return false;
+      }
+      if (!form.motivo_indisponibilidade.trim()) {
+        toast.error("Informe o motivo da indisponibilidade."); return false;
+      }
     }
     return true;
   }
@@ -463,9 +480,10 @@ function InscricaoPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Campo label="Data de nascimento">
+                <Campo label="Data de nascimento *">
                   <input
                     type="date" value={form.data_nascimento}
+                    max={new Date().toISOString().slice(0, 10)}
                     onChange={(e) => set("data_nascimento", e.target.value)}
                     className={INPUT_CLS}
                   />
@@ -533,7 +551,7 @@ function InscricaoPage() {
 
             <div className="space-y-4">
               {/* Comunidade */}
-              <Campo label="Comunidade que participa">
+              <Campo label={comunidades.length > 0 ? "Comunidade que participa *" : "Comunidade que participa"}>
                 {comunidades.length > 0 ? (
                   <select
                     value={form.comunidade_id}
@@ -561,7 +579,7 @@ function InscricaoPage() {
               {/* Atuação */}
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Atuação Pastoral
+                  {atuacoes.length > 0 ? "Atuação Pastoral *" : "Atuação Pastoral"}
                 </label>
                 {atuacoes.length > 0 ? (
                   <div className="mt-1.5 flex flex-wrap gap-2">
@@ -615,76 +633,134 @@ function InscricaoPage() {
               </Campo>
             </div>
 
-            {/* Disponibilidade — Missas Padrão */}
+            {/* Disponibilidade — escolha explícita obrigatória */}
             <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Disponibilidade
+                  Disponibilidade *
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Selecione as missas em que <strong>NÃO</strong> consegue servir.
+                  Informe sua situação de disponibilidade para servir nas missas.
                 </p>
               </div>
 
-              {missasPadrao.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic py-2">
-                  Nenhuma missa padrão cadastrada pela paróquia ainda.
-                  A coordenação irá configurar sua disponibilidade após o ingresso.
-                </p>
-              ) : (
-                <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
-                  {Object.entries(missasPorDia)
-                    .sort(([a], [b]) => Number(a) - Number(b))
-                    .map(([dia]) => {
-                      const horarioMap = missasPorDia[Number(dia)];
-                      return (
-                        <div key={dia} className="flex items-center gap-3 px-3 py-2.5">
-                          {/* Dia da semana */}
-                          <span className="text-xs font-semibold text-foreground/70 w-20 shrink-0">
-                            {DIAS_SEMANA_PT[Number(dia)]}
-                          </span>
-                          {/* Horários unificados */}
-                          <div className="flex flex-wrap gap-1.5">
-                            {Object.entries(horarioMap)
-                              .sort(([a], [b]) => a.localeCompare(b))
-                              .map(([hora, grupo]) => {
-                                const ids = grupo.map((m) => m.id);
-                                const selecionado = ids.every((id) =>
-                                  form.missas_nao_pode_ids.includes(id)
-                                );
-                                return (
-                                  <button
-                                    key={hora}
-                                    type="button"
-                                    onClick={() => toggleMissaGrupo(ids)}
-                                    className={`h-8 px-3 rounded-full text-xs font-semibold border transition ${
-                                      selecionado
-                                        ? "bg-destructive/15 border-destructive/40 text-destructive"
-                                        : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                                    }`}
-                                  >
-                                    {hora !== "—" ? hora.slice(0, 5) : "—"}
-                                  </button>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
+              {/* Escolha obrigatória */}
+              <div className="flex flex-col gap-2">
+                {[
+                  {
+                    v: "todos" as const,
+                    label: "Estou disponível para todos os horários",
+                    desc: "Poderei ser escalado em qualquer missa.",
+                  },
+                  {
+                    v: "restricoes" as const,
+                    label: "Tenho horários em que não consigo servir",
+                    desc: "Informarei quais missas não posso atender.",
+                  },
+                ].map(({ v, label, desc }) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => {
+                      set("disponibilidade_opcao", v);
+                      if (v === "todos") {
+                        setForm((f) => ({
+                          ...f,
+                          disponibilidade_opcao: v,
+                          missas_nao_pode_ids: [],
+                          motivo_indisponibilidade: "",
+                        }));
+                      }
+                    }}
+                    className={`text-left rounded-xl border p-3 transition ${
+                      form.disponibilidade_opcao === v
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                        form.disponibilidade_opcao === v
+                          ? "border-primary bg-primary"
+                          : "border-border"
+                      }`}>
+                        {form.disponibilidade_opcao === v && (
+                          <div className="h-1.5 w-1.5 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-foreground leading-tight">{label}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
 
-              {/* Motivo — obrigatório quando alguma missa selecionada */}
-              {form.missas_nao_pode_ids.length > 0 && (
-                <Campo label="Motivo da indisponibilidade *">
-                  <textarea
-                    rows={2}
-                    value={form.motivo_indisponibilidade}
-                    onChange={(e) => set("motivo_indisponibilidade", e.target.value)}
-                    className={INPUT_CLS + " resize-none"}
-                    placeholder="Trabalho, estudos, compromissos familiares…"
-                  />
-                </Campo>
+              {/* Seleção de missas — apenas quando há restrições */}
+              {form.disponibilidade_opcao === "restricoes" && (
+                <>
+                  {missasPadrao.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      Nenhuma missa padrão cadastrada ainda. Informe as restrições
+                      à coordenação após o ingresso.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground -mt-1">
+                        Selecione os horários em que <strong>NÃO</strong> consegue servir:
+                      </p>
+                      <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
+                        {Object.entries(missasPorDia)
+                          .sort(([a], [b]) => Number(a) - Number(b))
+                          .map(([dia]) => {
+                            const horarioMap = missasPorDia[Number(dia)];
+                            return (
+                              <div key={dia} className="flex items-center gap-3 px-3 py-2.5">
+                                <span className="text-xs font-semibold text-foreground/70 w-20 shrink-0">
+                                  {DIAS_SEMANA_PT[Number(dia)]}
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {Object.entries(horarioMap)
+                                    .sort(([a], [b]) => a.localeCompare(b))
+                                    .map(([hora, grupo]) => {
+                                      const ids = grupo.map((m) => m.id);
+                                      const selecionado = ids.every((id) =>
+                                        form.missas_nao_pode_ids.includes(id),
+                                      );
+                                      return (
+                                        <button
+                                          key={hora}
+                                          type="button"
+                                          onClick={() => toggleMissaGrupo(ids)}
+                                          className={`h-8 px-3 rounded-full text-xs font-semibold border transition ${
+                                            selecionado
+                                              ? "bg-destructive/15 border-destructive/40 text-destructive"
+                                              : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                                          }`}
+                                        >
+                                          {hora !== "—" ? hora.slice(0, 5) : "—"}
+                                        </button>
+                                      );
+                                    })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+
+                      <Campo label="Motivo da indisponibilidade *">
+                        <textarea
+                          rows={2}
+                          value={form.motivo_indisponibilidade}
+                          onChange={(e) => set("motivo_indisponibilidade", e.target.value)}
+                          className={INPUT_CLS + " resize-none"}
+                          placeholder="Trabalho, estudos, compromissos familiares…"
+                        />
+                      </Campo>
+                    </>
+                  )}
+                </>
               )}
             </div>
 
