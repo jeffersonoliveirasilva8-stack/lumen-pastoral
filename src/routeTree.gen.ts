@@ -9,6 +9,9 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AcessoNegadoRouteImport } from './routes/acesso-negado'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthMfaChallengeRouteImport } from './routes/auth.mfa-challenge'
 import { Route as ResetSenhaRouteImport } from './routes/reset-senha'
 import { Route as PortalMembroRouteImport } from './routes/portal-membro'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
@@ -50,6 +53,28 @@ import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authentic
 import { Route as AuthenticatedConfiguracoesParoquiaRouteImport } from './routes/_authenticated/configuracoes.paroquia'
 import { Route as AuthenticatedAdminLiturgiaRouteImport } from './routes/_authenticated/admin.liturgia'
 import { Route as AuthenticatedAdminParoquiasRouteImport } from './routes/_authenticated/admin.paroquias'
+import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
+
+const AcessoNegadoRoute = AcessoNegadoRouteImport.update({
+  id: '/acesso-negado',
+  path: '/acesso-negado',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthMfaChallengeRoute = AuthMfaChallengeRouteImport.update({
+  id: '/auth/mfa-challenge',
+  path: '/auth/mfa-challenge',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
+  id: '/auditoria',
+  path: '/auditoria',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 const ResetSenhaRoute = ResetSenhaRouteImport.update({
   id: '/reset-senha',
@@ -268,6 +293,9 @@ const AuthenticatedAdminParoquiasRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/acesso-negado': typeof AcessoNegadoRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
   '/cadastro': typeof CadastroRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
@@ -306,10 +334,14 @@ export interface FileRoutesByFullPath {
   '/portal/$token': typeof PortalTokenRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
+  '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/acesso-negado': typeof AcessoNegadoRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
   '/cadastro': typeof CadastroRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
@@ -348,11 +380,15 @@ export interface FileRoutesByTo {
   '/portal/$token': typeof PortalTokenRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
+  '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/acesso-negado': typeof AcessoNegadoRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/cadastro': typeof CadastroRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
@@ -392,12 +428,16 @@ export interface FileRoutesById {
   '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/_authenticated/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
+  '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/acesso-negado'
+    | '/auth/callback'
+    | '/auth/mfa-challenge'
     | '/cadastro'
     | '/esqueci-senha'
     | '/login'
@@ -436,10 +476,14 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/admin/liturgia'
     | '/admin/paroquias'
+    | '/auditoria'
     | '/configuracoes/paroquia'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/acesso-negado'
+    | '/auth/callback'
+    | '/auth/mfa-challenge'
     | '/cadastro'
     | '/esqueci-senha'
     | '/login'
@@ -478,10 +522,14 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/admin/liturgia'
     | '/admin/paroquias'
+    | '/auditoria'
     | '/configuracoes/paroquia'
   id:
     | '__root__'
     | '/'
+    | '/acesso-negado'
+    | '/auth/callback'
+    | '/auth/mfa-challenge'
     | '/_authenticated'
     | '/cadastro'
     | '/esqueci-senha'
@@ -521,11 +569,15 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/_authenticated/admin/liturgia'
     | '/_authenticated/admin/paroquias'
+    | '/_authenticated/auditoria'
     | '/_authenticated/configuracoes/paroquia'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AcessoNegadoRoute: typeof AcessoNegadoRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthMfaChallengeRoute: typeof AuthMfaChallengeRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   CadastroRoute: typeof CadastroRoute
   EsqueciSenhaRoute: typeof EsqueciSenhaRoute
@@ -544,6 +596,27 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/acesso-negado': {
+      id: '/acesso-negado'
+      path: '/acesso-negado'
+      fullPath: '/acesso-negado'
+      preLoaderRoute: typeof AcessoNegadoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/mfa-challenge': {
+      id: '/auth/mfa-challenge'
+      path: '/auth/mfa-challenge'
+      fullPath: '/auth/mfa-challenge'
+      preLoaderRoute: typeof AuthMfaChallengeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-senha': {
       id: '/reset-senha'
       path: '/reset-senha'
@@ -831,10 +904,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminParoquiasRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/auditoria': {
+      id: '/_authenticated/auditoria'
+      path: '/auditoria'
+      fullPath: '/auditoria'
+      preLoaderRoute: typeof AuthenticatedAuditoriaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCalendarioRoute: typeof AuthenticatedCalendarioRoute
   AuthenticatedEscalasRoute: typeof AuthenticatedEscalasRoute
   AuthenticatedEspiritualidadeRoute: typeof AuthenticatedEspiritualidadeRoute
@@ -855,6 +936,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedCalendarioRoute: AuthenticatedCalendarioRoute,
   AuthenticatedEscalasRoute: AuthenticatedEscalasRoute,
   AuthenticatedEspiritualidadeRoute: AuthenticatedEspiritualidadeRoute,
@@ -909,6 +991,9 @@ const PortalMembroRouteWithChildren = PortalMembroRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AcessoNegadoRoute: AcessoNegadoRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
+  AuthMfaChallengeRoute: AuthMfaChallengeRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   CadastroRoute: CadastroRoute,
   EsqueciSenhaRoute: EsqueciSenhaRoute,

@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 const isVercel = process.env.VERCEL === "1" || process.env.DEPLOY_TARGET === "vercel";
 
@@ -23,6 +24,18 @@ export default defineConfig(async ({ command }) => {
   }
 
   plugins.push(react());
+
+  // Sentry source maps em produção (requer SENTRY_AUTH_TOKEN + VITE_SENTRY_DSN)
+  if (command === "build" && process.env.SENTRY_AUTH_TOKEN && process.env.VITE_SENTRY_DSN) {
+    plugins.push(
+      sentryVitePlugin({
+        org:     process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+        authToken: process.env.SENTRY_AUTH_TOKEN,
+        sourcemaps: { filesToDeleteAfterUpload: ["dist/**/*.map"] },
+      }),
+    );
+  }
 
   if (command === "build" && !isVercel) {
     try {

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
-  Flame, BookOpen, CalendarRange, Bell, Trophy, UserCircle, X, MessageSquare, Church,
+  Flame, BookOpen, CalendarRange, Bell, Trophy, UserCircle, X, MessageSquare, Church, ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -141,6 +141,7 @@ function AuthLayout() {
     { to: "/ocorrencias",             label: "Ocorrências",     icon: MessageSquare },
     { to: "/notificacoes",            label: "Notificações",    icon: Bell },
     ...(!isLimitedCoord ? [{ to: "/configuracoes/paroquia", label: "Personalização", icon: Settings }] : []),
+    ...(isAdmin ? [{ to: "/auditoria", label: "Auditoria", icon: ShieldCheck }] : []),
     ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church }] : []),
     { to: "/minha-conta",             label: "Perfil",          icon: UserCircle },
   ];

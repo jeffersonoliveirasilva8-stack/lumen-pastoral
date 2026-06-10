@@ -24,7 +24,8 @@ export type PostLoginRoute =
   | "/portal-membro/home"
   | "/onboarding"
   | "/membro/login"
-  | "/acesso-negado";
+  | "/acesso-negado"
+  | "/auth/mfa-challenge";
 
 export async function getPostLoginRoute(
   supabase: SupabaseClient,
@@ -49,6 +50,16 @@ export async function getPostLoginRoute(
     const isCoordenador = roles.some((r) => r === "coordenador");
 
     if (isAdmin || isCoordenador) {
+      // Verifica se MFA (AAL2) é necessário
+      try {
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aalData && aalData.nextLevel === "aal2" && aalData.currentLevel !== "aal2") {
+          return "/auth/mfa-challenge";
+        }
+      } catch {
+        // Se falhar a verificação AAL, prossegue normalmente
+      }
+
       // Admin sem paróquia → onboarding
       if (!profileData?.paroquia_id) return "/onboarding";
       return "/painel";
