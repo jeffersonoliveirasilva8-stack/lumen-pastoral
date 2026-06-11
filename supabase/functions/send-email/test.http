@@ -1,0 +1,125 @@
+### ============================================================
+### Testes da Edge Function send-email
+### ============================================================
+###
+### Como usar:
+###   Opção A — REST Client (VS Code extension "REST Client"):
+###     1. Instale a extensão "REST Client" no VS Code
+###     2. Substitua as variáveis abaixo pelos valores reais
+###     3. Clique em "Send Request" acima de cada bloco
+###
+###   Opção B — curl (terminal):
+###     Ver os comandos curl equivalentes ao final deste arquivo
+###
+### Variáveis — substitua antes de testar:
+###   {{SUPABASE_URL}}      = URL do projeto (ex: https://xxxxx.supabase.co)
+###   {{ANON_KEY}}          = chave anon do projeto (para autenticação)
+###   {{EMAIL_DESTINO}}     = e-mail real para receber os testes
+###   {{NOME_TESTE}}        = nome fictício (ex: "Maria Silva")
+###   {{PAROQUIA_TESTE}}    = nome da paróquia (ex: "Paróquia São José")
+### ============================================================
+
+@SUPABASE_URL = https://SEU_PROJETO.supabase.co
+@ANON_KEY     = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...SEU_ANON_KEY
+@EMAIL_DESTINO = seu@email.com
+@NOME_TESTE    = Maria Silva
+@PAROQUIA_TESTE = Paróquia São José
+
+### ── 1. Verificar configuração dos secrets ──────────────────────────────────
+### Deve retornar 503 se RESEND_API_KEY não estiver configurado,
+### ou 400 se estiver configurado mas faltar campos obrigatórios.
+POST {{SUPABASE_URL}}/functions/v1/send-email
+Authorization: Bearer {{ANON_KEY}}
+Content-Type: application/json
+
+{
+  "template": "ping"
+}
+
+### ── 2. Teste: Aprovação de membro (ativacao_conta) ────────────────────────
+### Gera magic link real + envia e-mail com nome e paróquia.
+### ATENÇÃO: cria usuário no Supabase Auth se não existir.
+POST {{SUPABASE_URL}}/functions/v1/send-email
+Authorization: Bearer {{ANON_KEY}}
+Content-Type: application/json
+
+{
+  "template": "ativacao_conta",
+  "to": "{{EMAIL_DESTINO}}",
+  "nome": "{{NOME_TESTE}}",
+  "paroquia": "{{PAROQUIA_TESTE}}"
+}
+
+### ── 3. Teste: Reenvio de ativação (reenvio_ativacao) ───────────────────────
+### Igual ao anterior, mas com texto diferente no e-mail.
+POST {{SUPABASE_URL}}/functions/v1/send-email
+Authorization: Bearer {{ANON_KEY}}
+Content-Type: application/json
+
+{
+  "template": "reenvio_ativacao",
+  "to": "{{EMAIL_DESTINO}}",
+  "nome": "{{NOME_TESTE}}",
+  "paroquia": "{{PAROQUIA_TESTE}}"
+}
+
+### ── 4. Teste: Redefinição de senha (reset_senha) ───────────────────────────
+### Gera link de recovery. O parâmetro ?from=membro é lido do body.
+POST {{SUPABASE_URL}}/functions/v1/send-email?from=membro
+Authorization: Bearer {{ANON_KEY}}
+Content-Type: application/json
+
+{
+  "template": "reset_senha",
+  "to": "{{EMAIL_DESTINO}}",
+  "nome": "{{NOME_TESTE}}",
+  "paroquia": "{{PAROQUIA_TESTE}}"
+}
+
+### ── 5. Teste: Boas-vindas (boas_vindas) ────────────────────────────────────
+### Sem link de autenticação — apenas e-mail de boas-vindas.
+POST {{SUPABASE_URL}}/functions/v1/send-email
+Authorization: Bearer {{ANON_KEY}}
+Content-Type: application/json
+
+{
+  "template": "boas_vindas",
+  "to": "{{EMAIL_DESTINO}}",
+  "nome": "{{NOME_TESTE}}",
+  "paroquia": "{{PAROQUIA_TESTE}}"
+}
+
+### ============================================================
+### EQUIVALENTES EM CURL (copiar e colar no terminal)
+### Substitua as variáveis antes de executar.
+### ============================================================
+
+# 1. Verificar configuração
+# curl -s -X POST https://SEU_PROJETO.supabase.co/functions/v1/send-email \
+#   -H "Authorization: Bearer SEU_ANON_KEY" \
+#   -H "Content-Type: application/json" \
+#   -d '{"template":"ping"}' | jq
+
+# 2. Aprovação de membro
+# curl -s -X POST https://SEU_PROJETO.supabase.co/functions/v1/send-email \
+#   -H "Authorization: Bearer SEU_ANON_KEY" \
+#   -H "Content-Type: application/json" \
+#   -d '{"template":"ativacao_conta","to":"seu@email.com","nome":"Maria Silva","paroquia":"Paróquia São José"}' | jq
+
+# 3. Reenvio de ativação
+# curl -s -X POST https://SEU_PROJETO.supabase.co/functions/v1/send-email \
+#   -H "Authorization: Bearer SEU_ANON_KEY" \
+#   -H "Content-Type: application/json" \
+#   -d '{"template":"reenvio_ativacao","to":"seu@email.com","nome":"Maria Silva","paroquia":"Paróquia São José"}' | jq
+
+# 4. Redefinição de senha
+# curl -s -X POST "https://SEU_PROJETO.supabase.co/functions/v1/send-email?from=membro" \
+#   -H "Authorization: Bearer SEU_ANON_KEY" \
+#   -H "Content-Type: application/json" \
+#   -d '{"template":"reset_senha","to":"seu@email.com","nome":"Maria Silva","paroquia":"Paróquia São José"}' | jq
+
+# 5. Boas-vindas
+# curl -s -X POST https://SEU_PROJETO.supabase.co/functions/v1/send-email \
+#   -H "Authorization: Bearer SEU_ANON_KEY" \
+#   -H "Content-Type: application/json" \
+#   -d '{"template":"boas_vindas","to":"seu@email.com","nome":"Maria Silva","paroquia":"Paróquia São José"}' | jq

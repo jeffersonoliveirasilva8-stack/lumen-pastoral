@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -73,7 +73,24 @@ function SolicitacoesPage() {
   const [selected, setSelected] = useState<Solicitacao | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [showMotivo, setShowMotivo] = useState(false);
-  const [reenviando, setReenviando] = useState<string | null>(null);
+  const [reenviando, setReenviando]     = useState<string | null>(null);
+  const [cooldownMap, setCooldownMap]   = useState<Record<string, number>>({});
+
+  // Decrementa cooldowns ativos a cada segundo
+  useEffect(() => {
+    const active = Object.values(cooldownMap).some((v) => v > 0);
+    if (!active) return;
+    const t = setInterval(() => {
+      setCooldownMap((prev) => {
+        const next: Record<string, number> = {};
+        for (const [k, v] of Object.entries(prev)) {
+          if (v > 1) next[k] = v - 1;
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [cooldownMap]);
 
   // ── Paróquia (para o link de inscrição) ────────────────────────────────
   const { data: paroquia } = useQuery<{ nome: string; slug: string | null; id: string } | null>({
@@ -203,18 +220,25 @@ function SolicitacoesPage() {
         } catch { /* tabela pode não existir — não-fatal */ }
       }
 
-      // 3. Envia e-mail de ativação (cria auth user se não existir)
-      // O link leva a /membro/ativar-conta onde o membro cria sua senha obrigatória.
+      // 3. Envia e-mail de ativação rico via Edge Function (com nome + paróquia).
+      // Fallback para OTP nativo do Supabase se a Edge Function não estiver configurada.
       if (sol.email) {
         try {
-          await supabase.auth.signInWithOtp({
-            email: sol.email,
-            options: {
-              shouldCreateUser: true,
-              emailRedirectTo: window.location.origin + "/membro/ativar-conta",
+          const { error: efErr } = await supabase.functions.invoke("send-email", {
+            body: {
+              template: "ativacao_conta",
+              to:       sol.email,
+              nome:     sol.nome,
+              paroquia: paroquia?.nome ?? "Pastoral",
             },
           });
-          // Registra quando o e-mail de ativação foi enviado
+          if (efErr) {
+            // Fallback: OTP nativo (e-mail genérico do Supabase)
+            await supabase.auth.signInWithOtp({
+              email:   sol.email,
+              options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + "/membro/ativar-conta" },
+            });
+          }
           await anyDb
             .from("membros")
             .update({ ativacao_enviada_em: new Date().toISOString() })
@@ -270,26 +294,38 @@ function SolicitacoesPage() {
   });
 
   // ── Reenviar e-mail de ativação ────────────────────────────────────────
-  async function reenviarAtivacao(email: string) {
+  async function reenviarAtivacao(email: string, nome?: string) {
     setReenviando(email);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: window.location.origin + "/membro/ativar-conta",
+      // Tenta enviar e-mail rico via Edge Function
+      const { error: efErr } = await supabase.functions.invoke("send-email", {
+        body: {
+          template: "reenvio_ativacao",
+          to:       email,
+          nome:     nome ?? "",
+          paroquia: paroquia?.nome ?? "Pastoral",
         },
       });
-      if (error) {
-        const isRateLimit = error.message.toLowerCase().includes("rate") || error.message.toLowerCase().includes("many");
-        toast.error(isRateLimit ? "Aguarde alguns minutos antes de reenviar." : "Erro ao reenviar: " + error.message);
-        return;
+
+      if (efErr) {
+        // Fallback para OTP nativo do Supabase
+        const { error: otpErr } = await supabase.auth.signInWithOtp({
+          email,
+          options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + "/membro/ativar-conta" },
+        });
+        if (otpErr) {
+          const isRateLimit = otpErr.message.toLowerCase().includes("rate") || otpErr.message.toLowerCase().includes("many");
+          toast.error(isRateLimit ? "Aguarde alguns minutos antes de reenviar." : "Erro ao reenviar: " + otpErr.message);
+          return;
+        }
       }
+
       await anyDb
         .from("membros")
         .update({ ativacao_enviada_em: new Date().toISOString() })
         .eq("email", email);
       qc.invalidateQueries({ queryKey: ["membros-status", profile?.paroquia_id] });
+      setCooldownMap((prev) => ({ ...prev, [email]: 60 }));
       toast.success("E-mail de ativação reenviado!");
     } catch {
       toast.error("Erro de conexão ao reenviar.");
@@ -589,19 +625,23 @@ function SolicitacoesPage() {
                       </div>
 
                       {/* Reenviar ativação — só quando conta não foi ativada */}
-                      {selected.email && (!mStatus || !mStatus.conta_ativada) && (
-                        <Button
-                          variant="outline"
-                          className="w-full rounded-xl border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
-                          disabled={reenviando === selected.email}
-                          onClick={() => reenviarAtivacao(selected.email!)}
-                        >
-                          {reenviando === selected.email
-                            ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : <Send className="h-4 w-4" />}
-                          Reenviar ativação
-                        </Button>
-                      )}
+                      {selected.email && (!mStatus || !mStatus.conta_ativada) && (() => {
+                        const cd = cooldownMap[selected.email] ?? 0;
+                        const busy = reenviando === selected.email;
+                        return (
+                          <Button
+                            variant="outline"
+                            className="w-full rounded-xl border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                            disabled={busy || cd > 0}
+                            onClick={() => reenviarAtivacao(selected.email!, selected.nome)}
+                          >
+                            {busy
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Send className="h-4 w-4" />}
+                            {cd > 0 ? `Reenviar em ${cd}s` : "Reenviar ativação"}
+                          </Button>
+                        );
+                      })()}
                     </div>
                   );
                 })()}

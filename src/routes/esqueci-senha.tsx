@@ -36,6 +36,10 @@ function ForgotPage() {
     e.preventDefault();
     if (!email.trim()) return;
     setLoading(true);
+    // Preserva contexto no sessionStorage — o redirect do Supabase pode ignorar
+    // os query params do redirectTo, então reset-senha.tsx usa isso como fallback
+    if (from) sessionStorage.setItem("resetFrom", from);
+    else sessionStorage.removeItem("resetFrom");
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
       redirectTo: resetTarget,
     });

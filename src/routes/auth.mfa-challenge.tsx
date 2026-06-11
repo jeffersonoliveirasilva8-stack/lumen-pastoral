@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, Mail, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getPostLoginRoute } from "@/lib/auth-redirect";
@@ -13,13 +13,25 @@ export const Route = createFileRoute("/auth/mfa-challenge")({
   head: () => ({ meta: [{ title: "Verificação em dois fatores — Lumen Pastoral" }] }),
 });
 
+type FactorType = "email" | "totp";
+
 function MfaChallengePage() {
-  const navigate    = useNavigate();
-  const [code, setCode]         = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [factorId, setFactorId] = useState<string | null>(null);
-  const [checking, setChecking] = useState(true);
+  const navigate       = useNavigate();
+  const [code, setCode]               = useState("");
+  const [loading, setLoading]         = useState(false);
+  const [factorId, setFactorId]       = useState<string | null>(null);
+  const [factorType, setFactorType]   = useState<FactorType>("totp");
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [checking, setChecking]       = useState(true);
+  const [cooldown, setCooldown]       = useState(0);
   const processed = useRef(false);
+
+  // Decrementa cooldown de reenvio
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   useEffect(() => {
     async function init() {
@@ -27,7 +39,7 @@ function MfaChallengePage() {
       const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (!aalData) { navigate({ to: "/login", replace: true }); return; }
 
-      // Se já está no nível exigido, redireciona diretamente
+      // Já está no nível exigido — redireciona
       if (aalData.currentLevel === aalData.nextLevel || aalData.nextLevel === "aal1") {
         if (!processed.current) {
           processed.current = true;
@@ -37,43 +49,92 @@ function MfaChallengePage() {
         return;
       }
 
-      // Busca o fator TOTP verificado
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      const totp = (factors?.totp ?? []).find((f) => f.status === "verified");
-      if (!totp) {
+      // Lista fatores — prefer e-mail (mais amigável)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: factors } = await (supabase.auth.mfa.listFactors as any)();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const emailFactor = ((factors?.email ?? []) as any[]).find((f: any) => f.status === "verified");
+      const totpFactor  = ((factors?.totp ?? []) as any[]).find((f: any) => f.status === "verified");
+      const activeFactor = emailFactor ?? totpFactor;
+
+      if (!activeFactor) {
         // Nenhum fator cadastrado — redireciona normalmente
         const route = await getPostLoginRoute(supabase);
         navigate({ to: route, replace: true });
         return;
       }
 
-      setFactorId(totp.id);
+      const type: FactorType = emailFactor ? "email" : "totp";
+      setFactorId(activeFactor.id);
+      setFactorType(type);
+
+      // Para fator e-mail: envia o código imediatamente
+      if (type === "email") {
+        try {
+          const { data: ch, error } = await supabase.auth.mfa.challenge({ factorId: activeFactor.id });
+          if (!error) {
+            setChallengeId(ch.id);
+            setCooldown(60);
+          }
+        } catch { /* será tratado na UI */ }
+      }
+
       setChecking(false);
     }
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function resendEmailCode() {
+    if (!factorId || cooldown > 0) return;
+    setLoading(true);
+    try {
+      const { data: ch, error } = await supabase.auth.mfa.challenge({ factorId });
+      if (error) throw error;
+      setChallengeId(ch.id);
+      setCooldown(60);
+      toast.success("Novo código enviado para o seu e-mail.");
+    } catch {
+      toast.error("Erro ao reenviar. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
     if (!factorId || code.length < 6) return;
     setLoading(true);
     try {
-      const { data: challenge, error: cErr } = await supabase.auth.mfa.challenge({ factorId });
-      if (cErr) throw cErr;
+      let cid = challengeId;
+
+      // Para TOTP: sempre cria challenge fresco (código muda a cada 30s)
+      if (factorType === "totp" || !cid) {
+        const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId });
+        if (chErr) throw chErr;
+        cid = ch.id;
+        setChallengeId(cid);
+      }
 
       const { error: vErr } = await supabase.auth.mfa.verify({
         factorId,
-        challengeId: challenge.id,
+        challengeId: cid,
         code: code.trim(),
       });
+
       if (vErr) {
-        toast.error("Código inválido ou expirado. Tente novamente.");
+        const msg = vErr.message?.toLowerCase() ?? "";
+        if (msg.includes("expired") && factorType === "email") {
+          toast.error("Código expirado. Solicite um novo código abaixo.");
+          setChallengeId(null);
+        } else {
+          toast.error("Código incorreto. Tente novamente.");
+        }
         setCode("");
         return;
       }
 
-      // Challenge bem-sucedido → agora AAL2
+      // Verificação bem-sucedida → AAL2
       const route = await getPostLoginRoute(supabase);
       navigate({ to: route, replace: true });
     } catch {
@@ -99,19 +160,28 @@ function MfaChallengePage() {
   return (
     <div className="min-h-screen grid place-items-center bg-background px-4">
       <div className="w-full max-w-sm">
+        {/* Ícone + título */}
         <div className="flex flex-col items-center mb-8">
           <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <ShieldCheck className="h-7 w-7 text-primary" />
+            {factorType === "email"
+              ? <Mail className="h-7 w-7 text-primary" />
+              : <ShieldCheck className="h-7 w-7 text-primary" />}
           </div>
           <h1 className="font-serif text-2xl text-center">Verificação em dois fatores</h1>
           <p className="text-sm text-muted-foreground text-center mt-2">
-            Abra seu app autenticador e insira o código de 6 dígitos.
+            {factorType === "email"
+              ? "Enviamos um código de 6 dígitos para o seu e-mail. Verifique sua caixa de entrada."
+              : "Abra seu app autenticador e insira o código de 6 dígitos."}
           </p>
         </div>
 
         <form onSubmit={handleVerify} className="space-y-4">
           <div>
-            <Label htmlFor="mfa-code">Código do autenticador</Label>
+            <Label htmlFor="mfa-code" className="flex items-center gap-1.5">
+              {factorType === "email"
+                ? <><Mail className="h-3.5 w-3.5" /> Código enviado por e-mail</>
+                : <><Smartphone className="h-3.5 w-3.5" /> Código do autenticador</>}
+            </Label>
             <Input
               id="mfa-code"
               value={code}
@@ -123,16 +193,30 @@ function MfaChallengePage() {
               autoComplete="one-time-code"
               autoFocus
             />
+            {factorType === "totp" && (
+              <p className="text-xs text-muted-foreground mt-1 text-center">
+                O código muda a cada 30 segundos.
+              </p>
+            )}
           </div>
 
-          <Button
-            type="submit"
-            disabled={loading || code.length < 6}
-            className="w-full"
-          >
+          <Button type="submit" disabled={loading || code.length < 6} className="w-full">
             {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Verificar
           </Button>
+
+          {/* Reenvio — apenas para fator e-mail */}
+          {factorType === "email" && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={resendEmailCode}
+              disabled={loading || cooldown > 0}
+            >
+              {cooldown > 0 ? `Reenviar em ${cooldown}s` : "Reenviar código por e-mail"}
+            </Button>
+          )}
         </form>
 
         <div className="mt-6 text-center">

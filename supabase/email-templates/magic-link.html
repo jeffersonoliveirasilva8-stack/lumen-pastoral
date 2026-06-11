@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seu link de acesso</title>
+  <style>
+    body    { margin:0; padding:0; background:#f0efe9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; color:#333; }
+    .wrap   { max-width:540px; margin:32px auto; padding:0 12px 40px; }
+    .card   { background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.07); }
+    .hd     { background:#1a1a2e; padding:24px 32px 20px; text-align:center; }
+    .hd-nm  { font-size:20px; font-weight:700; color:#f5c842; margin:0; line-height:1.25; }
+    .hd-sub { font-size:11px; color:rgba(255,255,255,0.5); margin:5px 0 0; letter-spacing:0.12em; text-transform:uppercase; }
+    .bd     { padding:32px 36px; }
+    h1      { font-size:20px; font-weight:700; color:#111; margin:0 0 14px; }
+    p       { font-size:15px; color:#555; line-height:1.7; margin:0 0 16px; }
+    a.btn   { display:inline-block; background:#1a1a2e; color:#fff !important; text-decoration:none !important; font-weight:600; font-size:15px; padding:13px 32px; border-radius:8px; }
+    .bw     { text-align:center; margin:24px 0; }
+    hr      { border:none; border-top:1px solid #eee; margin:20px 0; }
+    .note   { font-size:13px; color:#888; line-height:1.6; }
+    .urlbox { background:#f7f6f2; border:1px solid #e4e3dd; border-radius:6px; padding:10px 13px; font-size:12px; color:#666; word-break:break-all; line-height:1.55; }
+    .ft     { text-align:center; padding:16px 12px 8px; font-size:11.5px; color:#aaa; line-height:1.75; }
+    .ft a   { color:#aaa; text-decoration:underline; }
+    @media only screen and (max-width:540px){
+      .bd { padding:22px 20px !important; }
+      .hd { padding:20px !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="hd">
+        <p class="hd-nm">Lumen Pastoral</p>
+        <p class="hd-sub">Portal do Servidor</p>
+      </div>
+      <div class="bd">
+        <h1>Seu link de acesso</h1>
+        <p>
+          Ol&aacute;! Clique no bot&atilde;o abaixo para entrar no Portal do Servidor.
+          O link &eacute; v&aacute;lido por <strong>1 hora</strong> e pode ser usado apenas uma vez.
+        </p>
+        <div class="bw">
+          <a href="{{ .ConfirmationURL }}" class="btn">Entrar no portal &rarr;</a>
+        </div>
+        <hr/>
+        <p class="note">Se o bot&atilde;o n&atilde;o funcionar, copie e cole este endere&ccedil;o no navegador:</p>
+        <div class="urlbox"><a href="{{ .ConfirmationURL }}">{{ .ConfirmationURL }}</a></div>
+        <hr/>
+        <p class="note">
+          Se voc&ecirc; n&atilde;o solicitou este acesso, ignore este e-mail com seguran&ccedil;a.
+          Nenhuma a&ccedil;&atilde;o ser&aacute; tomada.
+        </p>
+      </div>
+    </div>
+    <div class="ft">
+      Lumen Pastoral &mdash; Portal do Servidor<br/>
+      Este &eacute; um e-mail autom&aacute;tico &mdash; n&atilde;o responda a esta mensagem.<br/>
+      <a href="{{ .SiteURL }}">{{ .SiteURL }}</a>
+    </div>
+  </div>
+</body>
+</html>

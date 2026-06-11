@@ -5,6 +5,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -101,15 +102,24 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function AuthSync() {
   const router = useRouter();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        // Garante que o usuário seja levado à tela de redefinição, independente
+        // de para onde o Supabase redirecionou após o link de recuperação
+        if (!window.location.pathname.startsWith("/reset-senha")) {
+          navigate({ to: "/reset-senha", replace: true });
+        }
+        return;
+      }
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
         router.invalidate();
         qc.invalidateQueries();
       }
     });
     return () => subscription.unsubscribe();
-  }, [router, qc]);
+  }, [router, qc, navigate]);
   return null;
 }
 

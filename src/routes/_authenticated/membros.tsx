@@ -1952,7 +1952,7 @@ function MembrosPage() {
         try {
           await supabase.auth.signInWithOtp({
             email: sol.email,
-            options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + "/portal-membro/home" },
+            options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + "/membro/ativar-conta" },
           });
         } catch { /* non-fatal */ }
       }
@@ -2739,7 +2739,7 @@ function MembrosPage() {
                               email: m.email!,
                               options: {
                                 shouldCreateUser: true,
-                                emailRedirectTo: `${window.location.origin}/portal-membro/home`,
+                                emailRedirectTo: `${window.location.origin}/membro/ativar-conta`,
                               },
                             });
                             if (error) {

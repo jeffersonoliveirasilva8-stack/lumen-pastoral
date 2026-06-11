@@ -26,6 +26,8 @@ function AtivarContaPage() {
 
   const [senha, setSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [precisaSenhaAtual, setPrecisaSenhaAtual] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -61,12 +63,31 @@ function AtivarContaPage() {
     const erroSenha = validarSenha(senha);
     if (erroSenha) { toast.error(erroSenha); return; }
     if (senha !== confirmar) { toast.error("As senhas não conferem."); return; }
+    if (precisaSenhaAtual && !senhaAtual) { toast.error("Informe a senha atual para continuar."); return; }
 
     setSalvando(true);
     try {
-      // 1. Define a senha no Supabase Auth
+      // Se o Supabase exigiu reautenticação, faz signIn com a senha atual para renovar a sessão
+      if (precisaSenhaAtual) {
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: user!.email!,
+          password: senhaAtual,
+        });
+        if (signInErr) {
+          toast.error("Senha atual incorreta. Tente novamente.");
+          return;
+        }
+      }
+
+      // 1. Define a nova senha no Supabase Auth
       const { error: authErr } = await supabase.auth.updateUser({ password: senha });
       if (authErr) {
+        const msg = authErr.message?.toLowerCase() ?? "";
+        if (msg.includes("current password") || msg.includes("reauthentication")) {
+          setPrecisaSenhaAtual(true);
+          toast.error("Você já possui uma senha. Informe-a abaixo para continuar.");
+          return;
+        }
         toast.error("Erro ao salvar senha: " + authErr.message);
         return;
       }
@@ -156,6 +177,30 @@ function AtivarContaPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Campo de senha atual — aparece apenas quando o Supabase exige reautenticação */}
+              {precisaSenhaAtual && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-4 py-3 space-y-3">
+                  <p className="text-sm text-amber-800 dark:text-amber-300">
+                    Você já possui uma senha cadastrada. Informe-a abaixo para atualizá-la.
+                  </p>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Senha atual
+                    </label>
+                    <input
+                      type="password"
+                      value={senhaAtual}
+                      onChange={(e) => setSenhaAtual(e.target.value)}
+                      required
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      autoFocus
+                      className="mt-1.5 w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Regras de senha */}
               <div className="rounded-xl bg-muted/40 border border-border px-4 py-3 text-xs text-muted-foreground space-y-1">
                 <p className="font-semibold text-foreground mb-1.5">A senha deve ter:</p>
@@ -228,11 +273,11 @@ function AtivarContaPage() {
 
               <button
                 type="submit"
-                disabled={salvando || !!validarSenha(senha) || senha !== confirmar}
+                disabled={salvando || !!validarSenha(senha) || senha !== confirmar || (precisaSenhaAtual && !senhaAtual)}
                 className="w-full flex justify-center items-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60 transition"
               >
                 {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                Definir senha e continuar
+                {precisaSenhaAtual ? "Atualizar senha" : "Definir senha e continuar"}
               </button>
             </form>
           </div>

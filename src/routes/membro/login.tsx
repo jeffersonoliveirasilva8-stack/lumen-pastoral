@@ -18,7 +18,9 @@ function MembroLoginPage() {
 
   useEffect(() => {
     // Listener para capturar tokens processados assincronamente (magic link implicit flow)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // PASSWORD_RECOVERY é excluído: __root.tsx intercepta e redireciona para /reset-senha
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "PASSWORD_RECOVERY") return;
       if (session?.user) {
         const route = await getPostLoginRoute(supabase);
         navigate({ to: route, replace: true });
