@@ -137,10 +137,12 @@ function NotificacoesPage() {
   const criarMutation = useMutation({
     mutationFn: async (form: NovaNotificacaoForm) => {
       const { error } = await anyDb.from("notificacoes").insert({
-        paroquia_id: pid,
-        titulo: form.titulo,
-        mensagem: form.mensagem || null,
-        tipo: form.tipo,
+        paroquia_id:  pid,
+        titulo:       form.titulo,
+        mensagem:     form.mensagem || null,
+        tipo:         form.tipo,
+        apenas_admin: false, // comunicado para membros — visível no portal
+        destinatario_id: null, // broadcast: todos os membros da paróquia
       });
       if (error) throw error;
     },

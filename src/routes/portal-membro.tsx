@@ -119,7 +119,7 @@ function PortalMembroLayout() {
 
   const { data: urgentNotifs = [] } = useQuery<{ id: string; titulo: string; mensagem: string | null }[]>({
     queryKey: ["urgent-notifs", membro?.id],
-    enabled: !!membro?.paroquia_id,
+    enabled: !!membro?.paroquia_id && !!membro?.id,
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const db = supabase as any;
@@ -128,7 +128,9 @@ function PortalMembroLayout() {
         .select("id, titulo, mensagem")
         .eq("paroquia_id", membro!.paroquia_id)
         .eq("tipo", "urgente")
+        .eq("apenas_admin", false)
         .eq("lida", false)
+        .or(`destinatario_id.is.null,destinatario_id.eq.${membro!.id}`)
         .order("created_at", { ascending: false })
         .limit(5);
       return data ?? [];

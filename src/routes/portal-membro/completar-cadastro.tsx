@@ -24,15 +24,6 @@ type MissaOpt     = { id: string; nome: string; dia_semana: number; hora_inicio:
 
 const DIAS = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
 
-const MOTIVOS_RESTRICAO = [
-  "Trabalho",
-  "Faculdade",
-  "Escola",
-  "Curso",
-  "Saúde",
-  "Compromisso familiar",
-  "Outro",
-] as const;
 
 const STEP_LABELS = [
   "Dados Pessoais",
@@ -572,26 +563,16 @@ function CompletarCadastroPage() {
                     <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
                       <AlertCircle className="h-3 w-3" /> Motivo da indisponibilidade *
                     </label>
-                    <div className="flex flex-wrap gap-2">
-                      {MOTIVOS_RESTRICAO.map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setMotivoRestricao(m)}
-                          className={`h-8 px-3 rounded-full text-xs font-medium border transition ${
-                            motivoRestricao === m
-                              ? "bg-primary/10 border-primary text-primary"
-                              : "border-border text-muted-foreground hover:bg-muted"
-                          }`}
-                        >
-                          {motivoRestricao === m && <span className="mr-1">✓</span>}
-                          {m}
-                        </button>
-                      ))}
-                    </div>
-                    {!motivoRestricao && (
-                      <p className="text-xs text-muted-foreground mt-1.5">
-                        Selecione o motivo para continuar.
+                    <textarea
+                      value={motivoRestricao}
+                      onChange={(e) => setMotivoRestricao(e.target.value)}
+                      placeholder="Ex: trabalho às segundas, faculdade nos sábados de manhã, cuido dos filhos nos domingos..."
+                      rows={3}
+                      className="w-full rounded-xl border border-input bg-card px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 resize-none placeholder:text-muted-foreground/60"
+                    />
+                    {!motivoRestricao.trim() && (
+                      <p className="text-xs text-destructive/70 mt-1.5">
+                        Descreva o motivo para continuar.
                       </p>
                     )}
                   </div>

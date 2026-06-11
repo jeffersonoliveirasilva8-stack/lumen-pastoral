@@ -109,12 +109,13 @@ GRANT EXECUTE ON FUNCTION public.ativar_conta_membro TO authenticated;
 -- ── 4. completar_perfil_membro() — versão atualizada (marca perfil_completo) ──
 -- Substitui a versão do PATCH_M adicionando: UPDATE membros SET perfil_completo = true
 CREATE OR REPLACE FUNCTION public.completar_perfil_membro(
-  p_telefone            TEXT     DEFAULT NULL,
-  p_data_nascimento     DATE     DEFAULT NULL,
-  p_sexo                TEXT     DEFAULT NULL,
-  p_comunidade_id       UUID     DEFAULT NULL,
-  p_atuacao_ids         UUID[]   DEFAULT ARRAY[]::UUID[],
-  p_missa_restricao_ids UUID[]   DEFAULT ARRAY[]::UUID[]
+  p_telefone               TEXT     DEFAULT NULL,
+  p_data_nascimento        DATE     DEFAULT NULL,
+  p_sexo                   TEXT     DEFAULT NULL,
+  p_comunidade_id          UUID     DEFAULT NULL,
+  p_atuacao_ids            UUID[]   DEFAULT ARRAY[]::UUID[],
+  p_missa_restricao_ids    UUID[]   DEFAULT ARRAY[]::UUID[],
+  p_motivo_disponibilidade TEXT     DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -167,10 +168,11 @@ BEGIN
   END;
 
   UPDATE membros SET
-    telefone        = CASE WHEN p_telefone IS NOT NULL        THEN p_telefone        ELSE telefone        END,
-    data_nascimento = CASE WHEN p_data_nascimento IS NOT NULL THEN p_data_nascimento ELSE data_nascimento END,
-    sexo            = CASE WHEN p_sexo IS NOT NULL            THEN p_sexo            ELSE sexo            END,
-    comunidade_id   = CASE WHEN p_comunidade_id IS NOT NULL   THEN p_comunidade_id   ELSE comunidade_id   END
+    telefone               = CASE WHEN p_telefone IS NOT NULL               THEN p_telefone               ELSE telefone               END,
+    data_nascimento        = CASE WHEN p_data_nascimento IS NOT NULL        THEN p_data_nascimento        ELSE data_nascimento        END,
+    sexo                   = CASE WHEN p_sexo IS NOT NULL                   THEN p_sexo                   ELSE sexo                   END,
+    comunidade_id          = CASE WHEN p_comunidade_id IS NOT NULL          THEN p_comunidade_id          ELSE comunidade_id          END,
+    motivo_disponibilidade = CASE WHEN p_motivo_disponibilidade IS NOT NULL THEN p_motivo_disponibilidade ELSE motivo_disponibilidade END
   WHERE id = v_membro_id;
 
   -- ── Sincroniza membro_atuacoes ─────────────────────────────────────────

@@ -150,6 +150,7 @@ type FormData = {
   nome_pais: string;
   contato_pais: string;
   restricoes_horario: string;
+  motivo_disponibilidade: string;
   deslocamento: string;
   comunidade_id: string;
   planilha_url: string;
@@ -190,7 +191,7 @@ const EMPTY_FORM: FormData = {
   nome: "", email: "", telefone: "", data_nascimento: "",
   data_ingresso: "", cpf: "", rg: "", endereco: "", cidade: "", cep: "",
   nome_emergencia: "", telefone_emergencia: "",
-  nome_pais: "", contato_pais: "", restricoes_horario: "", deslocamento: "",
+  nome_pais: "", contato_pais: "", restricoes_horario: "", motivo_disponibilidade: "", deslocamento: "",
   comunidade_id: "", planilha_url: "", foto_url: "",
   observacoes: "", ativo: true,
   prioridade_escala: "nenhuma",
@@ -540,6 +541,19 @@ function MemberForm({
             </p>
           </div>
         )}
+
+        {/* Motivo de indisponibilidade informado pelo membro */}
+        <div className="space-y-1.5">
+          <Label htmlFor="motivo_disponibilidade">Motivo de indisponibilidade</Label>
+          <Textarea
+            id="motivo_disponibilidade"
+            value={form.motivo_disponibilidade}
+            onChange={(e) => setForm({ ...form, motivo_disponibilidade: e.target.value })}
+            placeholder="O membro ainda não informou um motivo..."
+            rows={2}
+          />
+          <p className="text-[11px] text-muted-foreground">Preenchido pelo próprio membro ao completar o cadastro.</p>
+        </div>
 
         {/* Texto livre + auto-detectar */}
         <div className="space-y-1.5">
@@ -2027,6 +2041,7 @@ function MembrosPage() {
         nome_pais: form.nome_pais || null,
         contato_pais: form.contato_pais || null,
         restricoes_horario: form.restricoes_horario || null,
+        motivo_disponibilidade: form.motivo_disponibilidade || null,
         deslocamento: form.deslocamento || null,
         comunidade_id: form.comunidade_id || null,
         planilha_url: form.planilha_url || null,
@@ -2351,7 +2366,7 @@ function MembrosPage() {
       const [aRes, rRes, extRes, mmrRes] = await Promise.all([
         anyDb.from("membro_atuacoes").select("atuacao_id").eq("membro_id", m.id),
         anyDb.from("membro_funcao_restricoes").select("ministerio_id, tipo").eq("membro_id", m.id),
-        anyDb.from("membros").select("cpf, rg, foto_url, endereco, cidade, cep, nome_emergencia, telefone_emergencia, nome_pais, contato_pais, restricoes_horario, deslocamento, comunidade_id, planilha_url, restricoes_dia_semana").eq("id", m.id).maybeSingle(),
+        anyDb.from("membros").select("cpf, rg, foto_url, endereco, cidade, cep, nome_emergencia, telefone_emergencia, nome_pais, contato_pais, restricoes_horario, motivo_disponibilidade, deslocamento, comunidade_id, planilha_url, restricoes_dia_semana").eq("id", m.id).maybeSingle(),
         anyDb.from("membro_missa_restricoes").select("missa_padrao_id").eq("membro_id", m.id),
       ]);
       atuacaoIds = (aRes.data ?? []).map((r: any) => r.atuacao_id as string);
@@ -2377,6 +2392,7 @@ function MembrosPage() {
       nome_pais: (extra.nome_pais as string) ?? "",
       contato_pais: (extra.contato_pais as string) ?? "",
       restricoes_horario: (extra.restricoes_horario as string) ?? "",
+      motivo_disponibilidade: (extra.motivo_disponibilidade as string) ?? "",
       deslocamento: (extra.deslocamento as string) ?? "",
       comunidade_id: (extra.comunidade_id as string) ?? "",
       planilha_url: (extra.planilha_url as string) ?? "",

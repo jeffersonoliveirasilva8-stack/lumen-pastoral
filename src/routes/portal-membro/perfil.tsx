@@ -162,25 +162,57 @@ function PortalMembroPerfil() {
         const hoje = new Date().toISOString().slice(0, 10);
         if (form.data_nascimento > hoje) throw new Error("Data de nascimento não pode ser no futuro.");
       }
-      // Usa RPC SECURITY DEFINER para garantir que o update ocorre mesmo quando
-      // auth_user_id não está configurado corretamente (resolve sincronização Admin ↔ Membro).
-      const { data: result, error } = await anyDb.rpc("atualizar_perfil_membro", {
-        p_nome:                form.nome.trim()            || null,
-        p_telefone:            form.telefone               || null,
-        p_data_nascimento:     form.data_nascimento        || null,
-        p_cpf:                 form.cpf                    || null,
-        p_rg:                  form.rg                     || null,
-        p_endereco:            form.endereco               || null,
-        p_cidade:              form.cidade                 || null,
-        p_cep:                 form.cep                    || null,
-        p_nome_pai:            form.nome_pai               || null,
-        p_nome_mae:            form.nome_mae               || null,
-        p_nome_emergencia:     form.nome_emergencia        || null,
-        p_telefone_emergencia: form.telefone_emergencia    || null,
-        p_observacoes:         form.observacoes            || null,
+
+      const payload = {
+        nome: form.nome.trim(),
+        telefone: form.telefone || null,
+        data_nascimento: form.data_nascimento || null,
+        cpf: form.cpf || null,
+        rg: form.rg || null,
+        endereco: form.endereco || null,
+        cidade: form.cidade || null,
+        cep: form.cep || null,
+        nome_pai: form.nome_pai || null,
+        nome_mae: form.nome_mae || null,
+        nome_emergencia: form.nome_emergencia || null,
+        telefone_emergencia: form.telefone_emergencia || null,
+        observacoes: form.observacoes || null,
+      };
+
+      // Tenta RPC SECURITY DEFINER (garante sync mesmo sem auth_user_id correto).
+      // PGRST202 = função não encontrada → patch SQL ainda não aplicado → fallback direto.
+      const { data: result, error: rpcError } = await anyDb.rpc("atualizar_perfil_membro", {
+        p_nome:                payload.nome,
+        p_telefone:            payload.telefone,
+        p_data_nascimento:     payload.data_nascimento,
+        p_cpf:                 payload.cpf,
+        p_rg:                  payload.rg,
+        p_endereco:            payload.endereco,
+        p_cidade:              payload.cidade,
+        p_cep:                 payload.cep,
+        p_nome_pai:            payload.nome_pai,
+        p_nome_mae:            payload.nome_mae,
+        p_nome_emergencia:     payload.nome_emergencia,
+        p_telefone_emergencia: payload.telefone_emergencia,
+        p_observacoes:         payload.observacoes,
       });
-      if (error) throw error;
-      if (result && !result.success) throw new Error(result.error ?? "Erro ao salvar perfil.");
+
+      if (!rpcError) {
+        if (result && !result.success) throw new Error(result.error ?? "Erro ao salvar perfil.");
+        return;
+      }
+
+      // Fallback: UPDATE direto (funciona quando PATCH_O ainda não foi aplicado)
+      if (rpcError.code === "PGRST202" || rpcError.message?.includes("atualizar_perfil_membro")) {
+        const { error: updateError } = await anyDb
+          .from("membros")
+          .update(payload)
+          .eq("id", membro!.id);
+        if (updateError) throw updateError;
+        return;
+      }
+
+      throw rpcError;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-perfil"] });

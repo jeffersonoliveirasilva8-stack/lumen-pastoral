@@ -308,6 +308,22 @@ GRANT SELECT ON public.escalas TO authenticated;
 --   • p_motivo_disponibilidade TEXT
 --   • Salva motivo no campo membros.motivo_disponibilidade
 
+-- Drop ALL overloads (versões anteriores com assinaturas diferentes)
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure::text AS sig
+    FROM pg_proc p
+    WHERE p.proname = 'completar_perfil_membro'
+      AND p.pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+  LOOP
+    EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.completar_perfil_membro(
   p_telefone               TEXT     DEFAULT NULL,
   p_data_nascimento        DATE     DEFAULT NULL,
@@ -434,7 +450,7 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.completar_perfil_membro TO authenticated;
+GRANT EXECUTE ON FUNCTION public.completar_perfil_membro(TEXT, DATE, TEXT, UUID, UUID[], UUID[], TEXT) TO authenticated;
 
 -- ══════════════════════════════════════════════════════════════════
 -- 8. RPC atualizar_perfil_membro() — edição de perfil com SECURITY DEFINER
@@ -516,7 +532,7 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.atualizar_perfil_membro TO authenticated;
+GRANT EXECUTE ON FUNCTION public.atualizar_perfil_membro(TEXT, TEXT, DATE, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
 
 -- ══════════════════════════════════════════════════════════════════
 -- 9. Migração: marcar notificações de ocorrências existentes como apenas_admin
