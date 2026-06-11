@@ -60,26 +60,12 @@ function CompletarCadastroPage() {
     enabled:  !!membro?.id,
     staleTime: 0,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log("[completar-cadastro] ── DIAGNÓSTICO DE SINCRONIZAÇÃO ──");
-      console.log("[completar-cadastro] auth.user.id:", user?.id ?? "NULL");
-      console.log("[completar-cadastro] membro.id:", membro!.id, "| paroquia_id:", membro!.paroquia_id);
-
-      // Verifica profiles row para confirmar current_paroquia_id()
-      const { data: profileData } = await anyDb
-        .from("profiles")
-        .select("id, paroquia_id")
-        .eq("id", user?.id)
-        .maybeSingle();
-      console.log("[completar-cadastro] profile.id:", profileData?.id ?? "NULL", "| profile.paroquia_id:", profileData?.paroquia_id ?? "NULL");
-
-      // Verifica auth_user_id real no banco (confirma que o link está ativo)
+      // Carrega dados atuais do membro para pré-popular o formulário
       const { data: membroDb } = await anyDb
         .from("membros")
         .select("auth_user_id, paroquia_id, sexo, comunidade_id, telefone, data_nascimento, motivo_disponibilidade")
         .eq("id", membro!.id)
         .maybeSingle();
-      console.log("[completar-cadastro] membros.auth_user_id:", membroDb?.auth_user_id ?? "NULL", "| membros.paroquia_id:", membroDb?.paroquia_id ?? "NULL");
 
       const [atuacoesRes, restricoesRes] = await Promise.all([
         anyDb
@@ -91,9 +77,6 @@ function CompletarCadastroPage() {
           .select("missa_padrao_id")
           .eq("membro_id", membro!.id),
       ]);
-
-      if (atuacoesRes.error) console.error("[completar-cadastro] membro_atuacoes error:", atuacoesRes.error?.message, "code:", atuacoesRes.error?.code);
-      if (restricoesRes.error) console.error("[completar-cadastro] membro_missa_restricoes error:", restricoesRes.error?.message, "code:", restricoesRes.error?.code);
 
       return {
         telefone:              (membroDb?.telefone              ?? "") as string,
@@ -134,8 +117,7 @@ function CompletarCadastroPage() {
         .select("id, nome")
         .eq("paroquia_id", membro!.paroquia_id)
         .order("nome");
-      console.log("[completar-cadastro] comunidades encontradas:", data?.length ?? 0,
-        error ? "❌ RLS-ERROR code=" + error.code + " msg=" + error.message : "✓ OK");
+      if (error) throw error;
       return data ?? [];
     },
   });
@@ -150,8 +132,7 @@ function CompletarCadastroPage() {
         .eq("paroquia_id", membro!.paroquia_id)
         .eq("ativo", true)
         .order("ordem", { ascending: true });
-      console.log("[completar-cadastro] atuacoes encontradas:", data?.length ?? 0,
-        error ? "❌ RLS-ERROR code=" + error.code + " msg=" + error.message : "✓ OK");
+      if (error) throw error;
       return data ?? [];
     },
   });
@@ -167,8 +148,7 @@ function CompletarCadastroPage() {
         .eq("ativo", true)
         .order("dia_semana", { ascending: true })
         .order("hora_inicio", { ascending: true });
-      console.log("[completar-cadastro] missas encontradas:", data?.length ?? 0,
-        error ? "❌ RLS-ERROR code=" + error.code + " msg=" + error.message : "✓ OK");
+      if (error) throw error;
       return data ?? [];
     },
   });
@@ -256,15 +236,8 @@ function CompletarCadastroPage() {
         p_motivo_disponibilidade: disponibilidade === "restricoes" ? (motivoRestricao || null) : null,
       });
 
-      if (error) {
-        console.error("[completar-cadastro] RPC error:", error);
-        throw new Error(error.message);
-      }
-
-      if (!result?.success) {
-        console.error("[completar-cadastro] RPC returned failure:", result);
-        throw new Error(result?.error ?? "Erro ao salvar perfil.");
-      }
+      if (error) throw new Error(error.message);
+      if (!result?.success) throw new Error(result?.error ?? "Erro ao salvar perfil.");
 
       qc.invalidateQueries({ queryKey: ["profile-completeness"] });
       qc.invalidateQueries({ queryKey: ["completar-extra"] });
@@ -274,9 +247,7 @@ function CompletarCadastroPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       navigate({ to: "/portal-membro/home" } as any);
     } catch (e: unknown) {
-      const msg = (e as Error).message ?? "Tente novamente.";
-      console.error("[completar-cadastro] Erro ao confirmar:", msg);
-      toast.error("Erro ao salvar: " + msg);
+      toast.error("Erro ao salvar: " + ((e as Error).message ?? "Tente novamente."));
     } finally {
       setSaving(false);
     }

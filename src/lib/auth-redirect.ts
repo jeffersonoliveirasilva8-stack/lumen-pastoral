@@ -4,17 +4,16 @@
  * Helper centralizado de redirect pós-login.
  * Usado por TODOS os fluxos de autenticação:
  *   - Email/senha (login.tsx)
- *   - Google OAuth (auth.callback.tsx)
  *   - Magic Link (membro/login.tsx)
  *   - Recuperação de sessão (_authenticated.tsx)
  *
  * Lógica de destino:
- *   super_admin | admin_paroquial | coordenador → /painel
+ *   super_admin | admin_paroquial | coordenador → /auth/admin-mfa (MFA customizado)
  *   servidor | membro | auxiliar (puro)         → /portal-membro/home
  *   sem roles + membro ativo (auto-link)        → /portal-membro/home
  *   sem roles + sem membro                      → /membro/login
  *   membro desativado                           → /acesso-negado
- *   sem paróquia (admin novo)                   → /onboarding
+ *   sem paróquia (admin novo)                   → /onboarding (após MFA)
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -25,7 +24,7 @@ export type PostLoginRoute =
   | "/onboarding"
   | "/membro/login"
   | "/acesso-negado"
-  | "/auth/mfa-challenge";
+  | "/auth/admin-mfa";
 
 export async function getPostLoginRoute(
   supabase: SupabaseClient,
@@ -37,32 +36,20 @@ export async function getPostLoginRoute(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabase as any;
 
-    // Busca roles e perfil em paralelo
-    const [{ data: rolesData }, { data: profileData }] = await Promise.all([
+    // Busca roles em paralelo com perfil
+    const [{ data: rolesData }] = await Promise.all([
       db.from("user_roles").select("role").eq("user_id", user.id),
-      db.from("profiles").select("paroquia_id").eq("id", user.id).maybeSingle(),
     ]);
 
     const roles: string[] = (rolesData ?? []).map((r: { role: string }) => r.role);
 
-    // Roles de coordenação → painel admin
+    // Roles de coordenação → MFA customizado primeiro
     const isAdmin = roles.some((r) => r === "admin_paroquial" || r === "super_admin");
     const isCoordenador = roles.some((r) => r === "coordenador");
 
     if (isAdmin || isCoordenador) {
-      // Verifica se MFA (AAL2) é necessário
-      try {
-        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        if (aalData && aalData.nextLevel === "aal2" && aalData.currentLevel !== "aal2") {
-          return "/auth/mfa-challenge";
-        }
-      } catch {
-        // Se falhar a verificação AAL, prossegue normalmente
-      }
-
-      // Admin sem paróquia → onboarding
-      if (!profileData?.paroquia_id) return "/onboarding";
-      return "/painel";
+      // Sempre exige MFA para admin/coordenador (código 6 dígitos via e-mail)
+      return "/auth/admin-mfa";
     }
 
     // Roles de membro/servidor/auxiliar → portal do membro

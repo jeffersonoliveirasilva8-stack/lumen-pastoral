@@ -40,6 +40,8 @@ CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON public.audit_logs (creat
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Admins e coordenadores veem apenas logs da própria paróquia
+-- (super_admin tem política separada sem restrição de paróquia)
+DROP POLICY IF EXISTS "audit_logs_paroquia_read" ON public.audit_logs;
 CREATE POLICY "audit_logs_paroquia_read" ON public.audit_logs
   FOR SELECT
   USING (
@@ -47,11 +49,12 @@ CREATE POLICY "audit_logs_paroquia_read" ON public.audit_logs
     AND EXISTS (
       SELECT 1 FROM public.user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('admin_paroquial', 'coordenador', 'super_admin')
+        AND role IN ('admin_paroquial', 'coordenador')
     )
   );
 
--- super_admin vê tudo
+-- super_admin vê todos os logs de todas as paróquias
+DROP POLICY IF EXISTS "audit_logs_super_admin" ON public.audit_logs;
 CREATE POLICY "audit_logs_super_admin" ON public.audit_logs
   FOR SELECT
   USING (
@@ -61,8 +64,8 @@ CREATE POLICY "audit_logs_super_admin" ON public.audit_logs
     )
   );
 
--- Ninguém pode INSERT/UPDATE/DELETE manualmente (apenas triggers)
--- service_role é o único com ALL (para os triggers SECURITY DEFINER)
+-- INSERT/UPDATE/DELETE via tabela: apenas service_role (Edge Functions e RPCs)
+-- Triggers SECURITY DEFINER rodam como dono da função (postgres) e bypassam RLS
 GRANT SELECT ON public.audit_logs TO authenticated;
 GRANT ALL    ON public.audit_logs TO service_role;
 

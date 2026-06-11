@@ -39,11 +39,16 @@ function AtivarContaPage() {
     }
   }, [loading, user, navigate]);
 
-  // Se conta já foi ativada → completar cadastro
+  // Se conta já foi ativada → ir para completar cadastro ou direto ao portal
   useEffect(() => {
     if (!loading && !linking && membro && membro.conta_ativada) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({ to: "/portal-membro/completar-cadastro" as any, replace: true });
+      if (membro.perfil_completo) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        navigate({ to: "/portal-membro/home" as any, replace: true });
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        navigate({ to: "/portal-membro/completar-cadastro" as any, replace: true });
+      }
     }
   }, [loading, linking, membro, navigate]);
 
@@ -93,11 +98,8 @@ function AtivarContaPage() {
       }
 
       // 2. Marca conta como ativada no banco (SECURITY DEFINER — ignora RLS)
-      const { data: rpcData } = await anyDb.rpc("ativar_conta_membro");
-      if (rpcData && !rpcData.success) {
-        // Erro não-fatal — conta foi ativada no auth, só falhou o registro no banco
-        console.warn("[ativar-conta] RPC warning:", rpcData.error);
-      }
+      // Falha não-fatal: auth já foi atualizado, banco atualiza no próximo login
+      await anyDb.rpc("ativar_conta_membro").catch(() => {});
 
       toast.success("Senha criada! Agora complete seu perfil.");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

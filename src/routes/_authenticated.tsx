@@ -108,6 +108,17 @@ function AuthLayout() {
     }
   }, [loading, user, roles, hasAdminAccess, isServidor, navigate]);
 
+  // Admin/coordenador sem MFA verificado → exige verificação antes de acessar o painel
+  // isServidor=true para "auxiliar puro" — esses vão para o portal, não para o painel
+  useEffect(() => {
+    if (!loading && user && hasAdminAccess && !isServidor) {
+      const mfaToken = sessionStorage.getItem("admin_mfa_token");
+      if (!mfaToken) {
+        navigate({ to: "/auth/admin-mfa" });
+      }
+    }
+  }, [loading, user, hasAdminAccess, isServidor, navigate]);
+
   useEffect(() => {
     if (!loading && user && profile && !profile.paroquia_id && pathname !== "/onboarding" && hasAdminAccess) {
       navigate({ to: "/onboarding" });
@@ -157,6 +168,7 @@ function AuthLayout() {
   const drawerGridItems = allNav.filter(i => !BOTTOM_ROUTES.includes(i.to) && i.to !== "/minha-conta");
 
   async function logout() {
+    sessionStorage.removeItem("admin_mfa_token");
     await supabase.auth.signOut();
     navigate({ to: "/login" });
   }

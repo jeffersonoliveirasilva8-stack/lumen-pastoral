@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Loader2, User, Save, Star, Calendar, Phone, Shield, Camera, Lock, Mail, Eye, EyeOff } from "lucide-react";
+import { Loader2, User, Save, Star, Calendar, Phone, Shield, Camera } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -68,39 +68,6 @@ function PortalMembroPerfil() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [localFotoUrl, setLocalFotoUrl] = useState<string | null>(null);
-
-  // ── Conta & Acesso ─────────────────────────────────────────────────
-  const [senha, setSenha] = useState({ nova: "", confirmar: "" });
-  const [showSenha, setShowSenha] = useState(false);
-  const [savingSenha, setSavingSenha] = useState(false);
-  const [novoEmail, setNovoEmail] = useState("");
-  const [savingEmail, setSavingEmail] = useState(false);
-
-  async function handleSenha(e: React.FormEvent) {
-    e.preventDefault();
-    if (savingSenha) return;
-    if (senha.nova.length < 6) { toast.error("A senha deve ter pelo menos 6 caracteres."); return; }
-    if (senha.nova !== senha.confirmar) { toast.error("As senhas não coincidem."); return; }
-    setSavingSenha(true);
-    const { error } = await supabase.auth.updateUser({ password: senha.nova });
-    setSavingSenha(false);
-    if (error) { toast.error("Erro: " + error.message); return; }
-    setSenha({ nova: "", confirmar: "" });
-    toast.success("Senha alterada com sucesso.");
-  }
-
-  async function handleEmail(e: React.FormEvent) {
-    e.preventDefault();
-    if (savingEmail) return;
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(novoEmail.trim());
-    if (!emailOk) { toast.error("Informe um e-mail válido."); return; }
-    setSavingEmail(true);
-    const { error } = await supabase.auth.updateUser({ email: novoEmail.trim() });
-    setSavingEmail(false);
-    if (error) { toast.error("Erro: " + error.message); return; }
-    setNovoEmail("");
-    toast.success("Confirmação enviada para o novo e-mail.");
-  }
 
   const { data: membroData, isLoading } = useQuery<MembroCompleto | null>({
     queryKey: ["pm-perfil", membro?.id],
@@ -474,83 +441,8 @@ function PortalMembroPerfil() {
         </Button>
       </form>
 
-      {/* ── Conta & Acesso ── */}
-      <div className="mt-8 space-y-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-          <Lock className="h-3.5 w-3.5" /> Conta e acesso
-        </h2>
-
-        {/* Alterar e-mail */}
-        <form onSubmit={handleEmail} className="space-y-3 rounded-xl border border-border bg-card p-4">
-          <p className="text-xs font-semibold flex items-center gap-1.5">
-            <Mail className="h-3.5 w-3.5 text-muted-foreground" /> Alterar e-mail
-          </p>
-          <div>
-            <Label htmlFor="pm-novo-email">Novo e-mail</Label>
-            <Input
-              id="pm-novo-email"
-              type="email"
-              value={novoEmail}
-              onChange={(e) => setNovoEmail(e.target.value)}
-              className="mt-1"
-              placeholder="novo@email.com"
-              autoComplete="email"
-            />
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Um link de confirmação será enviado para o novo endereço.
-            </p>
-          </div>
-          <Button type="submit" variant="outline" size="sm" disabled={savingEmail} className="w-full">
-            {savingEmail ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
-            Solicitar alteração de e-mail
-          </Button>
-        </form>
-
-        {/* Alterar senha */}
-        <form onSubmit={handleSenha} className="space-y-3 rounded-xl border border-border bg-card p-4">
-          <p className="text-xs font-semibold flex items-center gap-1.5">
-            <Lock className="h-3.5 w-3.5 text-muted-foreground" /> Alterar senha
-          </p>
-          <div>
-            <Label htmlFor="pm-nova-senha">Nova senha</Label>
-            <div className="relative mt-1">
-              <Input
-                id="pm-nova-senha"
-                type={showSenha ? "text" : "password"}
-                value={senha.nova}
-                onChange={(e) => setSenha((s) => ({ ...s, nova: e.target.value }))}
-                placeholder="Mínimo 6 caracteres"
-                autoComplete="new-password"
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowSenha((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="pm-conf-senha">Confirmar nova senha</Label>
-            <Input
-              id="pm-conf-senha"
-              type="password"
-              value={senha.confirmar}
-              onChange={(e) => setSenha((s) => ({ ...s, confirmar: e.target.value }))}
-              className="mt-1"
-              placeholder="Repita a nova senha"
-              autoComplete="new-password"
-            />
-          </div>
-          <Button type="submit" variant="outline" size="sm" disabled={savingSenha} className="w-full">
-            {savingSenha ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
-            Alterar senha
-          </Button>
-        </form>
-
-        {/* Segurança — 2FA */}
+      {/* ── Segurança ── */}
+      <div className="mt-8">
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
           <p className="text-xs font-semibold flex items-center gap-1.5">
             <Shield className="h-3.5 w-3.5 text-muted-foreground" /> Segurança

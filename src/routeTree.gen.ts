@@ -38,6 +38,7 @@ import { Route as InscricaoSlugRouteImport } from './routes/inscricao.$slug'
 import { Route as EscalaTokenRouteImport } from './routes/escala.$token'
 import { Route as AuthMfaChallengeRouteImport } from './routes/auth.mfa-challenge'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthAdminMfaRouteImport } from './routes/auth.admin-mfa'
 import { Route as AuthenticatedSolicitacoesRouteImport } from './routes/_authenticated/solicitacoes'
 import { Route as AuthenticatedSacristiaRouteImport } from './routes/_authenticated/sacristia'
 import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
@@ -203,6 +204,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthAdminMfaRoute = AuthAdminMfaRouteImport.update({
+  id: '/auth/admin-mfa',
+  path: '/auth/admin-mfa',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSolicitacoesRoute =
   AuthenticatedSolicitacoesRouteImport.update({
     id: '/solicitacoes',
@@ -327,6 +333,7 @@ export interface FileRoutesByFullPath {
   '/ranking': typeof AuthenticatedRankingRoute
   '/sacristia': typeof AuthenticatedSacristiaRoute
   '/solicitacoes': typeof AuthenticatedSolicitacoesRoute
+  '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
   '/escala/$token': typeof EscalaTokenRoute
@@ -375,6 +382,7 @@ export interface FileRoutesByTo {
   '/ranking': typeof AuthenticatedRankingRoute
   '/sacristia': typeof AuthenticatedSacristiaRoute
   '/solicitacoes': typeof AuthenticatedSolicitacoesRoute
+  '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
   '/escala/$token': typeof EscalaTokenRoute
@@ -425,6 +433,7 @@ export interface FileRoutesById {
   '/_authenticated/ranking': typeof AuthenticatedRankingRoute
   '/_authenticated/sacristia': typeof AuthenticatedSacristiaRoute
   '/_authenticated/solicitacoes': typeof AuthenticatedSolicitacoesRoute
+  '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
   '/escala/$token': typeof EscalaTokenRoute
@@ -475,6 +484,7 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/sacristia'
     | '/solicitacoes'
+    | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
     | '/escala/$token'
@@ -523,6 +533,7 @@ export interface FileRouteTypes {
     | '/ranking'
     | '/sacristia'
     | '/solicitacoes'
+    | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
     | '/escala/$token'
@@ -572,6 +583,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ranking'
     | '/_authenticated/sacristia'
     | '/_authenticated/solicitacoes'
+    | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
     | '/escala/$token'
@@ -607,6 +619,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   PortalMembroRoute: typeof PortalMembroRouteWithChildren
   ResetSenhaRoute: typeof ResetSenhaRoute
+  AuthAdminMfaRoute: typeof AuthAdminMfaRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthMfaChallengeRoute: typeof AuthMfaChallengeRoute
   EscalaTokenRoute: typeof EscalaTokenRoute
@@ -822,6 +835,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/callback'
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/admin-mfa': {
+      id: '/auth/admin-mfa'
+      path: '/auth/admin-mfa'
+      fullPath: '/auth/admin-mfa'
+      preLoaderRoute: typeof AuthAdminMfaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/solicitacoes': {
@@ -1040,6 +1060,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   PortalMembroRoute: PortalMembroRouteWithChildren,
   ResetSenhaRoute: ResetSenhaRoute,
+  AuthAdminMfaRoute: AuthAdminMfaRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthMfaChallengeRoute: AuthMfaChallengeRoute,
   EscalaTokenRoute: EscalaTokenRoute,

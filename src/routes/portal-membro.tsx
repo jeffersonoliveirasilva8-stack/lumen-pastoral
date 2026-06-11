@@ -73,7 +73,13 @@ function PortalMembroLayout() {
   }, [today]);
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [urgentDismissed, setUrgentDismissed] = useState(false);
+  const [urgentDismissed, setUrgentDismissed] = useState(() =>
+    sessionStorage.getItem("urgentNotifDismissed") === "true"
+  );
+  function dismissUrgent() {
+    sessionStorage.setItem("urgentNotifDismissed", "true");
+    setUrgentDismissed(true);
+  }
 
   // ── Completude de perfil ──────────────────────────────────────────────────
   const { data: profileCompleteness, isSuccess: completenessLoaded } = useQuery({
@@ -84,7 +90,7 @@ function PortalMembroLayout() {
       const [membroRes, atuacoesRes] = await Promise.all([
         anyDb
           .from("membros")
-          .select("sexo, comunidade_id")
+          .select("sexo, comunidade_id, perfil_completo")
           .eq("id", membro!.id)
           .single(),
         anyDb
@@ -93,6 +99,12 @@ function PortalMembroLayout() {
           .eq("membro_id", membro!.id)
           .limit(1),
       ]);
+      // Se o banco confirma que o perfil foi completado, confiar nele
+      // independentemente do estado das queries de membro_atuacoes (que pode
+      // retornar vazio por RLS antes de auth_user_id estar vinculado)
+      if (membroRes.data?.perfil_completo === true) {
+        return { complete: true, percentage: 100, missingFields: [] as string[] };
+      }
       return checkProfileCompleteness({
         nome: membro!.nome,
         telefone: membro!.telefone,
@@ -137,6 +149,22 @@ function PortalMembroLayout() {
     },
   });
 
+  const { data: unreadCount = 0 } = useQuery<number>({
+    queryKey: ["notif-unread-count", membro?.id],
+    enabled: !!membro?.paroquia_id && !!membro?.id,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const { count } = await anyDb
+        .from("notificacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("paroquia_id", membro!.paroquia_id)
+        .eq("apenas_admin", false)
+        .eq("lida", false)
+        .or(`destinatario_id.is.null,destinatario_id.eq.${membro!.id}`);
+      return count ?? 0;
+    },
+  });
+
   // Realtime global: score muda → invalida ranking queries
   useEffect(() => {
     if (!membro?.paroquia_id) return;
@@ -149,6 +177,23 @@ function PortalMembroLayout() {
         qc.invalidateQueries({ queryKey: ["ranking-full"] });
         qc.invalidateQueries({ queryKey: ["ranking-top"] });
         qc.invalidateQueries({ queryKey: ["ranking-pos"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [membro?.paroquia_id, qc]);
+
+  // Realtime global: nova notificação → atualiza badge e queries (único canal no layout)
+  useEffect(() => {
+    if (!membro?.paroquia_id) return;
+    const ch = supabase
+      .channel(`pm-layout-notif-rt-${membro.paroquia_id}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "notificacoes",
+        filter: `paroquia_id=eq.${membro.paroquia_id}`,
+      }, () => {
+        qc.invalidateQueries({ queryKey: ["notif-unread-count"] });
+        qc.invalidateQueries({ queryKey: ["urgent-notifs"] });
+        qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -176,6 +221,8 @@ function PortalMembroLayout() {
   useEffect(() => {
     if (pathname === "/portal-membro" || pathname === "/portal-membro/") navigate({ to: "/portal-membro/home" });
   }, [pathname, navigate]);
+
+  const hasUnread = unreadCount > 0;
 
   if (loading || linking || !user || !membro) {
     return (
@@ -220,14 +267,14 @@ function PortalMembroLayout() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => setUrgentDismissed(true)}
+                onClick={dismissUrgent}
                 className="flex-1 rounded-xl bg-muted px-4 py-2.5 text-sm font-medium hover:bg-muted/80 transition"
               >
                 Fechar
               </button>
               <Link
                 to="/portal-membro/notificacoes"
-                onClick={() => setUrgentDismissed(true)}
+                onClick={dismissUrgent}
                 className="flex-1 rounded-xl bg-destructive px-4 py-2.5 text-sm font-semibold text-white text-center hover:bg-destructive/90 transition"
               >
                 Ver todos
@@ -262,7 +309,12 @@ function PortalMembroLayout() {
                     : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 }`}
               >
-                <item.icon className="h-4 w-4 shrink-0" />
+                <span className="relative shrink-0">
+                  <item.icon className="h-4 w-4" />
+                  {item.icon === Bell && hasUnread && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive ring-1 ring-sidebar" />
+                  )}
+                </span>
                 {item.label}
               </Link>
             );
@@ -330,10 +382,13 @@ function PortalMembroLayout() {
               )}
               <Link
                 to="/portal-membro/notificacoes"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+                className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground transition"
                 title="Notificações"
               >
                 <Bell className="h-4 w-4" />
+                {hasUnread && (
+                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-card" />
+                )}
               </Link>
             </div>
           </div>
@@ -480,6 +535,7 @@ function PortalMembroLayout() {
           {/* ── 2 itens direita: Notificações, Perfil ── */}
           {NAV_BOTTOM.slice(2).map((item) => {
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
+            const isBell = item.icon === Bell;
             return (
               <Link
                 key={item.to}
@@ -491,8 +547,11 @@ function PortalMembroLayout() {
                 <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-b-full transition-all duration-200 ${
                   active ? "w-8 bg-primary" : "w-0 bg-transparent"
                 }`} />
-                <div className="mt-2">
+                <div className="mt-2 relative">
                   <item.icon className={`h-5 w-5 shrink-0 transition-all duration-150 ${active ? "stroke-[2.2] scale-110" : "stroke-[1.7]"}`} />
+                  {isBell && hasUnread && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-card" />
+                  )}
                 </div>
                 <span className={`text-[10px] leading-none truncate max-w-full px-0.5 mt-0.5 ${active ? "font-semibold" : "font-medium"}`}>
                   {item.label}

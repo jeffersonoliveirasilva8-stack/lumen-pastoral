@@ -19,6 +19,7 @@ export type MembroAuth = {
   foto_url: string | null;
   tipo_acesso: string;
   conta_ativada: boolean;
+  perfil_completo: boolean;
   ministerios: { id: string; nome: string; cor: string }[];
 };
 
@@ -37,7 +38,7 @@ type UseMembroAuth = {
 
 const MEMBRO_SELECT = `
   id, nome, email, telefone, data_nascimento, data_ingresso,
-  score, paroquia_id, foto_url, tipo_acesso, conta_ativada,
+  score, paroquia_id, foto_url, tipo_acesso, conta_ativada, perfil_completo,
   paroquias(nome, slug),
   membro_ministerios(ministerios(id, nome, cor))
 `;
@@ -58,6 +59,7 @@ function mapMembro(data: any): MembroAuth {
     foto_url: data.foto_url,
     tipo_acesso: data.tipo_acesso ?? "membro",
     conta_ativada: data.conta_ativada ?? false,
+    perfil_completo: data.perfil_completo ?? false,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ministerios: (data.membro_ministerios ?? []).map((mm: any) => mm.ministerios).filter(Boolean),
   };
@@ -83,7 +85,6 @@ export function useMembroAuth(): UseMembroAuth {
       .maybeSingle();
 
     if (byId) {
-      console.log("[use-membro-auth] ✓ membro por auth_user_id:", byId.id, "paroquia:", byId.paroquia_id);
       setMembro(mapMembro(byId));
       return true;
     }
@@ -91,7 +92,6 @@ export function useMembroAuth(): UseMembroAuth {
     // 2. Busca por email — funciona para primeiro acesso (requer política "membro_read_own")
     const email = userEmail ?? (await supabase.auth.getUser()).data.user?.email;
     if (!email) {
-      console.warn("[use-membro-auth] ✗ sem email para busca de fallback");
       setMembro(null);
       return false;
     }
@@ -104,8 +104,6 @@ export function useMembroAuth(): UseMembroAuth {
       .maybeSingle();
 
     if (byEmail) {
-      console.log("[use-membro-auth] ✓ membro por email:", byEmail.id, "paroquia:", byEmail.paroquia_id, "auth_user_id:", byEmail.auth_user_id ?? "NULL");
-
       // ── CORREÇÃO CRÍTICA: link SÍNCRONO via RPC, setMembro APÓS o link ────
       // IMPORTANTE: setMembro() é chamado DEPOIS do RPC, não antes.
       // Se setMembro() fosse chamado primeiro, React re-renderizaria imediatamente
@@ -114,19 +112,17 @@ export function useMembroAuth(): UseMembroAuth {
       // Chamando o RPC primeiro, garantimos que quando React re-renderizar,
       // auth_user_id já está definido no banco e as políticas RLS passam.
       try {
-        const { data: linkData, error: linkError } = await anyDb.rpc("portal_auto_link_by_email");
+        const { error: linkError } = await anyDb.rpc("portal_auto_link_by_email");
         if (linkError) {
-          console.warn("[use-membro-auth] ⚠ portal_auto_link_by_email erro:", linkError.message);
-        } else {
-          console.log("[use-membro-auth] ✓ auto-link RPC:", linkData);
+          // RPC falhou — tenta fallback direto
+          throw linkError;
         }
-      } catch (rpcErr) {
-        console.warn("[use-membro-auth] ⚠ RPC falhou, fallback direto:", rpcErr);
+      } catch {
         await anyDb
           .from("membros")
           .update({ auth_user_id: userId })
           .eq("id", byEmail.id)
-          .catch((e: unknown) => console.error("[use-membro-auth] ✗ fallback update falhou:", e));
+          .catch(() => {/* silencioso — fallback melhor esforço */});
       }
 
       // Re-fetch após o link: auth_user_id já está definido → policies RLS passam
@@ -137,12 +133,10 @@ export function useMembroAuth(): UseMembroAuth {
         .eq("ativo", true)
         .maybeSingle();
 
-      console.log("[use-membro-auth] ✓ re-fetch pós-link:", refreshed ? "OK auth_user_id=" + userId : "não encontrado por auth_user_id — usando byEmail");
       setMembro(mapMembro(refreshed ?? byEmail));
       return true;
     }
 
-    console.warn("[use-membro-auth] ✗ membro não encontrado. userId:", userId, "email:", email);
     setMembro(null);
     return false;
   }

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -70,20 +70,8 @@ function PortalMembroNotificacoes() {
     },
   });
 
-  // Realtime: INSERT, UPDATE e DELETE de notificações
-  useEffect(() => {
-    if (!membro?.paroquia_id) return;
-    const ch = supabase
-      .channel(`pm-notif-rt-${membro.paroquia_id}`)
-      .on("postgres_changes", {
-        event: "*", schema: "public", table: "notificacoes",
-        filter: `paroquia_id=eq.${membro.paroquia_id}`,
-      }, () => {
-        qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [membro?.paroquia_id, qc]);
+  // Realtime: canal gerenciado pelo layout portal-membro.tsx (pm-layout-notif-rt-*)
+  // que já invalida ["pm-notificacoes"], ["notif-unread-count"] e ["urgent-notifs"]
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -100,30 +88,28 @@ function PortalMembroNotificacoes() {
 
   const marcarLidaMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await anyDb
-        .from("notificacoes")
-        .update({ lida: true })
-        .eq("id", id);
+      const { data, error } = await anyDb.rpc("portal_marcar_notificacao_lida", { p_notif_id: id });
       if (error) throw error;
+      if (data && !data.success) throw new Error(data.error ?? "Falha ao marcar como lida");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notif-unread-count"] });
+      qc.invalidateQueries({ queryKey: ["urgent-notifs"] });
     },
     onError: (e: Error) => toast.error("Erro: " + e.message),
   });
 
   const marcarTodasMutation = useMutation({
     mutationFn: async () => {
-      const ids = notifs.filter((n) => !n.lida).map((n) => n.id);
-      if (!ids.length) return;
-      const { error } = await anyDb
-        .from("notificacoes")
-        .update({ lida: true })
-        .in("id", ids);
+      const { data, error } = await anyDb.rpc("portal_marcar_todas_notificacoes_lidas");
       if (error) throw error;
+      if (data && !data.success) throw new Error(data.error ?? "Falha ao marcar como lidas");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["notif-unread-count"] });
+      qc.invalidateQueries({ queryKey: ["urgent-notifs"] });
       toast.success("Todas as notificações marcadas como lidas.");
       setHistoricoOpen(true);
     },

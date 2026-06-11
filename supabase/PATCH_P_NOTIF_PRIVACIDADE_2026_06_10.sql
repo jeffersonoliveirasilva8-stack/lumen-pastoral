@@ -30,7 +30,7 @@
 -- 0. LIMPEZA — remove todas as notificações legadas/de teste
 -- ══════════════════════════════════════════════════════════════════
 -- Mantém apenas notificações dos últimos 0 dias (limpa tudo)
--- Se quiser conservar as recentes, ajuste o intervalo:
+-- Se qu1iser conservar as recentes, ajuste o intervalo:
 --   DELETE FROM public.notificacoes WHERE created_at < NOW() - INTERVAL '7 days';
 -- Para limpeza total:
 TRUNCATE public.notificacoes RESTART IDENTITY;

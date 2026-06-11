@@ -23,6 +23,19 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ─── Utilitários de MFA ───────────────────────────────────────────────────────
+
+function generateMfaCode(): string {
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  return String(arr[0] % 1_000_000).padStart(6, "0");
+}
+
+async function sha256hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 // ─── HTML-safe para conteúdo dinâmico ──────────────────────────────────────────
 // Usa Unicode escapes nos padrões de regex: seguro independente do encoding do
 // arquivo-fonte. Converte acentos para entidades HTML (pure ASCII no output).
@@ -199,6 +212,35 @@ function tResetSenha(nome: string, paroquia: string, link: string, siteUrl: stri
   return baseLayout(paroquia || "Portal do Servidor", body, siteUrl);
 }
 
+function tMfaAdminCode(nome: string, paroquia: string, code: string, siteUrl: string): string {
+  const sn = htmlSafe(nome) || "Administrador";
+  const sp = htmlSafe(paroquia);
+  const body = `
+    <h1>C&oacute;digo de verifica&ccedil;&atilde;o</h1>
+    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
+    <p>
+      Use o c&oacute;digo abaixo para concluir seu acesso ao painel da
+      <span class="hi">${sp || "pastoral"}</span>.
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <div style="display:inline-block;background:#f7f6f2;border:2px solid #e4e3dd;border-radius:12px;
+                  padding:16px 36px;font-size:36px;font-weight:900;letter-spacing:0.28em;
+                  color:#1a1a2e;font-family:'Courier New',monospace;">
+        ${htmlSafe(code)}
+      </div>
+    </div>
+    <p class="note" style="text-align:center;">
+      &#9888;&#65039;&nbsp; Este c&oacute;digo &eacute; v&aacute;lido por <strong>10 minutos</strong>
+      e pode ser usado apenas uma vez.
+    </p>
+    <hr/>
+    <p class="note">
+      Se voc&ecirc; n&atilde;o solicitou este c&oacute;digo, sua conta pode estar em risco.
+      Altere sua senha imediatamente e entre em contato com o administrador do sistema.
+    </p>`;
+  return baseLayout(paroquia || "Lumen Pastoral", body, siteUrl);
+}
+
 function tBoasVindas(nome: string, paroquia: string, siteUrl: string): string {
   const sn = htmlSafe(nome);
   const sp = htmlSafe(paroquia);
@@ -254,18 +296,19 @@ async function sendViaResend(o: SendOpts): Promise<{ ok: boolean; id?: string; e
 async function logEmail(admin: any, entry: {
   tipo: string; destinatario: string; assunto: string;
   status: "enviado" | "erro"; provider: string;
-  provider_id?: string; erro?: string; paroquia?: string;
+  provider_id?: string; erro?: string; paroquia?: string; requesterId?: string | null;
 }) {
   try {
     await admin.from("email_logs").insert({
-      tipo:         entry.tipo,
-      destinatario: entry.destinatario,
-      assunto:      entry.assunto,
-      status:       entry.status,
-      provider:     entry.provider,
-      provider_id:  entry.provider_id  ?? null,
-      erro:         entry.erro         ?? null,
-      paroquia:     entry.paroquia     ?? null,
+      tipo:               entry.tipo,
+      destinatario:       entry.destinatario,
+      assunto:            entry.assunto,
+      status:             entry.status,
+      provider:           entry.provider,
+      provider_id:        entry.provider_id       ?? null,
+      erro:               entry.erro              ?? null,
+      paroquia:           entry.paroquia          ?? null,
+      requester_user_id:  entry.requesterId       ?? null,
     });
   } catch { /* falha no log nunca deve bloquear o envio */ }
 }
@@ -292,10 +335,32 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const body = await req.json() as { template: string; to: string; nome?: string; paroquia?: string };
-    const { template, to, nome = "", paroquia = "Pastoral" } = body;
+    // Identifica o usuário autenticado (para rate limiting por conta)
+    const authToken = req.headers.get("Authorization")?.replace("Bearer ", "") ?? "";
+    let requesterId: string | null = null;
+    try {
+      const { data: { user } } = await admin.auth.getUser(authToken);
+      requesterId = user?.id ?? null;
+    } catch { /* não-fatal — rate limit por destinatário ainda se aplica */ }
+
+    const body = await req.json() as { template: string; to: string; nome?: string; paroquia?: string; code?: string };
+    const { template, to, nome = "", paroquia = "Pastoral", code = "" } = body;
 
     if (!template || !to) return json({ ok: false, error: "Missing fields: template, to" }, 400);
+
+    // ── Rate limiting ──────────────────────────────────────────────────────────
+    const { data: rateCheck } = await admin.rpc("check_email_rate_limit", {
+      p_destinatario: to,
+      p_tipo:         template,
+      p_requester_id: requesterId,
+    });
+    if (rateCheck && !rateCheck.allowed) {
+      await logEmail(admin, {
+        tipo: template, destinatario: to, assunto: `[BLOQUEADO] ${template}`,
+        status: "erro", provider: "rate_limit", erro: rateCheck.reason, paroquia,
+      });
+      return json({ ok: false, error: rateCheck.reason ?? "Rate limit excedido" }, 429);
+    }
 
     let subject = "", html = "";
 
@@ -332,6 +397,22 @@ Deno.serve(async (req) => {
       subject = `${paroquia || "Portal"} — Redefinição de senha`;
       html    = tResetSenha(nome, paroquia, ld.properties.action_link, siteUrl);
 
+    // ── MFA Admin — gera código, armazena hash, envia ────────────────────────
+    } else if (template === "mfa_admin_code") {
+      // Geração do código e hash acontece aqui (nunca no cliente)
+      const mfaCode     = generateMfaCode();
+      const mfaCodeHash = await sha256hex(mfaCode);
+
+      // Armazena hash no banco via service role (nunca o código plaintext)
+      const { error: storeErr } = await admin.rpc("store_admin_mfa_code", {
+        p_user_email: to,
+        p_code_hash:  mfaCodeHash,
+      });
+      if (storeErr) return json({ ok: false, error: storeErr.message }, 500);
+
+      subject = `${paroquia || "Lumen Pastoral"} — Código de verificação`;
+      html    = tMfaAdminCode(nome, paroquia, mfaCode, siteUrl);
+
     // ── Boas-vindas ──────────────────────────────────────────────────────────
     } else if (template === "boas_vindas") {
       subject = `${paroquia} — Bem-vindo(a) ao portal!`;
@@ -352,6 +433,7 @@ Deno.serve(async (req) => {
       provider_id:  result.id,
       erro:         result.error,
       paroquia,
+      requesterId,
     });
 
     return json(result, result.ok ? 200 : 502);
