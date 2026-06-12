@@ -23,7 +23,7 @@ export type PostLoginRoute =
   | "/portal-membro/home"
   | "/onboarding"
   | "/membro/login"
-  | "/membro/ativar-conta"
+  | "/membro/primeiro-acesso"
   | "/acesso-negado"
   | "/auth/admin-mfa";
 
@@ -66,7 +66,7 @@ export async function getPostLoginRoute(
         .maybeSingle();
 
       if (membroData?.ativo === false) return "/acesso-negado";
-      if (membroData?.conta_ativada === false) return "/membro/ativar-conta";
+      if (membroData?.conta_ativada === false) return "/membro/primeiro-acesso";
       return "/portal-membro/home";
     }
 
@@ -80,11 +80,11 @@ export async function getPostLoginRoute(
             .select("conta_ativada")
             .eq("auth_user_id", user.id)
             .maybeSingle();
-          if (linked?.conta_ativada === false) return "/membro/ativar-conta";
+          if (linked?.conta_ativada === false) return "/membro/primeiro-acesso";
           if (linked?.conta_ativada === true) return "/portal-membro/home";
           // RLS pode bloquear a leitura antes das policies serem aplicadas —
-          // ativar-conta é o destino seguro: redireciona para o portal se já ativado.
-          return "/membro/ativar-conta";
+          // primeiro-acesso detecta sessão e carrega por email.
+          return "/membro/primeiro-acesso";
         }
       } catch {
         // RPC pode não existir — continua para fallback
@@ -100,7 +100,7 @@ export async function getPostLoginRoute(
           .maybeSingle();
 
         if (membroByEmail) {
-          if (membroByEmail.conta_ativada === false) return "/membro/ativar-conta";
+          if (membroByEmail.conta_ativada === false) return "/membro/primeiro-acesso";
           return "/portal-membro/home";
         }
       }

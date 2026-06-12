@@ -205,16 +205,24 @@ function PortalMembroLayout() {
 
   useEffect(() => {
     if (!loading && !linking && user && membro === null) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({ to: "/membro/ativar-conta" as any });
+      console.warn("[portal-membro] membro não encontrado após loading completo", {
+        user_id: user.id, email: user.email,
+        motivo_do_bloqueio: "membro === null após loadMembro()",
+      });
+      navigate({ to: "/membro/login" as any });
     }
   }, [loading, linking, user, membro, navigate]);
 
-  // Guard: conta não ativada → forçar criação de senha
+  // Guard: conta não ativada → /membro/primeiro-acesso (sem token: usa sessão ativa)
   useEffect(() => {
     if (!loading && !linking && membro && !membro.conta_ativada) {
+      console.warn("[portal-membro] conta não ativada — redirecionando para primeiro-acesso", {
+        membro_id: membro.id, email: membro.email,
+        paroquia_id: membro.paroquia_id, status_membro: membro.conta_ativada,
+        motivo_do_bloqueio: "conta_ativada === false",
+      });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({ to: "/membro/ativar-conta" as any });
+      navigate({ to: "/membro/primeiro-acesso" as any });
     }
   }, [loading, linking, membro, navigate]);
 

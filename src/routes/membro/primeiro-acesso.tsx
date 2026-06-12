@@ -68,8 +68,7 @@ function PrimeiroAcessoPage() {
       setEstado("link_expirado");
       return;
     }
-    if (!token) { setEstado("token_invalido"); return; }
-
+    // token pode estar ausente quando magic link usou redirectTo sem ?token=UUID
     carregarEstado();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -86,8 +85,8 @@ function PrimeiroAcessoPage() {
           if (info && !info.conta_ativada) {
             setEstado("formulario");
           } else if (!info) {
-            // Token ainda não validado (corrida de inicialização) — recarrega tudo
-            carregarEstado();
+            // Sem info: token ausente ou race — carrega membro pela sessão ativa
+            carregarInfoPorSessao(session.user);
           }
         }
       },
@@ -96,45 +95,111 @@ function PrimeiroAcessoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estado, info]);
 
-  async function carregarEstado() {
-    if (!token) { setEstado("token_invalido"); return; }
+  // Carrega info do membro a partir de uma sessão já estabelecida (sem token no URL).
+  // Usado quando: (a) magic link chegou sem ?token=UUID, ou
+  //               (b) usuário autenticado acessou portal com conta_ativada=false.
+  async function carregarInfoPorSessao(user: { id: string; email?: string | null }) {
+    const email = user.email ?? "";
+    console.info("[LOG primeiro-acesso] carregarInfoPorSessao →", {
+      user_id: user.id, email, rota_atual: window.location.pathname,
+    });
 
-    // 1. Valida token (RPC acessível por anon)
-    const { data: memInfo, error: rpcErr } = await anyDb.rpc(
-      "portal_get_membro_por_token",
-      { p_token: token },
-    );
-    if (rpcErr || !memInfo?.valid) {
-      console.warn("[primeiro-acesso] token inválido", rpcErr?.message ?? memInfo?.error,
-        "| token:", token);
-      setEstado("token_invalido");
-      return;
-    }
+    if (!email) { setEstado("token_invalido"); return; }
 
+    const { data: mem, error: memErr } = await anyDb
+      .from("membros")
+      .select("id, nome, email, conta_ativada, paroquia_id, paroquias!inner(nome)")
+      .ilike("email", email.trim())
+      .eq("ativo", true)
+      .maybeSingle();
+
+    console.info("[LOG primeiro-acesso] busca por email →", {
+      encontrado: !!mem, membro_id: mem?.id, conta_ativada: mem?.conta_ativada,
+      paroquia_id: mem?.paroquia_id, error: memErr?.message,
+    });
+
+    if (!mem) { setEstado("token_invalido"); return; }
+
+    const masked = ((mem.email as string) ?? email).replace(/^(.)(.*)(@.*)$/, "$1***$3");
     const infoData: InfoMembro = {
-      nome:          memInfo.nome          ?? "",
-      email_masked:  memInfo.email_masked  ?? "",
-      conta_ativada: memInfo.conta_ativada ?? false,
-      paroquia_nome: memInfo.paroquia_nome ?? "",
+      nome:          mem.nome          ?? "",
+      email_masked:  masked,
+      conta_ativada: mem.conta_ativada ?? false,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      paroquia_nome: (mem.paroquias as any)?.nome ?? "",
     };
     setInfo(infoData);
 
-    // 2. Conta já ativada → redireciona ao login
     if (infoData.conta_ativada) {
       setEstado("ja_ativo");
       setTimeout(() => navigate({ to: "/membro/login" }), 2500);
+    } else {
+      setEstado("formulario");
+    }
+  }
+
+  async function carregarEstado() {
+    const hasAuthHash = window.location.hash.includes("access_token=");
+
+    console.info("[LOG primeiro-acesso] carregarEstado →", {
+      token: token || "(vazio)", hasAuthHash,
+      rota_atual: window.location.pathname + window.location.search,
+    });
+
+    if (token) {
+      // ── Com token: valida via RPC (acessível por anon) ──────────────────
+      const { data: memInfo, error: rpcErr } = await anyDb.rpc(
+        "portal_get_membro_por_token",
+        { p_token: token },
+      );
+      console.info("[LOG primeiro-acesso] portal_get_membro_por_token →", {
+        token, valid: memInfo?.valid, membro_id: memInfo?.membro_id,
+        conta_ativada: memInfo?.conta_ativada, error: rpcErr?.message ?? memInfo?.error,
+      });
+
+      if (rpcErr || !memInfo?.valid) { setEstado("token_invalido"); return; }
+
+      const infoData: InfoMembro = {
+        nome:          memInfo.nome          ?? "",
+        email_masked:  memInfo.email_masked  ?? "",
+        conta_ativada: memInfo.conta_ativada ?? false,
+        paroquia_nome: memInfo.paroquia_nome ?? "",
+      };
+      setInfo(infoData);
+
+      if (infoData.conta_ativada) {
+        setEstado("ja_ativo");
+        setTimeout(() => navigate({ to: "/membro/login" }), 2500);
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      console.info("[LOG primeiro-acesso] getSession (com token) →", {
+        user_id: session?.user?.id, email: session?.user?.email, hasAuthHash,
+      });
+      if (session?.user) { setEstado("formulario"); return; }
+      if (hasAuthHash) return; // aguarda SIGNED_IN
+      setEstado("sem_auth");
       return;
     }
 
-    // 3. Sessão já existe
+    // ── Sem token no URL ─────────────────────────────────────────────────
+    if (hasAuthHash) {
+      console.info("[LOG primeiro-acesso] sem token, auth hash detectado — aguardando SIGNED_IN");
+      return; // mantém estado = "carregando"
+    }
+
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) { setEstado("formulario"); return; }
+    console.info("[LOG primeiro-acesso] getSession (sem token, sem hash) →", {
+      user_id: session?.user?.id, email: session?.user?.email,
+    });
 
-    // 4. Hash de magic link presente → mantém "carregando", SIGNED_IN virá
-    if (window.location.hash.includes("access_token=")) return;
+    if (session?.user) {
+      await carregarInfoPorSessao(session.user);
+      return;
+    }
 
-    // 5. Sem sessão, sem hash → oferecer reenvio de e-mail
-    setEstado("sem_auth");
+    setEstado("token_invalido");
   }
 
   async function handleReenviarEmail() {
@@ -166,21 +231,43 @@ function PrimeiroAcessoPage() {
 
     setSalvando(true);
     try {
+      const { data: { session: s0 } } = await supabase.auth.getSession();
+      console.info("[LOG primeiro-acesso] handleSubmit →", {
+        user_id: s0?.user?.id, email: s0?.user?.email,
+        token: token || "(vazio)", rota_atual: window.location.pathname,
+      });
+
       const { error: authErr } = await supabase.auth.updateUser({ password: senha });
       if (authErr) {
+        console.error("[LOG primeiro-acesso] updateUser error →", authErr.message);
         toast.error("Erro ao salvar senha: " + authErr.message);
         return;
       }
 
-      // Ativa conta + garante profiles/user_roles (SECURITY DEFINER, ignora RLS)
-      const { data: activResult } = await anyDb.rpc("ativar_conta_membro");
-      console.info("[primeiro-acesso] ativar_conta_membro →", activResult);
+      // Garante auth_user_id vinculado antes de ativar (idempotente)
+      const { data: linkData } = await anyDb.rpc("portal_auto_link_by_email")
+        .catch(() => ({ data: null }));
+      console.info("[LOG primeiro-acesso] portal_auto_link_by_email →", linkData);
+
+      // Ativa conta + cria profiles/user_roles (SECURITY DEFINER, ignora RLS)
+      const { data: activResult, error: activErr } = await anyDb.rpc("ativar_conta_membro");
+      console.info("[LOG primeiro-acesso] ativar_conta_membro →", {
+        result: activResult, error: activErr?.message,
+      });
+
+      if (activErr || activResult?.success === false) {
+        console.error("[LOG primeiro-acesso] ativar_conta_membro falhou →",
+          activErr?.message ?? activResult?.error);
+        toast.error("Erro ao ativar conta. Tente novamente.");
+        return;
+      }
 
       setEstado("redirecionando");
       toast.success("Conta ativada! Bem-vindo ao portal.");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       navigate({ to: "/portal-membro/completar-cadastro" as any, replace: true });
-    } catch {
+    } catch (err) {
+      console.error("[LOG primeiro-acesso] exception →", err);
       toast.error("Erro de conexão. Tente novamente.");
     } finally {
       setSalvando(false);

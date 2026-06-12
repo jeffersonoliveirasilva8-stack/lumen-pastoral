@@ -431,7 +431,7 @@ Deno.serve(async (req) => {
       const memEmail   = mem.email as string;
       const memNome    = (mem.nome ?? "") as string;
       const memParoq   = ((mem.paroquias as any)?.nome ?? "Pastoral") as string;
-      const activLink  = `${siteUrl}/membro/primeiro-acesso?token=${token}`;
+      const activLink  = `${siteUrl}/membro/primeiro-acesso`;
 
       const { data: ld2, error: le2 } = await admin.auth.admin.generateLink({
         type: "magiclink", email: memEmail,
@@ -469,10 +469,20 @@ Deno.serve(async (req) => {
 
     // ── Templates com magic link ─────────────────────────────────────────────
     if (template === "ativacao_conta" || template === "reenvio_ativacao") {
+      // Strip query string: Supabase valida redirectTo comparando apenas origin+path.
+      // O token NÃO é necessário no redirectTo do magic link — primeiro-acesso.tsx
+      // identifica o membro pelo email da sessão após a autenticação.
+      const safeRedirect = (() => {
+        try {
+          const u = new URL(redirectTo || `${siteUrl}/membro/primeiro-acesso`);
+          u.search = ""; u.hash = "";
+          return u.toString();
+        } catch { return `${siteUrl}/membro/primeiro-acesso`; }
+      })();
       const { data: ld, error: le } = await admin.auth.admin.generateLink({
         type:    "magiclink",
         email:   to,
-        options: { redirectTo: redirectTo || `${siteUrl}/membro/ativar-conta` },
+        options: { redirectTo: safeRedirect },
       });
       if (le || !ld?.properties?.action_link)
         return json({ ok: false, error: le?.message ?? "Failed to generate activation link" }, 500);

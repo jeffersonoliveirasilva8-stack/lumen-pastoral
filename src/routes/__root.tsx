@@ -13,6 +13,7 @@ import {
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getPostLoginRoute } from "@/lib/auth-redirect";
 
 // Constante injetada pelo Vite em build-time (vite.config.ts → define)
 // true = Vercel SPA, false = Cloudflare SSR
@@ -104,10 +105,8 @@ function AuthSync() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "PASSWORD_RECOVERY") {
-        // Garante que o usuário seja levado à tela de redefinição, independente
-        // de para onde o Supabase redirecionou após o link de recuperação
         if (!window.location.pathname.startsWith("/reset-senha")) {
           navigate({ to: "/reset-senha", replace: true });
         }
@@ -116,6 +115,16 @@ function AuthSync() {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
         router.invalidate();
         qc.invalidateQueries();
+      }
+      // Safety net: se Supabase redirecionou para a landing page (porque o redirectTo
+      // não estava na lista de URLs permitidas), detectar SIGNED_IN e redirecionar
+      // para a rota correta conforme o perfil do usuário.
+      if (event === "SIGNED_IN" && session?.user && window.location.pathname === "/") {
+        console.info("[root AuthSync] SIGNED_IN na landing page — redirecionando", {
+          user_id: session.user.id, email: session.user.email,
+        });
+        const route = await getPostLoginRoute(supabase);
+        navigate({ to: route as any, replace: true });
       }
     });
     return () => subscription.unsubscribe();
