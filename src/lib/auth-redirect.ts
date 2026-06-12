@@ -81,13 +81,16 @@ export async function getPostLoginRoute(
             .eq("auth_user_id", user.id)
             .maybeSingle();
           if (linked?.conta_ativada === false) return "/membro/ativar-conta";
-          return "/portal-membro/home";
+          if (linked?.conta_ativada === true) return "/portal-membro/home";
+          // RLS pode bloquear a leitura antes das policies serem aplicadas —
+          // ativar-conta é o destino seguro: redireciona para o portal se já ativado.
+          return "/membro/ativar-conta";
         }
       } catch {
         // RPC pode não existir — continua para fallback
       }
 
-      // Verifica se existe membro ativo com este email
+      // Verifica se existe membro ativo com este email (fallback sem RPC)
       if (user.email) {
         const { data: membroByEmail } = await db
           .from("membros")
