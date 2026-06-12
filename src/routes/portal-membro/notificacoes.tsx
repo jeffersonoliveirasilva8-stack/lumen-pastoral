@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -29,9 +29,9 @@ type Notificacao = {
   titulo: string;
   mensagem: string | null;
   tipo: string;
-  lida: boolean;
   created_at: string;
   link_referencia: string | null;
+  destinatario_id: string | null;
 };
 
 const TIPO_CONFIG: Record<string, {
@@ -58,7 +58,7 @@ function PortalMembroNotificacoes() {
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("notificacoes")
-        .select("id, titulo, mensagem, tipo, lida, created_at, link_referencia")
+        .select("id, titulo, mensagem, tipo, created_at, link_referencia, destinatario_id")
         .eq("paroquia_id", membro!.paroquia_id)
         .eq("apenas_admin", false)
         .in("tipo", ["aviso", "alerta", "urgente", "sistema"])
@@ -70,16 +70,40 @@ function PortalMembroNotificacoes() {
     },
   });
 
+  // Leituras do membro atual — determina quais notificações estão lidas por ESTE membro
+  const { data: minhasLeituras = [] } = useQuery<{ notificacao_id: string }[]>({
+    queryKey: ["pm-notif-leituras", membro?.id],
+    enabled: !!membro?.id,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("notificacoes_leituras")
+        .select("notificacao_id")
+        .eq("membro_id", membro!.id);
+      return data ?? [];
+    },
+  });
+
+  const lidasSet = useMemo(
+    () => new Set(minhasLeituras.map((l) => l.notificacao_id)),
+    [minhasLeituras],
+  );
+
   // Realtime: canal gerenciado pelo layout portal-membro.tsx (pm-layout-notif-rt-*)
   // que já invalida ["pm-notificacoes"], ["notif-unread-count"] e ["urgent-notifs"]
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await anyDb.from("notificacoes").delete().eq("id", id);
+      // Só apaga notificações pessoais (destinatario_id = membro.id)
+      const { error } = await anyDb
+        .from("notificacoes")
+        .delete()
+        .eq("id", id)
+        .eq("destinatario_id", membro!.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["pm-notif-leituras"] });
       setDeleteId(null);
       toast.success("Notificação removida.");
     },
@@ -93,7 +117,7 @@ function PortalMembroNotificacoes() {
       if (data && !data.success) throw new Error(data.error ?? "Falha ao marcar como lida");
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["pm-notif-leituras"] });
       qc.invalidateQueries({ queryKey: ["notif-unread-count"] });
       qc.invalidateQueries({ queryKey: ["urgent-notifs"] });
     },
@@ -107,7 +131,7 @@ function PortalMembroNotificacoes() {
       if (data && !data.success) throw new Error(data.error ?? "Falha ao marcar como lidas");
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["pm-notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["pm-notif-leituras"] });
       qc.invalidateQueries({ queryKey: ["notif-unread-count"] });
       qc.invalidateQueries({ queryKey: ["urgent-notifs"] });
       toast.success("Todas as notificações marcadas como lidas.");
@@ -116,8 +140,8 @@ function PortalMembroNotificacoes() {
     onError: (e: Error) => toast.error("Erro: " + e.message),
   });
 
-  const pendentes = notifs.filter((n) => !n.lida);
-  const lidas = notifs.filter((n) => n.lida);
+  const pendentes = notifs.filter((n) => !lidasSet.has(n.id));
+  const lidas     = notifs.filter((n) =>  lidasSet.has(n.id));
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-24 space-y-5">
@@ -219,14 +243,16 @@ function PortalMembroNotificacoes() {
                           </div>
                         </div>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteId(n.id)}
-                        className="px-3 border-l border-current/20 rounded-r-2xl hover:bg-black/10 transition shrink-0"
-                        title="Remover notificação"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 opacity-40 hover:opacity-80" />
-                      </button>
+                      {n.destinatario_id === membro?.id && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteId(n.id)}
+                          className="px-3 border-l border-current/20 rounded-r-2xl hover:bg-black/10 transition shrink-0"
+                          title="Remover notificação"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 opacity-40 hover:opacity-80" />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -287,14 +313,16 @@ function PortalMembroNotificacoes() {
                             </div>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteId(n.id)}
-                          className="px-3 border-l border-border/50 rounded-r-2xl hover:bg-destructive/10 hover:text-destructive transition shrink-0"
-                          title="Remover notificação"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 opacity-50" />
-                        </button>
+                        {n.destinatario_id === membro?.id && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteId(n.id)}
+                            className="px-3 border-l border-border/50 rounded-r-2xl hover:bg-destructive/10 hover:text-destructive transition shrink-0"
+                            title="Remover notificação"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 opacity-50" />
+                          </button>
+                        )}
                       </div>
                     );
                   })}

@@ -238,6 +238,31 @@ function PortalMembroPerfil() {
       setForm((f) => ({ ...f, [key]: e.target.value }));
   }
 
+  function setMasked(key: keyof FormData, mask: (v: string) => string) {
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((f) => ({ ...f, [key]: mask(e.target.value) }));
+  }
+
+  function maskPhone(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 11);
+    if (d.length <= 2)  return d.replace(/(\d{1,2})/, "($1");
+    if (d.length <= 6)  return d.replace(/(\d{2})(\d{1,4})/, "($1) $2");
+    if (d.length <= 10) return d.replace(/(\d{2})(\d{4})(\d{1,4})/, "($1) $2-$3");
+    return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  }
+  function maskCpf(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 11);
+    if (d.length <= 3)  return d;
+    if (d.length <= 6)  return d.replace(/(\d{3})(\d{1,3})/, "$1.$2");
+    if (d.length <= 9)  return d.replace(/(\d{3})(\d{3})(\d{1,3})/, "$1.$2.$3");
+    return d.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, "$1.$2.$3-$4");
+  }
+  function maskCep(v: string) {
+    const d = v.replace(/\D/g, "").slice(0, 8);
+    if (d.length <= 5) return d;
+    return d.replace(/(\d{5})(\d{1,3})/, "$1-$2");
+  }
+
   if (isLoading || !membroData) {
     return (
       <div className="flex justify-center py-20">
@@ -341,7 +366,7 @@ function PortalMembroPerfil() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="telefone" className="flex items-center gap-1"><Phone className="h-3 w-3" />Telefone</Label>
-                <Input id="telefone" value={form.telefone} onChange={set("telefone")} className="mt-1" placeholder="(00) 00000-0000" />
+                <Input id="telefone" value={form.telefone} onChange={setMasked("telefone", maskPhone)} className="mt-1" placeholder="(00) 00000-0000" inputMode="numeric" />
               </div>
               <div>
                 <Label htmlFor="data_nascimento">Nascimento</Label>
@@ -351,11 +376,11 @@ function PortalMembroPerfil() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="cpf">CPF</Label>
-                <Input id="cpf" value={form.cpf} onChange={set("cpf")} className="mt-1" placeholder="000.000.000-00" />
+                <Input id="cpf" value={form.cpf} onChange={setMasked("cpf", maskCpf)} className="mt-1" placeholder="000.000.000-00" inputMode="numeric" />
               </div>
               <div>
                 <Label htmlFor="rg">RG</Label>
-                <Input id="rg" value={form.rg} onChange={set("rg")} className="mt-1" placeholder="00.000.000-0" />
+                <Input id="rg" value={form.rg} onChange={set("rg")} className="mt-1" placeholder="00.000.000-0" inputMode="numeric" />
               </div>
             </div>
           </div>
@@ -395,7 +420,7 @@ function PortalMembroPerfil() {
               </div>
               <div>
                 <Label htmlFor="cep">CEP</Label>
-                <Input id="cep" value={form.cep} onChange={set("cep")} className="mt-1" placeholder="00000-000" />
+                <Input id="cep" value={form.cep} onChange={setMasked("cep", maskCep)} className="mt-1" placeholder="00000-000" inputMode="numeric" />
               </div>
             </div>
           </div>
@@ -413,7 +438,7 @@ function PortalMembroPerfil() {
             </div>
             <div>
               <Label htmlFor="telefone_emergencia">Telefone</Label>
-              <Input id="telefone_emergencia" value={form.telefone_emergencia} onChange={set("telefone_emergencia")} className="mt-1" />
+              <Input id="telefone_emergencia" value={form.telefone_emergencia} onChange={setMasked("telefone_emergencia", maskPhone)} className="mt-1" placeholder="(00) 00000-0000" inputMode="numeric" />
             </div>
           </div>
         </section>

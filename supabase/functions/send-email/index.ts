@@ -405,8 +405,8 @@ Deno.serve(async (req) => {
       requesterId = user?.id ?? null;
     } catch { /* não-fatal — rate limit por destinatário ainda se aplica */ }
 
-    const body = await req.json() as { template: string; to?: string; nome?: string; paroquia?: string; code?: string; escalaTitulo?: string; escalaData?: string; escalaHora?: string; ministerioNome?: string; pendentes?: number; total?: number; redirectTo?: string; token?: string };
-    const { template, nome = "", paroquia = "Pastoral", code = "", escalaTitulo = "", escalaData = "", escalaHora = "", ministerioNome = "", pendentes = 0, total = 0, redirectTo = "", token = "" } = body;
+    const body = await req.json() as { template: string; to?: string; nome?: string; paroquia?: string; code?: string; escalaTitulo?: string; escalaData?: string; escalaHora?: string; ministerioNome?: string; pendentes?: number; total?: number; redirectTo?: string; token?: string; from?: string };
+    const { template, nome = "", paroquia = "Pastoral", code = "", escalaTitulo = "", escalaData = "", escalaHora = "", ministerioNome = "", pendentes = 0, total = 0, redirectTo = "", token = "", from: bodyFrom = "" } = body;
     let to = body.to ?? "";
 
     if (!template) return json({ ok: false, error: "Missing field: template" }, 400);
@@ -498,7 +498,25 @@ Deno.serve(async (req) => {
 
     // ── Reset de senha ───────────────────────────────────────────────────────
     } else if (template === "reset_senha") {
-      const fp = new URL(req.url).searchParams.get("from") ?? "membro";
+      const fp = bodyFrom || new URL(req.url).searchParams.get("from") || "membro";
+
+      // Busca nome/paróquia do membro quando não fornecidos pelo chamador
+      let resolvedNome = nome;
+      let resolvedParoquia = paroquia === "Pastoral" ? "" : paroquia;
+      if (!resolvedNome || !resolvedParoquia) {
+        const { data: mem } = await (admin as any)
+          .from("membros")
+          .select("nome, paroquias!inner(nome)")
+          .ilike("email", to.trim())
+          .eq("ativo", true)
+          .maybeSingle();
+        if (mem) {
+          resolvedNome      = resolvedNome      || (mem.nome ?? "");
+          resolvedParoquia  = resolvedParoquia  || ((mem.paroquias as any)?.nome ?? "");
+        }
+      }
+      const displayParoquia = resolvedParoquia || "Portal";
+
       const { data: ld, error: le } = await admin.auth.admin.generateLink({
         type:    "recovery",
         email:   to,
@@ -507,8 +525,8 @@ Deno.serve(async (req) => {
       if (le || !ld?.properties?.action_link)
         return json({ ok: false, error: le?.message ?? "Failed to generate reset link" }, 500);
 
-      subject = `${paroquia || "Portal"} — Redefinição de senha`;
-      html    = tResetSenha(nome, paroquia, ld.properties.action_link, siteUrl);
+      subject = `${displayParoquia} — Redefinição de senha`;
+      html    = tResetSenha(resolvedNome, displayParoquia, ld.properties.action_link, siteUrl);
 
     // ── MFA Admin — gera código, armazena hash, envia ────────────────────────
     } else if (template === "mfa_admin_code") {

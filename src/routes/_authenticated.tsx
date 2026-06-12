@@ -293,9 +293,6 @@ function AuthLayout() {
                   title="Notificações"
                 >
                   <Bell className="h-4 w-4" />
-                  {solicitacoesPendentes > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-card" />
-                  )}
                 </Link>
                 <button
                   onClick={logout}
@@ -311,9 +308,6 @@ function AuthLayout() {
                 aria-label="Notificações"
               >
                 <Bell className="h-5 w-5" />
-                {solicitacoesPendentes > 0 && (
-                  <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-amber-500 border-2 border-card" />
-                )}
               </Link>
             </div>
           </div>

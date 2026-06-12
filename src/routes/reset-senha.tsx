@@ -21,12 +21,8 @@ function validarSenha(senha: string): string | null {
 function ResetPage() {
   const navigate = useNavigate();
 
-  // Query param tem prioridade; sessionStorage é fallback quando o Supabase
-  // ignora o redirectTo e descarta os params da URL
   const fromParam = new URLSearchParams(window.location.search).get("from") ?? "";
-  const from = fromParam || sessionStorage.getItem("resetFrom") || "";
-  const isMemberContext = from === "membro";
-  const loginRoute = isMemberContext ? "/membro/login" : "/login";
+  const isMemberContext = fromParam === "membro";
 
   const [status, setStatus] = useState<Status>("loading");
   const [password, setPassword] = useState("");
@@ -78,6 +74,11 @@ function ResetPage() {
     if (password !== confirm) { toast.error("As senhas não coincidem."); return; }
 
     setSaving(true);
+
+    // Captura o email antes do signOut para determinar o destino correto
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const userEmail = currentUser?.email ?? "";
+
     const { error } = await supabase.auth.updateUser({ password });
     setSaving(false);
 
@@ -89,12 +90,22 @@ function ResetPage() {
       return;
     }
 
-    // Encerra sessão de recovery e limpa contexto salvo
-    sessionStorage.removeItem("resetFrom");
-    await supabase.auth.signOut();
+    // Determina destino: membro → /membro/login; admin → /login
+    let loginRoute = isMemberContext ? "/membro/login" : "/login";
+    if (!isMemberContext && userEmail) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: mem } = await (supabase as any)
+        .from("membros")
+        .select("id")
+        .ilike("email", userEmail.trim())
+        .eq("ativo", true)
+        .maybeSingle();
+      if (mem) loginRoute = "/membro/login";
+    }
 
+    await supabase.auth.signOut();
     toast.success("Senha atualizada! Faça login com a nova senha.");
-    navigate({ to: loginRoute, replace: true });
+    navigate({ to: loginRoute as never, replace: true });
   }
 
   if (status === "loading") {
@@ -122,7 +133,7 @@ function ResetPage() {
             </p>
           </div>
           <button
-            onClick={() => navigate({ to: (isMemberContext ? "/esqueci-senha?from=membro" : "/esqueci-senha") as never })}
+            onClick={() => navigate({ to: "/esqueci-senha" as never, search: (isMemberContext ? { from: "membro" } : {}) as never })}
             className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 transition"
           >
             Solicitar novo link

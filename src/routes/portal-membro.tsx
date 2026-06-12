@@ -57,7 +57,6 @@ const DRAWER_ITEMS = [
   { to: "/portal-membro/liturgia",     label: "Liturgia",      icon: BookOpen,      color: "bg-purple-500" },
   { to: "/portal-membro/ocorrencias",  label: "Ocorrências",   icon: MessageSquare, color: "bg-orange-500" },
   { to: "/portal-membro/calendario",   label: "Calendário",    icon: CalendarRange, color: "bg-teal-500" },
-  { to: "/portal-membro/escalas",      label: "Escalas",       icon: Calendar,      color: "bg-slate-500" },
 ] as const;
 
 function PortalMembroLayout() {
@@ -74,10 +73,10 @@ function PortalMembroLayout() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [urgentDismissed, setUrgentDismissed] = useState(() =>
-    sessionStorage.getItem("urgentNotifDismissed") === "true"
+    localStorage.getItem("urgentNotifDismissed") === "true"
   );
   function dismissUrgent() {
-    sessionStorage.setItem("urgentNotifDismissed", "true");
+    localStorage.setItem("urgentNotifDismissed", "true");
     setUrgentDismissed(true);
   }
 
@@ -131,37 +130,20 @@ function PortalMembroLayout() {
 
   const { data: urgentNotifs = [] } = useQuery<{ id: string; titulo: string; mensagem: string | null }[]>({
     queryKey: ["urgent-notifs", membro?.id],
-    enabled: !!membro?.paroquia_id && !!membro?.id,
+    enabled: !!membro?.id,
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const db = supabase as any;
-      const { data } = await db
-        .from("notificacoes")
-        .select("id, titulo, mensagem")
-        .eq("paroquia_id", membro!.paroquia_id)
-        .eq("tipo", "urgente")
-        .eq("apenas_admin", false)
-        .eq("lida", false)
-        .or(`destinatario_id.is.null,destinatario_id.eq.${membro!.id}`)
-        .order("created_at", { ascending: false })
-        .limit(5);
+      const { data } = await anyDb.rpc("portal_get_notif_urgentes_nao_lidas");
       return data ?? [];
     },
   });
 
   const { data: unreadCount = 0 } = useQuery<number>({
     queryKey: ["notif-unread-count", membro?.id],
-    enabled: !!membro?.paroquia_id && !!membro?.id,
+    enabled: !!membro?.id,
     staleTime: 60 * 1000,
     queryFn: async () => {
-      const { count } = await anyDb
-        .from("notificacoes")
-        .select("id", { count: "exact", head: true })
-        .eq("paroquia_id", membro!.paroquia_id)
-        .eq("apenas_admin", false)
-        .eq("lida", false)
-        .or(`destinatario_id.is.null,destinatario_id.eq.${membro!.id}`);
-      return count ?? 0;
+      const { data } = await anyDb.rpc("portal_count_notif_nao_lidas");
+      return (data as number) ?? 0;
     },
   });
 

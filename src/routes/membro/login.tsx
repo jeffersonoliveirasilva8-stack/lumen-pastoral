@@ -141,7 +141,7 @@ function OtpForm() {
       const { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
         options: {
-          shouldCreateUser: true,
+          shouldCreateUser: false,
           emailRedirectTo: window.location.origin + "/auth/callback",
         },
       });
@@ -335,12 +335,13 @@ function SenhaForm({ onShowOtp }: { onShowOtp: () => void }) {
       </form>
 
       <div className="border-t border-border pt-4 space-y-3">
-        <a
-          href="/esqueci-senha?from=membro"
+        <Link
+          to="/esqueci-senha"
+          search={{ from: "membro" } as never}
           className="block text-center text-xs text-primary hover:underline font-medium"
         >
           Esqueceu sua senha?
-        </a>
+        </Link>
         <button
           type="button"
           onClick={onShowOtp}

@@ -28,26 +28,32 @@ function ForgotPage() {
   const [sent, setSent] = useState(false);
 
   const isMemberContext = from === "membro";
-  // Usar /auth/callback como redirectTo garante que a URL está na whitelist do Supabase.
-  // O contexto "from" fica preservado via sessionStorage para reset-senha.tsx.
-  const resetTarget = window.location.origin + "/auth/callback";
 
   async function submit(e: { preventDefault(): void }) {
     e.preventDefault();
     if (!email.trim()) return;
     setLoading(true);
-    // Preserva contexto no sessionStorage — o redirect do Supabase pode ignorar
-    // os query params do redirectTo, então reset-senha.tsx usa isso como fallback
-    if (from) sessionStorage.setItem("resetFrom", from);
-    else sessionStorage.removeItem("resetFrom");
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: resetTarget,
-    });
-    setLoading(false);
-    if (error) {
-      toast.error(translateAuthError(error.message));
-      return;
+
+    let errorMsg: string | null = null;
+
+    if (isMemberContext) {
+      // Usa a edge function para gerar link de recovery com redirectTo correto.
+      // O link vai direto para /reset-senha?from=membro, preservando o contexto
+      // mesmo quando o e-mail é aberto em outro dispositivo.
+      const { error } = await supabase.functions.invoke("send-email", {
+        body: { template: "reset_senha", to: email.trim().toLowerCase(), from: "membro" },
+      });
+      if (error) errorMsg = translateAuthError(error.message ?? "Erro ao enviar e-mail.");
+    } else {
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        email.trim().toLowerCase(),
+        { redirectTo: window.location.origin + "/auth/callback" },
+      );
+      if (error) errorMsg = translateAuthError(error.message);
     }
+
+    setLoading(false);
+    if (errorMsg) { toast.error(errorMsg); return; }
     setSent(true);
   }
 
