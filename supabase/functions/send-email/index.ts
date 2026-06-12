@@ -399,7 +399,7 @@ Deno.serve(async (req) => {
       const { data: ld, error: le } = await admin.auth.admin.generateLink({
         type:    "magiclink",
         email:   to,
-        options: { redirectTo: `${siteUrl}/membro/ativar-conta` },
+        options: { redirectTo: `${siteUrl}/auth/callback` },
       });
       if (le || !ld?.properties?.action_link)
         return json({ ok: false, error: le?.message ?? "Failed to generate activation link" }, 500);

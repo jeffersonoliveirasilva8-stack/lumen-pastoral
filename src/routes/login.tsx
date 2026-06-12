@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Flame, Loader2 } from "lucide-react";
+import { Flame, Loader2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getPostLoginRoute } from "@/lib/auth-redirect";
 
@@ -136,15 +136,18 @@ function LoginPage() {
             )}
           </form>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            É servidor/acólito?{" "}
-            <Link to="/membro/login" className="font-medium text-primary hover:underline">
-              Entrar no portal do membro
+          <div className="mt-6 pt-5 border-t border-border space-y-3">
+            <Link
+              to="/membro/login"
+              className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-primary/25 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/10 transition"
+            >
+              <Users className="h-4 w-4" />
+              Sou servidor ou acólito — entrar aqui
             </Link>
-          </p>
-          <p className="mt-2 text-center text-sm text-muted-foreground">
-            Ainda não tem conta? <Link to="/cadastro" className="font-medium text-primary hover:underline">Criar paróquia</Link>
-          </p>
+            <p className="text-center text-xs text-muted-foreground">
+              Ainda não tem conta? <Link to="/cadastro" className="font-medium text-primary hover:underline">Criar paróquia</Link>
+            </p>
+          </div>
         </div>
       </main>
     </div>

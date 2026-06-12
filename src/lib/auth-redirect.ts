@@ -23,6 +23,7 @@ export type PostLoginRoute =
   | "/portal-membro/home"
   | "/onboarding"
   | "/membro/login"
+  | "/membro/ativar-conta"
   | "/acesso-negado"
   | "/auth/admin-mfa";
 
@@ -58,14 +59,14 @@ export async function getPostLoginRoute(
     );
 
     if (isMembroRole) {
-      // Verifica se membro está ativo
       const { data: membroData } = await db
         .from("membros")
-        .select("ativo")
+        .select("ativo, conta_ativada")
         .eq("auth_user_id", user.id)
         .maybeSingle();
 
-      if (membroData && membroData.ativo === false) return "/acesso-negado";
+      if (membroData?.ativo === false) return "/acesso-negado";
+      if (membroData?.conta_ativada === false) return "/membro/ativar-conta";
       return "/portal-membro/home";
     }
 
@@ -73,7 +74,15 @@ export async function getPostLoginRoute(
     if (roles.length === 0) {
       try {
         const { data: linkResult } = await db.rpc("portal_auto_link_by_email");
-        if (linkResult?.success) return "/portal-membro/home";
+        if (linkResult?.success) {
+          const { data: linked } = await db
+            .from("membros")
+            .select("conta_ativada")
+            .eq("auth_user_id", user.id)
+            .maybeSingle();
+          if (linked?.conta_ativada === false) return "/membro/ativar-conta";
+          return "/portal-membro/home";
+        }
       } catch {
         // RPC pode não existir — continua para fallback
       }
@@ -82,12 +91,15 @@ export async function getPostLoginRoute(
       if (user.email) {
         const { data: membroByEmail } = await db
           .from("membros")
-          .select("ativo, paroquia_id")
+          .select("ativo, conta_ativada, paroquia_id")
           .ilike("email", user.email.trim())
           .eq("ativo", true)
           .maybeSingle();
 
-        if (membroByEmail) return "/portal-membro/home";
+        if (membroByEmail) {
+          if (membroByEmail.conta_ativada === false) return "/membro/ativar-conta";
+          return "/portal-membro/home";
+        }
       }
 
       // Sem vínculo identificado → login do membro para escolher paróquia
