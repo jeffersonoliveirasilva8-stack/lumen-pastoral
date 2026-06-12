@@ -444,7 +444,7 @@ function PortalMembroHome() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-bold text-red-700 dark:text-red-400">Homilia do Dia</p>
-              <p className="text-[11px] text-red-600/70 dark:text-red-500/70">Pe. Paulo Ricardo — Disponível às 03:30 UTC</p>
+              <p className="text-[11px] text-red-600/70 dark:text-red-500/70">Homilia de hoje ainda não disponível — exibindo a mais recente</p>
             </div>
           </div>
         )}

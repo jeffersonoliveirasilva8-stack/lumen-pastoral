@@ -67,7 +67,12 @@ function EmailMfaSection() {
       setStep("verifying");
     } catch (err: unknown) {
       const e = err as { message?: string };
-      toast.error("Não foi possível iniciar: " + (e?.message ?? "erro desconhecido"));
+      const msg = e?.message ?? "";
+      if (msg.toLowerCase().includes("factor_type") || msg.toLowerCase().includes("email")) {
+        toast.error("Verificação por e-mail não disponível neste plano. Use o autenticador TOTP.");
+      } else {
+        toast.error("Não foi possível iniciar: " + (msg || "erro desconhecido"));
+      }
     } finally {
       setSubmitting(false);
     }

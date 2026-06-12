@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Calendar, CalendarRange, Users, Sparkles, Activity, ChevronRight,
   AlertTriangle, Cake, CheckCircle2, UserX, UserCheck,
-  CalendarOff, Zap, Loader2, FileText, BookOpen, Music,
+  CalendarOff, Zap, Loader2, FileText, BookOpen, Music, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useRankingTop } from "@/lib/ranking";
 import { useLiturgiaHoje } from "@/hooks/use-liturgia";
+import { useHomiliaRecente } from "@/hooks/use-homilia";
 import { DashboardMetricCard } from "@/components/dashboard/DashboardMetricCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -523,6 +524,11 @@ function DashboardPage() {
 
   // ── Liturgia do dia — fonte DB (tem precedência sobre o engine local) ─────────
   const { data: liturgiaDB } = useLiturgiaHoje();
+
+  // ── Homilia do dia ────────────────────────────────────────────────────────────
+  const { data: homiliaRecente } = useHomiliaRecente();
+  const [homiliaPlayerAberto, setHomiliaPlayerAberto] = useState(false);
+  const homiliaEHoje = homiliaRecente?.data === todayStr;
 
   // ── Stats cards ───────────────────────────────────────────────────────────────
   const stats = [
@@ -1039,6 +1045,72 @@ function DashboardPage() {
         </div>
 
         <div className="space-y-4">
+
+          {/* ── Homilia do Dia ── */}
+          <div className="rounded-[1.75rem] border border-border bg-card overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <Play className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground font-semibold flex-1">
+                  {homiliaEHoje ? "Homilia do Dia" : "Homilia Recente"}
+                </p>
+                {homiliaRecente && !homiliaEHoje && (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                    {format(new Date(homiliaRecente.data + "T12:00:00"), "d/MM", { locale: ptBR })}
+                  </span>
+                )}
+                <Link
+                  to="/espiritualidade"
+                  className="ml-1 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition text-[9px] font-semibold uppercase tracking-wide"
+                >
+                  Ver mais
+                </Link>
+              </div>
+
+              {homiliaRecente ? (
+                <>
+                  <div className="rounded-xl overflow-hidden mb-3 bg-black relative aspect-video">
+                    {homiliaPlayerAberto ? (
+                      <iframe
+                        src={`https://www.youtube.com/embed/${homiliaRecente.video_id}?autoplay=1&rel=0&modestbranding=1`}
+                        title={homiliaRecente.titulo}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="absolute inset-0 w-full h-full"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setHomiliaPlayerAberto(true)}
+                        className="absolute inset-0 w-full h-full group"
+                      >
+                        {homiliaRecente.thumbnail_url && (
+                          <img src={homiliaRecente.thumbnail_url} alt={homiliaRecente.titulo} className="w-full h-full object-cover" />
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/40 transition">
+                          <div className="h-10 w-10 rounded-full bg-red-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                            <Play className="h-4 w-4 text-white ml-0.5" />
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm font-semibold leading-snug line-clamp-2 text-foreground">
+                    {homiliaRecente.titulo}
+                  </p>
+                  {homiliaRecente.autor && (
+                    <p className="text-xs text-muted-foreground mt-1">{homiliaRecente.autor}</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground italic py-2 text-center">
+                  Homilia de hoje ainda não disponível — exibindo a mais recente
+                </p>
+              )}
+            </div>
+          </div>
+
           <InsightsPanel
             membrosOciosos={membrosOciosos}
             membrosNovos={membrosNovos}

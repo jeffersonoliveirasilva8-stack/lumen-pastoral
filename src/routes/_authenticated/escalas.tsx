@@ -5,7 +5,7 @@ import {
   Plus, Loader2, Calendar, List, ChevronLeft, ChevronRight, ChevronDown,
   MapPin, Clock, Trash2, Pencil, UserPlus, X, Check, Sparkles,
   MoreVertical, FileText, AlertTriangle, Users, ClipboardCheck,
-  CheckCircle2, XCircle, Church,
+  CheckCircle2, XCircle, Church, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths, addDays } from "date-fns";
@@ -153,7 +153,7 @@ function EscalasPage() {
   const qc = useQueryClient();
   const { abrir } = Route.useSearch();
 
-  const [view, setView] = useState<"lista" | "calendario" | "sacristia">("lista");
+  const [view, setView] = useState<"lista" | "calendario" | "sacristia" | "historico">("lista");
   const [calMonth, setCalMonth] = useState(new Date());
   const [formOpen, setFormOpen] = useState(false);
   const [detailEscala, setDetailEscala] = useState<Escala | null>(null);
@@ -1054,6 +1054,13 @@ function EscalasPage() {
     [escalas]
   );
 
+  const past = useMemo(
+    () => escalas
+      .filter((e) => new Date(e.data + "T00:00:00") < new Date(today.toDateString()))
+      .sort((a, b) => b.data.localeCompare(a.data)),
+    [escalas]
+  );
+
   useEffect(() => {
     if (autoArchiveTriggered || !profile?.paroquia_id) return;
     const hasPast = escalas.some((e) => {
@@ -1300,11 +1307,12 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Escalas pastorais</h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
-          <Tabs value={view} onValueChange={(v) => setView(v as "lista" | "calendario" | "sacristia")}>
+          <Tabs value={view} onValueChange={(v) => setView(v as "lista" | "calendario" | "sacristia" | "historico")}>
             <TabsList>
               <TabsTrigger value="lista"><List className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Lista</span></TabsTrigger>
               <TabsTrigger value="calendario"><Calendar className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Calendário</span></TabsTrigger>
               <TabsTrigger value="sacristia"><Church className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Sacristia</span></TabsTrigger>
+              <TabsTrigger value="historico"><History className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Histórico</span></TabsTrigger>
             </TabsList>
           </Tabs>
           <Button
@@ -1409,6 +1417,49 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           escalasForDay={escalasForDay}
           onOpenDetail={(e) => setDetailEscala(e)}
         />
+      ) : view === "historico" ? (
+        <div className="mt-6 space-y-3">
+          {past.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
+              <History className="h-6 w-6 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">Nenhuma escala passada encontrada.</p>
+            </div>
+          ) : (
+            past.map((e) => {
+              const d = new Date(e.data + "T00:00:00");
+              const counts = escalaCounts[e.id];
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => setDetailEscala(e)}
+                  className="w-full text-left rounded-2xl border border-border bg-card shadow-sm px-4 py-3.5 hover:bg-muted/40 active:scale-[0.99] transition-all"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground truncate">{e.titulo}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {format(d, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                        {e.hora_inicio ? ` · ${e.hora_inicio.slice(0, 5)}` : ""}
+                        {e.local ? ` · ${e.local}` : ""}
+                      </p>
+                    </div>
+                    <div className="shrink-0 flex flex-col items-end gap-1.5">
+                      <Badge variant="outline" className="text-[10px]">
+                        {e.status === "arquivada" ? "Arquivada" : e.status === "publicada" ? "Realizada" : "Rascunho"}
+                      </Badge>
+                      {counts && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {counts.filled}/{counts.needed} membros
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
       ) : (
         <SacristiaTab paroquiaId={profile?.paroquia_id ?? ""} />
       )}

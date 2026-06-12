@@ -294,6 +294,38 @@ function tBoasVindas(nome: string, paroquia: string, siteUrl: string): string {
   return baseLayout(paroquia, body, siteUrl);
 }
 
+function tLembretePresencaCoord(paroquia: string, escalaTitulo: string, escalaData: string, escalaHora: string, pendentes: number, total: number, siteUrl: string): string {
+  const sp = htmlSafe(paroquia);
+  const st = htmlSafe(escalaTitulo);
+  const hora = escalaHora ? ` &agrave;s ${htmlSafe(escalaHora)}` : "";
+  const escalasUrl = `${siteUrl}/escalas`;
+  const body = `
+    <h1>Presen&ccedil;as pendentes &#128221;</h1>
+    <p>A escala <span class="hi">${st}</span> da <span class="hi">${sp}</span>
+       (${htmlSafe(escalaData)}${hora}) j&aacute; aconteceu e ainda h&aacute;
+       <span class="hi">${pendentes} de ${total} membro(s)</span> sem confirma&ccedil;&atilde;o
+       de presen&ccedil;a.</p>
+    <p>Por favor, registre as presen&ccedil;as o quanto antes para manter o hist&oacute;rico da escala atualizado.</p>
+    <div class="bw"><a href="${escalasUrl}" class="btn">Registrar presen&ccedil;as &rarr;</a></div>
+    <p class="note">Este lembrete foi enviado automaticamente pelo Lumen Pastoral.</p>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
+function tLembretePresencaAdmin(paroquia: string, escalaTitulo: string, escalaData: string, pendentes: number, total: number, siteUrl: string): string {
+  const sp = htmlSafe(paroquia);
+  const st = htmlSafe(escalaTitulo);
+  const escalasUrl = `${siteUrl}/escalas`;
+  const body = `
+    <h1>Aten&ccedil;&atilde;o: presen&ccedil;as n&atilde;o registradas &#9888;&#65039;</h1>
+    <p>J&aacute; faz 2 dias que a escala <span class="hi">${st}</span>
+       (${htmlSafe(escalaData)}) foi realizada e ainda h&aacute;
+       <span class="hi">${pendentes} de ${total} membro(s)</span>
+       sem confirma&ccedil;&atilde;o de presen&ccedil;a na <span class="hi">${sp}</span>.</p>
+    <p>Por favor, verifique com o coordenador respons&aacute;vel e registre as presen&ccedil;as para n&atilde;o prejudicar o hist&oacute;rico e a pontua&ccedil;&atilde;o dos membros.</p>
+    <div class="bw"><a href="${escalasUrl}" class="btn">Ver escalas &rarr;</a></div>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
 // ─── Resend API ────────────────────────────────────────────────────────────────
 
 interface SendOpts { apiKey: string; from: string; to: string; subject: string; html: string; }
@@ -373,8 +405,8 @@ Deno.serve(async (req) => {
       requesterId = user?.id ?? null;
     } catch { /* não-fatal — rate limit por destinatário ainda se aplica */ }
 
-    const body = await req.json() as { template: string; to: string; nome?: string; paroquia?: string; code?: string; escalaTitulo?: string; escalaData?: string; ministerioNome?: string };
-    const { template, to, nome = "", paroquia = "Pastoral", code = "", escalaTitulo = "", escalaData = "", ministerioNome = "" } = body;
+    const body = await req.json() as { template: string; to: string; nome?: string; paroquia?: string; code?: string; escalaTitulo?: string; escalaData?: string; escalaHora?: string; ministerioNome?: string; pendentes?: number; total?: number };
+    const { template, to, nome = "", paroquia = "Pastoral", code = "", escalaTitulo = "", escalaData = "", escalaHora = "", ministerioNome = "", pendentes = 0, total = 0 } = body;
 
     if (!template || !to) return json({ ok: false, error: "Missing fields: template, to" }, 400);
 
@@ -452,6 +484,14 @@ Deno.serve(async (req) => {
     } else if (template === "escala_atribuida") {
       subject = `${paroquia} — Você foi escalado(a): ${escalaTitulo}`;
       html    = tEscalaAtribuida(nome, paroquia, escalaTitulo, escalaData, ministerioNome, siteUrl);
+
+    } else if (template === "lembrete_presenca_coord") {
+      subject = `${paroquia} — Presenças pendentes: ${escalaTitulo}`;
+      html    = tLembretePresencaCoord(paroquia, escalaTitulo, escalaData, escalaHora, pendentes, total, siteUrl);
+
+    } else if (template === "lembrete_presenca_admin") {
+      subject = `[Atenção] ${paroquia} — Presenças não registradas: ${escalaTitulo}`;
+      html    = tLembretePresencaAdmin(paroquia, escalaTitulo, escalaData, pendentes, total, siteUrl);
 
     } else {
       return json({ ok: false, error: `Unknown template: ${template}` }, 400);

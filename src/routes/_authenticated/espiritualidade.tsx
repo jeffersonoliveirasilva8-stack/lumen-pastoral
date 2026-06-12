@@ -185,7 +185,7 @@ function EspiritualidadePage() {
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
 
         {/* ── Coluna principal: leituras ── */}
-        <div className="space-y-5">
+        <div className="space-y-5 order-2 xl:order-1">
 
           {loadingL ? (
             <div className="rounded-[2rem] border border-border bg-card p-6 space-y-4">
@@ -265,8 +265,8 @@ function EspiritualidadePage() {
           )}
         </div>
 
-        {/* ── Coluna lateral: homilia + próximos dias ── */}
-        <div className="space-y-4">
+        {/* ── Homilia + próximos dias (order-1 = aparece primeiro no mobile) ── */}
+        <div className="space-y-4 order-1 xl:order-2">
 
           {/* Homilia */}
           <div className="rounded-[1.75rem] border border-border bg-card overflow-hidden">

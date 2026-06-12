@@ -33,6 +33,14 @@ function AuthCallback() {
     let timeout: ReturnType<typeof setTimeout>;
 
     async function handleSession() {
+      // Password recovery: hash fragment contains type=recovery
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      if (hashParams.get("type") === "recovery" || window.location.search.includes("type=recovery")) {
+        processed.current = true;
+        navigate({ to: "/reset-senha", replace: true });
+        return;
+      }
+
       // Verifica se sessão já está disponível (hash fragment ou cookie)
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user && !processed.current) {
@@ -45,6 +53,12 @@ function AuthCallback() {
       // Aguarda evento de auth (token no hash fragment ainda sendo processado)
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (_event, sess) => {
+          if (_event === "PASSWORD_RECOVERY" && !processed.current) {
+            processed.current = true;
+            clearTimeout(timeout);
+            navigate({ to: "/reset-senha", replace: true });
+            return;
+          }
           if (sess?.user && !processed.current) {
             processed.current = true;
             clearTimeout(timeout);

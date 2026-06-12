@@ -149,23 +149,23 @@ function AuthLayout() {
   if (pathname === "/onboarding") return <Outlet />;
 
   // ── Fonte única de navegação ─────────────────────────────────────────
-  type NavItem = { to: string; label: string; icon: React.ElementType; badge?: number };
+  type NavItem = { to: string; label: string; icon: React.ElementType; badge?: number; color?: string };
 
   const isSuperAdmin = roles.includes("super_admin");
 
   const allNav: NavItem[] = [
-    { to: "/painel",                  label: "Painel",          icon: LayoutDashboard },
-    { to: "/escalas",                 label: "Escalas",         icon: Calendar },
-    { to: "/formacoes",               label: "Agenda Pastoral", icon: CalendarRange },
-    { to: "/espiritualidade",         label: "Liturgia",        icon: BookOpen },
-    ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes }] : []),
-    { to: "/ranking",                 label: "Ranking",         icon: Trophy },
-    { to: "/ocorrencias",             label: "Ocorrências",     icon: MessageSquare },
-    { to: "/notificacoes",            label: "Notificações",    icon: Bell },
-    ...(!isLimitedCoord ? [{ to: "/configuracoes/paroquia", label: "Personalização", icon: Settings }] : []),
-    ...(isAdmin ? [{ to: "/auditoria", label: "Auditoria", icon: ShieldCheck }] : []),
-    ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church }] : []),
-    { to: "/minha-conta",             label: "Perfil",          icon: UserCircle },
+    { to: "/painel",                  label: "Painel",          icon: LayoutDashboard, color: "bg-slate-600" },
+    { to: "/escalas",                 label: "Escalas",         icon: Calendar,        color: "bg-blue-600" },
+    { to: "/formacoes",               label: "Agenda Pastoral", icon: CalendarRange,   color: "bg-teal-600" },
+    { to: "/espiritualidade",         label: "Liturgia",        icon: BookOpen,        color: "bg-purple-600" },
+    ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
+    { to: "/ranking",                 label: "Ranking",         icon: Trophy,          color: "bg-amber-500" },
+    { to: "/ocorrencias",             label: "Ocorrências",     icon: MessageSquare,   color: "bg-orange-600" },
+    { to: "/notificacoes",            label: "Notificações",    icon: Bell,            color: "bg-rose-500" },
+    ...(!isLimitedCoord ? [{ to: "/configuracoes/paroquia", label: "Personalização", icon: Settings, color: "bg-indigo-600" }] : []),
+    ...(isAdmin ? [{ to: "/auditoria", label: "Auditoria", icon: ShieldCheck, color: "bg-red-600" }] : []),
+    ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),
+    { to: "/minha-conta",             label: "Perfil",          icon: UserCircle,      color: "bg-slate-500" },
   ];
 
   // Sidebar desktop = todos exceto Notificações (no header) e Perfil (já no rodapé)
@@ -367,9 +367,9 @@ function AuthLayout() {
                       }`}
                     >
                       <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${
-                        active ? "bg-primary/15" : "bg-background/60"
+                        active ? "bg-primary/15" : (item.color ?? "bg-slate-500")
                       }`}>
-                        <item.icon className={`h-5 w-5 ${active ? "text-primary" : "text-muted-foreground"}`} />
+                        <item.icon className={`h-5 w-5 ${active ? "text-primary" : "text-white"}`} />
                       </div>
                       <span className="text-xs font-medium leading-tight">
                         {item.label === "Agenda Pastoral" ? "Agenda" : item.label}

@@ -28,9 +28,9 @@ function ForgotPage() {
   const [sent, setSent] = useState(false);
 
   const isMemberContext = from === "membro";
-  const resetTarget = isMemberContext
-    ? window.location.origin + "/reset-senha?from=membro"
-    : window.location.origin + "/reset-senha";
+  // Usar /auth/callback como redirectTo garante que a URL está na whitelist do Supabase.
+  // O contexto "from" fica preservado via sessionStorage para reset-senha.tsx.
+  const resetTarget = window.location.origin + "/auth/callback";
 
   async function submit(e: { preventDefault(): void }) {
     e.preventDefault();
