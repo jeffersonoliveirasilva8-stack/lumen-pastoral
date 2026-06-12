@@ -1,7 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Flame, Loader2, KeyRound, Eye, EyeOff, ArrowRight, UserCircle2, CheckCircle2 } from "lucide-react";
+import {
+  Flame, Loader2, KeyRound, Eye, EyeOff, ArrowRight,
+  CheckCircle2, AlertCircle, RefreshCw,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 
@@ -10,7 +13,7 @@ const anyDb = supabase as any;
 
 export const Route = createFileRoute("/membro/ativar-conta")({
   component: AtivarContaPage,
-  head: () => ({ meta: [{ title: "Ativar Conta — Portal do Servidor" }] }),
+  head: () => ({ meta: [{ title: "Primeiro Acesso — Portal do Servidor" }] }),
 });
 
 function validarSenha(senha: string): string | null {
@@ -30,37 +33,27 @@ function AtivarContaPage() {
   const [precisaSenhaAtual, setPrecisaSenhaAtual] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [linkError, setLinkError] = useState<string | null>(null);
 
-  // Se não autenticado → login
+  // Detecta erros enviados pelo Supabase na URL (link expirado, já usado, etc.)
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlError = urlParams.get("error");
+  const linkInvalido = urlError === "access_denied" || urlError === "otp_expired";
+
+  // Se não autenticado e link não é inválido → login
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !linkInvalido && !user) {
       navigate({ to: "/membro/login" });
     }
-  }, [loading, user, navigate]);
+  }, [loading, linkInvalido, user, navigate]);
 
-  // Se conta já foi ativada → ir para completar cadastro ou direto ao portal
+  // Se conta já ativada → portal (re-convite de membro já ativo)
   useEffect(() => {
-    if (!loading && !linking && membro && membro.conta_ativada) {
-      if (membro.perfil_completo) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        navigate({ to: "/portal-membro/home" as any, replace: true });
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        navigate({ to: "/portal-membro/completar-cadastro" as any, replace: true });
-      }
+    if (!loading && !linking && membro?.conta_ativada) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dest = membro.perfil_completo ? "/portal-membro/home" : "/portal-membro/completar-cadastro";
+      navigate({ to: dest as any, replace: true });
     }
   }, [loading, linking, membro, navigate]);
-
-  // Se o link falhou (nenhum membro encontrado para o email)
-  useEffect(() => {
-    if (!loading && !linking && user && membro === null) {
-      setLinkError(
-        "Nenhum cadastro encontrado para o e-mail " + (user.email ?? "") +
-        ". Verifique com o coordenador se seu e-mail está correto."
-      );
-    }
-  }, [loading, linking, user, membro]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -72,7 +65,6 @@ function AtivarContaPage() {
 
     setSalvando(true);
     try {
-      // Se o Supabase exigiu reautenticação, faz signIn com a senha atual para renovar a sessão
       if (precisaSenhaAtual) {
         const { error: signInErr } = await supabase.auth.signInWithPassword({
           email: user!.email!,
@@ -84,7 +76,6 @@ function AtivarContaPage() {
         }
       }
 
-      // 1. Define a nova senha no Supabase Auth
       const { error: authErr } = await supabase.auth.updateUser({ password: senha });
       if (authErr) {
         const msg = authErr.message?.toLowerCase() ?? "";
@@ -97,11 +88,10 @@ function AtivarContaPage() {
         return;
       }
 
-      // 2. Marca conta como ativada no banco (SECURITY DEFINER — ignora RLS)
-      // Falha não-fatal: auth já foi atualizado, banco atualiza no próximo login
+      // Marca conta como ativada (SECURITY DEFINER — ignora RLS)
       await anyDb.rpc("ativar_conta_membro").catch(() => {});
 
-      toast.success("Senha criada! Agora complete seu perfil.");
+      toast.success("Conta ativada! Bem-vindo ao portal.");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       navigate({ to: "/portal-membro/completar-cadastro" as any, replace: true });
     } catch {
@@ -111,6 +101,43 @@ function AtivarContaPage() {
     }
   }
 
+  // ── Link expirado ou inválido ──────────────────────────────────────────────
+  if (linkInvalido) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-12">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div className="flex items-center gap-2 justify-center mb-2">
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-gold">
+              <Flame className="h-4 w-4" />
+            </div>
+            <span className="font-serif text-lg">Lumen Pastoral</span>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-6 space-y-4">
+            <div className="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center mx-auto">
+              <AlertCircle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <h2 className="font-serif text-xl mb-2">Link expirado</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Este link de ativação expirou ou já foi utilizado.
+                Peça ao seu coordenador para reenviar o convite.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate({ to: "/membro/login" })}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-medium hover:bg-muted transition"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Ir para o login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Carregando ─────────────────────────────────────────────────────────────
   if (loading || linking) {
     return (
       <div className="min-h-screen grid place-items-center bg-background">
@@ -134,22 +161,22 @@ function AtivarContaPage() {
           <span className="font-serif text-lg">Lumen Pastoral</span>
         </div>
 
-        {/* ── Erro: nenhum cadastro encontrado ── */}
-        {linkError && (
+        {/* ── Cadastro não encontrado ── */}
+        {user && membro === null && (
           <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center space-y-4">
             <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-              <UserCircle2 className="h-6 w-6 text-destructive" />
+              <AlertCircle className="h-6 w-6 text-destructive" />
             </div>
             <div>
               <h2 className="font-serif text-xl mb-2">Cadastro não encontrado</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Nenhum cadastro de servidor foi encontrado para{" "}
-                <strong className="text-foreground">{user?.email}</strong>.
+                Nenhum cadastro foi encontrado para{" "}
+                <strong className="text-foreground">{user.email}</strong>.
               </p>
               <div className="mt-3 rounded-lg bg-muted/50 border border-border p-3 text-left text-xs text-muted-foreground space-y-1.5">
                 <p className="font-semibold text-foreground">O que verificar:</p>
-                <p>• O link de ativação pode ter expirado. Peça ao coordenador reenviar.</p>
-                <p>• Confirme que seu coordenador cadastrou exatamente <strong>{user?.email}</strong>.</p>
+                <p>• Este link pode ter expirado — peça ao coordenador reenviar o convite.</p>
+                <p>• Confirme que seu coordenador cadastrou exatamente <strong>{user.email}</strong>.</p>
               </div>
             </div>
             <button
@@ -165,25 +192,26 @@ function AtivarContaPage() {
         )}
 
         {/* ── Formulário de criação de senha ── */}
-        {!linkError && membro && !membro.conta_ativada && (
+        {membro && !membro.conta_ativada && (
           <div className="space-y-6">
             <div className="text-center">
-              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <KeyRound className="h-7 w-7 text-primary" />
+              {/* Badge de aprovação */}
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 dark:bg-green-950/30 dark:border-green-800 px-3 py-1 text-xs font-medium text-green-700 dark:text-green-400 mb-4">
+                <CheckCircle2 className="h-3 w-3" />
+                Aprovado por {membro.paroquia_nome}
               </div>
-              <h1 className="font-serif text-2xl">Criar sua senha</h1>
+              <h1 className="font-serif text-2xl">Bem-vindo, {membro.nome.split(" ")[0]}!</h1>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                Olá, <strong>{membro.nome.split(" ")[0]}</strong>! Defina uma senha para acessar
-                o portal sempre que quiser.
+                Sua solicitação foi aprovada. Para acessar o portal, crie sua senha abaixo.
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Campo de senha atual — aparece apenas quando o Supabase exige reautenticação */}
+              {/* Campo de senha atual — aparece quando Supabase exige reautenticação */}
               {precisaSenhaAtual && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-4 py-3 space-y-3">
                   <p className="text-sm text-amber-800 dark:text-amber-300">
-                    Você já possui uma senha cadastrada. Informe-a abaixo para atualizá-la.
+                    Você já possui uma senha cadastrada. Informe-a para continuar.
                   </p>
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -279,7 +307,7 @@ function AtivarContaPage() {
                 className="w-full flex justify-center items-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60 transition"
               >
                 {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                {precisaSenhaAtual ? "Atualizar senha" : "Definir senha e continuar"}
+                {precisaSenhaAtual ? "Atualizar senha e entrar" : "Criar senha e entrar"}
               </button>
             </form>
           </div>
