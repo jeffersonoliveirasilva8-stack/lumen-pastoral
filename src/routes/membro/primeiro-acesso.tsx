@@ -225,40 +225,77 @@ function PrimeiroAcessoPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const err = validarSenha(senha);
-    if (err) { toast.error(err); return; }
+    const errSenha = validarSenha(senha);
+    if (errSenha) { toast.error(errSenha); return; }
     if (senha !== confirmar) { toast.error("As senhas não conferem."); return; }
 
     setSalvando(true);
     try {
-      const { data: { session: s0 } } = await supabase.auth.getSession();
-      console.info("[LOG primeiro-acesso] handleSubmit →", {
-        user_id: s0?.user?.id, email: s0?.user?.email,
-        token: token || "(vazio)", rota_atual: window.location.pathname,
+
+      // ── 1. Estado antes de qualquer operação ─────────────────────────────
+      const { data: { session } }     = await supabase.auth.getSession();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+
+      const user_id       = session?.user?.id       ?? authUser?.id       ?? null;
+      const email         = session?.user?.email    ?? authUser?.email    ?? null;
+      const session_exists = !!session;
+
+      console.log("[SAVE PASSWORD] BEFORE", {
+        session_exists,
+        user_id,
+        email,
+        token:           token || "(vazio)",
+        href:            window.location.href,
+        hash:            window.location.hash || "(vazio)",
       });
 
-      const { error: authErr } = await supabase.auth.updateUser({ password: senha });
-      if (authErr) {
-        console.error("[LOG primeiro-acesso] updateUser error →", authErr.message);
-        toast.error("Erro ao salvar senha: " + authErr.message);
+      if (!session_exists) {
+        toast.error("Session not found — faça login novamente.");
+        return;
+      }
+      if (!user_id) {
+        toast.error("User not authenticated — sessão sem user_id.");
         return;
       }
 
-      // Garante auth_user_id vinculado antes de ativar (idempotente)
-      const { data: linkData } = await anyDb.rpc("portal_auto_link_by_email")
-        .catch(() => ({ data: null }));
-      console.info("[LOG primeiro-acesso] portal_auto_link_by_email →", linkData);
+      // ── 2. Salvar senha ──────────────────────────────────────────────────
+      const { data: updateData, error: updateError } =
+        await supabase.auth.updateUser({ password: senha });
 
-      // Ativa conta + cria profiles/user_roles (SECURITY DEFINER, ignora RLS)
-      const { data: activResult, error: activErr } = await anyDb.rpc("ativar_conta_membro");
-      console.info("[LOG primeiro-acesso] ativar_conta_membro →", {
-        result: activResult, error: activErr?.message,
+      console.log("[SAVE PASSWORD] UPDATE USER", {
+        data:  updateData ? { user_id: updateData.user?.id, email: updateData.user?.email } : null,
+        error: updateError ? { message: updateError.message, status: (updateError as any).status } : null,
       });
 
-      if (activErr || activResult?.success === false) {
-        console.error("[LOG primeiro-acesso] ativar_conta_membro falhou →",
-          activErr?.message ?? activResult?.error);
-        toast.error("Erro ao ativar conta. Tente novamente.");
+      if (updateError) {
+        toast.error("Password update failed: " + updateError.message);
+        return;
+      }
+
+      // ── 3. Vincular membro ao auth user ──────────────────────────────────
+      const { data: linkData, error: linkError } =
+        await anyDb.rpc("portal_auto_link_by_email");
+
+      console.log("[SAVE PASSWORD] LINK MEMBER", {
+        data:  linkData,
+        error: linkError ? { message: linkError.message, code: linkError.code } : null,
+      });
+
+      // ── 4. Ativar conta ──────────────────────────────────────────────────
+      const { data: activResult, error: activError } =
+        await anyDb.rpc("ativar_conta_membro");
+
+      console.log("[SAVE PASSWORD] ACTIVATE MEMBER", {
+        data:  activResult,
+        error: activError ? { message: activError.message, code: activError.code } : null,
+      });
+
+      if (activError) {
+        toast.error("RPC ativar_conta_membro failed: " + activError.message);
+        return;
+      }
+      if (activResult?.success === false) {
+        toast.error("RPC ativar_conta_membro returned failure: " + (activResult?.error ?? "desconhecido"));
         return;
       }
 
@@ -266,9 +303,11 @@ function PrimeiroAcessoPage() {
       toast.success("Conta ativada! Bem-vindo ao portal.");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       navigate({ to: "/portal-membro/completar-cadastro" as any, replace: true });
+
     } catch (err) {
-      console.error("[LOG primeiro-acesso] exception →", err);
-      toast.error("Erro de conexão. Tente novamente.");
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log("[SAVE PASSWORD] EXCEPTION", err);
+      toast.error("Exceção: " + msg);
     } finally {
       setSalvando(false);
     }
