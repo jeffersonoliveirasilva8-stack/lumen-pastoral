@@ -241,6 +241,36 @@ function tMfaAdminCode(nome: string, paroquia: string, code: string, siteUrl: st
   return baseLayout(paroquia || "Lumen Pastoral", body, siteUrl);
 }
 
+function tEscalaAtribuida(nome: string, paroquia: string, escalaTitulo: string, escalaData: string, ministerioNome: string, siteUrl: string): string {
+  const sn = htmlSafe(nome);
+  const sp = htmlSafe(paroquia);
+  const st = htmlSafe(escalaTitulo);
+  const sm = htmlSafe(ministerioNome);
+  let dataFormatada = escalaData;
+  try {
+    const [y, mo, d] = escalaData.split("-").map(Number);
+    const MESES = ["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+    dataFormatada = `${d} de ${MESES[mo - 1]} de ${y}`;
+  } catch { /* mantém formato original se falhar */ }
+  const portalUrl = `${siteUrl}/portal-membro/home`;
+  const body = `
+    <h1>Voc&ecirc; foi escalado(a)! &#9997;&#65039;</h1>
+    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
+    <p>
+      Voc&ecirc; foi adicionado(a) &agrave; escala de servi&ccedil;o da
+      <span class="hi">${sp}</span>.
+    </p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;width:100px;">Escala</td><td style="padding:6px 0;font-weight:600;color:#111;">${st}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Data</td><td style="padding:6px 0;font-weight:600;color:#111;">${dataFormatada}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Minist&eacute;rio</td><td style="padding:6px 0;font-weight:600;color:#111;">${sm}</td></tr>
+    </table>
+    <p>Acesse o portal para confirmar sua presen&ccedil;a ou registrar uma indisponibilidade:</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">Acessar o portal &rarr;</a></div>
+    <p class="note">Em caso de d&uacute;vidas, entre em contato com a coordena&ccedil;&atilde;o da ${sp}.</p>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
 function tBoasVindas(nome: string, paroquia: string, siteUrl: string): string {
   const sn = htmlSafe(nome);
   const sp = htmlSafe(paroquia);
@@ -343,8 +373,8 @@ Deno.serve(async (req) => {
       requesterId = user?.id ?? null;
     } catch { /* não-fatal — rate limit por destinatário ainda se aplica */ }
 
-    const body = await req.json() as { template: string; to: string; nome?: string; paroquia?: string; code?: string };
-    const { template, to, nome = "", paroquia = "Pastoral", code = "" } = body;
+    const body = await req.json() as { template: string; to: string; nome?: string; paroquia?: string; code?: string; escalaTitulo?: string; escalaData?: string; ministerioNome?: string };
+    const { template, to, nome = "", paroquia = "Pastoral", code = "", escalaTitulo = "", escalaData = "", ministerioNome = "" } = body;
 
     if (!template || !to) return json({ ok: false, error: "Missing fields: template, to" }, 400);
 
@@ -417,6 +447,11 @@ Deno.serve(async (req) => {
     } else if (template === "boas_vindas") {
       subject = `${paroquia} — Bem-vindo(a) ao portal!`;
       html    = tBoasVindas(nome, paroquia, siteUrl);
+
+    // ── Escala atribuída ─────────────────────────────────────────────────────
+    } else if (template === "escala_atribuida") {
+      subject = `${paroquia} — Você foi escalado(a): ${escalaTitulo}`;
+      html    = tEscalaAtribuida(nome, paroquia, escalaTitulo, escalaData, ministerioNome, siteUrl);
 
     } else {
       return json({ ok: false, error: `Unknown template: ${template}` }, 400);

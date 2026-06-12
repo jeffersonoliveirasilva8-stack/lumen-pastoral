@@ -171,9 +171,7 @@ function NotificacoesPage() {
           <h1 className="mt-2 font-serif text-2xl sm:text-3xl flex items-center gap-2">
             Notificações
             {naoLidas > 0 && (
-              <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold px-1.5">
-                {naoLidas > 9 ? "9+" : naoLidas}
-              </span>
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500 inline-block" />
             )}
           </h1>
         </div>

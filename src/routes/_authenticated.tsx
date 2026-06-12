@@ -111,12 +111,23 @@ function AuthLayout() {
   // Admin/coordenador sem MFA verificado → exige verificação antes de acessar o painel
   // isServidor=true para "auxiliar puro" — esses vão para o portal, não para o painel
   useEffect(() => {
-    if (!loading && user && hasAdminAccess && !isServidor) {
-      const mfaToken = sessionStorage.getItem("admin_mfa_token");
-      if (!mfaToken) {
-        navigate({ to: "/auth/admin-mfa" });
-      }
+    if (loading || !user || !hasAdminAccess || isServidor) return;
+
+    const mfaToken = sessionStorage.getItem("admin_mfa_token");
+    if (!mfaToken) {
+      navigate({ to: "/auth/admin-mfa" });
+      return;
     }
+
+    // Valida o token contra o banco — garante que a expiração de 8h seja respeitada
+    supabase
+      .rpc("check_admin_mfa_session", { p_session_token: mfaToken })
+      .then(({ data }) => {
+        if (!data?.valid) {
+          sessionStorage.removeItem("admin_mfa_token");
+          navigate({ to: "/auth/admin-mfa" });
+        }
+      });
   }, [loading, user, hasAdminAccess, isServidor, navigate]);
 
   useEffect(() => {
@@ -283,9 +294,7 @@ function AuthLayout() {
                 >
                   <Bell className="h-4 w-4" />
                   {solicitacoesPendentes > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
-                      {solicitacoesPendentes > 9 ? "9+" : solicitacoesPendentes}
-                    </span>
+                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-card" />
                   )}
                 </Link>
                 <button

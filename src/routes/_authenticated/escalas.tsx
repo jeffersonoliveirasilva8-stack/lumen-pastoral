@@ -62,6 +62,7 @@ type Membro = {
   id: string;
   nome: string;
   telefone: string | null;
+  email: string | null;
   score: number;
   forcar_escalacao_solene: boolean;
   restricoes_dia_semana: number[];
@@ -204,7 +205,7 @@ function EscalasPage() {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("membros")
-        .select("id, nome, telefone, score, forcar_escalacao_solene, restricoes_dia_semana, sexo")
+        .select("id, nome, telefone, email, score, forcar_escalacao_solene, restricoes_dia_semana, sexo")
         .eq("paroquia_id", profile!.paroquia_id!)
         .eq("ativo", true)
         .order("nome");
@@ -212,6 +213,19 @@ function EscalasPage() {
         ...m,
         restricoes_dia_semana: m.restricoes_dia_semana ?? [],
       })) as Membro[];
+    },
+  });
+
+  const { data: paroquiaNome = "" } = useQuery({
+    queryKey: ["paroquia-nome", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("paroquias")
+        .select("nome")
+        .eq("id", profile!.paroquia_id!)
+        .single();
+      return (data?.nome ?? "") as string;
     },
   });
 
@@ -466,7 +480,6 @@ function EscalasPage() {
           const membrosComVinculo = minIds.some((mid) => (membroMinisterios[mid] ?? []).length > 0);
           
           if (!membrosComVinculo) {
-            console.warn("[ESCALA] Aviso: Nenhum membro possui vínculo com as funções desta escala.");
             return { autoSugestoes: 0 };
           }
 
@@ -528,7 +541,7 @@ function EscalasPage() {
               autoSugestoes = sugestoes.length;
             }
           } else {
-            console.warn("[ESCALA] Nenhuma sugestão gerada — membros sem vínculo com as funções.");
+            // sem sugestões: membros sem vínculo — nenhuma ação necessária aqui
           }
         }
       }
@@ -621,11 +634,25 @@ function EscalasPage() {
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, { membro_id, ministerio_id }) => {
       refetchAtribuicoes();
-      // Sincroniza com portal do membro
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      const membro = membros.find((m) => m.id === membro_id);
+      const min = ministerios.find((m) => m.id === ministerio_id);
+      if (membro?.email && detailEscala) {
+        supabase.functions.invoke("send-email", {
+          body: {
+            template: "escala_atribuida",
+            to: membro.email,
+            nome: membro.nome,
+            paroquia: paroquiaNome,
+            escalaTitulo: detailEscala.titulo,
+            escalaData: detailEscala.data,
+            ministerioNome: min?.nome ?? "",
+          },
+        });
+      }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
@@ -1514,6 +1541,7 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
               onDelete={(e) => setDeleteTarget(e)}
               onAddFuncao={(mid, qty) => addFuncaoMutation.mutate({ ministerio_id: mid, quantidade: qty })}
               onRemoveFuncao={(id) => removeFuncaoMutation.mutate(id)}
+              paroquiaNome={paroquiaNome}
               onAtribuir={(mid, minid) => atribuirMutation.mutate({ membro_id: mid, ministerio_id: minid })}
               onRemoverAtribuicao={(id) => removerAtribuicaoMutation.mutate(id)}
               onStatusChange={(status) => updateStatusMutation.mutate({ id: detailEscala.id, status })}
@@ -2270,7 +2298,7 @@ function EscalaDetail({
   escala, ministerios, membros, funcoes, atribuicoes, membroMinisterios, assignmentHistory,
   membroAtuacoes,
   indisponibilidades, funcaoRestricoes, missasPadrao, membroMissaRestricoes, paroquiaConfig,
-  initialEditMode, comunidades, tiposMissa, isSaving, onSave,
+  paroquiaNome, initialEditMode, comunidades, tiposMissa, isSaving, onSave,
   onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onStatusChange,
 }: {
   escala: Escala;
@@ -2286,6 +2314,7 @@ function EscalaDetail({
   missasPadrao: { id: string; dia_semana: number; hora_inicio: string | null }[];
   membroMissaRestricoes: Record<string, string[]>;
   paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
+  paroquiaNome: string;
   initialEditMode: boolean;
   comunidades: { id: string; nome: string }[];
   tiposMissa: { id: string; nome: string; cor: string; icone: string | null }[];
@@ -2364,7 +2393,7 @@ function EscalaDetail({
       if (error) throw error;
       return (inserted as any[])?.length ?? assignments.length;
     },
-    onSuccess: (count) => {
+    onSuccess: (count, { assignments }) => {
       // refetchQueries força atualização imediata (não apenas marca como stale)
       queryClient.refetchQueries({ queryKey: ["escala-membros", escala.id] });
       queryClient.invalidateQueries({ queryKey: ["pm-escalas"] });
@@ -2375,6 +2404,23 @@ function EscalaDetail({
       setGenerateNotice(null);
       setEngineInsights([]);
       setShowInsights(false);
+      for (const { membro_id, ministerio_id } of assignments) {
+        const membro = membros.find((m) => m.id === membro_id);
+        const min = ministerios.find((m) => m.id === ministerio_id);
+        if (membro?.email) {
+          supabase.functions.invoke("send-email", {
+            body: {
+              template: "escala_atribuida",
+              to: membro.email,
+              nome: membro.nome,
+              paroquia: paroquiaNome,
+              escalaTitulo: escala.titulo,
+              escalaData: escala.data,
+              ministerioNome: min?.nome ?? "",
+            },
+          });
+        }
+      }
     },
     onError: (e: unknown) => {
       console.error("[APPLY] Erro ao aplicar sugestões:", e);
@@ -2419,20 +2465,7 @@ function EscalaDetail({
       return;
     }
 
-    // Diagnóstico detalhado no console para depuração
-    console.group("[MOTOR] Diagnóstico pré-geração");
-    console.log("Membros carregados:", membros.length, membros.map((m) => m.nome));
-    console.log("Funções da escala:", funcoes.map((f) => ({ nome: f.ministerio.nome, id: f.ministerio_id, qtd: f.quantidade })));
-    console.log("membroMinisterios (ministerio→membros):", membroMinisterios);
     const linkCount = Object.values(membroMinisterios).flat().length;
-    console.log("Total de vínculos membro↔função:", linkCount);
-    funcoes.forEach((f) => {
-      const count = (membroMinisterios[f.ministerio_id] ?? []).length;
-      console.log(`  "${f.ministerio.nome}" (${f.ministerio_id}): ${count} membro(s) vinculado(s)`, membroMinisterios[f.ministerio_id] ?? []);
-    });
-    console.log("membroAtuacoes:", membroAtuacoes);
-    console.log("indisponibilidades:", indisponibilidades.length);
-    console.groupEnd();
 
     if (linkCount === 0) {
       toast.error(

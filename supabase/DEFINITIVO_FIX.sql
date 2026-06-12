@@ -265,7 +265,25 @@ CREATE POLICY "presenca_admin_all" ON presencas_eventos
   WITH CHECK (_portal_is_admin((SELECT fe.paroquia_id FROM formacoes_eventos fe WHERE fe.id = evento_id LIMIT 1)));
 
 -- ════════════════════════════════════════════════════════════════════
--- PASSO 6 — Recarregar PostgREST
+-- PASSO 6 — Restaurar permissões de execução (obrigatório após DROP/CREATE)
+-- As funções foram recriadas sem OR REPLACE, portanto os GRANTs anteriores
+-- foram perdidos junto com o DROP. Este bloco os reestabelece.
+-- ════════════════════════════════════════════════════════════════════
+
+GRANT EXECUTE ON FUNCTION public._portal_membro_id()              TO authenticated;
+GRANT EXECUTE ON FUNCTION public._portal_membro_paroquia(uuid)    TO authenticated;
+GRANT EXECUTE ON FUNCTION public._portal_escala_paroquia(uuid)    TO authenticated;
+GRANT EXECUTE ON FUNCTION public._portal_is_admin(uuid)           TO authenticated;
+GRANT EXECUTE ON FUNCTION public._portal_is_coord(uuid)           TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public._portal_membro_id()             FROM anon;
+REVOKE EXECUTE ON FUNCTION public._portal_membro_paroquia(uuid)   FROM anon;
+REVOKE EXECUTE ON FUNCTION public._portal_escala_paroquia(uuid)   FROM anon;
+REVOKE EXECUTE ON FUNCTION public._portal_is_admin(uuid)          FROM anon;
+REVOKE EXECUTE ON FUNCTION public._portal_is_coord(uuid)          FROM anon;
+
+-- ════════════════════════════════════════════════════════════════════
+-- PASSO 7 — Recarregar PostgREST
 -- ════════════════════════════════════════════════════════════════════
 
 NOTIFY pgrst, 'reload schema';
