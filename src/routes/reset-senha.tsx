@@ -82,7 +82,10 @@ function ResetPage() {
     setSaving(false);
 
     if (error) {
-      toast.error("Erro ao salvar senha: " + error.message);
+      const msg = error.message.toLowerCase().includes("different from the old password")
+        ? "A nova senha deve ser diferente da senha atual."
+        : "Erro ao salvar senha: " + error.message;
+      toast.error(msg);
       return;
     }
 

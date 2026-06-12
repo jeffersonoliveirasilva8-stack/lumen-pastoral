@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Loader2, ShieldCheck, ShieldOff, ShieldAlert, Copy, Check,
-  Smartphone, Mail, ChevronDown, ChevronUp,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,291 +11,9 @@ import { Label } from "@/components/ui/label";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 
-type EmailStep = "idle" | "enrolling" | "verifying" | "disabling";
-type TotpStep  = "idle" | "enrolling" | "verifying" | "disabling";
+type TotpStep = "idle" | "enrolling" | "verifying" | "disabling";
 
 type TotpEnrollData = { factorId: string; qrCode: string; secret: string };
-
-// ── Subcomponente: MFA por E-mail ──────────────────────────────────────────────
-
-function EmailMfaSection() {
-  const [loading, setLoading]   = useState(true);
-  const [step, setStep]         = useState<EmailStep>("idle");
-  const [hasEmailMfa, setHasEmailMfa] = useState(false);
-  const [factorId, setFactorId] = useState<string | null>(null);
-  const [challengeId, setChallengeId] = useState<string | null>(null);
-  const [code, setCode]         = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-
-  useEffect(() => { checkStatus(); }, []);
-
-  // Decrementa o cooldown a cada segundo
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [cooldown]);
-
-  async function checkStatus() {
-    setLoading(true);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase.auth.mfa.listFactors as any)();
-      const emailFactors: any[] = data?.email ?? [];
-      const verified = emailFactors.find((f: any) => f.status === "verified");
-      setHasEmailMfa(!!verified);
-      if (verified) setFactorId(verified.id);
-    } catch { /* silencioso */ }
-    finally { setLoading(false); }
-  }
-
-  // Inicia o enrolamento: supabase envia código para o e-mail do usuário
-  async function handleEnroll() {
-    setSubmitting(true);
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.auth.mfa.enroll as any)({ factorType: "email" });
-      if (error) throw error;
-      const fid = data.id;
-      setFactorId(fid);
-      // Desafio imediato: envia o código por e-mail
-      const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: fid });
-      if (chErr) throw chErr;
-      setChallengeId(ch.id);
-      setCooldown(60);
-      setStep("verifying");
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      const msg = e?.message ?? "";
-      if (msg.toLowerCase().includes("factor_type") || msg.toLowerCase().includes("email")) {
-        toast.error("Verificação por e-mail não disponível neste plano. Use o autenticador TOTP.");
-      } else {
-        toast.error("Não foi possível iniciar: " + (msg || "erro desconhecido"));
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  // Reenvia o código (novo challenge)
-  async function handleResend() {
-    if (!factorId || cooldown > 0) return;
-    setSubmitting(true);
-    try {
-      const { data: ch, error } = await supabase.auth.mfa.challenge({ factorId });
-      if (error) throw error;
-      setChallengeId(ch.id);
-      setCooldown(60);
-      toast.success("Novo código enviado para o seu e-mail.");
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      toast.error("Erro ao reenviar: " + (e?.message ?? "erro desconhecido"));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleVerify(e: React.FormEvent) {
-    e.preventDefault();
-    if (!factorId || !challengeId || code.length < 6) return;
-    setSubmitting(true);
-    try {
-      const { error } = await supabase.auth.mfa.verify({
-        factorId,
-        challengeId,
-        code: code.trim(),
-      });
-      if (error) throw error;
-      toast.success("Verificação por e-mail ativada com sucesso.");
-      setCode("");
-      setChallengeId(null);
-      setStep("idle");
-      setHasEmailMfa(true);
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      if (e?.message?.toLowerCase().includes("expired")) {
-        toast.error("Código expirado. Solicite um novo código.");
-      } else {
-        toast.error("Código incorreto. Tente novamente.");
-      }
-      setCode("");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleDisable(e: React.FormEvent) {
-    e.preventDefault();
-    if (!factorId || code.length < 6) return;
-    setSubmitting(true);
-    try {
-      // Desafio fresco para desativação
-      const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId });
-      if (chErr) throw chErr;
-      const { error: vErr } = await supabase.auth.mfa.verify({
-        factorId,
-        challengeId: ch.id,
-        code: code.trim(),
-      });
-      if (vErr) throw vErr;
-      const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId });
-      if (uErr) throw uErr;
-      toast.success("Verificação por e-mail desativada.");
-      setCode("");
-      setStep("idle");
-      setHasEmailMfa(false);
-      setFactorId(null);
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      toast.error("Erro ao desativar: " + (e?.message ?? "erro desconhecido"));
-      setCode("");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Verificando…
-      </div>
-    );
-  }
-
-  if (step === "idle" && !hasEmailMfa) {
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <ShieldOff className="h-4 w-4 text-amber-500" />
-          Verificação por e-mail <strong>desativada</strong>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Ao fazer login, você receberá um código de 6 dígitos no seu e-mail. Não é necessário nenhum aplicativo.
-        </p>
-        <Button variant="outline" onClick={handleEnroll} disabled={submitting} className="w-full">
-          {submitting
-            ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            : <Mail className="h-4 w-4 mr-2" />}
-          Ativar verificação por e-mail
-        </Button>
-      </div>
-    );
-  }
-
-  if (step === "idle" && hasEmailMfa) {
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm text-green-600">
-          <ShieldCheck className="h-4 w-4" />
-          Verificação por e-mail <strong>ativada</strong>
-        </div>
-        <Button
-          variant="outline"
-          className="w-full text-destructive border-destructive/40 hover:bg-destructive/5"
-          onClick={() => { setStep("disabling"); setCode(""); }}
-        >
-          <ShieldOff className="h-4 w-4 mr-2" />
-          Desativar verificação por e-mail
-        </Button>
-      </div>
-    );
-  }
-
-  if (step === "verifying") {
-    return (
-      <form onSubmit={handleVerify} className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Mail className="h-4 w-4 text-primary" />
-          Confirme o código enviado para o seu e-mail
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Enviamos um código de 6 dígitos para o endereço cadastrado. Verifique sua caixa de entrada (e o lixo eletrônico).
-        </p>
-        <div>
-          <Label htmlFor="email-mfa-code">Código de verificação</Label>
-          <Input
-            id="email-mfa-code"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="000000"
-            className="mt-1.5 text-center text-2xl tracking-[0.5em] font-mono h-14"
-            maxLength={6}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            autoFocus
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1 text-xs"
-            onClick={handleResend}
-            disabled={submitting || cooldown > 0}
-          >
-            {cooldown > 0 ? `Reenviar em ${cooldown}s` : "Reenviar código"}
-          </Button>
-          <Button type="submit" disabled={submitting || code.length < 6} className="flex-1">
-            {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Confirmar
-          </Button>
-        </div>
-        <button
-          type="button"
-          className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-          onClick={() => { setStep("idle"); setCode(""); setChallengeId(null); }}
-        >
-          Cancelar
-        </button>
-      </form>
-    );
-  }
-
-  if (step === "disabling") {
-    return (
-      <form onSubmit={handleDisable} className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-          <ShieldOff className="h-4 w-4" />
-          Confirme a desativação
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Digite o código de 6 dígitos que enviaremos ao seu e-mail para confirmar a desativação.
-        </p>
-        <div>
-          <Label htmlFor="email-mfa-disable-code">Código de verificação</Label>
-          <Input
-            id="email-mfa-disable-code"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="000000"
-            className="mt-1.5 text-center text-2xl tracking-[0.5em] font-mono h-14"
-            maxLength={6}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            autoFocus
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1"
-            onClick={() => { setStep("idle"); setCode(""); }}
-          >
-            Cancelar
-          </Button>
-          <Button type="submit" variant="destructive" disabled={submitting || code.length < 6} className="flex-1">
-            {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Desativar
-          </Button>
-        </div>
-      </form>
-    );
-  }
-
-  return null;
-}
 
 // ── Subcomponente: MFA por App Autenticador (TOTP) ────────────────────────────
 
@@ -554,44 +272,19 @@ function TotpMfaSection() {
 // ── Componente principal ───────────────────────────────────────────────────────
 
 export function MfaSetup() {
-  const [showTotp, setShowTotp] = useState(false);
-
   return (
-    <div className="space-y-5">
-      {/* Método primário: e-mail */}
+    <div className="space-y-4">
+      {/* Método: App Autenticador (TOTP) — único disponível */}
       <div className="rounded-xl border border-border bg-muted/10 p-4">
         <div className="flex items-center gap-2 mb-3">
-          <Mail className="h-4 w-4 text-primary" />
-          <p className="text-sm font-semibold">Verificação por e-mail</p>
+          <Smartphone className="h-4 w-4 text-primary" />
+          <p className="text-sm font-semibold">App autenticador (TOTP)</p>
           <span className="ml-auto text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full">Recomendado</span>
         </div>
-        <EmailMfaSection />
-      </div>
-
-      {/* Método opcional: TOTP */}
-      <div className="rounded-xl border border-border bg-muted/10 p-4">
-        <button
-          type="button"
-          className="flex items-center justify-between w-full text-left"
-          onClick={() => setShowTotp((v) => !v)}
-        >
-          <div className="flex items-center gap-2">
-            <Smartphone className="h-4 w-4 text-muted-foreground" />
-            <p className="text-sm font-medium text-muted-foreground">App autenticador</p>
-            <span className="text-[10px] text-muted-foreground/60 border border-border px-1.5 py-0.5 rounded-full">Opcional</span>
-          </div>
-          {showTotp
-            ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-        </button>
-        {showTotp && (
-          <div className="mt-4">
-            <p className="text-xs text-muted-foreground mb-3">
-              Para segurança adicional, configure também um app como Google Authenticator ou Authy. Quando ativo, o login exigirá o código do app.
-            </p>
-            <TotpMfaSection />
-          </div>
-        )}
+        <p className="text-xs text-muted-foreground mb-3">
+          Use o Google Authenticator, Authy ou outro app compatível. A cada login, será solicitado o código de 6 dígitos gerado pelo app.
+        </p>
+        <TotpMfaSection />
       </div>
     </div>
   );

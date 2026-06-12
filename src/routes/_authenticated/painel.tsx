@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Calendar, CalendarRange, Users, Sparkles, Activity, ChevronRight,
   AlertTriangle, Cake, CheckCircle2, UserX, UserCheck,
-  CalendarOff, Zap, Loader2, FileText, BookOpen, Music, Play,
+  CalendarOff, Zap, Loader2, FileText, BookOpen, Play, ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -530,6 +530,40 @@ function DashboardPage() {
   const [homiliaPlayerAberto, setHomiliaPlayerAberto] = useState(false);
   const homiliaEHoje = homiliaRecente?.data === todayStr;
 
+  // ── Escalas com presenças pendentes (últimos 14 dias) ────────────────────────
+  const { data: escalasPresencaPendente = [] } = useQuery<{ id: string; titulo: string; data: string; pendentes: number }[]>({
+    queryKey: ["insights-presenca-pendente", pid],
+    enabled: !!pid,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const hoje = format(new Date(), "yyyy-MM-dd");
+      const em14Atras = format(addDays(new Date(), -14), "yyyy-MM-dd");
+      const { data: escalas } = await supabase
+        .from("escalas")
+        .select("id, titulo, data")
+        .eq("paroquia_id", pid!)
+        .lt("data", hoje)
+        .gte("data", em14Atras)
+        .eq("status", "publicada");
+      if (!escalas?.length) return [];
+      const ids = escalas.map((e) => e.id);
+      const { data: membros } = await supabase
+        .from("escala_membros")
+        .select("escala_id, status")
+        .in("escala_id", ids);
+      const pendentesCount: Record<string, number> = {};
+      (membros ?? []).forEach((m) => {
+        if (m.status === "pendente" || m.status === "confirmado") {
+          pendentesCount[m.escala_id] = (pendentesCount[m.escala_id] ?? 0) + 1;
+        }
+      });
+      return escalas
+        .filter((e) => (pendentesCount[e.id] ?? 0) > 0)
+        .map((e) => ({ ...e, pendentes: pendentesCount[e.id] ?? 0 }))
+        .slice(0, 3);
+    },
+  });
+
   // ── Stats cards ───────────────────────────────────────────────────────────────
   const stats = [
     {
@@ -880,7 +914,7 @@ function DashboardPage() {
       </div>
 
       {/* ── Alertas urgentes — só aparece quando há itens críticos ── */}
-      {(conflitos.length > 0 || escalasIncompletas.length > 0 || alertasLiturgicos.length > 0) && (
+      {(conflitos.length > 0 || escalasIncompletas.length > 0 || alertasLiturgicos.length > 0 || escalasPresencaPendente.length > 0) && (
         <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 overflow-hidden">
           <div className="flex items-center gap-2.5 px-4 py-3 border-b border-amber-200/60 dark:border-amber-800/60">
             <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
@@ -888,10 +922,30 @@ function DashboardPage() {
               Precisa de atenção
             </p>
             <span className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1">
-              {conflitos.length + escalasIncompletas.length + alertasLiturgicos.length}
+              {conflitos.length + escalasIncompletas.length + alertasLiturgicos.length + escalasPresencaPendente.length}
             </span>
           </div>
           <div className="divide-y divide-amber-200/50 dark:divide-amber-800/40">
+            {escalasPresencaPendente.slice(0, 2).map((e) => (
+              <Link
+                key={`presenca-${e.id}`}
+                to="/escalas"
+                search={{ abrir: e.id } as any}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-100/60 dark:hover:bg-amber-900/20 transition group"
+              >
+                <ClipboardList className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground leading-snug line-clamp-1">
+                    <span className="text-orange-600 font-semibold">{e.pendentes} presença{e.pendentes !== 1 ? "s" : ""} não registrada{e.pendentes !== 1 ? "s" : ""}</span>
+                    {" — "}{e.titulo}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Escala de {format(new Date(e.data + "T00:00:00"), "d 'de' MMMM", { locale: ptBR })}
+                  </p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition shrink-0" />
+              </Link>
+            ))}
             {escalasIncompletas.slice(0, 2).map((e) => (
               <Link
                 key={e.id}
@@ -901,7 +955,7 @@ function DashboardPage() {
               >
                 <CalendarOff className="h-3.5 w-3.5 text-red-500 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground leading-snug">
+                  <p className="text-sm font-medium text-foreground leading-snug line-clamp-1">
                     <span className="text-red-600 font-semibold">{e.abertas} vaga{e.abertas !== 1 ? "s" : ""} em aberto</span>
                     {" — "}{e.titulo}
                   </p>
@@ -909,21 +963,21 @@ function DashboardPage() {
                     {format(new Date(e.data + "T00:00:00"), "d 'de' MMMM", { locale: ptBR })}
                   </p>
                 </div>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition" />
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition shrink-0" />
               </Link>
             ))}
             {conflitos.slice(0, 2).map((c) => (
               <div key={`${c.membroNome}-${c.data}`} className="flex items-center gap-3 px-4 py-3">
                 <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground leading-snug">
+                  <p className="text-sm font-medium text-foreground leading-snug line-clamp-1">
                     Conflito: <span className="font-semibold">{c.membroNome}</span> em {format(new Date(c.data + "T00:00:00"), "d/MM", { locale: ptBR })}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">{c.escalaTitulo}</p>
                 </div>
                 <button
                   onClick={() => setSubstituicaoTarget({ escalaId: c.escalaId, atribuicaoId: c.atribuicaoId, ministerioId: c.ministerioId, membroNome: c.membroNome, data: c.data })}
-                  className="text-xs font-semibold text-primary hover:underline shrink-0"
+                  className="text-xs font-semibold text-primary hover:underline shrink-0 ml-2"
                 >
                   Substituir
                 </button>
@@ -942,10 +996,10 @@ function DashboardPage() {
                     {a.rank === "solenidade" ? "Solenidade" : "Festa"} sem escala em{" "}
                     <span className="font-semibold">{a.dias} dia{a.dias !== 1 ? "s" : ""}</span>
                   </p>
-                  <p className="text-xs text-muted-foreground">{a.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{a.name}</p>
                 </div>
                 <span className="text-xs font-semibold text-primary shrink-0 group-hover:underline">
-                  Criar escala →
+                  Criar →
                 </span>
               </Link>
             ))}
@@ -970,12 +1024,12 @@ function DashboardPage() {
         <div className="space-y-4">
           {/* ── Agenda Pastoral (escalas + eventos unificados) ── */}
           <div className="rounded-3xl border border-border bg-card shadow-altar overflow-hidden">
-            <div className="flex items-start justify-between gap-3 p-5 border-b border-border">
-              <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5 border-b border-border">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Agenda Pastoral</p>
-                <h2 className="mt-1.5 font-serif text-xl leading-snug">Próximas escalas e eventos</h2>
+                <h2 className="mt-1 font-serif text-lg sm:text-xl leading-snug">Próximas escalas e eventos</h2>
               </div>
-              <div className="flex items-center gap-1 shrink-0 mt-1">
+              <div className="flex items-center gap-1 shrink-0">
                 <Button variant="ghost" size="sm" className="h-8 text-xs px-2.5" asChild>
                   <Link to="/formacoes" search={{}}>Agenda <ChevronRight className="h-3 w-3 ml-0.5" /></Link>
                 </Button>
@@ -1047,68 +1101,89 @@ function DashboardPage() {
         <div className="space-y-4">
 
           {/* ── Homilia do Dia ── */}
-          <div className="rounded-[1.75rem] border border-border bg-card overflow-hidden">
-            <div className="p-4">
-              <div className="flex items-center gap-1.5 mb-3">
-                <Play className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground font-semibold flex-1">
-                  {homiliaEHoje ? "Homilia do Dia" : "Homilia Recente"}
-                </p>
-                {homiliaRecente && !homiliaEHoje && (
-                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
-                    {format(new Date(homiliaRecente.data + "T12:00:00"), "d/MM", { locale: ptBR })}
-                  </span>
-                )}
-                <Link
-                  to="/espiritualidade"
-                  className="ml-1 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition text-[9px] font-semibold uppercase tracking-wide"
-                >
-                  Ver mais
-                </Link>
-              </div>
-
-              {homiliaRecente ? (
-                <>
-                  <div className="rounded-xl overflow-hidden mb-3 bg-black relative aspect-video">
-                    {homiliaPlayerAberto ? (
-                      <iframe
-                        src={`https://www.youtube.com/embed/${homiliaRecente.video_id}?autoplay=1&rel=0&modestbranding=1`}
-                        title={homiliaRecente.titulo}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="absolute inset-0 w-full h-full"
-                        loading="lazy"
-                      />
-                    ) : (
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            {homiliaRecente ? (
+              <>
+                {/* Player / Thumbnail */}
+                <div className="relative aspect-video w-full bg-black">
+                  {homiliaPlayerAberto ? (
+                    <iframe
+                      src={`https://www.youtube.com/embed/${homiliaRecente.video_id}?autoplay=1&rel=0&modestbranding=1`}
+                      title={homiliaRecente.titulo}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="absolute inset-0 w-full h-full"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <>
+                      {homiliaRecente.thumbnail_url ? (
+                        <img
+                          src={homiliaRecente.thumbnail_url}
+                          alt={homiliaRecente.titulo}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-muted" />
+                      )}
                       <button
                         type="button"
                         onClick={() => setHomiliaPlayerAberto(true)}
-                        className="absolute inset-0 w-full h-full group"
+                        className="absolute inset-0 flex items-center justify-center bg-black/25 hover:bg-black/35 transition-colors w-full"
+                        aria-label="Assistir homilia"
                       >
-                        {homiliaRecente.thumbnail_url && (
-                          <img src={homiliaRecente.thumbnail_url} alt={homiliaRecente.titulo} className="w-full h-full object-cover" />
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/40 transition">
-                          <div className="h-10 w-10 rounded-full bg-red-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-                            <Play className="h-4 w-4 text-white ml-0.5" />
-                          </div>
+                        <div className="h-14 w-14 rounded-full bg-red-600 flex items-center justify-center shadow-xl hover:scale-105 transition-transform">
+                          <Play className="h-6 w-6 text-white ml-1" />
                         </div>
                       </button>
-                    )}
-                  </div>
-                  <p className="text-sm font-semibold leading-snug line-clamp-2 text-foreground">
-                    {homiliaRecente.titulo}
-                  </p>
-                  {homiliaRecente.autor && (
-                    <p className="text-xs text-muted-foreground mt-1">{homiliaRecente.autor}</p>
+                      <div className="absolute bottom-3 left-3 pointer-events-none">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] bg-black/60 text-white px-2.5 py-1 rounded-full backdrop-blur-sm">
+                          {homiliaEHoje ? "Homilia do dia" : "Homilia recente"}
+                        </span>
+                      </div>
+                      {!homiliaEHoje && (
+                        <div className="absolute bottom-3 right-3 pointer-events-none">
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/90 text-white backdrop-blur-sm">
+                            {format(new Date(homiliaRecente.data + "T12:00:00"), "d/MM", { locale: ptBR })}
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
-                </>
-              ) : (
-                <p className="text-xs text-muted-foreground italic py-2 text-center">
-                  Homilia de hoje ainda não disponível — exibindo a mais recente
-                </p>
-              )}
-            </div>
+                </div>
+                {/* Info */}
+                <div className="px-4 pt-3 pb-3.5 flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 mb-0.5">
+                      {homiliaRecente.titulo}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {homiliaRecente.autor ?? "Pe. Paulo Ricardo"}
+                    </p>
+                  </div>
+                  <Link
+                    to="/espiritualidade"
+                    className="shrink-0 text-[10px] font-semibold text-primary hover:underline whitespace-nowrap mt-0.5"
+                  >
+                    Ver mais →
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-3 px-4 py-4">
+                <div className="h-10 w-10 rounded-xl bg-red-600/20 flex items-center justify-center shrink-0">
+                  <Play className="h-4 w-4 text-red-600 ml-0.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-foreground">Homilia do Dia</p>
+                  <p className="text-[11px] text-muted-foreground">Homilia ainda não disponível</p>
+                </div>
+                <Link to="/espiritualidade" className="text-[10px] font-semibold text-primary hover:underline shrink-0">
+                  Ver mais →
+                </Link>
+              </div>
+            )}
           </div>
 
           <InsightsPanel
@@ -1116,6 +1191,7 @@ function DashboardPage() {
             membrosNovos={membrosNovos}
             conflitos={conflitos}
             escalasIncompletas={escalasIncompletas}
+            escalasPresencaPendente={escalasPresencaPendente}
             membrosSemFuncao={membrosSemFuncao}
             funcoesSemMembros={funcaoDistrib.filter((f) => f.membros === 0)}
             alertasLiturgicos={alertasLiturgicos}
@@ -1309,18 +1385,29 @@ type InsightItem = {
 
 function InsightsPanel({
   membrosOciosos, membrosNovos, conflitos, escalasIncompletas,
+  escalasPresencaPendente,
   membrosSemFuncao, funcoesSemMembros, alertasLiturgicos, onSugerirSubstituto,
 }: {
   membrosOciosos: { id: string; nome: string }[];
   membrosNovos: { id: string; nome: string }[];
   conflitos: { escalaId: string; escalaTitulo: string; membroId: string; membroNome: string; atribuicaoId: string; ministerioId: string; data: string }[];
   escalasIncompletas: { id: string; titulo: string; data: string; abertas: number; vagas: number }[];
+  escalasPresencaPendente: { id: string; titulo: string; data: string; pendentes: number }[];
   membrosSemFuncao: number;
   funcoesSemMembros: { nome: string }[];
   alertasLiturgicos: { name: string; date: string; rank: "solenidade" | "festa"; dias: number }[];
   onSugerirSubstituto: (t: SubstituicaoTarget) => void;
 }) {
   const insights: InsightItem[] = [];
+
+  escalasPresencaPendente.slice(0, 3).forEach((e) => {
+    insights.push({
+      id: `presenca-${e.id}`, icon: ClipboardList, iconCls: "text-orange-500", borderColor: "#f97316",
+      label: `Presenças não registradas: ${e.titulo}`,
+      desc: `${e.pendentes} membro${e.pendentes !== 1 ? "s" : ""} sem presença confirmada — ${format(new Date(e.data + "T00:00:00"), "d/MM", { locale: ptBR })}`,
+      href: "/escalas", hrefSearch: { abrir: e.id }, severity: "warning",
+    });
+  });
 
   alertasLiturgicos.forEach((a) => {
     insights.push({

@@ -302,15 +302,15 @@ function PortalMembroEscalas() {
 
       const escalaIds: string[] = memRows.map((r: any) => r.escala_id);
 
-      // Passo 2 — dados das escalas: publicadas, dos últimos 7 dias até futuro
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      // Passo 2 — dados das escalas: publicadas, dos últimos 30 dias até futuro
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const { data: escalasData, error: e2 } = await anyDb
         .from("escalas")
         .select("id, titulo, data, hora_inicio")
         .in("id", escalaIds)
         .eq("status", "publicada")
-        .gte("data", sevenDaysAgo.toISOString().slice(0, 10))
+        .gte("data", thirtyDaysAgo.toISOString().slice(0, 10))
         .order("data", { ascending: false });
       if (e2) throw e2;
       if (!escalasData?.length) return [];
@@ -983,7 +983,7 @@ function CoordinatorTab({
     return (
       <div className="rounded-3xl border border-dashed border-border p-10 text-center">
         <Shield className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
-        <p className="text-sm text-muted-foreground">Nenhuma escala publicada nos últimos 7 dias.</p>
+        <p className="text-sm text-muted-foreground">Nenhuma escala publicada nos últimos 30 dias.</p>
       </div>
     );
   }
@@ -1410,7 +1410,7 @@ function IndisponibilidadeTab({
 
 function HistoricoTab({ historico, loading }: { historico: HistoricoItem[]; loading: boolean }) {
   const totalPontos = historico.reduce((s, h) => s + (h.pontos ?? 0), 0);
-  const servidas = historico.filter((h) => h.status === "confirmado" || h.status === "ausente").length;
+  const servidas = historico.filter((h) => h.status === "presente" || h.status === "confirmado" || h.status === "atrasado").length;
 
   if (loading) {
     return <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
@@ -1440,10 +1440,14 @@ function HistoricoTab({ historico, loading }: { historico: HistoricoItem[]; load
           {historico.map((h) => (
             <div key={h.escala_membro_id} className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
               <div className="shrink-0">
-                {h.status === "confirmado" ? (
+                {(h.status === "presente" || h.status === "confirmado") ? (
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
-                ) : h.status === "ausente" ? (
+                ) : h.status === "atrasado" ? (
+                  <CheckCircle2 className="h-4 w-4 text-orange-400" />
+                ) : (h.status === "faltou" || h.status === "ausente") ? (
                   <XCircle className="h-4 w-4 text-red-400" />
+                ) : h.status === "justificou" ? (
+                  <XCircle className="h-4 w-4 text-amber-400" />
                 ) : (
                   <XCircle className="h-4 w-4 text-muted-foreground" />
                 )}
