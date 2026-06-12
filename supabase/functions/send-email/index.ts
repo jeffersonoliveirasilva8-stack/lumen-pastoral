@@ -467,11 +467,11 @@ Deno.serve(async (req) => {
 
     let subject = "", html = "";
 
-    // ── Templates com magic link ─────────────────────────────────────────────
+    // ── Templates de ativação de conta (recovery link) ──────────────────────
+    // Usa type:"recovery" para garantir que updateUser({ password }) funcione
+    // mesmo quando o usuário já possui encrypted_password de tentativa anterior.
     if (template === "ativacao_conta" || template === "reenvio_ativacao") {
       // Strip query string: Supabase valida redirectTo comparando apenas origin+path.
-      // O token NÃO é necessário no redirectTo do magic link — primeiro-acesso.tsx
-      // identifica o membro pelo email da sessão após a autenticação.
       const safeRedirect = (() => {
         try {
           const u = new URL(redirectTo || `${siteUrl}/membro/primeiro-acesso`);
@@ -480,7 +480,7 @@ Deno.serve(async (req) => {
         } catch { return `${siteUrl}/membro/primeiro-acesso`; }
       })();
       const { data: ld, error: le } = await admin.auth.admin.generateLink({
-        type:    "magiclink",
+        type:    "recovery",
         email:   to,
         options: { redirectTo: safeRedirect },
       });

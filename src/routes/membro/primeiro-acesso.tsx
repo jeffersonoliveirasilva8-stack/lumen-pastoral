@@ -80,12 +80,13 @@ function PrimeiroAcessoPage() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        if (_event === "SIGNED_IN" && session?.user && estado === "carregando") {
-          // Hash processado: se token já foi validado como não-ativo → formulário
-          if (info && !info.conta_ativada) {
-            setEstado("formulario");
-          } else if (!info) {
-            // Sem info: token ausente ou race — carrega membro pela sessão ativa
+        const isAuth = _event === "SIGNED_IN" || _event === "PASSWORD_RECOVERY";
+        if (isAuth && session?.user && estado === "carregando") {
+          if (info) {
+            // Para conta ativa com evento de recovery, __root.tsx redireciona para /reset-senha.
+            // Para conta pendente, avança direto para o formulário.
+            if (!info.conta_ativada) setEstado("formulario");
+          } else {
             carregarInfoPorSessao(session.user);
           }
         }
@@ -249,6 +250,11 @@ function PrimeiroAcessoPage() {
         hash:            window.location.hash || "(vazio)",
       });
 
+      // Logs específicos de diagnóstico de sessão
+      console.log("SESSION", session);
+      console.log("USER", session?.user ?? authUser);
+      console.log("PROVIDERS", session?.user?.app_metadata ?? authUser?.app_metadata);
+
       if (!session_exists) {
         toast.error("Session not found — faça login novamente.");
         return;
@@ -272,37 +278,46 @@ function PrimeiroAcessoPage() {
         return;
       }
 
-      // ── 3. Vincular membro ao auth user ──────────────────────────────────
-      const { data: linkData, error: linkError } =
-        await anyDb.rpc("portal_auto_link_by_email");
+      // ── 3. Fluxo pós-senha: ativação vs recuperação ──────────────────────
+      if (info?.conta_ativada === false) {
+        // CENÁRIO 1: Primeiro acesso — vincular e ativar conta
+        const { data: linkData, error: linkError } =
+          await anyDb.rpc("portal_auto_link_by_email");
 
-      console.log("[SAVE PASSWORD] LINK MEMBER", {
-        data:  linkData,
-        error: linkError ? { message: linkError.message, code: linkError.code } : null,
-      });
+        console.log("[SAVE PASSWORD] LINK MEMBER", {
+          data:  linkData,
+          error: linkError ? { message: linkError.message, code: linkError.code } : null,
+        });
 
-      // ── 4. Ativar conta ──────────────────────────────────────────────────
-      const { data: activResult, error: activError } =
-        await anyDb.rpc("ativar_conta_membro");
+        const { data: activResult, error: activError } =
+          await anyDb.rpc("ativar_conta_membro");
 
-      console.log("[SAVE PASSWORD] ACTIVATE MEMBER", {
-        data:  activResult,
-        error: activError ? { message: activError.message, code: activError.code } : null,
-      });
+        console.log("[SAVE PASSWORD] ACTIVATE MEMBER", {
+          data:  activResult,
+          error: activError ? { message: activError.message, code: activError.code } : null,
+        });
 
-      if (activError) {
-        toast.error("RPC ativar_conta_membro failed: " + activError.message);
-        return;
+        if (activError) {
+          toast.error("RPC ativar_conta_membro failed: " + activError.message);
+          return;
+        }
+        if (activResult?.success === false) {
+          toast.error("RPC ativar_conta_membro returned failure: " + (activResult?.error ?? "desconhecido"));
+          return;
+        }
+
+        setEstado("redirecionando");
+        toast.success("Conta ativada! Bem-vindo ao portal.");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        navigate({ to: "/portal-membro/completar-cadastro" as any, replace: true });
+
+      } else {
+        // CENÁRIO 2: Recuperação de acesso — senha redefinida, encerrar sessão de recovery
+        await supabase.auth.signOut();
+        setEstado("redirecionando");
+        toast.success("Senha atualizada! Faça login com a nova senha.");
+        navigate({ to: "/membro/login" as any, replace: true });
       }
-      if (activResult?.success === false) {
-        toast.error("RPC ativar_conta_membro returned failure: " + (activResult?.error ?? "desconhecido"));
-        return;
-      }
-
-      setEstado("redirecionando");
-      toast.success("Conta ativada! Bem-vindo ao portal.");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigate({ to: "/portal-membro/completar-cadastro" as any, replace: true });
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -472,18 +487,26 @@ function PrimeiroAcessoPage() {
         )}
 
         {/* ── Formulário de senha ── */}
-        {estado === "formulario" && info && (
+        {estado === "formulario" && info && (() => {
+          const ehRecovery = info.conta_ativada === true;
+          return (
           <div className="space-y-6">
             <div className="text-center">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 dark:bg-green-950/30 dark:border-green-800 px-3 py-1 text-xs font-medium text-green-700 dark:text-green-400 mb-4">
-                <CheckCircle2 className="h-3 w-3" />
-                Aprovado por {info.paroquia_nome}
-              </div>
+              {!ehRecovery && (
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-green-50 border border-green-200 dark:bg-green-950/30 dark:border-green-800 px-3 py-1 text-xs font-medium text-green-700 dark:text-green-400 mb-4">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Aprovado por {info.paroquia_nome}
+                </div>
+              )}
               <h1 className="font-serif text-2xl">
-                Bem-vindo, {info.nome.split(" ")[0]}!
+                {ehRecovery
+                  ? `Olá, ${info.nome.split(" ")[0]}!`
+                  : `Bem-vindo, ${info.nome.split(" ")[0]}!`}
               </h1>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                Crie sua senha para acessar o portal da sua paróquia.
+                {ehRecovery
+                  ? "Defina uma nova senha para recuperar seu acesso."
+                  : "Crie sua senha para acessar o portal da sua paróquia."}
               </p>
             </div>
 
@@ -566,11 +589,12 @@ function PrimeiroAcessoPage() {
                   ? <Loader2 className="h-4 w-4 animate-spin" />
                   : <><KeyRound className="h-4 w-4" /><ArrowRight className="h-4 w-4" /></>
                 }
-                Criar senha e entrar
+                {ehRecovery ? "Salvar nova senha" : "Criar senha e entrar"}
               </button>
             </form>
           </div>
-        )}
+          );
+        })()}
 
       </div>
     </div>

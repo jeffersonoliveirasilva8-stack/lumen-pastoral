@@ -107,8 +107,22 @@ function AuthSync() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "PASSWORD_RECOVERY") {
-        if (!window.location.pathname.startsWith("/reset-senha")) {
-          navigate({ to: "/reset-senha", replace: true });
+        // Roteamento inteligente: membro com conta pendente → primeiro-acesso
+        //                         membro ativo ou admin     → reset-senha
+        const { data: { user } } = await supabase.auth.getUser();
+        let dest = "/reset-senha";
+        if (user?.email) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: mem } = await (supabase as any)
+            .from("membros")
+            .select("conta_ativada")
+            .ilike("email", user.email.trim())
+            .eq("ativo", true)
+            .maybeSingle();
+          if (mem?.conta_ativada === false) dest = "/membro/primeiro-acesso";
+        }
+        if (window.location.pathname !== dest) {
+          navigate({ to: dest as any, replace: true });
         }
         return;
       }
