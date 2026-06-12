@@ -111,10 +111,7 @@ function MembroLoginPage() {
           )}
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            Ainda não tem acesso?{" "}
-            <Link to="/login" className="text-primary hover:underline font-medium">
-              Solicitar inscrição
-            </Link>
+            Ainda não tem acesso? Solicite ao coordenador da sua paróquia.
           </p>
           <p className="mt-2 text-center text-xs text-muted-foreground">
             É coordenador?{" "}

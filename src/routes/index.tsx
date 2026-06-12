@@ -53,7 +53,11 @@ function Landing() {
               Criar conta da paróquia
             </Link>
             <Link to="/login" className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground hover:bg-muted">
-              Acessar minha conta
+              Acesso coordenação
+            </Link>
+            <Link to="/membro/login" className="inline-flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-6 py-3 text-sm font-semibold text-primary hover:bg-primary/10">
+              <Users className="h-4 w-4" />
+              Portal do servidor
             </Link>
           </div>
         </div>

@@ -1092,7 +1092,7 @@ function EscalaCoordCard({
                 <p className="text-[11px] text-muted-foreground capitalize">{STATUS_LABEL[m.status] ?? m.status}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {(["presente", "faltou", "justificou", "atrasado"] as const).map((s) => {
                 // Mapeia o status atual para o botão correspondente
                 const isActive =

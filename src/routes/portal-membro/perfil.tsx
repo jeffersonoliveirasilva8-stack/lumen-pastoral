@@ -260,7 +260,7 @@ function PortalMembroPerfil() {
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
           {/* Avatar / foto */}
           <div className="relative shrink-0">
-            <div className="h-20 w-20 sm:h-16 sm:w-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+            <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
               {fotoDisplay ? (
                 <img src={fotoDisplay} alt="Foto" className="h-full w-full object-cover" />
               ) : (
@@ -338,7 +338,7 @@ function PortalMembroPerfil() {
               <Label htmlFor="nome">Nome completo</Label>
               <Input id="nome" value={form.nome} onChange={set("nome")} className="mt-1" required />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="telefone" className="flex items-center gap-1"><Phone className="h-3 w-3" />Telefone</Label>
                 <Input id="telefone" value={form.telefone} onChange={set("telefone")} className="mt-1" placeholder="(00) 00000-0000" />
@@ -348,7 +348,7 @@ function PortalMembroPerfil() {
                 <Input id="data_nascimento" type="date" value={form.data_nascimento} onChange={set("data_nascimento")} className="mt-1" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="cpf">CPF</Label>
                 <Input id="cpf" value={form.cpf} onChange={set("cpf")} className="mt-1" placeholder="000.000.000-00" />
@@ -388,7 +388,7 @@ function PortalMembroPerfil() {
               <Label htmlFor="endereco">Endereço</Label>
               <Input id="endereco" value={form.endereco} onChange={set("endereco")} className="mt-1" placeholder="Rua, número, complemento" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="cidade">Cidade</Label>
                 <Input id="cidade" value={form.cidade} onChange={set("cidade")} className="mt-1" />
@@ -406,7 +406,7 @@ function PortalMembroPerfil() {
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
             <Shield className="h-3.5 w-3.5" /> Contato de emergência
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="nome_emergencia">Nome</Label>
               <Input id="nome_emergencia" value={form.nome_emergencia} onChange={set("nome_emergencia")} className="mt-1" />
