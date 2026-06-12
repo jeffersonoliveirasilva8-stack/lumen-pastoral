@@ -405,10 +405,51 @@ Deno.serve(async (req) => {
       requesterId = user?.id ?? null;
     } catch { /* não-fatal — rate limit por destinatário ainda se aplica */ }
 
-    const body = await req.json() as { template: string; to: string; nome?: string; paroquia?: string; code?: string; escalaTitulo?: string; escalaData?: string; escalaHora?: string; ministerioNome?: string; pendentes?: number; total?: number };
-    const { template, to, nome = "", paroquia = "Pastoral", code = "", escalaTitulo = "", escalaData = "", escalaHora = "", ministerioNome = "", pendentes = 0, total = 0 } = body;
+    const body = await req.json() as { template: string; to?: string; nome?: string; paroquia?: string; code?: string; escalaTitulo?: string; escalaData?: string; escalaHora?: string; ministerioNome?: string; pendentes?: number; total?: number; redirectTo?: string; token?: string };
+    const { template, nome = "", paroquia = "Pastoral", code = "", escalaTitulo = "", escalaData = "", escalaHora = "", ministerioNome = "", pendentes = 0, total = 0, redirectTo = "", token = "" } = body;
+    let to = body.to ?? "";
 
-    if (!template || !to) return json({ ok: false, error: "Missing fields: template, to" }, 400);
+    if (!template) return json({ ok: false, error: "Missing field: template" }, 400);
+
+    // ── Template: ativacao_por_token ─────────────────────────────────────────
+    // Não requer 'to': busca o email a partir do token_acesso no banco.
+    // Usado pela rota /membro/primeiro-acesso quando o membro NÃO está
+    // autenticado e clica em "Reenviar meu link de acesso".
+    if (template === "ativacao_por_token") {
+      if (!token) return json({ ok: false, error: "Missing field: token" }, 400);
+
+      // Lookup: email + nome + paróquia por token_acesso
+      const { data: mem } = await (admin as any)
+        .from("membros")
+        .select("email, nome, paroquias!inner(nome)")
+        .eq("token_acesso", token)
+        .eq("ativo", true)
+        .maybeSingle();
+
+      if (!mem?.email) return json({ ok: false, error: "token_not_found" }, 404);
+
+      const memEmail   = mem.email as string;
+      const memNome    = (mem.nome ?? "") as string;
+      const memParoq   = ((mem.paroquias as any)?.nome ?? "Pastoral") as string;
+      const activLink  = `${siteUrl}/membro/primeiro-acesso?token=${token}`;
+
+      const { data: ld2, error: le2 } = await admin.auth.admin.generateLink({
+        type: "magiclink", email: memEmail,
+        options: { redirectTo: activLink },
+      });
+      if (le2 || !ld2?.properties?.action_link)
+        return json({ ok: false, error: le2?.message ?? "Failed to generate link" }, 500);
+
+      const sub2  = `${htmlSafe(memParoq)} — Acesse sua conta`;
+      const html2 = tReenvioAtivacao(memNome, memParoq, ld2.properties.action_link, siteUrl);
+      const r2    = await sendViaResend({ apiKey: resendKey, from: emailFrom, to: memEmail, subject: sub2, html: html2 });
+      await logEmail(admin, { tipo: "ativacao_por_token", destinatario: memEmail, assunto: sub2,
+        status: r2.ok ? "enviado" : "erro", provider: "resend", provider_id: r2.id,
+        erro: r2.error, paroquia: memParoq, requesterId });
+      return json({ ok: r2.ok }, r2.ok ? 200 : 502);
+    }
+
+    if (!to) return json({ ok: false, error: "Missing field: to" }, 400);
 
     // ── Rate limiting ──────────────────────────────────────────────────────────
     const { data: rateCheck } = await admin.rpc("check_email_rate_limit", {
@@ -431,7 +472,7 @@ Deno.serve(async (req) => {
       const { data: ld, error: le } = await admin.auth.admin.generateLink({
         type:    "magiclink",
         email:   to,
-        options: { redirectTo: `${siteUrl}/membro/ativar-conta` },
+        options: { redirectTo: redirectTo || `${siteUrl}/membro/ativar-conta` },
       });
       if (le || !ld?.properties?.action_link)
         return json({ ok: false, error: le?.message ?? "Failed to generate activation link" }, 500);

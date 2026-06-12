@@ -2733,19 +2733,20 @@ function MembrosPage() {
                         <DropdownMenuItem onClick={() => openEdit(m)}>
                           <Pencil className="h-3.5 w-3.5 mr-2" />Editar membro
                         </DropdownMenuItem>
-                        {m.email && (
+                        {m.email && m.token_acesso && (
                           <DropdownMenuItem onClick={async () => {
-                            const { error } = await supabase.auth.signInWithOtp({
-                              email: m.email!,
-                              options: {
-                                shouldCreateUser: true,
-                                emailRedirectTo: `${window.location.origin}/membro/ativar-conta`,
-                              },
+                            const { AccessInvitationService } = await import("@/lib/invitation-service");
+                            const { ok, error } = await AccessInvitationService.sendEmail({
+                              email:       m.email!,
+                              nome:        m.nome,
+                              paroquiaNome: paroquia?.nome ?? "Pastoral",
+                              tokenAcesso: m.token_acesso!,
+                              template:    "reenvio_ativacao",
                             });
-                            if (error) {
-                              toast.error("Erro ao enviar link: " + error.message);
-                            } else {
+                            if (ok) {
                               toast.success(`Link de acesso enviado para ${m.email}`);
+                            } else {
+                              toast.error("Erro ao enviar link: " + (error ?? ""));
                             }
                           }}>
                             <Mail className="h-3.5 w-3.5 mr-2 text-primary" />
@@ -2754,23 +2755,16 @@ function MembrosPage() {
                         )}
                         {m.token_acesso && (
                           <>
-                            <DropdownMenuItem onClick={() => {
-                              const url = paroquiaSlug
-                                ? `${window.location.origin}/paroquia/${paroquiaSlug}`
-                                : `${window.location.origin}/membro/${m.token_acesso}`;
-                              navigator.clipboard.writeText(url);
+                            <DropdownMenuItem onClick={async () => {
+                              const { AccessInvitationService } = await import("@/lib/invitation-service");
+                              AccessInvitationService.copy(m.token_acesso!);
                               toast.success("Link copiado!");
                             }}>
                               <Link2 className="h-3.5 w-3.5 mr-2" />Copiar link de acesso
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              const url = paroquiaSlug
-                                ? `${window.location.origin}/paroquia/${paroquiaSlug}`
-                                : `${window.location.origin}/membro/${m.token_acesso}`;
-                              const msg = paroquiaSlug
-                                ? `Olá, ${m.nome}! Acesse o portal da paróquia e faça seu cadastro: ${url}`
-                                : `Olá, ${m.nome}! Acesse seu portal de escalas: ${url}`;
-                              window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+                            <DropdownMenuItem onClick={async () => {
+                              const { AccessInvitationService } = await import("@/lib/invitation-service");
+                              AccessInvitationService.whatsApp(m.token_acesso!, m.nome);
                             }}>
                               <MessageCircle className="h-3.5 w-3.5 mr-2 text-green-600" />Enviar WhatsApp
                             </DropdownMenuItem>

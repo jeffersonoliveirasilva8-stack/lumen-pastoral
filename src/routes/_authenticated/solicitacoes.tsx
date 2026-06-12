@@ -191,7 +191,7 @@ function SolicitacoesPage() {
             d.motivo_indisponibilidade ? `Indisponibilidade: ${d.motivo_indisponibilidade}` : null,
           ].filter(Boolean).join(" | ") || null,
         })
-        .select("id")
+        .select("id, token_acesso")
         .single();
       if (memberErr) throw memberErr;
 
@@ -220,29 +220,22 @@ function SolicitacoesPage() {
         } catch { /* tabela pode não existir — não-fatal */ }
       }
 
-      // 3. Envia e-mail de ativação rico via Edge Function (com nome + paróquia).
-      // Fallback para OTP nativo do Supabase se a Edge Function não estiver configurada.
-      if (sol.email) {
+      // 3. Envia e-mail de ativação rico via AccessInvitationService.
+      // O link aponta para /membro/primeiro-acesso?token=<token_acesso>.
+      if (sol.email && novoMembro?.token_acesso) {
         try {
-          const { error: efErr } = await supabase.functions.invoke("send-email", {
-            body: {
-              template: "ativacao_conta",
-              to:       sol.email,
-              nome:     sol.nome,
-              paroquia: paroquia?.nome ?? "Pastoral",
-            },
+          const { AccessInvitationService } = await import("@/lib/invitation-service");
+          await AccessInvitationService.sendEmail({
+            email:       sol.email,
+            nome:        sol.nome,
+            paroquiaNome: paroquia?.nome ?? "Pastoral",
+            tokenAcesso: novoMembro.token_acesso,
+            template:    "ativacao_conta",
           });
-          if (efErr) {
-            // Fallback: OTP nativo (e-mail genérico do Supabase)
-            await supabase.auth.signInWithOtp({
-              email:   sol.email,
-              options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + "/membro/ativar-conta" },
-            });
-          }
           await anyDb
             .from("membros")
             .update({ ativacao_enviada_em: new Date().toISOString() })
-            .eq("email", sol.email);
+            .eq("id", novoMembro.id);
         } catch {
           // Não-fatal: coordenador pode reenviar pelo botão "Reenviar ativação"
         }
@@ -297,36 +290,54 @@ function SolicitacoesPage() {
   async function reenviarAtivacao(email: string, nome?: string) {
     setReenviando(email);
     try {
-      // Tenta enviar e-mail rico via Edge Function
-      const { error: efErr } = await supabase.functions.invoke("send-email", {
-        body: {
-          template: "reenvio_ativacao",
-          to:       email,
-          nome:     nome ?? "",
-          paroquia: paroquia?.nome ?? "Pastoral",
-        },
-      });
+      // Busca token_acesso do membro para montar o link /primeiro-acesso?token=
+      const { data: memData } = await anyDb
+        .from("membros")
+        .select("id, token_acesso")
+        .eq("email", email)
+        .eq("ativo", true)
+        .maybeSingle();
 
-      if (efErr) {
-        // Fallback para OTP nativo do Supabase
+      const { AccessInvitationService } = await import("@/lib/invitation-service");
+
+      let ok = false;
+      if (memData?.token_acesso) {
+        const result = await AccessInvitationService.sendEmail({
+          email,
+          nome:        nome ?? "",
+          paroquiaNome: paroquia?.nome ?? "Pastoral",
+          tokenAcesso: memData.token_acesso,
+          template:    "reenvio_ativacao",
+        });
+        ok = result.ok;
+        if (!ok) {
+          const isRate = (result.error ?? "").toLowerCase().includes("rate");
+          toast.error(isRate ? "Aguarde alguns minutos antes de reenviar." : "Erro ao reenviar: " + result.error);
+          return;
+        }
+      } else {
+        // Fallback: token_acesso não disponível → envia OTP nativo
         const { error: otpErr } = await supabase.auth.signInWithOtp({
           email,
           options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + "/membro/ativar-conta" },
         });
         if (otpErr) {
-          const isRateLimit = otpErr.message.toLowerCase().includes("rate") || otpErr.message.toLowerCase().includes("many");
-          toast.error(isRateLimit ? "Aguarde alguns minutos antes de reenviar." : "Erro ao reenviar: " + otpErr.message);
+          const isRate = otpErr.message.toLowerCase().includes("rate") || otpErr.message.toLowerCase().includes("many");
+          toast.error(isRate ? "Aguarde alguns minutos antes de reenviar." : "Erro ao reenviar: " + otpErr.message);
           return;
         }
+        ok = true;
       }
 
-      await anyDb
-        .from("membros")
-        .update({ ativacao_enviada_em: new Date().toISOString() })
-        .eq("email", email);
-      qc.invalidateQueries({ queryKey: ["membros-status", profile?.paroquia_id] });
-      setCooldownMap((prev) => ({ ...prev, [email]: 60 }));
-      toast.success("E-mail de ativação reenviado!");
+      if (ok) {
+        await anyDb
+          .from("membros")
+          .update({ ativacao_enviada_em: new Date().toISOString() })
+          .eq("email", email);
+        qc.invalidateQueries({ queryKey: ["membros-status", profile?.paroquia_id] });
+        setCooldownMap((prev) => ({ ...prev, [email]: 60 }));
+        toast.success("E-mail de ativação reenviado!");
+      }
     } catch {
       toast.error("Erro de conexão ao reenviar.");
     } finally {

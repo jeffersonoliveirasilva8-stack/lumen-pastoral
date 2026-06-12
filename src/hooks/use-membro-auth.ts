@@ -187,15 +187,24 @@ export function useMembroAuth(): UseMembroAuth {
 
     async function start() {
       try {
+        // Detecta magic link no hash ANTES de getSession().
+        // Se o hash tiver access_token, a sessão está sendo estabelecida
+        // assincronamente pelo cliente Supabase. Não marcar loading=false
+        // ainda: onAuthStateChange SIGNED_IN vai cuidar disso.
+        const hasAuthHash = typeof window !== "undefined" &&
+          window.location.hash.includes("access_token=");
+
         const { data: { session } } = await supabase.auth.getSession();
         if (!isMounted) return;
         const u = session?.user ?? null;
         setUser(u);
         if (u) {
           await init(u.id, u.email ?? undefined);
-        } else {
+        } else if (!hasAuthHash) {
+          // Sem sessão e sem hash pendente → definitivamente não logado
           if (isMounted) setLoading(false);
         }
+        // Se !u && hasAuthHash: mantém loading=true até SIGNED_IN chegar
       } catch {
         if (isMounted) setLoading(false);
       }
