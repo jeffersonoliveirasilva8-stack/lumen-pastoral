@@ -37,10 +37,26 @@ type InfoMembro = {
 };
 
 function validarSenha(s: string): string | null {
-  if (s.length < 8)        return "Mínimo de 8 caracteres";
-  if (!/[a-zA-Z]/.test(s)) return "Deve conter pelo menos uma letra";
-  if (!/[0-9]/.test(s))    return "Deve conter pelo menos um número";
+  if (s.length < 8)            return "Mínimo de 8 caracteres";
+  if (!/[A-Z]/.test(s))        return "Deve conter pelo menos uma letra maiúscula";
+  if (!/[a-z]/.test(s))        return "Deve conter pelo menos uma letra minúscula";
+  if (!/[0-9]/.test(s))        return "Deve conter pelo menos um número";
+  if (!/[^A-Za-z0-9]/.test(s)) return "Deve conter pelo menos um caractere especial (ex: @, #, !)";
   return null;
+}
+
+function calcularForcaSenha(s: string): { nivel: 0 | 1 | 2 | 3 | 4; label: string; cor: string } {
+  let pts = 0;
+  if (s.length >= 8)            pts++;
+  if (/[A-Z]/.test(s))          pts++;
+  if (/[a-z]/.test(s))          pts++;
+  if (/[0-9]/.test(s))          pts++;
+  if (/[^A-Za-z0-9]/.test(s))   pts++;
+  if (pts <= 1) return { nivel: 0, label: "Muito fraca",  cor: "bg-destructive" };
+  if (pts === 2) return { nivel: 1, label: "Fraca",        cor: "bg-orange-500" };
+  if (pts === 3) return { nivel: 2, label: "Regular",      cor: "bg-amber-400" };
+  if (pts === 4) return { nivel: 3, label: "Boa",          cor: "bg-blue-500" };
+  return             { nivel: 4, label: "Forte",           cor: "bg-green-500" };
 }
 
 function PrimeiroAcessoPage() {
@@ -262,12 +278,12 @@ function PrimeiroAcessoPage() {
       console.log("USER", session?.user ?? authUser);
       console.log("PROVIDERS", session?.user?.app_metadata ?? authUser?.app_metadata);
 
-      if (!session_exists) {
-        toast.error("Session not found — faça login novamente.");
-        return;
-      }
-      if (!user_id) {
-        toast.error("User not authenticated — sessão sem user_id.");
+      if (!session_exists || !user_id) {
+        toast.error(
+          "Sua sessão expirou. Clique em \"Enviar link de acesso\" para receber um novo e-mail.",
+          { duration: 6000 },
+        );
+        setEstado("sem_auth");
         return;
       }
 
@@ -281,7 +297,14 @@ function PrimeiroAcessoPage() {
       });
 
       if (updateError) {
-        toast.error("Password update failed: " + updateError.message);
+        const errMsg = updateError.message ?? "";
+        if (errMsg.toLowerCase().includes("same password")) {
+          toast.error("A nova senha não pode ser igual à senha atual. Escolha uma senha diferente.");
+        } else if (errMsg.toLowerCase().includes("weak")) {
+          toast.error("Senha muito fraca. Use letras maiúsculas, minúsculas, números e caracteres especiais.");
+        } else {
+          toast.error("Não foi possível salvar a senha. Tente novamente ou solicite um novo link de acesso.");
+        }
         return;
       }
 
@@ -305,11 +328,13 @@ function PrimeiroAcessoPage() {
         });
 
         if (activError) {
-          toast.error("RPC ativar_conta_membro failed: " + activError.message);
+          toast.error("Erro ao ativar a conta. Verifique sua conexão e tente novamente.");
+          console.error("[ACTIVATE] activError", activError);
           return;
         }
         if (activResult?.success === false) {
-          toast.error("RPC ativar_conta_membro returned failure: " + (activResult?.error ?? "desconhecido"));
+          toast.error("Não foi possível ativar a conta. Entre em contato com seu coordenador.");
+          console.error("[ACTIVATE] activResult failure", activResult);
           return;
         }
 
@@ -327,9 +352,8 @@ function PrimeiroAcessoPage() {
       }
 
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log("[SAVE PASSWORD] EXCEPTION", err);
-      toast.error("Exceção: " + msg);
+      console.error("[SAVE PASSWORD] EXCEPTION", err);
+      toast.error("Ocorreu um erro inesperado. Tente novamente ou solicite um novo link de acesso.");
     } finally {
       setSalvando(false);
     }
@@ -369,16 +393,26 @@ function PrimeiroAcessoPage() {
             <div>
               <h2 className="font-serif text-xl mb-2">Link expirado</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Este link expirou ou já foi utilizado. Peça ao seu coordenador
-                para reenviar o convite.
+                Este link expirou ou já foi utilizado. Se você ainda não criou
+                sua senha, solicite um novo link abaixo.
               </p>
             </div>
+            {token && (
+              <button
+                onClick={handleReenviarEmail}
+                disabled={enviando}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60 transition"
+              >
+                {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                Reenviar link de acesso
+              </button>
+            )}
             <button
               onClick={() => navigate({ to: "/membro/login" })}
               className="w-full flex items-center justify-center gap-2 rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-medium hover:bg-muted transition"
             >
               <RefreshCw className="h-4 w-4" />
-              Ir para o login
+              Já tenho senha — entrar
             </button>
           </div>
         )}
@@ -518,20 +552,39 @@ function PrimeiroAcessoPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="rounded-xl bg-muted/40 border border-border px-4 py-3 text-xs text-muted-foreground space-y-1">
+              <div className="rounded-xl bg-muted/40 border border-border px-4 py-3 text-xs text-muted-foreground space-y-1.5">
                 <p className="font-semibold text-foreground mb-1.5">A senha deve ter:</p>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${senha.length >= 8 ? "text-green-500" : "text-muted-foreground/40"}`} />
-                  <span className={senha.length >= 8 ? "text-foreground" : ""}>Mínimo de 8 caracteres</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${/[a-zA-Z]/.test(senha) ? "text-green-500" : "text-muted-foreground/40"}`} />
-                  <span className={/[a-zA-Z]/.test(senha) ? "text-foreground" : ""}>Pelo menos uma letra</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${/[0-9]/.test(senha) ? "text-green-500" : "text-muted-foreground/40"}`} />
-                  <span className={/[0-9]/.test(senha) ? "text-foreground" : ""}>Pelo menos um número</span>
-                </div>
+                {[
+                  { ok: senha.length >= 8,            label: "Mínimo de 8 caracteres" },
+                  { ok: /[A-Z]/.test(senha),           label: "Letra maiúscula (A-Z)" },
+                  { ok: /[a-z]/.test(senha),           label: "Letra minúscula (a-z)" },
+                  { ok: /[0-9]/.test(senha),           label: "Pelo menos um número" },
+                  { ok: /[^A-Za-z0-9]/.test(senha),   label: "Caractere especial (@, #, !, …)" },
+                ].map(({ ok, label }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 transition-colors ${ok ? "text-green-500" : "text-muted-foreground/30"}`} />
+                    <span className={ok ? "text-foreground" : ""}>{label}</span>
+                  </div>
+                ))}
+                {/* Medidor de força */}
+                {senha.length > 0 && (() => {
+                  const forca = calcularForcaSenha(senha);
+                  return (
+                    <div className="pt-1 space-y-1">
+                      <div className="flex gap-1 h-1.5">
+                        {[0, 1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className={`flex-1 rounded-full transition-all ${i < forca.nivel ? forca.cor : "bg-muted"}`}
+                          />
+                        ))}
+                      </div>
+                      <p className={`text-[11px] font-medium ${forca.nivel >= 3 ? "text-green-600" : forca.nivel === 2 ? "text-amber-600" : "text-destructive"}`}>
+                        {forca.label}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Plus, Pencil, Trash2, Loader2, Users, Search, X, CalendarDays,
   Upload, ChevronRight, Link2, MessageCircle, Star, User, MoreVertical, Sparkles, RefreshCw, Mail,
-  UserCheck, UserX, ClipboardList, FileDown, CheckCircle2,
+  UserCheck, UserX, ClipboardList, FileDown, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -75,6 +75,7 @@ type Membro = {
   observacoes: string | null;
   score: number;
   ativo: boolean;
+  conta_ativada: boolean | null;
   prioridade_escala: string;
   prioridade_id: string | null;
   tipo_acesso: string;
@@ -1759,10 +1760,16 @@ function MembrosPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterMin, setFilterMin] = useState("todos");
   const [filterAtivo, setFilterAtivo] = useState("ativos");
+  const [filterAtivacao, setFilterAtivacao] = useState("todas");
   const [filterAtuacao, setFilterAtuacao] = useState("todas");
   const [filterComunidade, setFilterComunidade] = useState("todas");
   const [filterPrioridade, setFilterPrioridade] = useState("todas");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSendOpen, setBulkSendOpen] = useState(false);
+  const [bulkSendProgress, setBulkSendProgress] = useState(0);
+  const [bulkSendTotal, setBulkSendTotal] = useState(0);
+  const [bulkSendRunning, setBulkSendRunning] = useState(false);
+  const [bulkSendLog, setBulkSendLog] = useState<{ nome: string; ok: boolean }[]>([]);
   const [newIndisp, setNewIndisp] = useState("");
   const [newIndispMotivo, setNewIndispMotivo] = useState("");
   const [importOpen, setImportOpen] = useState(false);
@@ -1796,15 +1803,17 @@ function MembrosPage() {
     },
   });
 
-  const { data: paroquiaSlug } = useQuery<string | null>({
-    queryKey: ["paroquia-slug", pid],
+  const { data: paroquiaInfo } = useQuery<{ slug: string | null; nome: string } | null>({
+    queryKey: ["paroquia-info", pid],
     enabled: !!pid,
     queryFn: async () => {
       const { data } = await anyDb
-        .from("paroquias").select("slug").eq("id", pid!).maybeSingle();
-      return data?.slug ?? null;
+        .from("paroquias").select("slug, nome").eq("id", pid!).maybeSingle();
+      return data ?? null;
     },
   });
+  const paroquiaSlug = paroquiaInfo?.slug ?? null;
+  const paroquia = paroquiaInfo;
 
   const { data: ministerios = [] } = useQuery({
     queryKey: ["ministerios", pid],
@@ -1857,7 +1866,7 @@ function MembrosPage() {
     queryFn: async () => {
       const { data: rawMembros, error } = await anyDb
         .from("membros")
-        .select("id, nome, email, telefone, data_nascimento, data_ingresso, observacoes, score, ativo, forcar_escalacao_solene, prioridade_escala, prioridade_id, tipo_acesso, token_acesso, auth_user_id, comunidade_id, sexo, foto_url")
+        .select("id, nome, email, telefone, data_nascimento, data_ingresso, observacoes, score, ativo, conta_ativada, forcar_escalacao_solene, prioridade_escala, prioridade_id, tipo_acesso, token_acesso, auth_user_id, comunidade_id, sexo, foto_url")
         .eq("paroquia_id", pid!).order("nome");
       if (error) throw error;
       const rows = (rawMembros ?? []) as any[];
@@ -1883,6 +1892,7 @@ function MembrosPage() {
       return rows.map((m: any) => ({
         ...m,
         score: m.score ?? 0,
+        conta_ativada: m.conta_ativada ?? null,
         prioridade_escala: m.prioridade_escala ?? "nenhuma",
         auth_user_id: m.auth_user_id ?? null,
         comunidade_id: m.comunidade_id ?? null,
@@ -2017,6 +2027,8 @@ function MembrosPage() {
     let list = membros;
     if (filterAtivo === "ativos") list = list.filter((m) => m.ativo);
     if (filterAtivo === "inativos") list = list.filter((m) => !m.ativo);
+    if (filterAtivacao === "pendentes") list = list.filter((m) => m.ativo && m.conta_ativada === false);
+    if (filterAtivacao === "ativados") list = list.filter((m) => m.conta_ativada === true);
     if (filterMin !== "todos") list = list.filter((m) => m.ministerios.some((mn) => mn.id === filterMin));
     if (filterAtuacao !== "todas") list = list.filter((m) => m.atuacao_ids.includes(filterAtuacao));
     if (filterComunidade !== "todas") list = list.filter((m) => m.comunidade_id === filterComunidade);
@@ -2030,7 +2042,7 @@ function MembrosPage() {
       );
     }
     return list;
-  }, [membros, debouncedSearch, filterMin, filterAtivo, filterAtuacao, filterComunidade, filterPrioridade]);
+  }, [membros, debouncedSearch, filterMin, filterAtivo, filterAtivacao, filterAtuacao, filterComunidade, filterPrioridade]);
 
   async function handleExportExcel() {
     const XLSX = await import("xlsx");
@@ -2196,8 +2208,10 @@ function MembrosPage() {
       const { error } = await supabase.from("membros").delete().eq("id", id);
       if (error) throw new Error(logDbError("DELETE membros", error));
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       qc.invalidateQueries({ queryKey: ["membros"] });
+      // Remove the deleted member from selectedIds to prevent stale FK violations
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
       toast.success("Membro removido.");
       setDeleteTarget(null);
     },
@@ -2233,6 +2247,23 @@ function MembrosPage() {
 
   const bulkEditMutation = useMutation({
     mutationFn: async ({ ids, bf }: { ids: string[]; bf: BulkEditForm }) => {
+      // Guard: selectedIds can go stale if a member is deleted individually after being
+      // selected (deleteMutation does not clear selectedIds for that specific ID).
+      // Validate all IDs still exist before any write to prevent FK violations.
+      const { data: existCheck } = await anyDb.from("membros").select("id").in("id", ids);
+      const validIds: string[] = (existCheck ?? []).map((m: any) => m.id as string);
+      const missingIds = ids.filter((id) => !validIds.includes(id));
+      if (missingIds.length > 0) {
+        console.warn("[BULK EDIT] membro_id FK guard — IDs ausentes em membros:", {
+          membro_ids_recebidos: ids,
+          membro_ids_validos: validIds,
+          membro_ids_ausentes: missingIds,
+          ministerios: bf.funcao_ids,
+          payload: bf,
+        });
+      }
+      if (validIds.length === 0) return;
+
       // ── Campos diretos no membros ───────────────────────────────────────────
       const directPayload: Record<string, unknown> = {};
       if (bf.changeSexo)       directPayload.sexo          = bf.sexo || null;
@@ -2242,22 +2273,22 @@ function MembrosPage() {
       if (bf.changeRestricoesDia) directPayload.restricoes_dia_semana = bf.restricoes_dia_semana;
 
       if (Object.keys(directPayload).length > 0) {
-        const { error } = await anyDb.from("membros").update(directPayload).in("id", ids);
+        const { error } = await anyDb.from("membros").update(directPayload).in("id", validIds);
         if (error) throw new Error(logDbError("BULK UPDATE membros", error));
       }
 
       // ── Missas que não pode servir ──────────────────────────────────────────
       if (bf.changeMissasRestricao) {
         if (bf.missasRestricaoMode === "substituir") {
-          await anyDb.from("membro_missa_restricoes").delete().in("membro_id", ids);
+          await anyDb.from("membro_missa_restricoes").delete().in("membro_id", validIds);
           if (bf.missas_nao_pode_ids.length > 0) {
-            const rows = ids.flatMap((mid) =>
+            const rows = validIds.flatMap((mid) =>
               bf.missas_nao_pode_ids.map((mpid) => ({ membro_id: mid, missa_padrao_id: mpid })),
             );
             await anyDb.from("membro_missa_restricoes").insert(rows);
           }
         } else if (bf.missas_nao_pode_ids.length > 0) {
-          const rows = ids.flatMap((mid) =>
+          const rows = validIds.flatMap((mid) =>
             bf.missas_nao_pode_ids.map((mpid) => ({ membro_id: mid, missa_padrao_id: mpid })),
           );
           await anyDb.from("membro_missa_restricoes").upsert(rows, { onConflict: "membro_id,missa_padrao_id", ignoreDuplicates: true });
@@ -2268,45 +2299,46 @@ function MembrosPage() {
         const { error } = await anyDb
           .from("membros")
           .update({ prioridade_escala: bf.prioridade, forcar_escalacao_solene: bf.prioridade === "sempre_solenes" })
-          .in("id", ids);
+          .in("id", validIds);
         if (error) throw new Error(logDbError("BULK UPDATE prioridade", error));
       }
       if (bf.changeFuncoes) {
         if (bf.funcoesMode === "substituir") {
-          const { error } = await supabase.from("membro_ministerios").delete().in("membro_id", ids);
+          const { error } = await supabase.from("membro_ministerios").delete().in("membro_id", validIds);
           if (error) throw new Error(logDbError("BULK DELETE membro_ministerios", error));
           if (bf.funcao_ids.length > 0) {
-            const rows = ids.flatMap((mid) => bf.funcao_ids.map((fid) => ({ membro_id: mid, ministerio_id: fid })));
+            const rows = validIds.flatMap((mid) => bf.funcao_ids.map((fid) => ({ membro_id: mid, ministerio_id: fid })));
             const { error: insErr } = await supabase.from("membro_ministerios").insert(rows);
             if (insErr) throw new Error(logDbError("BULK INSERT membro_ministerios", insErr));
           }
         } else if (bf.funcao_ids.length > 0) {
-          const rows = ids.flatMap((mid) => bf.funcao_ids.map((fid) => ({ membro_id: mid, ministerio_id: fid })));
+          const rows = validIds.flatMap((mid) => bf.funcao_ids.map((fid) => ({ membro_id: mid, ministerio_id: fid })));
+          console.log("[BULK UPSERT membro_ministerios] payload", { membro_ids: validIds, ministerio_ids: bf.funcao_ids, rows });
           const { error } = await supabase.from("membro_ministerios").upsert(rows, { onConflict: "membro_id,ministerio_id", ignoreDuplicates: true });
           if (error) throw new Error(logDbError("BULK UPSERT membro_ministerios", error));
         }
       }
       if (bf.changeAtuacoes) {
         if (bf.atuacoesMode === "substituir") {
-          await anyDb.from("membro_atuacoes").delete().in("membro_id", ids);
+          await anyDb.from("membro_atuacoes").delete().in("membro_id", validIds);
           if (bf.atuacao_ids.length > 0) {
-            const rows = ids.flatMap((mid) => bf.atuacao_ids.map((aid) => ({ membro_id: mid, atuacao_id: aid })));
+            const rows = validIds.flatMap((mid) => bf.atuacao_ids.map((aid) => ({ membro_id: mid, atuacao_id: aid })));
             await anyDb.from("membro_atuacoes").insert(rows);
           }
         } else if (bf.atuacao_ids.length > 0) {
-          const rows = ids.flatMap((mid) => bf.atuacao_ids.map((aid) => ({ membro_id: mid, atuacao_id: aid })));
+          const rows = validIds.flatMap((mid) => bf.atuacao_ids.map((aid) => ({ membro_id: mid, atuacao_id: aid })));
           await anyDb.from("membro_atuacoes").upsert(rows, { onConflict: "membro_id,atuacao_id", ignoreDuplicates: true });
         }
       }
       if (bf.changeRestricoes) {
         if (bf.restricoesMode === "substituir") {
-          await anyDb.from("membro_funcao_restricoes").delete().eq("tipo", "nao_pode").in("membro_id", ids);
+          await anyDb.from("membro_funcao_restricoes").delete().eq("tipo", "nao_pode").in("membro_id", validIds);
           if (bf.restricao_ids.length > 0) {
-            const rows = ids.flatMap((mid) => bf.restricao_ids.map((rid) => ({ membro_id: mid, ministerio_id: rid, tipo: "nao_pode" })));
+            const rows = validIds.flatMap((mid) => bf.restricao_ids.map((rid) => ({ membro_id: mid, ministerio_id: rid, tipo: "nao_pode" })));
             await anyDb.from("membro_funcao_restricoes").insert(rows);
           }
         } else if (bf.restricao_ids.length > 0) {
-          const rows = ids.flatMap((mid) => bf.restricao_ids.map((rid) => ({ membro_id: mid, ministerio_id: rid, tipo: "nao_pode" })));
+          const rows = validIds.flatMap((mid) => bf.restricao_ids.map((rid) => ({ membro_id: mid, ministerio_id: rid, tipo: "nao_pode" })));
           await anyDb.from("membro_funcao_restricoes").upsert(rows, { onConflict: "membro_id,ministerio_id", ignoreDuplicates: true });
         }
       }
@@ -2557,7 +2589,7 @@ function MembrosPage() {
         <TabsContent value="membros">
         {/* Busca + Filtros */}
         {(() => {
-          const hasFilters = filterMin !== "todos" || filterAtuacao !== "todas" || filterComunidade !== "todas" || filterPrioridade !== "todas" || filterAtivo !== "ativos";
+          const hasFilters = filterMin !== "todos" || filterAtuacao !== "todas" || filterComunidade !== "todas" || filterPrioridade !== "todas" || filterAtivo !== "ativos" || filterAtivacao !== "todas";
           return (
             <div className="mt-3 space-y-2.5">
               {/* Barra de busca destacada */}
@@ -2586,6 +2618,17 @@ function MembrosPage() {
                     <SelectItem value="ativos">Ativos</SelectItem>
                     <SelectItem value="inativos">Inativos</SelectItem>
                     <SelectItem value="todos">Todos</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterAtivacao} onValueChange={(v) => { setFilterAtivacao(v); setSelectedIds(new Set()); }}>
+                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[180px] ${filterAtivacao !== "todas" ? "border-amber-500/50 bg-amber-500/5 text-amber-700 dark:text-amber-400" : "border-border bg-card"}`}>
+                    <SelectValue placeholder="Ativação" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas as contas</SelectItem>
+                    <SelectItem value="pendentes">Aguardando ativação</SelectItem>
+                    <SelectItem value="ativados">Conta ativada</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -2641,7 +2684,7 @@ function MembrosPage() {
                 {hasFilters && (
                   <button
                     className="h-8 shrink-0 flex items-center gap-1 rounded-full px-3 text-xs text-destructive border border-destructive/30 bg-destructive/5 hover:bg-destructive/10 transition whitespace-nowrap"
-                    onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setFilterAtivo("ativos"); setSelectedIds(new Set()); }}
+                    onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setFilterAtivo("ativos"); setFilterAtivacao("todas"); setSelectedIds(new Set()); }}
                   >
                     <X className="h-3 w-3" />Limpar
                   </button>
@@ -2722,6 +2765,14 @@ function MembrosPage() {
               />
               <span className="text-xs text-muted-foreground">Selecionar todos</span>
             </label>
+            {filterAtivacao === "pendentes" && filtered.length > 0 && (
+              <button
+                className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+                onClick={() => setSelectedIds(new Set(filtered.map((m) => m.id)))}
+              >
+                Selecionar todos os pendentes ({filtered.length})
+              </button>
+            )}
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-medium text-foreground">{filtered.length}</span>
               <span className="text-xs text-muted-foreground">
@@ -2777,11 +2828,15 @@ function MembrosPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-semibold text-sm leading-snug truncate">{m.nome}</span>
-                        {m.auth_user_id && (
-                          <span title="Conta vinculada ao portal" className="h-4 w-4 rounded-full bg-green-500/15 text-green-600 flex items-center justify-center shrink-0">
+                        {m.conta_ativada === true ? (
+                          <span title="Conta ativada" className="h-4 w-4 rounded-full bg-green-500/15 text-green-600 flex items-center justify-center shrink-0">
                             <UserCheck className="h-2.5 w-2.5" />
                           </span>
-                        )}
+                        ) : m.ativo && m.conta_ativada === false ? (
+                          <span title="Aguardando ativação de conta" className="h-4 w-4 rounded-full bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+                            <UserX className="h-2.5 w-2.5" />
+                          </span>
+                        ) : null}
                       </div>
                       {m.email ? (
                         <p className="text-xs text-muted-foreground truncate mt-0.5">{m.email}</p>
@@ -2923,6 +2978,27 @@ function MembrosPage() {
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setBulkEditForm(EMPTY_BULK_EDIT); setBulkEditOpen(true); }}>
                   Editar em massa
                 </Button>
+                {(() => {
+                  const selecionados = [...selectedIds].map((id) => membros.find((m) => m.id === id)).filter(Boolean) as Membro[];
+                  const comPendencia = selecionados.filter((m) => m.email && m.token_acesso && m.conta_ativada === false);
+                  if (comPendencia.length === 0) return null;
+                  return (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-amber-400/60 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40"
+                      onClick={() => {
+                        setBulkSendLog([]);
+                        setBulkSendProgress(0);
+                        setBulkSendTotal(comPendencia.length);
+                        setBulkSendOpen(true);
+                      }}
+                    >
+                      <Mail className="h-3 w-3 mr-1" />
+                      Enviar acesso ({comPendencia.length})
+                    </Button>
+                  );
+                })()}
                 <Button size="sm" variant="outline" className="h-7 text-xs" disabled={bulkToggleAtivoMutation.isPending} onClick={() => bulkToggleAtivoMutation.mutate({ ids: [...selectedIds], ativo: true })}>
                   Ativar
                 </Button>
@@ -2966,6 +3042,124 @@ function MembrosPage() {
         </TabsContent>
 
       </Tabs>{/* fim tabs */}
+
+      {/* Diálogo de envio em massa */}
+      <Dialog open={bulkSendOpen} onOpenChange={(o) => { if (!bulkSendRunning) setBulkSendOpen(o); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar acesso em lote</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {!bulkSendRunning && bulkSendProgress === 0 && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Serão enviados links de acesso para{" "}
+                  <strong>{bulkSendTotal}</strong> membro(s) que ainda não ativaram a conta.
+                </p>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300">
+                  Os envios são feitos um a um — aguarde a conclusão sem fechar esta janela.
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" className="flex-1" onClick={() => setBulkSendOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={async () => {
+                      const selecionados = [...selectedIds]
+                        .map((id) => membros.find((m) => m.id === id))
+                        .filter(Boolean) as Membro[];
+                      const pendentes = selecionados.filter(
+                        (m) => m.email && m.token_acesso && m.conta_ativada === false,
+                      );
+                      setBulkSendRunning(true);
+                      setBulkSendLog([]);
+                      let done = 0;
+                      const { AccessInvitationService } = await import("@/lib/invitation-service");
+                      for (const m of pendentes) {
+                        const { ok } = await AccessInvitationService.sendEmail({
+                          email: m.email!,
+                          nome: m.nome,
+                          paroquiaNome: paroquia?.nome ?? "Pastoral",
+                          tokenAcesso: m.token_acesso!,
+                          template: "reenvio_ativacao",
+                        });
+                        done++;
+                        setBulkSendProgress(done);
+                        setBulkSendLog((prev) => [...prev, { nome: m.nome, ok }]);
+                        // Pausa de 400ms entre envios para evitar rate limit
+                        await new Promise((r) => setTimeout(r, 400));
+                      }
+                      setBulkSendRunning(false);
+                    }}
+                  >
+                    <Mail className="h-4 w-4 mr-1" />
+                    Enviar agora
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {(bulkSendRunning || bulkSendProgress > 0) && (
+              <div className="space-y-3">
+                {/* Barra de progresso */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{bulkSendRunning ? "Enviando…" : "Concluído"}</span>
+                    <span>{bulkSendProgress} / {bulkSendTotal}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-300"
+                      style={{ width: bulkSendTotal > 0 ? `${(bulkSendProgress / bulkSendTotal) * 100}%` : "0%" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Log de envios */}
+                <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-border bg-muted/30 p-2">
+                  {bulkSendLog.map((item, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      {item.ok ? (
+                        <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                      ) : (
+                        <AlertCircle className="h-3 w-3 text-destructive shrink-0" />
+                      )}
+                      <span className={item.ok ? "text-foreground" : "text-destructive"}>{item.nome}</span>
+                    </div>
+                  ))}
+                  {bulkSendRunning && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                      <span>Enviando próximo…</span>
+                    </div>
+                  )}
+                </div>
+
+                {!bulkSendRunning && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground text-center">
+                      {bulkSendLog.filter((l) => l.ok).length} enviado(s) com sucesso
+                      {bulkSendLog.filter((l) => !l.ok).length > 0 && ` · ${bulkSendLog.filter((l) => !l.ok).length} com falha`}
+                    </p>
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setBulkSendOpen(false);
+                        setBulkSendProgress(0);
+                        setBulkSendLog([]);
+                        setSelectedIds(new Set());
+                      }}
+                    >
+                      Fechar
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Sheet adicionar/editar */}
       <Sheet open={sheetOpen} onOpenChange={(o) => !o && closeSheet()}>
