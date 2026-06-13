@@ -329,9 +329,12 @@ BEGIN
 
     IF v_au_id IS NULL THEN
       -- Não existe usuário auth para este e-mail → precisa de convite
-      RETURN NEXT (m.id, m.nome, m.email,
-        'sem_auth',
-        'Usuário auth não encontrado. Envie o convite para que o membro crie a senha.');
+      membro_id := m.id;
+      nome      := m.nome;
+      email     := m.email;
+      acao      := 'sem_auth';
+      resultado := 'Usuário auth não encontrado. Envie o convite para que o membro crie a senha.';
+      RETURN NEXT;
       CONTINUE;
     END IF;
 
@@ -355,7 +358,12 @@ BEGIN
       ELSE 'profile + role criados + conta ativada'
     END;
 
-    RETURN NEXT (m.id, m.nome, m.email, COALESCE(NULLIF(v_acao,''),'ativado'), v_resultado);
+    membro_id := m.id;
+    nome      := m.nome;
+    email     := m.email;
+    acao      := COALESCE(NULLIF(v_acao,''),'ativado');
+    resultado := v_resultado;
+    RETURN NEXT;
   END LOOP;
 
   -- ── FASE 2: Membros ativados mas com profile/role ausente ─────────────
@@ -388,9 +396,12 @@ BEGIN
     VALUES (m.auth_user_id, 'membro', v_paroquia_id)
     ON CONFLICT DO NOTHING;
 
-    RETURN NEXT (m.id, m.nome, m.email,
-      'correcao_pos_ativacao',
-      'Profile e/ou role recriados para membro já ativado.');
+    membro_id := m.id;
+    nome      := m.nome;
+    email     := m.email;
+    acao      := 'correcao_pos_ativacao';
+    resultado := 'Profile e/ou role recriados para membro já ativado.';
+    RETURN NEXT;
   END LOOP;
 END;
 $$;
