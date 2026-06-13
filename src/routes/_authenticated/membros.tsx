@@ -25,6 +25,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AuditoriaAtivacao } from "@/components/membros/AuditoriaAtivacao";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -2429,12 +2430,9 @@ function MembrosPage() {
 
   const addIndispMutation = useMutation({
     mutationFn: async ({ data, motivo }: { data: string; motivo: string }) => {
-      const { error } = await supabase.from("indisponibilidades").insert({
-        paroquia_id: pid!,
-        membro_id: editId!,
-        data,
-        motivo: motivo || null,
-      });
+      const payload = { paroquia_id: pid!, membro_id: editId!, data, motivo: motivo || null };
+      console.log("[INSERT indisponibilidades] payload", payload);
+      const { error } = await supabase.from("indisponibilidades").insert(payload);
       if (error) throw new Error(logDbError("INSERT indisponibilidades", error));
     },
     onSuccess: () => { refetchIndisp(); setNewIndisp(""); setNewIndispMotivo(""); },
@@ -2569,7 +2567,7 @@ function MembrosPage() {
         </div>
       </div>
 
-      {/* ── Tabs: Membros | Solicitações ── */}
+      {/* ── Tabs: Membros | Solicitações | Auditoria ── */}
       <Tabs defaultValue="membros" className="mt-6">
         <TabsList className="w-full sm:w-auto mb-2">
           <TabsTrigger value="membros">
@@ -2583,6 +2581,10 @@ function MembrosPage() {
                 {solPendentes.length}
               </span>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="auditoria" className="gap-1.5">
+            <AlertCircle className="h-3.5 w-3.5" />
+            Auditoria
           </TabsTrigger>
         </TabsList>
 
@@ -3039,6 +3041,11 @@ function MembrosPage() {
             rejeitando={rejeitarSolMutation.isPending}
             paroquiaId={pid ?? ""}
           />
+        </TabsContent>
+
+        {/* ── Tab: Auditoria de ativação ── */}
+        <TabsContent value="auditoria">
+          <AuditoriaAtivacao paroquia={paroquia} />
         </TabsContent>
 
       </Tabs>{/* fim tabs */}
