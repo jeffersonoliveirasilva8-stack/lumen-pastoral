@@ -34,8 +34,10 @@ type Substituicao = {
   motivo_rejeicao: string | null;
   aprovado_em: string | null;
   created_at: string;
+  escala_id: string;
   escala_titulo: string;
   escala_data: string;
+  ministerio_id: string;
   ministerio_nome: string;
   ministerio_cor: string;
   solicitante_nome: string;
@@ -469,6 +471,18 @@ function SubstAdminCard({
                 >
                   {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                   Aprovar troca
+                </Button>
+              )}
+              {subst.status === "solicitada" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl"
+                  disabled={saving}
+                  onClick={() => onBuscarSubstitutos(subst.escala_id, subst.ministerio_id)}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Buscar substituto
                 </Button>
               )}
               <Button

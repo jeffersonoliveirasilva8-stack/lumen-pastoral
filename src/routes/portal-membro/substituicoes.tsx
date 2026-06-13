@@ -50,6 +50,18 @@ type EscalaDisponivel = {
   ministerio_cor: string;
 };
 
+type SubstAberta = {
+  id: string;
+  status: string;
+  motivo_solicitacao: string | null;
+  created_at: string;
+  escala_titulo: string;
+  escala_data: string;
+  ministerio_nome: string;
+  ministerio_cor: string;
+  solicitante_nome: string;
+};
+
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; variant: "default" | "secondary" | "destructive" | "outline"; color: string }> = {
   solicitada: {
     label: "Aguardando voluntário",
@@ -98,6 +110,16 @@ function PortalMembroSubstituicoes() {
     enabled: !!membro?.id,
     queryFn: async () => {
       const { data, error } = await anyDb.rpc("portal_get_substituicoes_membro");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: abertasParaVoluntariar = [] } = useQuery<SubstAberta[]>({
+    queryKey: ["pm-substituicoes-abertas", membro?.id],
+    enabled: !!membro?.id,
+    queryFn: async () => {
+      const { data, error } = await anyDb.rpc("portal_get_substituicoes_abertas");
       if (error) throw error;
       return data ?? [];
     },
@@ -201,9 +223,6 @@ function PortalMembroSubstituicoes() {
   const ativas = substituicoes.filter((s) => !["cancelada", "rejeitada"].includes(s.status));
   const historico = substituicoes.filter((s) => ["cancelada", "rejeitada", "aprovada"].includes(s.status));
 
-  // Substituições solicitadas por outros (para se voluntariar) — não há endpoint separado
-  // O membro vê apenas as suas; para voluntariar, usa a aba de Escalas onde pode clicar "Solicitar sub"
-
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 pb-24 lg:px-6 space-y-6">
 
@@ -304,6 +323,29 @@ function PortalMembroSubstituicoes() {
         </div>
       )}
 
+      {/* Disponíveis para voluntariar */}
+      {abertasParaVoluntariar.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <HandHelping className="h-4 w-4 text-violet-500" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Disponíveis para você ({abertasParaVoluntariar.length})
+            </p>
+            <div className="flex-1 h-px bg-border/50" />
+          </div>
+          <div className="space-y-3">
+            {abertasParaVoluntariar.map((s) => (
+              <SubstAbertaCard
+                key={s.id}
+                subst={s}
+                onVoluntariar={() => voluntariarMutation.mutate(s.id)}
+                saving={voluntariarMutation.isPending && voluntariarMutation.variables === s.id}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Histórico colapsável */}
       {historico.length > 0 && (
         <div>
@@ -354,6 +396,57 @@ function PortalMembroSubstituicoes() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ── SubstAbertaCard ───────────────────────────────────────────
+// Card para substituições abertas de outros membros que o usuário pode assumir
+
+function SubstAbertaCard({
+  subst, onVoluntariar, saving,
+}: {
+  subst: SubstAberta;
+  onVoluntariar: () => void;
+  saving: boolean;
+}) {
+  const dateObj = new Date(subst.escala_data + "T12:00:00");
+
+  return (
+    <div className="rounded-2xl border border-violet-200 dark:border-violet-800 bg-card overflow-hidden">
+      <div className="p-4 space-y-2">
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: subst.ministerio_cor }} />
+          <span className="text-xs font-semibold" style={{ color: subst.ministerio_cor }}>
+            {subst.ministerio_nome}
+          </span>
+        </div>
+        <p className="text-sm font-semibold leading-snug">{subst.escala_titulo}</p>
+        <p className="text-xs text-muted-foreground capitalize">
+          {format(dateObj, "EEEE, d 'de' MMMM", { locale: ptBR })}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Solicitante: <span className="font-medium text-foreground">{subst.solicitante_nome}</span>
+        </p>
+        {subst.motivo_solicitacao && subst.motivo_solicitacao !== "Membro recusou a escala" && (
+          <p className="text-xs text-muted-foreground italic border-l-2 border-border pl-2">
+            "{subst.motivo_solicitacao}"
+          </p>
+        )}
+      </div>
+      <div className="border-t border-border/40 px-4 py-3">
+        <Button
+          size="sm"
+          className="w-full rounded-xl bg-violet-600 hover:bg-violet-700 text-white"
+          disabled={saving}
+          onClick={onVoluntariar}
+        >
+          {saving
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+            : <HandHelping className="h-3.5 w-3.5 mr-1.5" />}
+          Me voluntariar para substituir
+        </Button>
+      </div>
     </div>
   );
 }
