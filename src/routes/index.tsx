@@ -16,19 +16,22 @@ function Landing() {
     <div className="min-h-screen bg-background">
       {/* Nav */}
       <header className="border-b border-border/60 bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-sacro text-gold">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+          <Link to="/" className="flex items-center gap-2 min-w-0">
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-sacro text-gold shrink-0">
               <Flame className="h-4 w-4" />
             </div>
-            <span className="font-serif text-lg font-semibold tracking-tight">Lumen Pastoral</span>
+            <span className="font-serif text-base sm:text-lg font-semibold tracking-tight truncate">Lumen Pastoral</span>
           </Link>
-          <nav className="flex items-center gap-2">
-            <Link to="/login" className="rounded-md px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <nav className="flex items-center gap-1.5 shrink-0">
+            <Link to="/login" className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
               Entrar
             </Link>
-            <Link to="/cadastro" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-altar hover:opacity-90">
+            <Link to="/cadastro" className="hidden sm:inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-altar hover:opacity-90">
               Criar paróquia <ChevronRight className="h-4 w-4" />
+            </Link>
+            <Link to="/cadastro" className="sm:hidden inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
+              Cadastrar
             </Link>
           </nav>
         </div>
