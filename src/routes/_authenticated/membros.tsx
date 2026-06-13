@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Plus, Pencil, Trash2, Loader2, Users, Search, X, CalendarDays,
   Upload, ChevronRight, Link2, MessageCircle, Star, User, MoreVertical, Sparkles, RefreshCw, Mail,
-  UserCheck, UserX, ClipboardList,
+  UserCheck, UserX, ClipboardList, FileDown, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -491,7 +491,18 @@ function MemberForm({
 
       {/* ── Disponibilidade ───────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Disponibilidade</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Disponibilidade</p>
+          {form.restricoes_dia_semana.length === 0 ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-500/10 border border-green-500/20 rounded-full px-2 py-0.5">
+              <CheckCircle2 className="h-3 w-3" /> Qualquer dia
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Restrição: {form.restricoes_dia_semana.sort((a, b) => a - b).map((d) => DIAS_SEMANA[d]).join(", ")}
+            </span>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground">Datas específicas indisponíveis são gerenciadas na aba "Indisponibilidades" após salvar.</p>
 
         {/* Checklist de missas padrão que o membro não consegue servir */}
@@ -1923,8 +1934,9 @@ function MembrosPage() {
           comunidade_id: d.comunidade_id || null,
           nome_pais, contato_pais,
           deslocamento: d.possui_conducao === "sim" ? "Possui condução própria" : null,
-          restricoes_horario: d.horarios_indisponivel || null,
-          observacoes: [d.observacoes, d.motivo_indisponibilidade ? `Indisponibilidade: ${d.motivo_indisponibilidade}` : null].filter(Boolean).join(" | ") || null,
+          restricoes_horario: d.horarios_indisponivel || d.motivo_indisponibilidade || null,
+          motivo_disponibilidade: d.motivo_indisponibilidade || null,
+          observacoes: d.observacoes || null,
         })
         .select("id").single();
       if (memberErr) throw memberErr;
@@ -2019,6 +2031,63 @@ function MembrosPage() {
     }
     return list;
   }, [membros, debouncedSearch, filterMin, filterAtivo, filterAtuacao, filterComunidade, filterPrioridade]);
+
+  async function handleExportExcel() {
+    const XLSX = await import("xlsx");
+    const rows = filtered.map((m) => ({
+      "Nome": m.nome,
+      "E-mail": m.email ?? "",
+      "Telefone": m.telefone ?? "",
+      "Sexo": m.sexo === "M" ? "Masculino" : m.sexo === "F" ? "Feminino" : "",
+      "Nasc.": m.data_nascimento ?? "",
+      "Ingresso": m.data_ingresso ?? "",
+      "Funções": m.ministerios.map((mn) => mn.nome).join(", "),
+      "Pastorais": m.atuacao_ids.map((id) => atuacoes.find((a) => a.id === id)?.nome ?? "").filter(Boolean).join(", "),
+      "Situação": m.ativo ? "Ativo" : "Inativo",
+      "Score": m.score,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Membros");
+    XLSX.writeFile(wb, `membros_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  function handleExportPDF() {
+    const cols = ["Nome", "E-mail", "Telefone", "Sexo", "Funções", "Pastorais", "Situação", "Score"];
+    const rows = filtered.map((m) => [
+      m.nome,
+      m.email ?? "",
+      m.telefone ?? "",
+      m.sexo === "M" ? "M" : m.sexo === "F" ? "F" : "",
+      m.ministerios.map((mn) => mn.nome).join(", "),
+      m.atuacao_ids.map((id) => atuacoes.find((a) => a.id === id)?.nome ?? "").filter(Boolean).join(", "),
+      m.ativo ? "Ativo" : "Inativo",
+      m.score,
+    ]);
+    const now = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Membros</title><style>
+      *{box-sizing:border-box;font-family:sans-serif;font-size:11px}
+      body{margin:20px;color:#111}
+      h2{font-size:15px;margin:0 0 4px}
+      p.sub{color:#666;margin:0 0 14px;font-size:10px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#1e293b;color:#fff;text-align:left;padding:5px 7px}
+      td{padding:4px 7px;border-bottom:1px solid #e2e8f0}
+      tr:nth-child(even) td{background:#f8fafc}
+      @media print{@page{size:landscape}}
+    </style></head><body>
+      <h2>Membros — Lumen Pastoral</h2>
+      <p class="sub">Gerado em ${now} · ${filtered.length} membro(s) exibido(s)</p>
+      <table><thead><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table></body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Permita pop-ups para gerar o PDF."); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 400);
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -2577,6 +2646,22 @@ function MembrosPage() {
                     <X className="h-3 w-3" />Limpar
                   </button>
                 )}
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="h-8 shrink-0 flex items-center gap-1 rounded-full px-3 text-xs border border-border bg-card hover:bg-muted transition whitespace-nowrap ml-auto">
+                      <FileDown className="h-3.5 w-3.5" /> Exportar
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportExcel}>
+                      Exportar Excel (.xlsx)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPDF}>
+                      Exportar PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           );

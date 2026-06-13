@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import {
   Plus, Pencil, Trash2, Loader2, CalendarRange, MapPin,
   Users, CheckCircle2, XCircle, ChevronDown, ChevronUp, Clock,
-  UserCheck,
+  UserCheck, Search, Mail, X as XIcon,
 } from "lucide-react";
 import { format, parseISO, isPast } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -128,6 +128,7 @@ function AgendaPastoralPage() {
   const [deleteTarget, setDeleteTarget] = useState<Evento | null>(null);
   const [presencaEvento, setPresencaEvento] = useState<Evento | null>(null);
   const [tipoFilter, setTipoFilter]     = useState<string>("todos");
+  const [pendingEmailOpts, setPendingEmailOpts] = useState<SaveOpts & { titulo: string; data_inicio: string } | null>(null);
 
   const { data: eventos = [], isLoading } = useQuery<Evento[]>({
     queryKey: ["formacoes_eventos", pid],
@@ -169,10 +170,44 @@ function AgendaPastoralPage() {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ["formacoes_eventos", pid] });
       toast.success(editTarget ? "Evento atualizado." : "Evento criado.");
       setFormOpen(false); setEditTarget(null);
+
+      const opts = pendingEmailOpts;
+      setPendingEmailOpts(null);
+      if (opts?.notificar && pid) {
+        // Resolve member emails
+        let membroIds: string[] = opts.selectedMembroIds;
+        if (membroIds.length === 0) {
+          // All active members of the parish
+          const { data: all } = await anyDb.from("membros").select("id").eq("paroquia_id", pid).eq("ativo", true);
+          membroIds = (all ?? []).map((m: { id: string }) => m.id);
+        }
+        const { data: membersWithEmail } = await anyDb
+          .from("membros")
+          .select("id, nome, email, paroquias!inner(nome)")
+          .in("id", membroIds)
+          .not("email", "is", null);
+        const members = (membersWithEmail ?? []) as { nome: string; email: string; paroquias: { nome: string } }[];
+        if (members.length === 0) return;
+
+        const dataFormatada = opts.data_inicio.slice(0, 10);
+        const hora = opts.data_inicio.length >= 16 ? opts.data_inicio.slice(11, 16) : "";
+        const paroqNome = members[0]?.paroquias?.nome ?? "Pastoral";
+
+        let enviados = 0;
+        for (const m of members) {
+          try {
+            const { data: r } = await anyDb.functions.invoke("send-email", {
+              body: { template: "evento_convite", to: m.email, nome: m.nome, paroquia: paroqNome, escalaTitulo: opts.titulo, escalaData: dataFormatada, escalaHora: hora },
+            });
+            if (r?.ok) enviados++;
+          } catch { /* non-fatal */ }
+        }
+        if (enviados > 0) toast.success(`${enviados} membro(s) notificado(s) por e-mail.`);
+      }
     },
     onError: (e: unknown) => toast.error((e as Error).message),
   });
@@ -294,7 +329,10 @@ function AgendaPastoralPage() {
         saving={saveMutation.isPending}
         paroquiaId={pid ?? ""}
         onClose={() => { setFormOpen(false); setEditTarget(null); }}
-        onSave={(data) => saveMutation.mutate(editTarget ? { ...data, id: editTarget.id } : data)}
+        onSave={(data, opts) => {
+          setPendingEmailOpts({ ...opts, titulo: data.titulo, data_inicio: data.data_inicio });
+          saveMutation.mutate(editTarget ? { ...data, id: editTarget.id } : data);
+        }}
       />
 
       {/* Delete confirm */}
@@ -437,6 +475,8 @@ function EventoSection({
 type Comunidade = { id: string; nome: string; endereco: string | null };
 type AtuacaoPastoral = { id: string; nome: string; cor: string | null };
 
+type SaveOpts = { notificar: boolean; selectedMembroIds: string[] };
+
 function EventoFormSheet({
   open, initial, saving, paroquiaId, onClose, onSave,
 }: {
@@ -445,13 +485,15 @@ function EventoFormSheet({
   saving: boolean;
   paroquiaId: string;
   onClose: () => void;
-  onSave: (data: EventoForm) => void;
+  onSave: (data: EventoForm, opts: SaveOpts) => void;
 }) {
   const [form, setForm] = useState<EventoForm>(EMPTY_FORM);
   const [comunidadeId, setComunidadeId] = useState<string>("");
   const [localCustom, setLocalCustom] = useState("");
   const [selectedAtuacoes, setSelectedAtuacoes] = useState<string[]>([]);
-  const [membrosManual, setMembrosManual] = useState("");
+  const [selectedMembroIds, setSelectedMembroIds] = useState<string[]>([]);
+  const [membroSearch, setMembroSearch] = useState("");
+  const [notificarEmail, setNotificarEmail] = useState(false);
 
   const { data: comunidades = [] } = useQuery<Comunidade[]>({
     queryKey: ["comunidades", paroquiaId],
@@ -481,6 +523,20 @@ function EventoFormSheet({
     },
   });
 
+  const { data: todosMembros = [] } = useQuery<MembroBase[]>({
+    queryKey: ["membros-base", paroquiaId],
+    enabled: !!paroquiaId && open,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("membros")
+        .select("id, nome")
+        .eq("paroquia_id", paroquiaId)
+        .eq("ativo", true)
+        .order("nome");
+      return (data ?? []) as MembroBase[];
+    },
+  });
+
   useEffect(() => {
     if (!open) return;
     if (initial) {
@@ -507,15 +563,17 @@ function EventoFormSheet({
         setLocalCustom(initial.local ?? "");
       }
       setSelectedAtuacoes([]);
-      setMembrosManual(
-        !initial.publico_alvo || initial.publico_alvo === "todos" ? "" : initial.publico_alvo,
-      );
+      setSelectedMembroIds([]);
+      setMembroSearch("");
+      setNotificarEmail(false);
     } else {
       setForm(EMPTY_FORM);
       setComunidadeId("");
       setLocalCustom("");
       setSelectedAtuacoes([]);
-      setMembrosManual("");
+      setSelectedMembroIds([]);
+      setMembroSearch("");
+      setNotificarEmail(false);
     }
   }, [initial, open, comunidades]);
 
@@ -544,10 +602,14 @@ function EventoFormSheet({
     const com = comunidades.find((c) => c.id === comunidadeId);
     const finalComunidade = comunidadeId === "outro" ? "" : (com?.nome ?? "");
     const finalLocal = comunidadeId === "outro" ? localCustom : (com?.endereco ?? com?.nome ?? "");
+    const membroNomes = todosMembros.filter((m) => selectedMembroIds.includes(m.id)).map((m) => m.nome);
     const finalPublicoAlvo =
-      [...selectedAtuacoes, membrosManual.trim()].filter(Boolean).join(", ") || "todos";
+      [...selectedAtuacoes, ...membroNomes].filter(Boolean).join(", ") || "todos";
 
-    onSave({ ...form, comunidade: finalComunidade, local: finalLocal, publico_alvo: finalPublicoAlvo });
+    onSave(
+      { ...form, comunidade: finalComunidade, local: finalLocal, publico_alvo: finalPublicoAlvo },
+      { notificar: notificarEmail && !initial, selectedMembroIds },
+    );
   }
 
   const canSave = !!form.titulo.trim() && !!form.data_inicio;
@@ -671,11 +733,51 @@ function EventoFormSheet({
                   Nenhuma atuação pastoral cadastrada.
                 </p>
               )}
-              <Input
-                value={membrosManual}
-                onChange={(e) => setMembrosManual(e.target.value)}
-                placeholder="Membros específicos (nomes, separados por vírgula)…"
-              />
+              {/* Seleção de membros específicos (P1.7) */}
+              {todosMembros.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <p className="text-xs text-muted-foreground">Membros específicos</p>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-input bg-card text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring/20"
+                      placeholder="Buscar membro…"
+                      value={membroSearch}
+                      onChange={(e) => setMembroSearch(e.target.value)}
+                    />
+                  </div>
+                  {selectedMembroIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {todosMembros.filter((m) => selectedMembroIds.includes(m.id)).map((m) => (
+                        <span key={m.id} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                          {m.nome.split(" ")[0]}
+                          <button type="button" onClick={() => setSelectedMembroIds((p) => p.filter((id) => id !== m.id))}>
+                            <XIcon className="h-2.5 w-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {membroSearch.length > 0 && (
+                    <div className="max-h-36 overflow-y-auto rounded-xl border border-border divide-y divide-border bg-card">
+                      {todosMembros
+                        .filter((m) => m.nome.toLowerCase().includes(membroSearch.toLowerCase()) && !selectedMembroIds.includes(m.id))
+                        .slice(0, 8)
+                        .map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-muted/40 transition"
+                            onClick={() => { setSelectedMembroIds((p) => [...p, m.id]); setMembroSearch(""); }}
+                          >
+                            {m.nome}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Descrição */}
@@ -722,14 +824,29 @@ function EventoFormSheet({
           </div>
 
           {/* Footer */}
-          <div className="px-6 pb-8 pt-2 flex gap-3 border-t border-border">
-            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" className="flex-1" disabled={saving || !canSave}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-              Salvar
-            </Button>
+          <div className="px-6 pb-8 pt-4 space-y-3 border-t border-border">
+            {!initial && (
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <Switch
+                  id="notif-email-switch"
+                  checked={notificarEmail}
+                  onCheckedChange={setNotificarEmail}
+                />
+                <span className="flex items-center gap-1.5 text-sm">
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                  Notificar membros por e-mail ao criar
+                </span>
+              </label>
+            )}
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="flex-1" disabled={saving || !canSave}>
+                {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                Salvar
+              </Button>
+            </div>
           </div>
         </form>
       </SheetContent>

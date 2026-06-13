@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Flame, Loader2, LogIn, Mail, CheckCircle2, ChevronLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+
+const anyDb = supabase as any;
 import { getPostLoginRoute } from "@/lib/auth-redirect";
 
 export const Route = createFileRoute("/membro/login")({
@@ -232,6 +234,17 @@ function SenhaForm({ onShowOtp }: { onShowOtp: () => void }) {
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [magicLinkAllowed, setMagicLinkAllowed] = useState<boolean>(false);
+
+  useEffect(() => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes("@")) { setMagicLinkAllowed(false); return; }
+    const timer = setTimeout(async () => {
+      const { data } = await anyDb.rpc("check_magic_link_allowed", { p_email: trimmed });
+      setMagicLinkAllowed(data === true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [email]);
 
   useEffect(() => {
     if (!lockedUntil) return;
@@ -342,13 +355,15 @@ function SenhaForm({ onShowOtp }: { onShowOtp: () => void }) {
         >
           Esqueceu sua senha?
         </Link>
-        <button
-          type="button"
-          onClick={onShowOtp}
-          className="w-full flex justify-center items-center gap-1.5 rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-medium text-foreground/70 hover:bg-muted hover:text-foreground transition"
-        >
-          <Mail className="h-3.5 w-3.5" /> Prefiro entrar com link por e-mail
-        </button>
+        {magicLinkAllowed && (
+          <button
+            type="button"
+            onClick={onShowOtp}
+            className="w-full flex justify-center items-center gap-1.5 rounded-lg border border-input bg-card px-4 py-2.5 text-sm font-medium text-foreground/70 hover:bg-muted hover:text-foreground transition"
+          >
+            <Mail className="h-3.5 w-3.5" /> Prefiro entrar com link por e-mail
+          </button>
+        )}
       </div>
     </div>
   );

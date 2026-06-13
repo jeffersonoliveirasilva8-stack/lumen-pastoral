@@ -73,21 +73,23 @@ function PrimeiroAcessoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Escuta SIGNED_IN: magic link processado enquanto loading ─────────────
-  // Quando o usuário clica no link de e-mail, o hash #access_token=... é
-  // processado assincronamente. Este listener avança o estado assim que
-  // a sessão fica disponível.
+  // ── Escuta SIGNED_IN / PASSWORD_RECOVERY ────────────────────────────────
+  // Avança o estado assim que a sessão fica disponível após o clique no link.
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         const isAuth = _event === "SIGNED_IN" || _event === "PASSWORD_RECOVERY";
+        const isRecovery = _event === "PASSWORD_RECOVERY";
         if (isAuth && session?.user && estado === "carregando") {
           if (info) {
-            // Para conta ativa com evento de recovery, __root.tsx redireciona para /reset-senha.
-            // Para conta pendente, avança direto para o formulário.
-            if (!info.conta_ativada) setEstado("formulario");
+            if (isRecovery && info.conta_ativada) {
+              // Membro ativo fazendo reset → vai direto para /reset-senha
+              navigate({ to: "/reset-senha" as any, replace: true });
+            } else if (!info.conta_ativada) {
+              setEstado("formulario");
+            }
           } else {
-            carregarInfoPorSessao(session.user);
+            carregarInfoPorSessao(session.user, isRecovery);
           }
         }
       },
@@ -99,7 +101,7 @@ function PrimeiroAcessoPage() {
   // Carrega info do membro a partir de uma sessão já estabelecida (sem token no URL).
   // Usado quando: (a) magic link chegou sem ?token=UUID, ou
   //               (b) usuário autenticado acessou portal com conta_ativada=false.
-  async function carregarInfoPorSessao(user: { id: string; email?: string | null }) {
+  async function carregarInfoPorSessao(user: { id: string; email?: string | null }, isRecovery = false) {
     const email = user.email ?? "";
     console.info("[LOG primeiro-acesso] carregarInfoPorSessao →", {
       user_id: user.id, email, rota_atual: window.location.pathname,
@@ -132,8 +134,13 @@ function PrimeiroAcessoPage() {
     setInfo(infoData);
 
     if (infoData.conta_ativada) {
-      setEstado("ja_ativo");
-      setTimeout(() => navigate({ to: "/membro/login" }), 2500);
+      if (isRecovery) {
+        // Membro ativo clicou no link de recuperação → redireciona para reset
+        navigate({ to: "/reset-senha" as any, replace: true });
+      } else {
+        setEstado("ja_ativo");
+        setTimeout(() => navigate({ to: "/membro/login" }), 2500);
+      }
     } else {
       setEstado("formulario");
     }

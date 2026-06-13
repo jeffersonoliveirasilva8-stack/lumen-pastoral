@@ -107,6 +107,7 @@ type Paroquia = {
   pontuacao_config: PontuacaoConfig | null;
   pdf_cabecalho_url: string | null;
   pdf_rodape_url: string | null;
+  allow_magic_link: boolean;
 };
 
 type MissaPadrao = {
@@ -549,13 +550,13 @@ function PersonalizacaoPage() {
 type IdentidadeForm = {
   nome: string; padroeiro: string; cidade: string; diocese: string;
   endereco: string; contato_email: string; contato_telefone: string;
-  slug: string;
+  slug: string; allow_magic_link: boolean;
 };
 
 function IdentidadeTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () => void }) {
   const [form, setForm] = useState<IdentidadeForm>({
     nome: "", padroeiro: "", cidade: "", diocese: "",
-    endereco: "", contato_email: "", contato_telefone: "", slug: "",
+    endereco: "", contato_email: "", contato_telefone: "", slug: "", allow_magic_link: false,
   });
   const [saving, setSaving] = useState(false);
 
@@ -569,10 +570,11 @@ function IdentidadeTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () 
       contato_email: paroquia.contato_email ?? "",
       contato_telefone: paroquia.contato_telefone ?? "",
       slug: paroquia.slug ?? "",
+      allow_magic_link: paroquia.allow_magic_link ?? false,
     });
   }, [paroquia]);
 
-  const fields: { key: keyof IdentidadeForm; label: string; placeholder?: string }[] = [
+  const fields: { key: Exclude<keyof IdentidadeForm, "allow_magic_link">; label: string; placeholder?: string }[] = [
     { key: "nome", label: "Nome da paróquia", placeholder: "Ex: Paróquia Nossa Senhora…" },
     { key: "padroeiro", label: "Padroeiro / padroeira", placeholder: "Ex: Nossa Senhora Mãe da Igreja" },
     { key: "cidade", label: "Cidade" },
@@ -595,6 +597,7 @@ function IdentidadeTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () 
       contato_email: form.contato_email || null,
       contato_telefone: form.contato_telefone || null,
       slug: slugValue,
+      allow_magic_link: form.allow_magic_link,
     }).eq("id", paroquia.id);
     setSaving(false);
     if (error) { toast.error(supabaseErrorMessage(error)); return; }
@@ -648,6 +651,19 @@ function IdentidadeTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () 
                 </button>
               </div>
             )}
+          </div>
+        </Field>
+
+        {/* Login por link mágico */}
+        <Field label="Login por link mágico">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Permite que membros entrem no portal sem senha, via link enviado por e-mail. Desativado por padrão.
+            </p>
+            <Switch
+              checked={form.allow_magic_link}
+              onCheckedChange={(v) => setForm({ ...form, allow_magic_link: v })}
+            />
           </div>
         </Field>
 

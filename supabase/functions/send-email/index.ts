@@ -326,6 +326,35 @@ function tLembretePresencaAdmin(paroquia: string, escalaTitulo: string, escalaDa
   return baseLayout(paroquia, body, siteUrl);
 }
 
+function tEventoConvite(nome: string, paroquia: string, titulo: string, data: string, hora: string, siteUrl: string): string {
+  const sn = htmlSafe(nome) || "Servidor(a)";
+  const sp = htmlSafe(paroquia);
+  const st = htmlSafe(titulo);
+  let dataFormatada = htmlSafe(data);
+  try {
+    const [y, mo, d] = data.split("-").map(Number);
+    const MESES = ["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+    dataFormatada = `${d} de ${MESES[mo - 1]} de ${y}`;
+  } catch { /* mantém formato original */ }
+  const horaFmt = hora ? ` &agrave;s ${htmlSafe(hora)}` : "";
+  const portalUrl = `${siteUrl}/portal-membro/home`;
+  const body = `
+    <h1>Novo evento! &#128197;</h1>
+    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
+    <p>
+      Voc&ecirc; foi convidado(a) para o seguinte evento da
+      <span class="hi">${sp}</span>:
+    </p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;width:80px;">Evento</td><td style="padding:6px 0;font-weight:600;color:#111;">${st}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Data</td><td style="padding:6px 0;font-weight:600;color:#111;">${dataFormatada}${horaFmt}</td></tr>
+    </table>
+    <p>Acesse o portal para ver mais detalhes e confirmar sua presen&ccedil;a:</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">Acessar o portal &rarr;</a></div>
+    <p class="note">Em caso de d&uacute;vidas, entre em contato com a coordena&ccedil;&atilde;o da ${sp}.</p>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
 // ─── Resend API ────────────────────────────────────────────────────────────────
 
 interface SendOpts { apiKey: string; from: string; to: string; subject: string; html: string; }
@@ -517,10 +546,19 @@ Deno.serve(async (req) => {
       }
       const displayParoquia = resolvedParoquia || "Portal";
 
+      // Usa /membro/primeiro-acesso como redirectTo — está na whitelist do Supabase.
+      // O __root.tsx intercepta PASSWORD_RECOVERY e roteia para /reset-senha
+      // ou /membro/primeiro-acesso conforme conta_ativada.
+      // NÃO usar /reset-senha diretamente: pode não estar na additional_redirect_urls.
+      const isAdminContext = fp === "admin";
+      const safeRedirectTo = isAdminContext
+        ? `${siteUrl}/auth/callback`
+        : `${siteUrl}/membro/primeiro-acesso`;
+
       const { data: ld, error: le } = await admin.auth.admin.generateLink({
         type:    "recovery",
         email:   to,
-        options: { redirectTo: `${siteUrl}/reset-senha?from=${fp}` },
+        options: { redirectTo: safeRedirectTo },
       });
       if (le || !ld?.properties?.action_link)
         return json({ ok: false, error: le?.message ?? "Failed to generate reset link" }, 500);
@@ -561,6 +599,10 @@ Deno.serve(async (req) => {
     } else if (template === "lembrete_presenca_admin") {
       subject = `[Atenção] ${paroquia} — Presenças não registradas: ${escalaTitulo}`;
       html    = tLembretePresencaAdmin(paroquia, escalaTitulo, escalaData, pendentes, total, siteUrl);
+
+    } else if (template === "evento_convite") {
+      subject = `${paroquia} — ${escalaTitulo || "Novo evento"}`;
+      html    = tEventoConvite(nome, paroquia, escalaTitulo, escalaData, escalaHora, siteUrl);
 
     } else {
       return json({ ok: false, error: `Unknown template: ${template}` }, 400);

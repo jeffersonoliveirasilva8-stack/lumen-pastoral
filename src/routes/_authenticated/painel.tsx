@@ -345,6 +345,55 @@ function DashboardPage() {
     },
   });
 
+  // ── Stats: distribuição de membros por pastoral / sexo / faixa etária ─────────
+  const { data: memberStats } = useQuery({
+    queryKey: ["stats-membros-distrib", pid],
+    enabled: !!pid,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const [{ data: mbs }, { data: atuacoes }, { data: matuacoes }] = await Promise.all([
+        supabase.from("membros").select("id, sexo, data_nascimento").eq("paroquia_id", pid!).eq("ativo", true),
+        anyDb.from("atuacoes_pastorais").select("id, nome, cor").eq("paroquia_id", pid!).eq("ativo", true).order("ordem"),
+        anyDb.from("membro_atuacoes").select("membro_id, atuacao_id"),
+      ]);
+
+      // By sex
+      const sc: Record<string, number> = { M: 0, F: 0 };
+      (mbs ?? []).forEach((m: { sexo: string | null }) => { if (m.sexo === "M") sc.M++; else if (m.sexo === "F") sc.F++; });
+      const bySex = [
+        { nome: "Masculino", membros: sc.M, cor: "#3b82f6" },
+        { nome: "Feminino",  membros: sc.F, cor: "#ec4899" },
+      ].filter((x) => x.membros > 0);
+
+      // By age
+      const now = new Date();
+      const ag: Record<string, number> = { "<18": 0, "18–29": 0, "30–44": 0, "45–59": 0, "60+": 0 };
+      (mbs ?? []).forEach((m: { data_nascimento: string | null }) => {
+        if (!m.data_nascimento) return;
+        const age = now.getFullYear() - new Date(m.data_nascimento + "T12:00:00").getFullYear();
+        if (age < 18) ag["<18"]++;
+        else if (age < 30) ag["18–29"]++;
+        else if (age < 45) ag["30–44"]++;
+        else if (age < 60) ag["45–59"]++;
+        else ag["60+"]++;
+      });
+      const byAge = Object.entries(ag).filter(([, v]) => v > 0).map(([nome, membros]) => ({ nome, membros }));
+
+      // By pastoral
+      const ids = new Set((mbs ?? []).map((m: { id: string }) => m.id));
+      const ac: Record<string, number> = {};
+      (matuacoes ?? []).filter((r: { membro_id: string }) => ids.has(r.membro_id)).forEach((r: { atuacao_id: string }) => {
+        ac[r.atuacao_id] = (ac[r.atuacao_id] ?? 0) + 1;
+      });
+      const byPastoral = (atuacoes ?? [])
+        .map((a: { id: string; nome: string; cor: string }) => ({ nome: a.nome, membros: ac[a.id] ?? 0, cor: a.cor }))
+        .filter((x: { membros: number }) => x.membros > 0)
+        .sort((a: { membros: number }, b: { membros: number }) => b.membros - a.membros);
+
+      return { bySex, byAge, byPastoral };
+    },
+  });
+
   // ── Aniversariantes do mês ───────────────────────────────────────────────────
   const mesAtual = today.getMonth() + 1;
   const { data: aniversariantes = [] } = useQuery<{ id: string; nome: string; data_nascimento: string }[]>({
@@ -1259,7 +1308,7 @@ function DashboardPage() {
         </div>
       </div>
 
-      <div className="hidden sm:grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
           <h2 className="font-serif text-lg mb-1">Participação por membro</h2>
           <p className="text-xs text-muted-foreground mb-5">Top 10 servidores por pontuação acumulada</p>
@@ -1324,6 +1373,60 @@ function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ── Gráficos pastorais: sexo, faixa etária, pastoral ── */}
+      {memberStats && (memberStats.bySex.length > 0 || memberStats.byAge.length > 0 || memberStats.byPastoral.length > 0) && (
+        <div className="hidden sm:grid gap-6 lg:grid-cols-3">
+          {memberStats.bySex.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
+              <h2 className="font-serif text-lg mb-1">Membros por sexo</h2>
+              <p className="text-xs text-muted-foreground mb-5">Distribuição de membros ativos</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={memberStats.bySex} margin={{ left: 0, right: 8, top: 0, bottom: 0 }}>
+                  <XAxis dataKey="nome" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
+                  <Bar dataKey="membros" radius={[4, 4, 0, 0]} name="Membros">
+                    {memberStats.bySex.map((entry, i) => <Cell key={i} fill={entry.cor} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {memberStats.byAge.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
+              <h2 className="font-serif text-lg mb-1">Faixa etária</h2>
+              <p className="text-xs text-muted-foreground mb-5">Membros ativos com data de nascimento informada</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={memberStats.byAge} margin={{ left: 0, right: 8, top: 0, bottom: 0 }}>
+                  <XAxis dataKey="nome" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
+                  <Bar dataKey="membros" radius={[4, 4, 0, 0]} name="Membros">
+                    {memberStats.byAge.map((_, i) => <Cell key={i} fill={`hsl(var(--primary) / ${Math.max(0.4, 1 - i * 0.1)})`} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {memberStats.byPastoral.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
+              <h2 className="font-serif text-lg mb-1">Membros por pastoral</h2>
+              <p className="text-xs text-muted-foreground mb-5">Membros ativos em cada pastoral</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={memberStats.byPastoral} margin={{ left: 0, right: 8, top: 0, bottom: 32 }}>
+                  <XAxis dataKey="nome" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" interval={0} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
+                  <Bar dataKey="membros" radius={[4, 4, 0, 0]} name="Membros">
+                    {memberStats.byPastoral.map((entry: { cor: string }, i: number) => <Cell key={i} fill={entry.cor ?? "hsl(var(--primary))"} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Dialog substituição de membro ─────────────────────────────────── */}
       <Dialog open={!!substituicaoTarget} onOpenChange={(o) => { if (!o) setSubstituicaoTarget(null); }}>
