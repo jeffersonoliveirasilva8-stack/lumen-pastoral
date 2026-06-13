@@ -732,11 +732,11 @@ function ComunidadesTab({ paroquiaId }: { paroquiaId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="flex-1 min-w-0 text-sm text-muted-foreground">
           Matriz, capelas e comunidades vinculadas à paróquia.
         </p>
-        <Button size="sm" onClick={openCreate}>
+        <Button size="sm" onClick={openCreate} className="shrink-0">
           <Plus className="h-4 w-4 mr-1" /> Nova comunidade
         </Button>
       </div>
@@ -1828,8 +1828,8 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
           <p className="text-sm text-muted-foreground">
             Defina os tipos de celebração e as funções geradas automaticamente para cada um.
           </p>
@@ -1837,7 +1837,7 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
             Ex: Missa Comum, Missa Solene, Missa com Bispo, Via Sacra, Adoração.
           </p>
         </div>
-        <Button size="sm" onClick={() => { setEditTarget(null); setDialogOpen(true); }}>
+        <Button size="sm" className="shrink-0" onClick={() => { setEditTarget(null); setDialogOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo tipo
         </Button>
       </div>

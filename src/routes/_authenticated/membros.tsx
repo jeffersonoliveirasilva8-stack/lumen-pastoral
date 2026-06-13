@@ -499,7 +499,7 @@ function MemberForm({
             </span>
           ) : (
             <span className="text-xs text-muted-foreground">
-              Restrição: {form.restricoes_dia_semana.sort((a, b) => a - b).map((d) => DIAS_SEMANA[d]).join(", ")}
+              Restrição: {[...form.restricoes_dia_semana].sort((a, b) => a - b).map((d) => DIAS_SEMANA[d]).join(", ")}
             </span>
           )}
         </div>

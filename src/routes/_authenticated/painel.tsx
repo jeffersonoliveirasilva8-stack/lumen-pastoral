@@ -1376,7 +1376,7 @@ function DashboardPage() {
 
       {/* ── Gráficos pastorais: sexo, faixa etária, pastoral ── */}
       {memberStats && (memberStats.bySex.length > 0 || memberStats.byAge.length > 0 || memberStats.byPastoral.length > 0) && (
-        <div className="hidden sm:grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {memberStats.bySex.length > 0 && (
             <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
               <h2 className="font-serif text-lg mb-1">Membros por sexo</h2>
