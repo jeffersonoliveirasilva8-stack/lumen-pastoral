@@ -145,6 +145,7 @@
   html {
     scroll-behavior: smooth;
     overflow-x: hidden;
+    max-width: 100vw;
   }
   html, body { font-family: var(--font-sans); }
   body {
@@ -153,9 +154,16 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
+    max-width: 100vw;
+    overscroll-behavior-x: none;
     -webkit-tap-highlight-color: transparent;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
+  }
+  #root {
+    overflow-x: hidden;
+    max-width: 100vw;
+    width: 100%;
   }
   h1, h2, h3, .font-serif { font-family: var(--font-serif); letter-spacing: -0.01em; }
 

@@ -313,8 +313,8 @@ function AuthLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto max-w-7xl px-4 pt-6 pb-32 sm:px-6 lg:px-8 lg:pb-10">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full">
+          <div className="mx-auto max-w-7xl px-4 pt-6 pb-32 sm:px-6 lg:px-8 lg:pb-10 min-w-0 w-full overflow-hidden">
             <Outlet />
           </div>
         </main>

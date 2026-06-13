@@ -1072,17 +1072,17 @@ function DashboardPage() {
       <div className="grid gap-6 xl:grid-cols-[2.2fr_1fr]">
         <div className="space-y-4">
           {/* ── Agenda Pastoral (escalas + eventos unificados) ── */}
-          <div className="rounded-3xl border border-border bg-card shadow-altar overflow-hidden">
-            <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5 border-b border-border">
+          <div className="rounded-3xl border border-border bg-card shadow-altar overflow-hidden min-w-0">
+            <div className="flex items-center justify-between gap-2 p-4 sm:p-5 border-b border-border">
               <div className="min-w-0 flex-1">
                 <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Agenda Pastoral</p>
                 <h2 className="mt-1 font-serif text-lg sm:text-xl leading-snug">Próximas escalas e eventos</h2>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <Button variant="ghost" size="sm" className="h-8 text-xs px-2.5" asChild>
+                <Button variant="ghost" size="sm" className="h-8 text-xs px-2" asChild>
                   <Link to="/formacoes" search={{}}>Agenda <ChevronRight className="h-3 w-3 ml-0.5" /></Link>
                 </Button>
-                <Button variant="ghost" size="sm" className="h-8 text-xs px-2.5" asChild>
+                <Button variant="ghost" size="sm" className="h-8 text-xs px-2" asChild>
                   <Link to="/escalas" search={{}}>Escalas <ChevronRight className="h-3 w-3 ml-0.5" /></Link>
                 </Button>
               </div>
@@ -1094,7 +1094,6 @@ function DashboardPage() {
                 <p className="mt-3 text-sm text-muted-foreground">Nenhum evento ou escala nas próximas duas semanas.</p>
               </div>
             ) : (() => {
-              // Group by date
               const dateGroups = new Map<string, AgendaEvent[]>();
               agendaItems.forEach((ev) => {
                 const list = dateGroups.get(ev.data) ?? [];
@@ -1108,7 +1107,7 @@ function DashboardPage() {
                     const d = new Date(date + "T00:00:00");
                     const isToday = format(d, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
                     return (
-                      <div key={date} className={`px-5 py-3.5 ${isToday ? "bg-primary/3" : ""}`}>
+                      <div key={date} className={`px-4 py-3 ${isToday ? "bg-primary/3" : ""}`}>
                         <p className={`text-[11px] font-bold uppercase tracking-[0.2em] mb-2.5 ${isToday ? "text-primary" : "text-muted-foreground"}`}>
                           {isToday ? "Hoje — " : ""}{format(d, "EEE, d 'de' MMM", { locale: ptBR })}
                         </p>
@@ -1116,21 +1115,21 @@ function DashboardPage() {
                           {items.map((ev) => {
                             const escalaStatus = ev.status ? (STATUS_CONFIG[ev.status] ?? STATUS_CONFIG.rascunho) : null;
                             return (
-                              <div key={ev.id} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background px-3.5 py-2.5">
+                              <div key={ev.id} className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background px-3 py-2.5 min-w-0 overflow-hidden">
                                 <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: ev.cor }} />
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1 min-w-0 overflow-hidden">
                                   <p className="text-sm font-medium truncate leading-snug">{ev.titulo}</p>
-                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                                     {ev.hora ? ev.hora.slice(0,5) : ""}
                                     {ev.local ? (ev.hora ? ` · ${ev.local}` : ev.local) : ""}
                                   </p>
                                 </div>
                                 {ev.tipo === "Escala" && escalaStatus ? (
-                                  <Badge variant={escalaStatus.variant} className="text-[10px] uppercase shrink-0">
+                                  <Badge variant={escalaStatus.variant} className="text-[10px] uppercase shrink-0 max-w-[80px] truncate">
                                     {escalaStatus.label}
                                   </Badge>
                                 ) : (
-                                  <span className="inline-flex rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-blue-600 shrink-0">
+                                  <span className="inline-flex rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-blue-600 shrink-0">
                                     {ev.tipo}
                                   </span>
                                 )}
@@ -1640,13 +1639,13 @@ function InsightsPanel({
                 key={ins.id}
                 to={ins.href as any}
                 search={ins.hrefSearch as any}
-                className="flex items-start gap-3 px-4 py-3.5 border-l-4 hover:bg-muted/30 transition block"
+                className="flex items-start gap-3 px-4 py-3.5 border-l-4 hover:bg-muted/30 transition"
                 style={{ borderLeftColor: ins.borderColor }}
               >
                 <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${ins.iconCls}`} />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium leading-snug">{ins.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{ins.desc}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium leading-snug truncate">{ins.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">{ins.desc}</p>
                 </div>
               </Link>
             );
