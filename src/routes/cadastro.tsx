@@ -61,9 +61,14 @@ function CadastroPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await anyDb
+      // Gera ID no cliente para não precisar de SELECT após INSERT
+      // (evita problemas de RLS com SELECT policy para anon)
+      const newId = crypto.randomUUID();
+
+      const { error } = await anyDb
         .from("solicitacoes_paroquia")
         .insert({
+          id:            newId,
           nome_paroquia: form.nome_paroquia.trim(),
           diocese:       form.diocese.trim(),
           cidade:        form.cidade.trim(),
@@ -73,9 +78,7 @@ function CadastroPage() {
           email:         form.email.trim().toLowerCase(),
           mensagem:      form.mensagem.trim() || null,
           status:        "pendente",
-        })
-        .select("id")
-        .single();
+        });
 
       if (error) {
         // Verifica se é duplicata (índice único pendente/em_analise)
@@ -88,7 +91,7 @@ function CadastroPage() {
         return;
       }
 
-      setProtocoloId(data.id.slice(0, 8).toUpperCase());
+      setProtocoloId(newId.slice(0, 8).toUpperCase());
       setStep("success");
     } catch (err) {
       toast.error("Erro inesperado: " + (err as Error).message);
