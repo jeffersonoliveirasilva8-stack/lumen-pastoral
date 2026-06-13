@@ -2833,18 +2833,65 @@ function PDFImagesTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () =
 
 // ── Tab: Regras de Escala ─────────────────────────────────────────────────────
 
+type ConfigEscalasEngine = {
+  confirmacao_ativa: boolean;
+  confirmacao_horas_antes: number;
+  substituicao_ativa: boolean;
+  substituicao_horas_antes: number;
+  auto_pontuar: boolean;
+  pontuacao_presenca: number;
+  pontuacao_falta: number;
+  pontuacao_atraso: number;
+  pontuacao_justificou: number;
+};
+
+const DEFAULT_CONFIG_ESCALAS: ConfigEscalasEngine = {
+  confirmacao_ativa: false,
+  confirmacao_horas_antes: 72,
+  substituicao_ativa: false,
+  substituicao_horas_antes: 48,
+  auto_pontuar: false,
+  pontuacao_presenca: 1,
+  pontuacao_falta: -2,
+  pontuacao_atraso: -1,
+  pontuacao_justificou: 0,
+};
+
 function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () => void }) {
   const raw = paroquia.regras_escala as RegrasEscala | null;
   const [regras, setRegras] = useState<RegrasEscala>({ ...DEFAULT_REGRAS, ...(raw ?? {}) });
+  const [configEscalas, setConfigEscalas] = useState<ConfigEscalasEngine>(DEFAULT_CONFIG_ESCALAS);
   const [saving, setSaving] = useState(false);
 
+  useQuery<ConfigEscalasEngine>({
+    queryKey: ["config-escalas-engine", paroquia.id],
+    queryFn: async () => {
+      const { data } = await anyDb.from("paroquia_config_escalas").select("*").eq("paroquia_id", paroquia.id).maybeSingle();
+      const cfg = { ...DEFAULT_CONFIG_ESCALAS, ...(data ?? {}) };
+      setConfigEscalas(cfg);
+      return cfg;
+    },
+  });
+
   function r(key: keyof RegrasEscala, value: unknown) { setRegras({ ...regras, [key]: value }); }
+  function c(key: keyof ConfigEscalasEngine, value: unknown) {
+    setConfigEscalas((prev) => ({ ...prev, [key]: value }));
+    // Sincroniza confirmacao_escala_ativa com confirmacao_ativa
+    if (key === "confirmacao_ativa") setRegras((prev) => ({ ...prev, confirmacao_escala_ativa: value as boolean }));
+  }
 
   async function save() {
     setSaving(true);
-    const { error } = await supabase.from("paroquias").update({ regras_escala: regras }).eq("id", paroquia.id);
+    const { error: e1 } = await supabase.from("paroquias").update({ regras_escala: { ...regras, confirmacao_escala_ativa: configEscalas.confirmacao_ativa } }).eq("id", paroquia.id);
+    if (e1) { setSaving(false); toast.error(e1.message); return; }
+
+    const { error: e2 } = await anyDb.from("paroquia_config_escalas").upsert({
+      paroquia_id: paroquia.id,
+      ...configEscalas,
+    }, { onConflict: "paroquia_id" });
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (e2) { toast.error(e2.message); return; }
+
     toast.success("Regras de escala salvas.");
     onSaved();
   }
@@ -2861,15 +2908,15 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
         <div className="space-y-3">
           <button
             type="button"
-            onClick={() => r("confirmacao_escala_ativa", false)}
+            onClick={() => c("confirmacao_ativa", false)}
             className={`w-full text-left rounded-xl border-2 p-4 transition ${
-              !regras.confirmacao_escala_ativa
+              !configEscalas.confirmacao_ativa
                 ? "border-primary bg-primary/5"
                 : "border-border hover:border-primary/40"
             }`}
           >
             <div className="flex items-start gap-3">
-              <div className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${!regras.confirmacao_escala_ativa ? "border-primary bg-primary" : "border-muted-foreground"}`} />
+              <div className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${!configEscalas.confirmacao_ativa ? "border-primary bg-primary" : "border-muted-foreground"}`} />
               <div>
                 <p className="font-semibold text-sm">Escala Fixa <span className="text-xs text-emerald-600 font-normal ml-1">(Recomendado)</span></p>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -2881,15 +2928,15 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
           </button>
           <button
             type="button"
-            onClick={() => r("confirmacao_escala_ativa", true)}
+            onClick={() => c("confirmacao_ativa", true)}
             className={`w-full text-left rounded-xl border-2 p-4 transition ${
-              regras.confirmacao_escala_ativa
+              configEscalas.confirmacao_ativa
                 ? "border-primary bg-primary/5"
                 : "border-border hover:border-primary/40"
             }`}
           >
             <div className="flex items-start gap-3">
-              <div className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${regras.confirmacao_escala_ativa ? "border-primary bg-primary" : "border-muted-foreground"}`} />
+              <div className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 ${configEscalas.confirmacao_ativa ? "border-primary bg-primary" : "border-muted-foreground"}`} />
               <div>
                 <p className="font-semibold text-sm">Confirmação Ativa</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -2899,6 +2946,83 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
             </div>
           </button>
         </div>
+        {configEscalas.confirmacao_ativa && (
+          <div className="pt-2">
+            <label className="text-xs text-muted-foreground">Prazo para confirmar (horas antes da escala)</label>
+            <input
+              type="number" min={1} max={168}
+              value={configEscalas.confirmacao_horas_antes}
+              onChange={(e) => c("confirmacao_horas_antes", Number(e.target.value))}
+              className="mt-1 w-28 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Substituições */}
+      <div className="rounded-xl border border-border p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Substituições</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Permite que membros solicitem troca de escala.</p>
+          </div>
+          <Switch
+            checked={configEscalas.substituicao_ativa}
+            onCheckedChange={(v) => c("substituicao_ativa", v)}
+          />
+        </div>
+        {configEscalas.substituicao_ativa && (
+          <div>
+            <label className="text-xs text-muted-foreground">Prazo para solicitar substituição (horas antes)</label>
+            <input
+              type="number" min={1} max={168}
+              value={configEscalas.substituicao_horas_antes}
+              onChange={(e) => c("substituicao_horas_antes", Number(e.target.value))}
+              className="mt-1 w-28 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Auto-pontuação */}
+      <div className="rounded-xl border border-border p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pontuação automática</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Atribui pontos ao membro automaticamente quando o coordenador registra presença/falta.
+              Alimenta o Ranking.
+            </p>
+          </div>
+          <Switch
+            checked={configEscalas.auto_pontuar}
+            onCheckedChange={(v) => c("auto_pontuar", v)}
+          />
+        </div>
+        {configEscalas.auto_pontuar && (
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            {([
+              { key: "pontuacao_presenca" as const,   label: "Presença",   sign: "+" },
+              { key: "pontuacao_atraso" as const,     label: "Atraso",     sign: "−" },
+              { key: "pontuacao_falta" as const,      label: "Falta",      sign: "−" },
+              { key: "pontuacao_justificou" as const, label: "Justificou", sign: "±" },
+            ]).map(({ key, label, sign }) => (
+              <div key={key} className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground flex-1">{label}</label>
+                <span className="text-xs font-bold text-muted-foreground w-3 shrink-0">{sign}</span>
+                <input
+                  type="number" min={-10} max={10}
+                  value={Math.abs(configEscalas[key])}
+                  onChange={(e) => {
+                    const abs = Number(e.target.value);
+                    c(key, sign === "+" || sign === "±" ? abs : -abs);
+                  }}
+                  className="w-16 rounded-lg border border-input bg-background px-2 py-1.5 text-sm text-center outline-none focus:border-ring"
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Indisponibilidade */}

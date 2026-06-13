@@ -345,17 +345,29 @@ function PortalMembroEscalas() {
   // ── Mutations ─────────────────────────────────────────────────────────
   const responderMutation = useMutation({
     mutationFn: async (args: { escala_membro_id: string; status: string; justificativa?: string }) => {
-      const { error } = await anyDb
-        .from("escala_membros")
-        .update({ status: args.status, justificativa: args.justificativa ?? null })
-        .eq("id", args.escala_membro_id)
-        .eq("membro_id", membro!.id);
-      if (error) throw error;
+      if (args.status === "recusado") {
+        // Usa RPC com SECURITY DEFINER para garantir persistência e criar substituição
+        const { data, error } = await anyDb.rpc("portal_recusar_escala", {
+          p_escala_membro_id: args.escala_membro_id,
+          p_motivo: args.justificativa ?? "",
+        });
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error ?? "Erro ao registrar recusa");
+      } else {
+        // Confirmação e volta para pendente: direct update
+        const { error } = await anyDb
+          .from("escala_membros")
+          .update({ status: args.status, justificativa: args.justificativa ?? null })
+          .eq("id", args.escala_membro_id)
+          .eq("membro_id", membro!.id);
+        if (error) throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["pm-todas-escalas", membro!.paroquia_id] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas", membro!.id] });
-      toast.success("Resposta registrada.");
+      qc.invalidateQueries({ queryKey: ["pm-substituicoes", membro!.id] });
+      toast.success(args.status === "recusado" ? "Recusa registrada." : "Resposta registrada.");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -776,21 +788,25 @@ function EscalaPortalCard({
 
       {myMembro && isPendente && recusando && confirmacaoAtiva && (
         <div className="border-t border-border/40 px-4 py-3 space-y-2">
+          <p className="text-xs text-muted-foreground">Informe o motivo da recusa. <span className="text-destructive">Obrigatório.</span></p>
           <textarea
             className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring resize-none"
-            placeholder="Motivo da recusa (opcional)…"
+            placeholder="Ex: compromisso de trabalho, viagem em família…"
             rows={2}
             value={justificativa}
             onChange={(e) => setJustificativa(e.target.value)}
             autoFocus
           />
+          {justificativa.trim().length > 0 && justificativa.trim().length < 10 && (
+            <p className="text-[11px] text-destructive">Digite ao menos 10 caracteres.</p>
+          )}
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
               className="flex-1 text-destructive border-destructive/30 hover:bg-destructive/10 rounded-xl"
-              disabled={saving}
-              onClick={() => { onResponder(myMembro.id, "recusado", justificativa || undefined); setRecusando(false); }}
+              disabled={saving || justificativa.trim().length < 10}
+              onClick={() => { onResponder(myMembro.id, "recusado", justificativa.trim()); setRecusando(false); }}
             >
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Confirmar recusa

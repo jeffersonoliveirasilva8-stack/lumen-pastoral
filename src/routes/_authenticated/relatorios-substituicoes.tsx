@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/relatorios-substituicoes")({
-  component: RelatoriosSubstituicoes,
+  component: () => <RelatoriosContent showHeader />,
   head: () => ({ meta: [{ title: "Relatórios — Substituições — Lumen Pastoral" }] }),
 });
 
@@ -50,7 +50,7 @@ const STATUS_LABEL: Record<string, string> = {
   cancelada:      "Cancelada",
 };
 
-function RelatoriosSubstituicoes() {
+export function RelatoriosContent({ showHeader = false }: { showHeader?: boolean }) {
   const { profile } = useAuth();
   const paroquiaId = profile?.paroquia_id ?? null;
   const [filtros, setFiltros] = useState<Filtros>({
@@ -150,21 +150,33 @@ function RelatoriosSubstituicoes() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 lg:px-6 space-y-6 pb-10">
+    <div className="space-y-6">
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-serif">Relatórios — Substituições</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Análise e histórico completo de substituições da paróquia.
-          </p>
+      {/* Header — exibido apenas na rota standalone */}
+      {showHeader && (
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-serif">Relatórios — Substituições</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Análise e histórico completo de substituições da paróquia.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="rounded-xl shrink-0" onClick={exportCSV}>
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            Exportar CSV
+          </Button>
         </div>
-        <Button variant="outline" size="sm" className="rounded-xl shrink-0" onClick={exportCSV}>
-          <Download className="h-3.5 w-3.5 mr-1.5" />
-          Exportar CSV
-        </Button>
-      </div>
+      )}
+
+      {/* Botão exportar quando em modo aba */}
+      {!showHeader && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" className="rounded-xl" onClick={exportCSV}>
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            Exportar CSV
+          </Button>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 rounded-2xl border border-border bg-card px-4 py-3">

@@ -6,8 +6,9 @@ import { ptBR } from "date-fns/locale";
 import {
   Loader2, ArrowLeftRight, CheckCircle2, XCircle, Clock,
   AlertTriangle, Filter, HandHelping, ChevronDown, ChevronUp,
-  Users, Search,
+  Users, Search, BarChart3,
 } from "lucide-react";
+import { RelatoriosContent } from "@/routes/_authenticated/relatorios-substituicoes";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -70,6 +71,7 @@ function AdminSubstituicoes() {
   const { profile } = useAuth();
   const paroquiaId = profile?.paroquia_id ?? null;
   const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"gestao" | "relatorios">("gestao");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectMotivo, setRejectMotivo] = useState("");
@@ -167,13 +169,47 @@ function AdminSubstituicoes() {
             Gerencie solicitações de troca de escala da paróquia.
           </p>
         </div>
-        {pendentes > 0 && (
+        {pendentes > 0 && activeTab === "gestao" && (
           <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-sm text-amber-700 dark:text-amber-400 shrink-0">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span className="font-semibold">{pendentes} pendente{pendentes !== 1 ? "s" : ""}</span>
           </div>
         )}
       </div>
+
+      {/* Abas: Gestão | Relatórios */}
+      <div className="flex gap-1 border-b border-border">
+        <button
+          type="button"
+          onClick={() => setActiveTab("gestao")}
+          className={`px-4 py-2 text-sm font-medium transition border-b-2 -mb-px ${
+            activeTab === "gestao"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <ArrowLeftRight className="h-3.5 w-3.5 inline mr-1.5" />
+          Gestão
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("relatorios")}
+          className={`px-4 py-2 text-sm font-medium transition border-b-2 -mb-px ${
+            activeTab === "relatorios"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <BarChart3 className="h-3.5 w-3.5 inline mr-1.5" />
+          Relatórios
+        </button>
+      </div>
+
+      {/* Aba Relatórios */}
+      {activeTab === "relatorios" && <RelatoriosContent />}
+
+      {/* Aba Gestão — Filtros */}
+      {activeTab === "gestao" && <>
 
       {/* Filtros */}
       <div className="space-y-3">
@@ -240,14 +276,19 @@ function AdminSubstituicoes() {
             <DialogTitle>Rejeitar substituição</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            <p className="text-sm text-muted-foreground">Informe o motivo (opcional). O solicitante será notificado.</p>
+            <p className="text-sm text-muted-foreground">
+              Informe o motivo. <span className="text-destructive font-medium">Obrigatório</span> — o solicitante será notificado.
+            </p>
             <textarea
               value={rejectMotivo}
               onChange={(e) => setRejectMotivo(e.target.value)}
-              placeholder="Ex: o voluntário não tem a qualificação necessária…"
+              placeholder="Ex: o voluntário não tem a qualificação necessária para este ministério…"
               rows={3}
               className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring resize-none"
             />
+            {rejectMotivo.trim().length > 0 && rejectMotivo.trim().length < 15 && (
+              <p className="text-[11px] text-destructive">Digite ao menos 15 caracteres para que o motivo seja claro.</p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setRejectId(null); setRejectMotivo(""); }}>
@@ -255,7 +296,7 @@ function AdminSubstituicoes() {
             </Button>
             <Button
               variant="destructive"
-              disabled={rejeitarMutation.isPending}
+              disabled={rejeitarMutation.isPending || rejectMotivo.trim().length < 15}
               onClick={() => rejectId && rejeitarMutation.mutate({ substId: rejectId, motivo: rejectMotivo })}
             >
               {rejeitarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
@@ -312,6 +353,8 @@ function AdminSubstituicoes() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      </> /* fim aba gestao */}
     </div>
   );
 }

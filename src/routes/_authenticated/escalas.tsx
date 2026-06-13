@@ -891,21 +891,25 @@ function EscalasPage() {
             if (!passes) { skipped.push(missa.nome); continue; }
           }
 
-          // Verificar se escala já existe nessa data
-          const { data: existing } = await supabase
+          // Verificar se escala já existe nessa data para esta missa específica.
+          // Usa match exato (título + local) para não confundir duas missas no
+          // mesmo dia com nomes similares mas comunidades distintas.
+          const tituloGerado = `${missa.nome} — ${format(targetDate, "dd/MM", { locale: ptBR })}`;
+          let existingQuery = (supabase as any)
             .from("escalas")
             .select("id")
             .eq("paroquia_id", profile.paroquia_id!)
             .eq("data", dateStr)
-            .ilike("titulo", `%${missa.nome}%`)
-            .limit(1);
+            .eq("titulo", tituloGerado);
+          if (missa.local) existingQuery = existingQuery.eq("local", missa.local);
+          const { data: existing } = await existingQuery.limit(1);
 
           if (existing && existing.length > 0) { skipped.push(missa.nome); continue; }
 
-          // Criar escala
+          // Criar escala — tituloGerado já calculado acima para o check de duplicata
           const { data: newEscala, error } = await (supabase as any).from("escalas").insert({
             paroquia_id: profile.paroquia_id!,
-            titulo: `${missa.nome} — ${format(targetDate, "dd/MM", { locale: ptBR })}`,
+            titulo: tituloGerado,
             data: dateStr,
             hora_inicio: missa.hora_inicio,
             local: missa.local,
