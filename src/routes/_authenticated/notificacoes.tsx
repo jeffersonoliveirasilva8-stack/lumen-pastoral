@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
-  BellOff, Plus, Loader2, AlertTriangle, Info,
-  Zap, Settings2, CheckCheck, Trash2, Clock, History, ChevronDown, ChevronUp,
+  BellOff, Plus, Loader2, AlertTriangle, Info, Zap, Settings2,
+  CheckCheck, Trash2, ChevronRight, X,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import {
+  format, parseISO, isToday, isYesterday, isThisWeek,
+  differenceInMinutes, differenceInHours,
+} from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -33,7 +36,7 @@ export const Route = createFileRoute("/_authenticated/notificacoes")({
   head: () => ({ meta: [{ title: "Notificações — Lumen Pastoral" }] }),
 });
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────
 
 type Notificacao = {
   id: string;
@@ -52,29 +55,201 @@ type NovaNotificacaoForm = {
   tipo: "aviso" | "alerta" | "urgente" | "sistema";
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Configuração visual por tipo ───────────────────────────────
 
 const TIPO_CONFIG: Record<string, {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  badgeCls: string;
-  dotCls: string;
+  iconBg: string;
+  accent: string;
 }> = {
-  aviso:   { label: "Aviso",   icon: Info,          badgeCls: "bg-blue-500/10 text-blue-700 border-blue-200",    dotCls: "bg-blue-500" },
-  alerta:  { label: "Alerta",  icon: AlertTriangle, badgeCls: "bg-amber-500/10 text-amber-700 border-amber-200", dotCls: "bg-amber-500" },
-  urgente: { label: "Urgente", icon: Zap,            badgeCls: "bg-red-500/10 text-red-700 border-red-200",       dotCls: "bg-red-500" },
-  sistema: { label: "Sistema", icon: Settings2,      badgeCls: "bg-slate-500/10 text-slate-700 border-slate-200", dotCls: "bg-slate-500" },
+  aviso:   { label: "Aviso",   icon: Info,          iconBg: "bg-blue-500",   accent: "border-l-blue-500" },
+  alerta:  { label: "Alerta",  icon: AlertTriangle, iconBg: "bg-amber-400",  accent: "border-l-amber-400" },
+  urgente: { label: "Urgente", icon: Zap,            iconBg: "bg-red-500",    accent: "border-l-red-500" },
+  sistema: { label: "Sistema", icon: Settings2,      iconBg: "bg-slate-400",  accent: "border-l-slate-400" },
 };
 
 const TIPO_FILTROS = [
-  { value: "todos", label: "Todos os tipos" },
+  { value: "todos",   label: "Todas" },
   { value: "aviso",   label: "Avisos" },
   { value: "alerta",  label: "Alertas" },
   { value: "urgente", label: "Urgentes" },
   { value: "sistema", label: "Sistema" },
 ];
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────
+
+function getGrupoData(dateStr: string): string {
+  const d = parseISO(dateStr);
+  if (isToday(d)) return "Hoje";
+  if (isYesterday(d)) return "Ontem";
+  if (isThisWeek(d, { weekStartsOn: 0 })) return format(d, "EEEE", { locale: ptBR });
+  return format(d, "d 'de' MMMM", { locale: ptBR });
+}
+
+function tempoRelativo(dateStr: string): string {
+  const d = parseISO(dateStr);
+  const mins = differenceInMinutes(new Date(), d);
+  if (mins < 1) return "agora";
+  if (mins < 60) return `${mins}min`;
+  const hrs = differenceInHours(new Date(), d);
+  if (hrs < 24) return `${hrs}h`;
+  return format(d, "d MMM", { locale: ptBR });
+}
+
+// ── Card iOS ───────────────────────────────────────────────────
+
+function NotifCard({
+  n,
+  onMarcarLida,
+  onDelete,
+  isMarkingRead,
+}: {
+  n: Notificacao;
+  onMarcarLida: (id: string) => void;
+  onDelete: (n: Notificacao) => void;
+  isMarkingRead: boolean;
+}) {
+  const cfg = TIPO_CONFIG[n.tipo] ?? TIPO_CONFIG.aviso;
+  const Icon = cfg.icon;
+  const isLida = n.lida;
+
+  const [swipeX, setSwipeX] = useState(0);
+  const [swiping, setSwiping] = useState(false);
+  const touchStartX = useRef(0);
+  const THRESHOLD = 80;
+
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+    setSwiping(true);
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    const dx = e.touches[0].clientX - touchStartX.current;
+    if (dx < 0) setSwipeX(Math.max(dx, -(THRESHOLD + 12)));
+  }
+  function onTouchEnd() {
+    setSwiping(false);
+    if (swipeX <= -THRESHOLD) onDelete(n);
+    setSwipeX(0);
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl">
+      {/* Reveal vermelho */}
+      <div
+        className="absolute inset-y-0 right-0 flex items-center justify-center bg-red-500 rounded-r-2xl"
+        style={{ width: Math.abs(swipeX) || 72 }}
+      >
+        <Trash2 className="h-5 w-5 text-white" />
+      </div>
+
+      {/* Card */}
+      <div
+        className={[
+          "relative flex items-start gap-3 px-4 py-3.5 rounded-2xl bg-card",
+          "border-l-4",
+          !isLida ? cfg.accent + " shadow-sm" : "border-l-transparent opacity-55",
+        ].join(" ")}
+        style={{
+          transform: `translateX(${swipeX}px)`,
+          transition: swiping ? "none" : "transform 0.25s cubic-bezier(.4,0,.2,1)",
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* Ícone redondo */}
+        <div
+          className={`shrink-0 h-10 w-10 rounded-2xl flex items-center justify-center mt-0.5 text-white ${cfg.iconBg}`}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+        </div>
+
+        {/* Conteúdo */}
+        <div
+          className="flex-1 min-w-0 cursor-pointer"
+          onClick={() => !isLida && !isMarkingRead && onMarcarLida(n.id)}
+        >
+          {/* Linha: tipo + tempo */}
+          <div className="flex items-center justify-between mb-0.5">
+            <span className={`text-[11px] font-semibold uppercase tracking-wide ${isLida ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
+              {cfg.label}
+            </span>
+            <span className="text-[11px] text-muted-foreground/50 shrink-0 ml-2">
+              {tempoRelativo(n.created_at)}
+            </span>
+          </div>
+
+          {/* Título */}
+          <div className="flex items-start gap-1.5">
+            {!isLida && (
+              <span className="mt-1 shrink-0 h-2 w-2 rounded-full bg-blue-500" />
+            )}
+            <p className={`text-sm font-semibold leading-snug ${isLida ? "text-foreground/60" : "text-foreground"}`}>
+              {n.titulo}
+            </p>
+          </div>
+
+          {/* Mensagem */}
+          {n.mensagem && (
+            <p className={`text-xs mt-0.5 leading-relaxed line-clamp-2 ${isLida ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
+              {n.mensagem}
+            </p>
+          )}
+
+          {/* CTA marcar lida */}
+          {!isLida && (
+            <div className="flex items-center gap-0.5 mt-1.5">
+              <span className="text-[11px] text-blue-500 font-medium">Marcar como lida</span>
+              <ChevronRight className="h-3 w-3 text-blue-500" />
+            </div>
+          )}
+        </div>
+
+        {/* Ações desktop */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {!isLida && (
+            <button
+              type="button"
+              onClick={() => onMarcarLida(n.id)}
+              disabled={isMarkingRead}
+              title="Marcar como lida"
+              className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-blue-500 hover:bg-blue-500/10 transition"
+            >
+              {isMarkingRead
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <CheckCheck className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onDelete(n)}
+            title="Excluir"
+            className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Separador de data ──────────────────────────────────────────
+
+function DateDivider({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="flex items-center gap-2 px-1 py-1">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60 capitalize">
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-border/50" />
+      <span className="text-[10px] text-muted-foreground/40 tabular-nums">{count}</span>
+    </div>
+  );
+}
+
+// ── Página principal ───────────────────────────────────────────
 
 function NotificacoesPage() {
   const { profile } = useAuth();
@@ -84,7 +259,6 @@ function NotificacoesPage() {
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [novaOpen, setNovaOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Notificacao | null>(null);
-  const [historicoOpen, setHistoricoOpen] = useState(false);
 
   const { data: notificacoes = [], isLoading } = useQuery<Notificacao[]>({
     queryKey: ["notificacoes", pid],
@@ -117,7 +291,6 @@ function NotificacoesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notificacoes", pid] });
       toast.success("Todas marcadas como lidas.");
-      setHistoricoOpen(true);
     },
     onError: (e: unknown) => toast.error((e as Error).message),
   });
@@ -129,7 +302,8 @@ function NotificacoesPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notificacoes", pid] });
-      toast.success("Notificação removida."); setDeleteTarget(null);
+      toast.success("Notificação removida.");
+      setDeleteTarget(null);
     },
     onError: (e: unknown) => toast.error("Erro ao remover: " + (e as Error).message),
   });
@@ -137,18 +311,19 @@ function NotificacoesPage() {
   const criarMutation = useMutation({
     mutationFn: async (form: NovaNotificacaoForm) => {
       const { error } = await anyDb.from("notificacoes").insert({
-        paroquia_id:  pid,
-        titulo:       form.titulo,
-        mensagem:     form.mensagem || null,
-        tipo:         form.tipo,
-        apenas_admin: false, // comunicado para membros — visível no portal
-        destinatario_id: null, // broadcast: todos os membros da paróquia
+        paroquia_id:     pid,
+        titulo:          form.titulo,
+        mensagem:        form.mensagem || null,
+        tipo:            form.tipo,
+        apenas_admin:    false,
+        destinatario_id: null,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notificacoes", pid] });
-      toast.success("Notificação criada."); setNovaOpen(false);
+      toast.success("Notificação publicada.");
+      setNovaOpen(false);
     },
     onError: (e: unknown) => toast.error((e as Error).message),
   });
@@ -157,93 +332,132 @@ function NotificacoesPage() {
     ? notificacoes
     : notificacoes.filter((n) => n.tipo === tipoFiltro);
 
-  const pendentes = filtered.filter((n) => !n.lida);
-  const lidas = filtered.filter((n) => n.lida);
   const naoLidas = notificacoes.filter((n) => !n.lida).length;
 
-  return (
-    <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto space-y-6 pb-24 lg:pb-10">
+  // Agrupa por data
+  const grupos = useMemo(() => {
+    const map = new Map<string, Notificacao[]>();
+    for (const n of filtered) {
+      const g = getGrupoData(n.created_at);
+      const arr = map.get(g) ?? [];
+      arr.push(n);
+      map.set(g, arr);
+    }
+    return map;
+  }, [filtered]);
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-2xl mx-auto pb-24">
+
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Comunicação</p>
-          <h1 className="mt-2 font-serif text-2xl sm:text-3xl flex items-center gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground mb-1">
+            Comunicação
+          </p>
+          <h1 className="font-serif text-2xl flex items-center gap-2">
             Notificações
             {naoLidas > 0 && (
-              <span className="h-2.5 w-2.5 rounded-full bg-red-500 inline-block" />
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-bold px-1.5">
+                {naoLidas}
+              </span>
             )}
           </h1>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex items-center gap-2">
           {naoLidas > 0 && (
             <Button
-              variant="outline" size="sm"
+              variant="ghost"
+              size="sm"
               onClick={() => marcarTodasMutation.mutate()}
               disabled={marcarTodasMutation.isPending}
+              className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 text-xs font-semibold h-8 px-3"
             >
               {marcarTodasMutation.isPending
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <CheckCheck className="h-3.5 w-3.5" />
-              }
-              <span className="hidden sm:inline">Marcar todas lidas</span>
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                : <CheckCheck className="h-3.5 w-3.5 mr-1" />}
+              Limpar todas
             </Button>
           )}
-          <Button size="sm" onClick={() => setNovaOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Nova</span>
+          <Button
+            size="sm"
+            onClick={() => setNovaOpen(true)}
+            className="h-8 rounded-xl"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Nova
           </Button>
         </div>
       </div>
 
-      {/* Filtro por tipo */}
-      <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
-        {TIPO_FILTROS.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            onClick={() => setTipoFiltro(f.value)}
-            className={`shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition ${
-              tipoFiltro === f.value
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background text-muted-foreground border-border hover:border-primary/50"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      {/* ── Filtro por tipo ─────────────────────────────────────── */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-4 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+        {TIPO_FILTROS.map((f) => {
+          const ativo = tipoFiltro === f.value;
+          const cfg = f.value !== "todos" ? TIPO_CONFIG[f.value] : null;
+          const count = f.value === "todos"
+            ? naoLidas
+            : notificacoes.filter((n) => n.tipo === f.value && !n.lida).length;
+          return (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setTipoFiltro(f.value)}
+              className={[
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0",
+                ativo
+                  ? "bg-foreground text-background shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80",
+              ].join(" ")}
+            >
+              {cfg && (
+                <span className={`inline-flex h-3 w-3 rounded-full ${cfg.iconBg}`} />
+              )}
+              {f.label}
+              {count > 0 && (
+                <span className={[
+                  "h-4 min-w-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center",
+                  ativo ? "bg-background/20 text-background" : "bg-blue-500 text-white",
+                ].join(" ")}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
+      {/* ── Conteúdo ────────────────────────────────────────────── */}
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <div className="h-16 w-16 rounded-3xl bg-muted flex items-center justify-center">
+            <BellOff className="h-7 w-7 text-muted-foreground/30" />
+          </div>
+          <p className="text-sm font-medium text-muted-foreground">
+            {tipoFiltro === "todos" ? "Nenhuma notificação" : "Nenhuma notificação nesta categoria"}
+          </p>
+          {tipoFiltro !== "todos" && (
+            <button
+              type="button"
+              onClick={() => setTipoFiltro("todos")}
+              className="flex items-center gap-1 text-xs text-blue-500 hover:underline"
+            >
+              <X className="h-3 w-3" /> Ver todas
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
-
-          {/* ── PENDENTES ─────────────────────────────────────────────────── */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground/70">
-                Pendentes
-              </h2>
-              {pendentes.length > 0 && (
-                <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                  {pendentes.length}
-                </span>
-              )}
-            </div>
-
-            {pendentes.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border p-10 text-center">
-                <CheckCheck className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">Nenhuma notificação pendente.</p>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-border bg-card overflow-hidden divide-y divide-border">
-                {pendentes.map((n) => (
-                  <NotificacaoItem
+          {Array.from(grupos.entries()).map(([grupo, itens]) => (
+            <section key={grupo}>
+              <DateDivider label={grupo} count={itens.length} />
+              <div className="space-y-2 mt-2">
+                {itens.map((n) => (
+                  <NotifCard
                     key={n.id}
                     n={n}
                     onMarcarLida={(id) => marcarLidaMutation.mutate(id)}
@@ -252,65 +466,12 @@ function NotificacoesPage() {
                   />
                 ))}
               </div>
-            )}
-          </section>
-
-          {/* ── LIDAS / HISTÓRICO ─────────────────────────────────────────── */}
-          {lidas.length > 0 && (
-            <section>
-              <button
-                type="button"
-                className="flex items-center gap-2 mb-3 w-full group"
-                onClick={() => setHistoricoOpen((o) => !o)}
-              >
-                <History className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground/50 group-hover:text-foreground/70 transition">
-                  Histórico
-                </h2>
-                <span className="text-xs text-muted-foreground/60 bg-muted rounded-full px-2 py-0.5">
-                  {lidas.length}
-                </span>
-                <span className="ml-auto text-muted-foreground">
-                  {historicoOpen
-                    ? <ChevronUp className="h-4 w-4" />
-                    : <ChevronDown className="h-4 w-4" />
-                  }
-                </span>
-              </button>
-
-              {historicoOpen && (
-                <div className="rounded-2xl border border-border bg-card/50 overflow-hidden divide-y divide-border/60">
-                  {lidas.map((n) => (
-                    <NotificacaoItem
-                      key={n.id}
-                      n={n}
-                      onMarcarLida={() => {}}
-                      onDelete={setDeleteTarget}
-                      isMarkingRead={false}
-                      dimmed
-                    />
-                  ))}
-                </div>
-              )}
             </section>
-          )}
-
-          {/* Estado vazio total */}
-          {pendentes.length === 0 && lidas.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-border p-16 text-center">
-              <BellOff className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-              <p className="font-medium">Nenhuma notificação</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {tipoFiltro === "todos"
-                  ? "Nenhuma notificação cadastrada ainda."
-                  : "Nenhuma notificação nesta categoria."}
-              </p>
-            </div>
-          )}
+          ))}
         </div>
       )}
 
-      {/* Nova notificação */}
+      {/* ── Nova notificação ───────────────────────────────────── */}
       <NovaNotificacaoDialog
         open={novaOpen}
         saving={criarMutation.isPending}
@@ -318,7 +479,7 @@ function NotificacoesPage() {
         onSave={(data) => criarMutation.mutate(data)}
       />
 
-      {/* Confirmar exclusão */}
+      {/* ── Confirmar exclusão ─────────────────────────────────── */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -344,72 +505,7 @@ function NotificacoesPage() {
   );
 }
 
-// ── NotificacaoItem ───────────────────────────────────────────────────────────
-
-function NotificacaoItem({
-  n,
-  onMarcarLida,
-  onDelete,
-  isMarkingRead,
-  dimmed = false,
-}: {
-  n: Notificacao;
-  onMarcarLida: (id: string) => void;
-  onDelete: (n: Notificacao) => void;
-  isMarkingRead: boolean;
-  dimmed?: boolean;
-}) {
-  const cfg = TIPO_CONFIG[n.tipo] ?? TIPO_CONFIG.aviso;
-  const Icon = cfg.icon;
-
-  return (
-    <div className={`flex items-start gap-4 px-5 py-4 transition ${dimmed ? "opacity-60" : ""}`}>
-      <div className={`mt-0.5 h-8 w-8 rounded-full grid place-items-center shrink-0 ${cfg.badgeCls}`}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <div
-        className={`flex-1 min-w-0 ${!n.lida ? "cursor-pointer" : ""}`}
-        onClick={() => !n.lida && !isMarkingRead && onMarcarLida(n.id)}
-      >
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className={`text-sm ${!n.lida ? "font-semibold" : "font-medium text-foreground/70"}`}>
-            {n.titulo}
-          </p>
-          <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.badgeCls}`}>
-            {cfg.label}
-          </span>
-          {!n.lida && (
-            <span className={`h-2 w-2 rounded-full ${cfg.dotCls} shrink-0`} />
-          )}
-        </div>
-        {n.mensagem && (
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.mensagem}</p>
-        )}
-        <p className="text-xs text-muted-foreground/60 mt-1">
-          {format(parseISO(n.created_at), "d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
-        </p>
-        {!n.lida && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onMarcarLida(n.id); }}
-            className="mt-2 text-[11px] text-primary/70 hover:text-primary font-medium underline-offset-2 hover:underline transition"
-          >
-            Marcar como lida →
-          </button>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={() => onDelete(n)}
-        className="mt-0.5 p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition shrink-0"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
-
-// ── NovaNotificacaoDialog ─────────────────────────────────────────────────────
+// ── NovaNotificacaoDialog ──────────────────────────────────────
 
 function NovaNotificacaoDialog({
   open, saving, onClose, onSave,
@@ -440,8 +536,13 @@ function NovaNotificacaoDialog({
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Título *</Label>
-            <Input required value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex: Reunião de coordenadores confirmada" />
+            <Label>Título <span className="text-destructive">*</span></Label>
+            <Input
+              required
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              placeholder="Ex: Reunião de coordenadores confirmada"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Tipo</Label>
@@ -456,13 +557,21 @@ function NovaNotificacaoDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Mensagem (opcional)</Label>
-            <Textarea rows={3} value={mensagem} onChange={(e) => setMensagem(e.target.value)} placeholder="Detalhes da notificação…" />
+            <Label>Mensagem <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+            <Textarea
+              rows={3}
+              value={mensagem}
+              onChange={(e) => setMensagem(e.target.value)}
+              placeholder="Detalhes da notificação…"
+            />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => { onClose(); reset(); }}>Cancelar</Button>
+            <Button type="button" variant="outline" onClick={() => { onClose(); reset(); }}>
+              Cancelar
+            </Button>
             <Button type="submit" disabled={saving || !titulo.trim()}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />} Publicar
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Publicar para todos
             </Button>
           </DialogFooter>
         </form>

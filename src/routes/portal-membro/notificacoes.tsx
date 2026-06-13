@@ -1,11 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
-import { format, parseISO, isToday, isYesterday, isThisWeek, isThisMonth } from "date-fns";
+import {
+  format, parseISO, isToday, isYesterday, isThisWeek, differenceInMinutes,
+  differenceInHours,
+} from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   BellOff, CheckCheck, Loader2, Trash2, Calendar, ArrowLeftRight,
-  Megaphone, Users, Church, AlertTriangle, Zap, Settings2, X,
+  Megaphone, Users, Church, AlertTriangle, Zap, Settings2, X, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
@@ -38,22 +41,21 @@ type Categoria = "todas" | "escalas" | "substituicoes" | "eventos" | "comunicado
 
 const CATEGORIA_CONFIG: Record<Exclude<Categoria, "todas">, {
   label: string;
-  emoji: string;
   icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  bg: string;
+  iconBg: string;
+  iconColor: string;
+  accent: string;
 }> = {
-  urgente:       { label: "Urgente",       emoji: "🚨", icon: Zap,           color: "text-red-600",    bg: "bg-red-500/10 border-red-200 dark:border-red-800" },
-  pendencias:    { label: "Pendências",    emoji: "⚠️",  icon: AlertTriangle, color: "text-amber-600",  bg: "bg-amber-500/10 border-amber-200 dark:border-amber-800" },
-  escalas:       { label: "Escalas",       emoji: "📅", icon: Calendar,      color: "text-blue-600",   bg: "bg-blue-500/10 border-blue-200 dark:border-blue-800" },
-  substituicoes: { label: "Substituições", emoji: "🔄", icon: ArrowLeftRight, color: "text-violet-600", bg: "bg-violet-500/10 border-violet-200 dark:border-violet-800" },
-  eventos:       { label: "Eventos",       emoji: "⛪", icon: Church,        color: "text-emerald-600", bg: "bg-emerald-500/10 border-emerald-200 dark:border-emerald-800" },
-  comunicados:   { label: "Comunicados",   emoji: "📢", icon: Megaphone,     color: "text-sky-600",    bg: "bg-sky-500/10 border-sky-200 dark:border-sky-800" },
-  membros:       { label: "Membros",       emoji: "👥", icon: Users,         color: "text-pink-600",   bg: "bg-pink-500/10 border-pink-200 dark:border-pink-800" },
-  sistema:       { label: "Sistema",       emoji: "⚙️",  icon: Settings2,    color: "text-slate-600",  bg: "bg-slate-500/10 border-slate-200 dark:border-slate-800" },
+  urgente:       { label: "Urgente",       icon: Zap,            iconBg: "bg-red-500",     iconColor: "text-white",  accent: "border-l-red-500" },
+  pendencias:    { label: "Pendências",    icon: AlertTriangle,  iconBg: "bg-amber-400",   iconColor: "text-white",  accent: "border-l-amber-400" },
+  escalas:       { label: "Escalas",       icon: Calendar,       iconBg: "bg-blue-500",    iconColor: "text-white",  accent: "border-l-blue-500" },
+  substituicoes: { label: "Substituições", icon: ArrowLeftRight,  iconBg: "bg-violet-500",  iconColor: "text-white",  accent: "border-l-violet-500" },
+  eventos:       { label: "Eventos",       icon: Church,         iconBg: "bg-emerald-500", iconColor: "text-white",  accent: "border-l-emerald-500" },
+  comunicados:   { label: "Comunicados",   icon: Megaphone,      iconBg: "bg-sky-500",     iconColor: "text-white",  accent: "border-l-sky-500" },
+  membros:       { label: "Membros",       icon: Users,          iconBg: "bg-pink-500",    iconColor: "text-white",  accent: "border-l-pink-500" },
+  sistema:       { label: "Sistema",       icon: Settings2,      iconBg: "bg-slate-400",   iconColor: "text-white",  accent: "border-l-slate-400" },
 };
 
-// Derivar categoria a partir de tipo + link_referencia
 function getCategoria(n: Notificacao): Exclude<Categoria, "todas"> {
   if (n.tipo === "urgente") return "urgente";
   if (n.tipo === "sistema") return "sistema";
@@ -71,11 +73,21 @@ function getGrupoData(dateStr: string): string {
   if (isToday(d)) return "Hoje";
   if (isYesterday(d)) return "Ontem";
   if (isThisWeek(d, { weekStartsOn: 0 })) return format(d, "EEEE", { locale: ptBR });
-  if (isThisMonth(d)) return format(d, "'Dia' d", { locale: ptBR });
-  return format(d, "MMMM 'de' yyyy", { locale: ptBR });
+  return format(d, "d 'de' MMMM", { locale: ptBR });
 }
 
-// Componente de card com swipe para deletar (mobile)
+function tempoRelativo(dateStr: string): string {
+  const d = parseISO(dateStr);
+  const mins = differenceInMinutes(new Date(), d);
+  if (mins < 1) return "agora";
+  if (mins < 60) return `${mins}min`;
+  const hrs = differenceInHours(new Date(), d);
+  if (hrs < 24) return `${hrs}h`;
+  return format(d, "d MMM", { locale: ptBR });
+}
+
+// ── Card estilo iOS ────────────────────────────────────────────
+
 function NotifCard({
   n,
   isLida,
@@ -96,10 +108,11 @@ function NotifCard({
   const cat = getCategoria(n);
   const cfg = CATEGORIA_CONFIG[cat];
   const Icon = cfg.icon;
+
   const [swipeX, setSwipeX] = useState(0);
   const [swiping, setSwiping] = useState(false);
   const touchStartX = useRef(0);
-  const SWIPE_THRESHOLD = 72;
+  const THRESHOLD = 80;
 
   function onTouchStart(e: React.TouchEvent) {
     touchStartX.current = e.touches[0].clientX;
@@ -107,127 +120,141 @@ function NotifCard({
   }
   function onTouchMove(e: React.TouchEvent) {
     const dx = e.touches[0].clientX - touchStartX.current;
-    if (dx < 0 && podeExcluir) setSwipeX(Math.max(dx, -SWIPE_THRESHOLD - 8));
+    if (dx < 0 && podeExcluir) setSwipeX(Math.max(dx, -(THRESHOLD + 12)));
   }
   function onTouchEnd() {
     setSwiping(false);
-    if (swipeX <= -SWIPE_THRESHOLD) {
-      onDelete();
-    }
+    if (swipeX <= -THRESHOLD) onDelete();
     setSwipeX(0);
   }
 
   return (
     <div className="relative overflow-hidden rounded-2xl">
-      {/* Fundo vermelho de exclusão (swipe) */}
+      {/* Reveal: botão vermelho atrás */}
       {podeExcluir && (
-        <div className="absolute inset-y-0 right-0 w-16 flex items-center justify-center bg-destructive rounded-r-2xl">
-          <Trash2 className="h-4 w-4 text-white" />
+        <div
+          className="absolute inset-y-0 right-0 flex items-center justify-center bg-red-500 rounded-r-2xl"
+          style={{ width: Math.abs(swipeX) || 72 }}
+        >
+          <Trash2 className="h-5 w-5 text-white" />
         </div>
       )}
 
       {/* Card principal */}
       <div
         className={[
-          "relative transition-all duration-200",
-          "rounded-2xl border",
-          isLida
-            ? "bg-card/60 border-border opacity-60"
-            : cfg.bg,
-          n.tipo === "urgente" && !isLida ? "shadow-md ring-1 ring-red-400/30" : "",
+          "relative flex items-start gap-3 px-4 py-3.5 rounded-2xl",
+          "border-l-4 bg-card",
+          !isLida ? cfg.accent + " shadow-sm" : "border-l-transparent opacity-60",
         ].join(" ")}
         style={{
-          transform: swiping ? `translateX(${swipeX}px)` : undefined,
-          transition: swiping ? "none" : "transform 0.2s ease",
+          transform: `translateX(${swipeX}px)`,
+          transition: swiping ? "none" : "transform 0.25s cubic-bezier(.4,0,.2,1)",
         }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
+        {/* Ícone redondo estilo iOS */}
+        <div
+          className={`shrink-0 h-10 w-10 rounded-2xl flex items-center justify-center mt-0.5 ${cfg.iconBg} ${cfg.iconColor}`}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+        </div>
+
+        {/* Conteúdo */}
         <button
           type="button"
-          className="w-full text-left px-4 py-3.5"
+          className="flex-1 min-w-0 text-left"
           onClick={onTap}
           disabled={isPendingLida}
         >
-          <div className="flex items-start gap-3">
-            {/* Ícone de categoria */}
-            <div className={[
-              "shrink-0 h-9 w-9 rounded-xl flex items-center justify-center mt-0.5",
-              isLida ? "bg-muted" : (n.tipo === "urgente" ? "bg-red-100 dark:bg-red-900/40" : "bg-background/70"),
-            ].join(" ")}>
-              <Icon className={`h-4 w-4 ${isLida ? "text-muted-foreground" : cfg.color}`} />
-            </div>
-
-            {/* Conteúdo */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <p className={`text-sm font-semibold leading-snug ${isLida ? "text-foreground/60" : ""}`}>
-                  {n.titulo}
-                </p>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {!isLida && <span className="h-2 w-2 rounded-full bg-primary" />}
-                </div>
-              </div>
-
-              {n.mensagem && (
-                <p className={`text-xs mt-1 leading-relaxed line-clamp-2 ${isLida ? "text-muted-foreground/70" : "text-foreground/75"}`}>
-                  {n.mensagem}
-                </p>
-              )}
-
-              <div className="flex items-center gap-2 mt-1.5">
-                <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${isLida ? "bg-muted text-muted-foreground/60" : "bg-background/50 " + cfg.color}`}>
-                  {cfg.emoji} {cfg.label}
-                </span>
-                <span className="text-[10px] text-foreground/40">·</span>
-                <span className="text-[10px] text-foreground/50 capitalize">
-                  {format(parseISO(n.created_at), "HH:mm", { locale: ptBR })}
-                </span>
-                {n.link_referencia && !isLida && (
-                  <>
-                    <span className="text-[10px] text-foreground/40">·</span>
-                    <span className="text-[10px] text-primary underline underline-offset-2">Abrir</span>
-                  </>
-                )}
-              </div>
-            </div>
+          {/* Linha superior: categoria + tempo */}
+          <div className="flex items-center justify-between mb-0.5">
+            <span className={`text-[11px] font-semibold uppercase tracking-wide ${isLida ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
+              {cfg.label}
+            </span>
+            <span className="text-[11px] text-muted-foreground/60 shrink-0 ml-2">
+              {tempoRelativo(n.created_at)}
+            </span>
           </div>
+
+          {/* Título */}
+          <div className="flex items-start gap-1.5">
+            {!isLida && (
+              <span className="mt-1 shrink-0 h-2 w-2 rounded-full bg-blue-500" />
+            )}
+            <p className={`text-sm font-semibold leading-snug ${isLida ? "text-foreground/60" : "text-foreground"}`}>
+              {n.titulo}
+            </p>
+          </div>
+
+          {/* Mensagem */}
+          {n.mensagem && (
+            <p className={`text-xs mt-0.5 leading-relaxed line-clamp-2 ${isLida ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
+              {n.mensagem}
+            </p>
+          )}
+
+          {/* Link */}
+          {n.link_referencia && !isLida && (
+            <div className="flex items-center gap-0.5 mt-1.5">
+              <span className="text-[11px] text-primary font-medium">Abrir</span>
+              <ChevronRight className="h-3 w-3 text-primary" />
+            </div>
+          )}
         </button>
 
-        {/* Botões de ação (desktop / non-swipe) */}
-        {(!isLida || podeExcluir) && (
-          <div className="flex border-t border-current/10">
-            {!isLida && (
-              <button
-                type="button"
-                onClick={onMarcarLida}
-                disabled={isPendingLida}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs text-foreground/50 hover:text-foreground/80 hover:bg-black/5 dark:hover:bg-white/5 transition rounded-bl-2xl"
-              >
-                <CheckCheck className="h-3 w-3" />
-                Marcar como lida
-              </button>
-            )}
-            {podeExcluir && (
-              <button
-                type="button"
-                onClick={onDelete}
-                className={[
-                  "flex items-center justify-center gap-1.5 px-4 py-2 text-xs text-destructive/60 hover:text-destructive hover:bg-destructive/10 transition",
-                  !isLida ? "border-l border-current/10 rounded-br-2xl" : "flex-1 rounded-b-2xl",
-                ].join(" ")}
-              >
-                <Trash2 className="h-3 w-3" />
-                Excluir
-              </button>
-            )}
-          </div>
-        )}
+        {/* Ações desktop */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {!isLida && (
+            <button
+              type="button"
+              onClick={onMarcarLida}
+              disabled={isPendingLida}
+              title="Marcar como lida"
+              className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted transition"
+            >
+              {isPendingLida
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <CheckCheck className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          {podeExcluir && (
+            <button
+              type="button"
+              onClick={onDelete}
+              title="Excluir"
+              className="p-1.5 rounded-lg text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
+// ── Separador de data estilo iOS ───────────────────────────────
+
+function DateDivider({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="flex items-center gap-2 px-1 py-1">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60 capitalize">
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-border/50" />
+      <span className="text-[10px] text-muted-foreground/40 tabular-nums">{count}</span>
+    </div>
+  );
+}
+
+// ── Página principal ────────────────────────────────────────────
+
+const FILTROS_ORDENADOS: Categoria[] = [
+  "todas", "urgente", "escalas", "pendencias", "eventos", "comunicados", "membros", "substituicoes", "sistema",
+];
 
 function PortalMembroNotificacoes() {
   const { membro } = useMembroAuth();
@@ -322,7 +349,6 @@ function PortalMembroNotificacoes() {
     }
   }
 
-  // Contagem por categoria para badges dos filtros
   const contagemPorCategoria = useMemo(() => {
     const map: Partial<Record<Categoria, number>> = {};
     for (const n of notifs) {
@@ -335,14 +361,11 @@ function PortalMembroNotificacoes() {
 
   const naoLidasTotal = notifs.filter((n) => !lidasSet.has(n.id)).length;
 
-  // Filtra + organiza por data
-  const notifsFiltradas = useMemo(() => {
-    return filtro === "todas"
-      ? notifs
-      : notifs.filter((n) => getCategoria(n) === filtro);
-  }, [notifs, filtro]);
+  const notifsFiltradas = useMemo(
+    () => filtro === "todas" ? notifs : notifs.filter((n) => getCategoria(n) === filtro),
+    [notifs, filtro],
+  );
 
-  // Agrupa por grupo de data
   const grupos = useMemo(() => {
     const map = new Map<string, Notificacao[]>();
     for (const n of notifsFiltradas) {
@@ -354,21 +377,19 @@ function PortalMembroNotificacoes() {
     return map;
   }, [notifsFiltradas]);
 
-  const FILTROS_ORDENADOS: Categoria[] = [
-    "todas", "urgente", "escalas", "pendencias", "eventos", "comunicados", "membros", "substituicoes", "sistema",
-  ];
-
   return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-28">
+    <div className="p-4 sm:p-6 max-w-xl mx-auto pb-28">
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Portal</p>
-          <h1 className="mt-1.5 font-serif text-3xl flex items-center gap-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground mb-1">
+            Portal do Servidor
+          </p>
+          <h1 className="font-serif text-2xl flex items-center gap-2">
             Notificações
             {naoLidasTotal > 0 && (
-              <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold px-2">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-bold px-1.5">
                 {naoLidasTotal}
               </span>
             )}
@@ -376,21 +397,22 @@ function PortalMembroNotificacoes() {
         </div>
         {naoLidasTotal > 0 && (
           <Button
-            variant="outline" size="sm"
+            variant="ghost"
+            size="sm"
             onClick={() => marcarTodasMutation.mutate()}
             disabled={marcarTodasMutation.isPending}
-            className="self-start sm:mt-1 shrink-0"
+            className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10 text-xs font-semibold h-8 px-3"
           >
             {marcarTodasMutation.isPending
-              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              : <CheckCheck className="h-3.5 w-3.5" />}
-            Marcar todas
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              : <CheckCheck className="h-3.5 w-3.5 mr-1" />}
+            Limpar todas
           </Button>
         )}
       </div>
 
-      {/* ── Filtros de categoria (scroll horizontal) ───────────── */}
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-5 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+      {/* ── Filtros de categoria ────────────────────────────────── */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-4 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
         {FILTROS_ORDENADOS.map((cat) => {
           const isAll = cat === "todas";
           const cfg = isAll ? null : CATEGORIA_CONFIG[cat as Exclude<Categoria, "todas">];
@@ -402,18 +424,20 @@ function PortalMembroNotificacoes() {
               type="button"
               onClick={() => setFiltro(cat)}
               className={[
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border",
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0",
                 ativo
-                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                  : "bg-card border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                  ? "bg-foreground text-background shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80",
               ].join(" ")}
             >
-              {cfg ? <span>{cfg.emoji}</span> : null}
-              <span>{isAll ? "Todas" : cfg!.label}</span>
+              {cfg && (
+                <span className={`inline-flex h-4 w-4 rounded-full items-center justify-center ${cfg.iconBg}`} />
+              )}
+              {isAll ? "Todas" : cfg!.label}
               {count > 0 && (
                 <span className={[
-                  "h-4 min-w-[1rem] px-1 rounded-full text-[10px] font-bold flex items-center justify-center",
-                  ativo ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/15 text-primary",
+                  "h-4 min-w-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center",
+                  ativo ? "bg-background/20 text-background" : "bg-blue-500 text-white",
                 ].join(" ")}>
                   {count}
                 </span>
@@ -425,39 +449,33 @@ function PortalMembroNotificacoes() {
 
       {/* ── Conteúdo ───────────────────────────────────────────── */}
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
         </div>
       ) : notifsFiltradas.length === 0 ? (
-        <div className="rounded-[1.75rem] border border-dashed border-border p-14 text-center">
-          <BellOff className="h-8 w-8 mx-auto text-muted-foreground/30 mb-3" />
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <div className="h-16 w-16 rounded-3xl bg-muted flex items-center justify-center">
+            <BellOff className="h-7 w-7 text-muted-foreground/30" />
+          </div>
           <p className="text-sm font-medium text-muted-foreground">
-            {filtro === "todas" ? "Nenhuma notificação." : "Nenhuma notificação nesta categoria."}
+            {filtro === "todas" ? "Nenhuma notificação" : "Nenhuma notificação nesta categoria"}
           </p>
           {filtro !== "todas" && (
             <button
               type="button"
               onClick={() => setFiltro("todas")}
-              className="mt-3 text-xs text-primary hover:underline flex items-center gap-1 mx-auto"
+              className="flex items-center gap-1 text-xs text-blue-500 hover:underline"
             >
               <X className="h-3 w-3" /> Limpar filtro
             </button>
           )}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {Array.from(grupos.entries()).map(([grupo, itens]) => (
             <section key={grupo}>
-              {/* Separador de data */}
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60 capitalize">
-                  {grupo}
-                </span>
-                <div className="flex-1 h-px bg-border/60" />
-                <span className="text-[10px] text-muted-foreground/40">{itens.length}</span>
-              </div>
-
-              <div className="space-y-2.5">
+              <DateDivider label={grupo} count={itens.length} />
+              <div className="space-y-2 mt-2">
                 {itens.map((n) => (
                   <NotifCard
                     key={n.id}
@@ -481,16 +499,18 @@ function PortalMembroNotificacoes() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remover notificação?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Esta notificação será excluída permanentemente.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground"
-              disabled={deleteMutation.isPending}
               onClick={() => deleteId && deleteMutation.mutate(deleteId)}
+              disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              {deleteMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
               Remover
             </AlertDialogAction>
           </AlertDialogFooter>
