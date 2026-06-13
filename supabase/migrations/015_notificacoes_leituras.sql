@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.notificacoes_leituras (
 
 ALTER TABLE public.notificacoes_leituras ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "membro_own_leituras" ON public.notificacoes_leituras;
 CREATE POLICY "membro_own_leituras" ON public.notificacoes_leituras
   FOR ALL TO authenticated
   USING (

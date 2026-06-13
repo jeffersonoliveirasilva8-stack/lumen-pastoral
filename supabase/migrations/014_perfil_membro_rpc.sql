@@ -2,6 +2,8 @@
 -- Permite que o membro atualize seus próprios dados mesmo quando auth_user_id
 -- e email podem estar em estados transitórios de vinculação.
 
+DROP FUNCTION IF EXISTS public.atualizar_perfil_membro CASCADE;
+
 CREATE OR REPLACE FUNCTION public.atualizar_perfil_membro(
   p_nome                TEXT,
   p_telefone            TEXT    DEFAULT NULL,
