@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
   Flame, BookOpen, CalendarRange, Bell, Trophy, UserCircle, X, MessageSquare, Church, ShieldCheck,
+  ArrowLeftRight, BarChart3, SlidersHorizontal,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -154,18 +155,21 @@ function AuthLayout() {
   const isSuperAdmin = roles.includes("super_admin");
 
   const allNav: NavItem[] = [
-    { to: "/painel",                  label: "Painel",          icon: LayoutDashboard, color: "bg-slate-600" },
-    { to: "/escalas",                 label: "Escalas",         icon: Calendar,        color: "bg-blue-600" },
-    { to: "/formacoes",               label: "Agenda Pastoral", icon: CalendarRange,   color: "bg-teal-600" },
-    { to: "/espiritualidade",         label: "Liturgia",        icon: BookOpen,        color: "bg-purple-600" },
+    { to: "/painel",                      label: "Painel",          icon: LayoutDashboard, color: "bg-slate-600" },
+    { to: "/escalas",                     label: "Escalas",         icon: Calendar,        color: "bg-blue-600" },
+    { to: "/substituicoes",               label: "Substituições",   icon: ArrowLeftRight,  color: "bg-blue-500" },
+    { to: "/formacoes",                   label: "Agenda Pastoral", icon: CalendarRange,   color: "bg-teal-600" },
+    { to: "/espiritualidade",             label: "Liturgia",        icon: BookOpen,        color: "bg-purple-600" },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
-    { to: "/ranking",                 label: "Ranking",         icon: Trophy,          color: "bg-amber-500" },
-    { to: "/ocorrencias",             label: "Ocorrências",     icon: MessageSquare,   color: "bg-orange-600" },
-    { to: "/notificacoes",            label: "Notificações",    icon: Bell,            color: "bg-rose-500" },
+    { to: "/ranking",                     label: "Ranking",         icon: Trophy,          color: "bg-amber-500" },
+    { to: "/ocorrencias",                 label: "Ocorrências",     icon: MessageSquare,   color: "bg-orange-600" },
+    { to: "/relatorios-substituicoes",    label: "Relatórios",      icon: BarChart3,       color: "bg-violet-600" },
+    { to: "/notificacoes",                label: "Notificações",    icon: Bell,            color: "bg-rose-500" },
     ...(!isLimitedCoord ? [{ to: "/configuracoes/paroquia", label: "Personalização", icon: Settings, color: "bg-indigo-600" }] : []),
+    ...(!isLimitedCoord ? [{ to: "/configuracoes-escalas", label: "Config. Escalas", icon: SlidersHorizontal, color: "bg-sky-600" }] : []),
     ...(isAdmin ? [{ to: "/auditoria", label: "Auditoria", icon: ShieldCheck, color: "bg-red-600" }] : []),
     ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),
-    { to: "/minha-conta",             label: "Perfil",          icon: UserCircle,      color: "bg-slate-500" },
+    { to: "/minha-conta",                 label: "Perfil",          icon: UserCircle,      color: "bg-slate-500" },
   ];
 
   // Sidebar desktop = todos exceto Notificações (no header) e Perfil (já no rodapé)

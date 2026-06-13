@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import {
   Loader2, Home, Calendar, Trophy, User, LogOut, Flame,
   CalendarDays, MessageSquare, Bell, BookOpen, X,
-  CalendarRange, Zap, AlertCircle,
+  CalendarRange, Zap, AlertCircle, ArrowLeftRight,
 } from "lucide-react";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,14 +32,15 @@ export const Route = createFileRoute("/portal-membro")({
 
 // Sidebar desktop — completa
 const NAV_SIDEBAR = [
-  { to: "/portal-membro/home",          label: "Início",        icon: Home },
-  { to: "/portal-membro/escalas",       label: "Escalas",       icon: Calendar },
-  { to: "/portal-membro/eventos",       label: "Agenda",        icon: CalendarDays },
-  { to: "/portal-membro/liturgia",      label: "Liturgia",      icon: BookOpen },
-  { to: "/portal-membro/ranking",       label: "Ranking",       icon: Trophy },
-  { to: "/portal-membro/ocorrencias",   label: "Ocorrências",   icon: MessageSquare },
-  { to: "/portal-membro/notificacoes",  label: "Notificações",  icon: Bell },
-  { to: "/portal-membro/perfil",        label: "Perfil",        icon: User },
+  { to: "/portal-membro/home",           label: "Início",        icon: Home },
+  { to: "/portal-membro/escalas",        label: "Escalas",       icon: Calendar },
+  { to: "/portal-membro/substituicoes",  label: "Substituições", icon: ArrowLeftRight },
+  { to: "/portal-membro/eventos",        label: "Agenda",        icon: CalendarDays },
+  { to: "/portal-membro/liturgia",       label: "Liturgia",      icon: BookOpen },
+  { to: "/portal-membro/ranking",        label: "Ranking",       icon: Trophy },
+  { to: "/portal-membro/ocorrencias",    label: "Ocorrências",   icon: MessageSquare },
+  { to: "/portal-membro/notificacoes",   label: "Notificações",  icon: Bell },
+  { to: "/portal-membro/perfil",         label: "Perfil",        icon: User },
 ] as const;
 
 // Bottom nav mobile: Home | Escalas | [FAB] | Notificações | Perfil
@@ -52,11 +53,12 @@ const NAV_BOTTOM = [
 
 // Drawer "Mais" — itens secundários
 const DRAWER_ITEMS = [
-  { to: "/portal-membro/eventos",      label: "Agenda",        icon: CalendarDays,  color: "bg-blue-500" },
-  { to: "/portal-membro/ranking",      label: "Ranking",       icon: Trophy,        color: "bg-amber-500" },
-  { to: "/portal-membro/liturgia",     label: "Liturgia",      icon: BookOpen,      color: "bg-purple-500" },
-  { to: "/portal-membro/ocorrencias",  label: "Ocorrências",   icon: MessageSquare, color: "bg-orange-500" },
-  { to: "/portal-membro/calendario",   label: "Calendário",    icon: CalendarRange, color: "bg-teal-500" },
+  { to: "/portal-membro/substituicoes", label: "Substituições", icon: ArrowLeftRight, color: "bg-blue-600" },
+  { to: "/portal-membro/eventos",       label: "Agenda",        icon: CalendarDays,   color: "bg-blue-500" },
+  { to: "/portal-membro/ranking",       label: "Ranking",       icon: Trophy,         color: "bg-amber-500" },
+  { to: "/portal-membro/liturgia",      label: "Liturgia",      icon: BookOpen,       color: "bg-purple-500" },
+  { to: "/portal-membro/ocorrencias",   label: "Ocorrências",   icon: MessageSquare,  color: "bg-orange-500" },
+  { to: "/portal-membro/calendario",    label: "Calendário",    icon: CalendarRange,  color: "bg-teal-500" },
 ] as const;
 
 function PortalMembroLayout() {

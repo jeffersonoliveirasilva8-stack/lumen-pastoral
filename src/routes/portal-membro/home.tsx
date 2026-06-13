@@ -295,8 +295,58 @@ function PortalMembroHome() {
 
   const myScore = membro.score ?? 0;
 
+  // Verifica se hoje é o aniversário do próprio membro
+  const isAniversario = (() => {
+    if (!membro.data_nascimento) return false;
+    const hojeMD = today.toISOString().slice(5, 10); // "MM-DD"
+    const nascMD = membro.data_nascimento.slice(5, 10);
+    return hojeMD === nascMD;
+  })();
+
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-6 pb-24">
+
+      {/* ── Banner de aniversário (só aparece no dia do próprio membro) ── */}
+      {isAniversario && (
+        <section>
+          <div className="relative overflow-hidden rounded-3xl border-2 border-pink-300 dark:border-pink-700 bg-gradient-to-br from-pink-50 via-rose-50 to-amber-50 dark:from-pink-950/40 dark:via-rose-950/30 dark:to-amber-950/30 p-6 shadow-lg">
+            {/* Confetes decorativos (pure CSS) */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+              {["top-2 left-[8%]", "top-4 left-[22%]", "top-1 left-[42%]", "top-3 left-[60%]", "top-2 left-[78%]", "top-5 left-[90%]"].map((pos, i) => (
+                <span
+                  key={i}
+                  className={`absolute text-base animate-bounce ${pos}`}
+                  style={{ animationDelay: `${i * 0.15}s`, animationDuration: `${1.4 + i * 0.1}s` }}
+                >
+                  {["🎊", "✨", "🎉", "⭐", "🌟", "🎈"][i]}
+                </span>
+              ))}
+            </div>
+
+            {/* Conteúdo */}
+            <div className="relative flex flex-col sm:flex-row items-center sm:items-start gap-4">
+              <div className="h-16 w-16 rounded-2xl bg-pink-100 dark:bg-pink-900/50 flex items-center justify-center shrink-0 text-3xl shadow-inner">
+                🎂
+              </div>
+              <div className="text-center sm:text-left">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-pink-500 dark:text-pink-400 mb-1">
+                  Feliz Aniversário!
+                </p>
+                <h2 className="font-serif text-2xl text-foreground leading-tight">
+                  {membro.nome.split(" ")[0]}, hoje é seu dia! 🥳
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed max-w-md">
+                  Que Deus abençoe sua vida com saúde, paz, fé e muitas graças.
+                  A comunidade agradece seu serviço e deseja um dia muito especial.
+                </p>
+                <p className="mt-3 text-xs text-pink-500 dark:text-pink-400 font-medium">
+                  Com carinho, da coordenação pastoral 🙏
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── Greeting ── */}
       <section>

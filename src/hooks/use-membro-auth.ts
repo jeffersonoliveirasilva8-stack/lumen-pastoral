@@ -33,6 +33,8 @@ type UseMembroAuth = {
   linking: boolean;
   nivel: PortalNivel;
   isAdministrador: boolean;
+  /** true se membro tem tipo_acesso auxiliar/coordenador/administrador OU está na tabela coordenadores */
+  isCoordenador: boolean;
   refreshMembro: () => Promise<void>;
 };
 
@@ -73,6 +75,22 @@ export function useMembroAuth(): UseMembroAuth {
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [userRoles, setUserRoles] = useState<string[]>([]);
+  const [isInCoordTable, setIsInCoordTable] = useState(false);
+
+  async function fetchCoordStatus(membroId: string, paroquiaId: string, tipoAcesso: string) {
+    if (["auxiliar", "coordenador", "administrador"].includes(tipoAcesso)) {
+      setIsInCoordTable(true);
+      return;
+    }
+    const { data } = await anyDb
+      .from("coordenadores")
+      .select("id")
+      .eq("membro_id", membroId)
+      .eq("paroquia_id", paroquiaId)
+      .eq("ativo", true)
+      .maybeSingle();
+    setIsInCoordTable(!!data);
+  }
 
   // Carrega membro: tenta por auth_user_id (rápido) e depois por email (fallback)
   async function loadMembro(userId: string, userEmail?: string): Promise<boolean> {
@@ -86,6 +104,7 @@ export function useMembroAuth(): UseMembroAuth {
 
     if (byId) {
       setMembro(mapMembro(byId));
+      fetchCoordStatus(byId.id, byId.paroquia_id, byId.tipo_acesso);
       return true;
     }
 
@@ -133,7 +152,9 @@ export function useMembroAuth(): UseMembroAuth {
         .eq("ativo", true)
         .maybeSingle();
 
-      setMembro(mapMembro(refreshed ?? byEmail));
+      const membroData = refreshed ?? byEmail;
+      setMembro(mapMembro(membroData));
+      fetchCoordStatus(membroData.id, membroData.paroquia_id, membroData.tipo_acesso);
       return true;
     }
 
@@ -224,6 +245,7 @@ export function useMembroAuth(): UseMembroAuth {
       } else {
         setMembro(null);
         setUserRoles([]);
+        setIsInCoordTable(false);
         setLoading(false);
       }
     });
@@ -241,7 +263,9 @@ export function useMembroAuth(): UseMembroAuth {
     membro?.tipo_acesso === "auxiliar" ||
     (userRoles.includes("auxiliar") && !ADMIN_ROLES.some((r) => userRoles.includes(r)));
 
+  const isCoordenador = isAdministrador || isInCoordTable;
+
   const nivel: PortalNivel = isAdministrador ? "administrador" : "membro";
 
-  return { user, membro, loading, linking, nivel, isAdministrador, refreshMembro };
+  return { user, membro, loading, linking, nivel, isAdministrador, isCoordenador, refreshMembro };
 }

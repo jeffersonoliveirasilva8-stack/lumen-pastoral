@@ -19,6 +19,7 @@ import { Route as AcessoNegadoRouteImport } from './routes/acesso-negado'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalTokenRouteImport } from './routes/portal.$token'
+import { Route as PortalMembroSubstituicoesRouteImport } from './routes/portal-membro/substituicoes'
 import { Route as PortalMembroRankingRouteImport } from './routes/portal-membro/ranking'
 import { Route as PortalMembroPerfilRouteImport } from './routes/portal-membro/perfil'
 import { Route as PortalMembroOcorrenciasRouteImport } from './routes/portal-membro/ocorrencias'
@@ -39,8 +40,10 @@ import { Route as EscalaTokenRouteImport } from './routes/escala.$token'
 import { Route as AuthMfaChallengeRouteImport } from './routes/auth.mfa-challenge'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthAdminMfaRouteImport } from './routes/auth.admin-mfa'
+import { Route as AuthenticatedSubstituicoesRouteImport } from './routes/_authenticated/substituicoes'
 import { Route as AuthenticatedSolicitacoesRouteImport } from './routes/_authenticated/solicitacoes'
 import { Route as AuthenticatedSacristiaRouteImport } from './routes/_authenticated/sacristia'
+import { Route as AuthenticatedRelatoriosSubstituicoesRouteImport } from './routes/_authenticated/relatorios-substituicoes'
 import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
 import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authenticated/planejamento'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
@@ -52,6 +55,7 @@ import { Route as AuthenticatedMembrosRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedFormacoesRouteImport } from './routes/_authenticated/formacoes'
 import { Route as AuthenticatedEspiritualidadeRouteImport } from './routes/_authenticated/espiritualidade'
 import { Route as AuthenticatedEscalasRouteImport } from './routes/_authenticated/escalas'
+import { Route as AuthenticatedConfiguracoesEscalasRouteImport } from './routes/_authenticated/configuracoes-escalas'
 import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedConfiguracoesParoquiaRouteImport } from './routes/_authenticated/configuracoes.paroquia'
@@ -107,6 +111,12 @@ const PortalTokenRoute = PortalTokenRouteImport.update({
   path: '/portal/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PortalMembroSubstituicoesRoute =
+  PortalMembroSubstituicoesRouteImport.update({
+    id: '/substituicoes',
+    path: '/substituicoes',
+    getParentRoute: () => PortalMembroRoute,
+  } as any)
 const PortalMembroRankingRoute = PortalMembroRankingRouteImport.update({
   id: '/ranking',
   path: '/ranking',
@@ -209,6 +219,12 @@ const AuthAdminMfaRoute = AuthAdminMfaRouteImport.update({
   path: '/auth/admin-mfa',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSubstituicoesRoute =
+  AuthenticatedSubstituicoesRouteImport.update({
+    id: '/substituicoes',
+    path: '/substituicoes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedSolicitacoesRoute =
   AuthenticatedSolicitacoesRouteImport.update({
     id: '/solicitacoes',
@@ -220,6 +236,12 @@ const AuthenticatedSacristiaRoute = AuthenticatedSacristiaRouteImport.update({
   path: '/sacristia',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedRelatoriosSubstituicoesRoute =
+  AuthenticatedRelatoriosSubstituicoesRouteImport.update({
+    id: '/relatorios-substituicoes',
+    path: '/relatorios-substituicoes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
   id: '/ranking',
   path: '/ranking',
@@ -280,6 +302,12 @@ const AuthenticatedEscalasRoute = AuthenticatedEscalasRouteImport.update({
   path: '/escalas',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedConfiguracoesEscalasRoute =
+  AuthenticatedConfiguracoesEscalasRouteImport.update({
+    id: '/configuracoes-escalas',
+    path: '/configuracoes-escalas',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedCalendarioRoute = AuthenticatedCalendarioRouteImport.update({
   id: '/calendario',
   path: '/calendario',
@@ -320,6 +348,7 @@ export interface FileRoutesByFullPath {
   '/reset-senha': typeof ResetSenhaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
+  '/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
   '/escalas': typeof AuthenticatedEscalasRoute
   '/espiritualidade': typeof AuthenticatedEspiritualidadeRoute
   '/formacoes': typeof AuthenticatedFormacoesRoute
@@ -331,8 +360,10 @@ export interface FileRoutesByFullPath {
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/ranking': typeof AuthenticatedRankingRoute
+  '/relatorios-substituicoes': typeof AuthenticatedRelatoriosSubstituicoesRoute
   '/sacristia': typeof AuthenticatedSacristiaRoute
   '/solicitacoes': typeof AuthenticatedSolicitacoesRoute
+  '/substituicoes': typeof AuthenticatedSubstituicoesRoute
   '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
@@ -353,6 +384,7 @@ export interface FileRoutesByFullPath {
   '/portal-membro/ocorrencias': typeof PortalMembroOcorrenciasRoute
   '/portal-membro/perfil': typeof PortalMembroPerfilRoute
   '/portal-membro/ranking': typeof PortalMembroRankingRoute
+  '/portal-membro/substituicoes': typeof PortalMembroSubstituicoesRoute
   '/portal/$token': typeof PortalTokenRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
@@ -369,6 +401,7 @@ export interface FileRoutesByTo {
   '/reset-senha': typeof ResetSenhaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
+  '/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
   '/escalas': typeof AuthenticatedEscalasRoute
   '/espiritualidade': typeof AuthenticatedEspiritualidadeRoute
   '/formacoes': typeof AuthenticatedFormacoesRoute
@@ -380,8 +413,10 @@ export interface FileRoutesByTo {
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/ranking': typeof AuthenticatedRankingRoute
+  '/relatorios-substituicoes': typeof AuthenticatedRelatoriosSubstituicoesRoute
   '/sacristia': typeof AuthenticatedSacristiaRoute
   '/solicitacoes': typeof AuthenticatedSolicitacoesRoute
+  '/substituicoes': typeof AuthenticatedSubstituicoesRoute
   '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
@@ -402,6 +437,7 @@ export interface FileRoutesByTo {
   '/portal-membro/ocorrencias': typeof PortalMembroOcorrenciasRoute
   '/portal-membro/perfil': typeof PortalMembroPerfilRoute
   '/portal-membro/ranking': typeof PortalMembroRankingRoute
+  '/portal-membro/substituicoes': typeof PortalMembroSubstituicoesRoute
   '/portal/$token': typeof PortalTokenRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
@@ -420,6 +456,7 @@ export interface FileRoutesById {
   '/reset-senha': typeof ResetSenhaRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/calendario': typeof AuthenticatedCalendarioRoute
+  '/_authenticated/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
   '/_authenticated/escalas': typeof AuthenticatedEscalasRoute
   '/_authenticated/espiritualidade': typeof AuthenticatedEspiritualidadeRoute
   '/_authenticated/formacoes': typeof AuthenticatedFormacoesRoute
@@ -431,8 +468,10 @@ export interface FileRoutesById {
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/_authenticated/ranking': typeof AuthenticatedRankingRoute
+  '/_authenticated/relatorios-substituicoes': typeof AuthenticatedRelatoriosSubstituicoesRoute
   '/_authenticated/sacristia': typeof AuthenticatedSacristiaRoute
   '/_authenticated/solicitacoes': typeof AuthenticatedSolicitacoesRoute
+  '/_authenticated/substituicoes': typeof AuthenticatedSubstituicoesRoute
   '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
@@ -453,6 +492,7 @@ export interface FileRoutesById {
   '/portal-membro/ocorrencias': typeof PortalMembroOcorrenciasRoute
   '/portal-membro/perfil': typeof PortalMembroPerfilRoute
   '/portal-membro/ranking': typeof PortalMembroRankingRoute
+  '/portal-membro/substituicoes': typeof PortalMembroSubstituicoesRoute
   '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/_authenticated/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
@@ -471,6 +511,7 @@ export interface FileRouteTypes {
     | '/reset-senha'
     | '/auditoria'
     | '/calendario'
+    | '/configuracoes-escalas'
     | '/escalas'
     | '/espiritualidade'
     | '/formacoes'
@@ -482,8 +523,10 @@ export interface FileRouteTypes {
     | '/painel'
     | '/planejamento'
     | '/ranking'
+    | '/relatorios-substituicoes'
     | '/sacristia'
     | '/solicitacoes'
+    | '/substituicoes'
     | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
@@ -504,6 +547,7 @@ export interface FileRouteTypes {
     | '/portal-membro/ocorrencias'
     | '/portal-membro/perfil'
     | '/portal-membro/ranking'
+    | '/portal-membro/substituicoes'
     | '/portal/$token'
     | '/admin/liturgia'
     | '/admin/paroquias'
@@ -520,6 +564,7 @@ export interface FileRouteTypes {
     | '/reset-senha'
     | '/auditoria'
     | '/calendario'
+    | '/configuracoes-escalas'
     | '/escalas'
     | '/espiritualidade'
     | '/formacoes'
@@ -531,8 +576,10 @@ export interface FileRouteTypes {
     | '/painel'
     | '/planejamento'
     | '/ranking'
+    | '/relatorios-substituicoes'
     | '/sacristia'
     | '/solicitacoes'
+    | '/substituicoes'
     | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
@@ -553,6 +600,7 @@ export interface FileRouteTypes {
     | '/portal-membro/ocorrencias'
     | '/portal-membro/perfil'
     | '/portal-membro/ranking'
+    | '/portal-membro/substituicoes'
     | '/portal/$token'
     | '/admin/liturgia'
     | '/admin/paroquias'
@@ -570,6 +618,7 @@ export interface FileRouteTypes {
     | '/reset-senha'
     | '/_authenticated/auditoria'
     | '/_authenticated/calendario'
+    | '/_authenticated/configuracoes-escalas'
     | '/_authenticated/escalas'
     | '/_authenticated/espiritualidade'
     | '/_authenticated/formacoes'
@@ -581,8 +630,10 @@ export interface FileRouteTypes {
     | '/_authenticated/painel'
     | '/_authenticated/planejamento'
     | '/_authenticated/ranking'
+    | '/_authenticated/relatorios-substituicoes'
     | '/_authenticated/sacristia'
     | '/_authenticated/solicitacoes'
+    | '/_authenticated/substituicoes'
     | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
@@ -603,6 +654,7 @@ export interface FileRouteTypes {
     | '/portal-membro/ocorrencias'
     | '/portal-membro/perfil'
     | '/portal-membro/ranking'
+    | '/portal-membro/substituicoes'
     | '/portal/$token'
     | '/_authenticated/admin/liturgia'
     | '/_authenticated/admin/paroquias'
@@ -703,6 +755,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/$token'
       preLoaderRoute: typeof PortalTokenRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/portal-membro/substituicoes': {
+      id: '/portal-membro/substituicoes'
+      path: '/substituicoes'
+      fullPath: '/portal-membro/substituicoes'
+      preLoaderRoute: typeof PortalMembroSubstituicoesRouteImport
+      parentRoute: typeof PortalMembroRoute
     }
     '/portal-membro/ranking': {
       id: '/portal-membro/ranking'
@@ -844,6 +903,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAdminMfaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/substituicoes': {
+      id: '/_authenticated/substituicoes'
+      path: '/substituicoes'
+      fullPath: '/substituicoes'
+      preLoaderRoute: typeof AuthenticatedSubstituicoesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/solicitacoes': {
       id: '/_authenticated/solicitacoes'
       path: '/solicitacoes'
@@ -856,6 +922,13 @@ declare module '@tanstack/react-router' {
       path: '/sacristia'
       fullPath: '/sacristia'
       preLoaderRoute: typeof AuthenticatedSacristiaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/relatorios-substituicoes': {
+      id: '/_authenticated/relatorios-substituicoes'
+      path: '/relatorios-substituicoes'
+      fullPath: '/relatorios-substituicoes'
+      preLoaderRoute: typeof AuthenticatedRelatoriosSubstituicoesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/ranking': {
@@ -935,6 +1008,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEscalasRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/configuracoes-escalas': {
+      id: '/_authenticated/configuracoes-escalas'
+      path: '/configuracoes-escalas'
+      fullPath: '/configuracoes-escalas'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesEscalasRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/calendario': {
       id: '/_authenticated/calendario'
       path: '/calendario'
@@ -976,6 +1056,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCalendarioRoute: typeof AuthenticatedCalendarioRoute
+  AuthenticatedConfiguracoesEscalasRoute: typeof AuthenticatedConfiguracoesEscalasRoute
   AuthenticatedEscalasRoute: typeof AuthenticatedEscalasRoute
   AuthenticatedEspiritualidadeRoute: typeof AuthenticatedEspiritualidadeRoute
   AuthenticatedFormacoesRoute: typeof AuthenticatedFormacoesRoute
@@ -987,8 +1068,10 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedPlanejamentoRoute: typeof AuthenticatedPlanejamentoRoute
   AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
+  AuthenticatedRelatoriosSubstituicoesRoute: typeof AuthenticatedRelatoriosSubstituicoesRoute
   AuthenticatedSacristiaRoute: typeof AuthenticatedSacristiaRoute
   AuthenticatedSolicitacoesRoute: typeof AuthenticatedSolicitacoesRoute
+  AuthenticatedSubstituicoesRoute: typeof AuthenticatedSubstituicoesRoute
   AuthenticatedAdminLiturgiaRoute: typeof AuthenticatedAdminLiturgiaRoute
   AuthenticatedAdminParoquiasRoute: typeof AuthenticatedAdminParoquiasRoute
   AuthenticatedConfiguracoesParoquiaRoute: typeof AuthenticatedConfiguracoesParoquiaRoute
@@ -997,6 +1080,8 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedCalendarioRoute: AuthenticatedCalendarioRoute,
+  AuthenticatedConfiguracoesEscalasRoute:
+    AuthenticatedConfiguracoesEscalasRoute,
   AuthenticatedEscalasRoute: AuthenticatedEscalasRoute,
   AuthenticatedEspiritualidadeRoute: AuthenticatedEspiritualidadeRoute,
   AuthenticatedFormacoesRoute: AuthenticatedFormacoesRoute,
@@ -1008,8 +1093,11 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedPlanejamentoRoute: AuthenticatedPlanejamentoRoute,
   AuthenticatedRankingRoute: AuthenticatedRankingRoute,
+  AuthenticatedRelatoriosSubstituicoesRoute:
+    AuthenticatedRelatoriosSubstituicoesRoute,
   AuthenticatedSacristiaRoute: AuthenticatedSacristiaRoute,
   AuthenticatedSolicitacoesRoute: AuthenticatedSolicitacoesRoute,
+  AuthenticatedSubstituicoesRoute: AuthenticatedSubstituicoesRoute,
   AuthenticatedAdminLiturgiaRoute: AuthenticatedAdminLiturgiaRoute,
   AuthenticatedAdminParoquiasRoute: AuthenticatedAdminParoquiasRoute,
   AuthenticatedConfiguracoesParoquiaRoute:
@@ -1031,6 +1119,7 @@ interface PortalMembroRouteChildren {
   PortalMembroOcorrenciasRoute: typeof PortalMembroOcorrenciasRoute
   PortalMembroPerfilRoute: typeof PortalMembroPerfilRoute
   PortalMembroRankingRoute: typeof PortalMembroRankingRoute
+  PortalMembroSubstituicoesRoute: typeof PortalMembroSubstituicoesRoute
 }
 
 const PortalMembroRouteChildren: PortalMembroRouteChildren = {
@@ -1044,6 +1133,7 @@ const PortalMembroRouteChildren: PortalMembroRouteChildren = {
   PortalMembroOcorrenciasRoute: PortalMembroOcorrenciasRoute,
   PortalMembroPerfilRoute: PortalMembroPerfilRoute,
   PortalMembroRankingRoute: PortalMembroRankingRoute,
+  PortalMembroSubstituicoesRoute: PortalMembroSubstituicoesRoute,
 }
 
 const PortalMembroRouteWithChildren = PortalMembroRoute._addFileChildren(
