@@ -63,6 +63,7 @@ CREATE INDEX IF NOT EXISTS idx_substituicoes_substituto
 CREATE INDEX IF NOT EXISTS idx_substituicoes_escala_membro
   ON public.substituicoes (escala_membro_id);
 
+DROP TRIGGER IF EXISTS substituicoes_updated_at ON public.substituicoes;
 CREATE TRIGGER substituicoes_updated_at
   BEFORE UPDATE ON public.substituicoes
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
@@ -114,6 +115,7 @@ CREATE TABLE IF NOT EXISTS public.paroquia_config_escalas (
 
 ALTER TABLE public.paroquia_config_escalas ENABLE ROW LEVEL SECURITY;
 
+DROP TRIGGER IF EXISTS paroquia_config_escalas_updated_at ON public.paroquia_config_escalas;
 CREATE TRIGGER paroquia_config_escalas_updated_at
   BEFORE UPDATE ON public.paroquia_config_escalas
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();

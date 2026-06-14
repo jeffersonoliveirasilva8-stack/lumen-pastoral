@@ -269,6 +269,7 @@ CREATE POLICY "subst_membro_read" ON public.substituicoes
 -- Nenhum UPDATE direto — somente via RPCs SECURITY DEFINER
 
 -- Admin pode deletar (cancelar no admin panel)
+DROP POLICY IF EXISTS "subst_admin_all" ON public.substituicoes;
 CREATE POLICY "subst_admin_all" ON public.substituicoes
   FOR ALL TO authenticated
   USING (_portal_is_admin(paroquia_id))
