@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:8080",
+      "localStorage": [
+        {
+          "name": "sb-cusuoggmlhtvrclrzvfr-auth-token",
+          "value": "{\"access_token\":\"eyJhbGciOiJFUzI1NiIsImtpZCI6ImIwZjM2NjE4LWY5N2UtNDZlMC1hODkxLWQ1YmExMmU2OWM3MCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2N1c3VvZ2dtbGh0dnJjbHJ6dmZyLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJmMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgxMzU0Njk4LCJpYXQiOjE3ODEzNTEwOTgsImVtYWlsIjoiYWRtaW4udGVzdGVAbHVtZW5wYXN0b3JhbC5jb20uYnIiLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7Im5vbWUiOiJBZG1pbiBUZXN0ZSJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzgxMzUxMDk4fV0sInNlc3Npb25faWQiOiIwZmU1MzIwZS1jZTJmLTQyOGUtYWVjOS01NTU3ZWZmYWU1Y2MiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.4cHT1F0niONOsw9E60uzUxeNyXQgfHlkHCESAWNdlS3Qv74K9Dxa8ZW8gR55_8XjpaYKLiISnuPz_d4vLk-8Gg\",\"token_type\":\"bearer\",\"expires_in\":3600,\"expires_at\":1781354698,\"refresh_token\":\"kdxfbafkpt4q\",\"user\":{\"id\":\"f0000000-0000-0000-0000-000000000002\",\"aud\":\"authenticated\",\"role\":\"authenticated\",\"email\":\"admin.teste@lumenpastoral.com.br\",\"email_confirmed_at\":\"2026-06-13T04:08:04.157613Z\",\"phone\":\"\",\"confirmed_at\":\"2026-06-13T04:08:04.157613Z\",\"last_sign_in_at\":\"2026-06-13T11:44:58.176166925Z\",\"app_metadata\":{\"provider\":\"email\",\"providers\":[\"email\"]},\"user_metadata\":{\"nome\":\"Admin Teste\"},\"identities\":[],\"created_at\":\"2026-06-13T04:08:04.157613Z\",\"updated_at\":\"2026-06-13T11:44:58.208836Z\",\"is_anonymous\":false},\"weak_password\":null}"
+        }
+      ]
+    }
+  ]
+}
