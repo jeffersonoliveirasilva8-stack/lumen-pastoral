@@ -120,6 +120,7 @@ function AuthSync() {
             .eq("ativo", true)
             .maybeSingle();
           if (mem?.conta_ativada === false) dest = "/membro/primeiro-acesso";
+          else if (mem === null) dest = window.location.pathname; // RLS bloqueou ou membro não encontrado — não redirecionar
         }
         if (window.location.pathname !== dest) {
           navigate({ to: dest as any, replace: true });

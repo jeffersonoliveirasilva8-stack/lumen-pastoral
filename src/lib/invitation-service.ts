@@ -12,6 +12,27 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
+// ── Helpers de rate-limit Supabase Auth ────────────────────────────────────────
+
+/** Detecta se a mensagem de erro é o cooldown de OTP do Supabase Auth. */
+export function isCooldownError(error: string | null | undefined): boolean {
+  if (!error) return false;
+  return (
+    /for security purposes.*you can only request this after/i.test(error) ||
+    /you can only request this after \d+ seconds?/i.test(error) ||
+    /email rate limit exceeded/i.test(error)
+  );
+}
+
+/** Extrai o número de segundos do cooldown da mensagem de erro. Retorna null se não encontrar. */
+export function parseCooldownSeconds(error: string | null | undefined): number | null {
+  if (!error) return null;
+  const match = error.match(/after (\d+) seconds?/i);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 export const AccessInvitationService = {
   /** URL canônica de ativação para um token_acesso de membro. */
   getLink(tokenAcesso: string): string {
@@ -21,6 +42,9 @@ export const AccessInvitationService = {
   /**
    * Envia e-mail de convite/ativação via Edge Function send-email.
    * Fallback para signInWithOtp se a Edge Function falhar.
+   *
+   * Retorna `{ cooldown: N }` quando o Supabase Auth está em rate-limit —
+   * isso NÃO é falha de envio; o chamador deve tratar como "aguardar N segundos".
    */
   async sendEmail(params: {
     email: string;
@@ -28,7 +52,7 @@ export const AccessInvitationService = {
     paroquiaNome: string;
     tokenAcesso: string;
     template?: "ativacao_conta" | "reenvio_ativacao";
-  }): Promise<{ ok: boolean; error?: string }> {
+  }): Promise<{ ok: boolean; error?: string; cooldown?: number }> {
     const redirectTo = this.getLink(params.tokenAcesso);
 
     const { error: efErr } = await supabase.functions.invoke("send-email", {
@@ -42,12 +66,25 @@ export const AccessInvitationService = {
     });
 
     if (efErr) {
+      // A Edge Function pode repassar o erro de cooldown do OTP interno.
+      if (isCooldownError(efErr.message)) {
+        const secs = parseCooldownSeconds(efErr.message);
+        return { ok: false, error: efErr.message, cooldown: secs ?? 60 };
+      }
+
       // Fallback: OTP nativo — usa o mesmo redirectTo com o token
       const { error: otpErr } = await supabase.auth.signInWithOtp({
         email:   params.email,
         options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
       });
-      if (otpErr) return { ok: false, error: otpErr.message };
+
+      if (otpErr) {
+        if (isCooldownError(otpErr.message)) {
+          const secs = parseCooldownSeconds(otpErr.message);
+          return { ok: false, error: otpErr.message, cooldown: secs ?? 60 };
+        }
+        return { ok: false, error: otpErr.message };
+      }
     }
 
     return { ok: true };
@@ -74,7 +111,16 @@ export const AccessInvitationService = {
   /** Abre o WhatsApp Web com mensagem e link de ativação do membro. */
   whatsApp(tokenAcesso: string, nome: string): void {
     const link = this.getLink(tokenAcesso);
-    const msg  = `Olá, ${nome}! Acesse o portal litúrgico da sua paróquia pelo link abaixo:\n${link}`;
+    const msg = [
+      `Olá, ${nome}!`,
+      ``,
+      `Seu acesso ao Portal Lumen foi liberado.`,
+      ``,
+      `Caso não tenha recebido o e-mail, utilize o link abaixo para criar sua senha:`,
+      link,
+      ``,
+      `Qualquer dúvida, entre em contato com a coordenação.`,
+    ].join("\n");
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   },
 };
