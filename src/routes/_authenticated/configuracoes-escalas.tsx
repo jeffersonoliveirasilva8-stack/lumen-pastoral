@@ -367,47 +367,57 @@ function ConfiguracaoEscalas() {
               <PontuacaoRow label="Substituição recusada" color="text-red-600"   value={form.pontuacao_substituicao_recusada} onChange={(v) => update("pontuacao_substituicao_recusada", v)} />
             </div>
 
-            <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 px-3 py-2.5">
-              <Info className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-700 dark:text-blue-400">
-                <strong>Reprocessar:</strong> recalcula os pontos de cada presença em escala
-                conforme os valores atuais acima (normal / solene / bispo / falta…).
-                Use após alterar pontuações para corrigir o histórico existente.
-                <br />
-                <strong>Recalcular:</strong> apenas soma o que já está no histórico, sem
-                alterar os pontos individuais.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                variant="default"
-                size="sm"
-                className="rounded-xl flex-1"
-                disabled={reprocessLoading || recalcLoading}
-                onClick={handleReprocessar}
-              >
-                {reprocessLoading
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                  : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
-                Reprocessar pontuação histórica
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl flex-1"
-                disabled={recalcLoading || reprocessLoading}
-                onClick={handleRecalcular}
-              >
-                {recalcLoading
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                  : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
-                Recalcular scores (soma)
-              </Button>
-            </div>
           </div>
         )}
+      </section>
+
+      {/* Ferramentas de pontuação — sempre visível */}
+      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <Settings className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Ferramentas de pontuação</h2>
+        </div>
+
+        <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 px-3 py-2.5">
+          <Info className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-700 dark:text-blue-400">
+            <strong>Reprocessar pontuação histórica:</strong> recalcula os pontos de cada
+            presença já registrada em escala conforme os valores configurados acima
+            (normal / solene / bispo / falta…). Use após alterar pontuações para
+            corrigir o histórico existente.
+            <br className="mt-1" />
+            <strong>Recalcular scores (soma):</strong> apenas soma o que já está no
+            histórico, sem alterar os pontos individuais de cada registro.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            variant="default"
+            size="sm"
+            className="rounded-xl flex-1"
+            disabled={reprocessLoading || recalcLoading}
+            onClick={handleReprocessar}
+          >
+            {reprocessLoading
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+            Reprocessar pontuação histórica
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl flex-1"
+            disabled={recalcLoading || reprocessLoading}
+            onClick={handleRecalcular}
+          >
+            {recalcLoading
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+            Recalcular scores (soma)
+          </Button>
+        </div>
       </section>
 
       {/* Salvar */}
