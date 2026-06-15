@@ -108,6 +108,7 @@ function ConfiguracaoEscalas() {
   const [form, setForm] = useState<ConfigEscalas>(DEFAULTS);
   const [dirty, setDirty] = useState(false);
   const [recalcLoading, setRecalcLoading] = useState(false);
+  const [reprocessLoading, setReprocessLoading] = useState(false);
 
   const { data: config, isLoading } = useQuery<ConfigEscalas>({
     queryKey: ["config-escalas", paroquiaId],
@@ -190,6 +191,25 @@ function ConfiguracaoEscalas() {
       toast.error("Erro ao recalcular: " + (e as Error).message);
     } finally {
       setRecalcLoading(false);
+    }
+  }
+
+  async function handleReprocessar() {
+    setReprocessLoading(true);
+    try {
+      const { data, error } = await anyDb.rpc("admin_reprocessar_historico_escala", {
+        p_paroquia_id: paroquiaId,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error);
+      toast.success(
+        `Reprocessado: ${data.registros_atualizados} presenças · ${data.membros_atualizados} membros atualizados.`,
+      );
+      qc.invalidateQueries({ queryKey: ["membros"] });
+    } catch (e: unknown) {
+      toast.error("Erro ao reprocessar: " + (e as Error).message);
+    } finally {
+      setReprocessLoading(false);
     }
   }
 
@@ -350,23 +370,42 @@ function ConfiguracaoEscalas() {
             <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 px-3 py-2.5">
               <Info className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
               <p className="text-xs text-blue-700 dark:text-blue-400">
-                Após alterar pontuações, clique em "Recalcular scores" para aplicar
-                aos dados históricos (escalas + agenda pastoral).
+                <strong>Reprocessar:</strong> recalcula os pontos de cada presença em escala
+                conforme os valores atuais acima (normal / solene / bispo / falta…).
+                Use após alterar pontuações para corrigir o histórico existente.
+                <br />
+                <strong>Recalcular:</strong> apenas soma o que já está no histórico, sem
+                alterar os pontos individuais.
               </p>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl"
-              disabled={recalcLoading}
-              onClick={handleRecalcular}
-            >
-              {recalcLoading
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
-              Recalcular scores da paróquia
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                className="rounded-xl flex-1"
+                disabled={reprocessLoading || recalcLoading}
+                onClick={handleReprocessar}
+              >
+                {reprocessLoading
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                Reprocessar pontuação histórica
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl flex-1"
+                disabled={recalcLoading || reprocessLoading}
+                onClick={handleRecalcular}
+              >
+                {recalcLoading
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+                Recalcular scores (soma)
+              </Button>
+            </div>
           </div>
         )}
       </section>
