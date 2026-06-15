@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 import { useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -76,6 +77,11 @@ function AdminRanking() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      <ModuleTabBar tabs={[
+        { label: "Membros",     to: "/membros",     isActive: false },
+        { label: "Ranking",     to: "/ranking",     isActive: true  },
+        { label: "Ocorrências", to: "/ocorrencias", isActive: false },
+      ]} />
       <div>
         <h1 className="font-serif text-2xl">Ranking de Servidores</h1>
         <p className="text-sm text-muted-foreground mt-0.5">

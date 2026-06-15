@@ -26,7 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -154,7 +154,7 @@ function EscalasPage() {
   const qc = useQueryClient();
   const { abrir } = Route.useSearch();
 
-  const [view, setView] = useState<"lista" | "calendario" | "sacristia" | "historico">("lista");
+  const [view, setView] = useState<"lista" | "historico">("lista");
   const [calMonth, setCalMonth] = useState(new Date());
   const [formOpen, setFormOpen] = useState(false);
   const [detailEscala, setDetailEscala] = useState<Escala | null>(null);
@@ -1067,6 +1067,14 @@ function EscalasPage() {
     [escalas]
   );
 
+  // Status counts para indicadores rápidos
+  const statusCounts = useMemo(() => {
+    const rascunhos  = escalas.filter((e) => e.status === "rascunho"  && new Date(e.data + "T00:00:00") >= new Date(today.toDateString())).length;
+    const publicadas = escalas.filter((e) => e.status === "publicada" && new Date(e.data + "T00:00:00") >= new Date(today.toDateString())).length;
+    const arquivadas = escalas.filter((e) => e.status === "arquivada").length;
+    return { rascunhos, publicadas, arquivadas };
+  }, [escalas, today]);
+
   useEffect(() => {
     if (autoArchiveTriggered || !profile?.paroquia_id) return;
     const hasPast = escalas.some((e) => {
@@ -1306,6 +1314,13 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
+      {/* Abas do módulo Escalas */}
+      <ModuleTabBar tabs={[
+        { label: "Escalas",       onClick: () => setView("lista"),     isActive: view === "lista" },
+        { label: "Histórico",     onClick: () => setView("historico"), isActive: view === "historico" },
+        { label: "Substituições", to: "/substituicoes",                isActive: false },
+      ]} />
+
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -1313,14 +1328,6 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Escalas pastorais</h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
-          <Tabs value={view} onValueChange={(v) => setView(v as "lista" | "calendario" | "sacristia" | "historico")}>
-            <TabsList>
-              <TabsTrigger value="lista"><List className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Lista</span></TabsTrigger>
-              <TabsTrigger value="calendario"><Calendar className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Calendário</span></TabsTrigger>
-              <TabsTrigger value="sacristia"><Church className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Sacristia</span></TabsTrigger>
-              <TabsTrigger value="historico"><History className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Histórico</span></TabsTrigger>
-            </TabsList>
-          </Tabs>
           <Button
             variant="outline" size="sm"
             onClick={() => archivePastEscalasMutation.mutate()}
@@ -1343,6 +1350,29 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           </Button>
         </div>
       </div>
+
+      {/* Indicadores de status — futurasa */}
+      {escalas.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {statusCounts.publicadas > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-semibold text-primary">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+              {statusCounts.publicadas} publicada{statusCounts.publicadas !== 1 ? "s" : ""}
+            </span>
+          )}
+          {statusCounts.rascunhos > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+              {statusCounts.rascunhos} rascunho{statusCounts.rascunhos !== 1 ? "s" : ""}
+            </span>
+          )}
+          {statusCounts.arquivadas > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/50 border border-border/50 px-3 py-1 text-xs font-medium text-muted-foreground/60">
+              {statusCounts.arquivadas} arquivada{statusCounts.arquivadas !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Barra de ações em massa — fixa na base */}
       {selectedEscalaIds.size > 0 && (
@@ -1415,14 +1445,6 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           onExportPDF={(id: string) => exportarEscalasPDF([id])}
           onReorganizar={() => setReorganizarOpen(true)}
         />
-      ) : view === "calendario" ? (
-        <CalendarioView
-          calMonth={calMonth}
-          setCalMonth={setCalMonth}
-          calDays={calDays}
-          escalasForDay={escalasForDay}
-          onOpenDetail={(e) => setDetailEscala(e)}
-        />
       ) : view === "historico" ? (
         <div className="mt-6 space-y-3">
           {past.length === 0 ? (
@@ -1466,9 +1488,7 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
             })
           )}
         </div>
-      ) : (
-        <SacristiaTab paroquiaId={profile?.paroquia_id ?? ""} />
-      )}
+      ) : null}
 
       {/* ── Dialog período para gerar escalas ──────────────────────────────── */}
       <Dialog open={gerarPeriodoOpen} onOpenChange={setGerarPeriodoOpen}>

@@ -5,6 +5,7 @@ import {
   Calendar, CalendarRange, Users, Sparkles, Activity, ChevronRight,
   AlertTriangle, Cake, CheckCircle2, UserX, UserCheck,
   CalendarOff, Zap, Loader2, FileText, BookOpen, Play, ClipboardList,
+  TrendingUp, ArrowLeftRight, Clock, HandHelping,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -104,7 +105,8 @@ function ChartTooltip({ active, payload, label }: {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 function DashboardPage() {
-  const { profile } = useAuth();
+  const { profile, hasAdminAccess, isAdmin, isCoordenador } = useAuth();
+  const isCoord = isAdmin || isCoordenador;
   const pid = profile?.paroquia_id;
 
   // ── Liturgical (pure, no fetch) ───────────────────────────────────────────────
@@ -613,6 +615,165 @@ function DashboardPage() {
     },
   });
 
+  // ── Presença do mês atual ─────────────────────────────────────────────────────
+  const { data: presencaMes } = useQuery<{ presente: number; faltou: number; atraso: number; justificou: number; total: number } | null>({
+    queryKey: ["stats-presenca-mes", pid],
+    enabled: !!pid,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const now = new Date();
+      const inicio = format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd");
+      const hoje = format(now, "yyyy-MM-dd");
+      const { data: esc } = await supabase
+        .from("escalas")
+        .select("id")
+        .eq("paroquia_id", pid!)
+        .eq("status", "publicada")
+        .gte("data", inicio)
+        .lt("data", hoje);
+      if (!esc?.length) return null;
+      const ids = esc.map((e) => e.id);
+      const { data } = await supabase
+        .from("escala_membros")
+        .select("status")
+        .in("escala_id", ids)
+        .in("status", ["presente", "faltou", "atraso", "justificou"]);
+      const counts = { presente: 0, faltou: 0, atraso: 0, justificou: 0, total: 0 };
+      (data ?? []).forEach((r) => {
+        const s = r.status as keyof typeof counts;
+        if (s in counts) counts[s]++;
+        counts.total++;
+      });
+      return counts.total > 0 ? counts : null;
+    },
+  });
+
+  // ── Confirmações pendentes (próximos 7 dias, publicadas) ──────────────────────
+  const { data: confirmacoesPendentes = 0 } = useQuery<number>({
+    queryKey: ["stats-confirmacoes-pendentes", pid],
+    enabled: !!pid,
+    staleTime: 3 * 60 * 1000,
+    queryFn: async () => {
+      const hoje = format(new Date(), "yyyy-MM-dd");
+      const em7 = format(addDays(new Date(), 7), "yyyy-MM-dd");
+      const { data: esc } = await supabase
+        .from("escalas")
+        .select("id")
+        .eq("paroquia_id", pid!)
+        .eq("status", "publicada")
+        .gte("data", hoje)
+        .lte("data", em7);
+      if (!esc?.length) return 0;
+      const { count } = await supabase
+        .from("escala_membros")
+        .select("*", { count: "exact", head: true })
+        .in("escala_id", esc.map((e) => e.id))
+        .eq("status", "pendente");
+      return count ?? 0;
+    },
+  });
+
+  // ── Substituições pendentes ───────────────────────────────────────────────────
+  const { data: substituicoesPendentesCount = 0 } = useQuery<number>({
+    queryKey: ["stats-substituicoes-pendentes", pid],
+    enabled: !!pid,
+    staleTime: 3 * 60 * 1000,
+    queryFn: async () => {
+      const { count } = await anyDb
+        .from("substituicoes")
+        .select("*", { count: "exact", head: true })
+        .in("status", ["solicitada", "com_voluntario"]);
+      return count ?? 0;
+    },
+  });
+
+  // ── Próximas 7 celebrações com vagas info ─────────────────────────────────────
+  const { data: proximasCelebracoes = [] } = useQuery<{
+    id: string; titulo: string; data: string; hora_inicio: string | null;
+    local: string | null; status: string; vagas: number; escalados: number; abertas: number;
+  }[]>({
+    queryKey: ["proximas-celebracoes-detalhe", pid],
+    enabled: !!pid,
+    staleTime: 3 * 60 * 1000,
+    queryFn: async () => {
+      const { data: escalas } = await supabase
+        .from("escalas")
+        .select("id, titulo, data, hora_inicio, local, status")
+        .eq("paroquia_id", pid!)
+        .neq("status", "arquivada")
+        .gte("data", format(new Date(), "yyyy-MM-dd"))
+        .order("data").order("hora_inicio")
+        .limit(7);
+      if (!escalas?.length) return [];
+      const ids = escalas.map((e) => e.id);
+      const [vagasResult, escaladosResult] = await Promise.all([
+        supabase.from("escala_funcoes").select("escala_id, quantidade").in("escala_id", ids),
+        supabase.from("escala_membros").select("escala_id").in("escala_id", ids),
+      ]);
+      const vagasMap: Record<string, number> = {};
+      const escMap: Record<string, number> = {};
+      (vagasResult.data ?? []).forEach((r) => { vagasMap[r.escala_id] = (vagasMap[r.escala_id] ?? 0) + ((r.quantidade as number) ?? 1); });
+      (escaladosResult.data ?? []).forEach((r) => { escMap[r.escala_id] = (escMap[r.escala_id] ?? 0) + 1; });
+      return escalas.map((e) => ({
+        ...e,
+        vagas: vagasMap[e.id] ?? 0,
+        escalados: escMap[e.id] ?? 0,
+        abertas: Math.max(0, (vagasMap[e.id] ?? 0) - (escMap[e.id] ?? 0)),
+      }));
+    },
+  });
+
+  // ── Missas compatíveis (portal do membro) ─────────────────────────────────────
+  type MissaParaMembro = { id: string; titulo: string; data: string; hora_inicio: string | null; ministerio_nome: string; abertas: number };
+  const { data: missasParaMembro = [] } = useQuery<MissaParaMembro[]>({
+    queryKey: ["missas-para-membro", pid, profile?.id],
+    enabled: !!pid && !!profile?.id,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<MissaParaMembro[]> => {
+      if (!profile?.id) return [];
+      const { data: mins } = await anyDb.from("membro_ministerios").select("ministerio_id, ministerios(nome)").eq("membro_id", profile.id);
+      if (!mins?.length) return [];
+      const minIds = (mins as { ministerio_id: string; ministerios: { nome: string } | null }[]).map((m) => m.ministerio_id);
+      const hoje = format(new Date(), "yyyy-MM-dd");
+      const em14 = format(addDays(new Date(), 14), "yyyy-MM-dd");
+      const { data: esc } = await supabase
+        .from("escalas")
+        .select("id, titulo, data, hora_inicio")
+        .eq("paroquia_id", pid!)
+        .eq("status", "publicada")
+        .gte("data", hoje)
+        .lte("data", em14)
+        .order("data");
+      if (!esc?.length) return [];
+      const ids = esc.map((e) => e.id);
+      const [vagasResult, escaladosResult] = await Promise.all([
+        supabase.from("escala_funcoes").select("escala_id, ministerio_id, quantidade").in("escala_id", ids).in("ministerio_id", minIds),
+        supabase.from("escala_membros").select("escala_id, ministerio_id").in("escala_id", ids).in("ministerio_id", minIds),
+      ]);
+      const result: MissaParaMembro[] = [];
+      for (const escala of esc) {
+        for (const ministerioId of minIds) {
+          const vagasForMin = (vagasResult.data ?? []).filter((v: any) => v.escala_id === escala.id && v.ministerio_id === ministerioId);
+          const totalVagas = vagasForMin.reduce((s: number, v: any) => s + ((v.quantidade as number) ?? 1), 0);
+          const escaladosForMin = (escaladosResult.data ?? []).filter((v: any) => v.escala_id === escala.id && v.ministerio_id === ministerioId).length;
+          const abertas = Math.max(0, totalVagas - escaladosForMin);
+          if (abertas > 0) {
+            const min = mins.find((m: { ministerio_id: string }) => m.ministerio_id === ministerioId) as { ministerio_id: string; ministerios: { nome: string } | null } | undefined;
+            result.push({
+              id: `${escala.id}-${ministerioId}`,
+              titulo: escala.titulo,
+              data: escala.data,
+              hora_inicio: escala.hora_inicio,
+              ministerio_nome: min?.ministerios?.nome ?? "Função",
+              abertas,
+            });
+          }
+        }
+      }
+      return result.slice(0, 5);
+    },
+  });
+
   // ── Stats cards ───────────────────────────────────────────────────────────────
   const stats = [
     {
@@ -870,6 +1031,44 @@ function DashboardPage() {
         )}
       </div>
 
+      {/* ── Portal do membro: Missas precisando de servidores ── */}
+      {!hasAdminAccess && missasParaMembro.length > 0 && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 overflow-hidden">
+          <div className="flex items-center gap-2.5 px-4 py-3 border-b border-primary/20">
+            <HandHelping className="h-3.5 w-3.5 text-primary shrink-0" />
+            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+              Missas precisando de servidores
+            </p>
+            <span className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1">
+              {missasParaMembro.length}
+            </span>
+          </div>
+          <div className="divide-y divide-primary/10">
+            {missasParaMembro.map((m) => (
+              <Link
+                key={m.id}
+                to="/escalas"
+                search={{} as any}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-primary/10 transition group"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground leading-snug truncate">{m.titulo}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {format(new Date(m.data + "T00:00:00"), "EEE, d 'de' MMM", { locale: ptBR })}
+                    {m.hora_inicio ? ` · ${m.hora_inicio.slice(0, 5)}` : ""}
+                    {" · "}<span className="font-medium">{m.ministerio_nome}</span>
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-semibold text-amber-600">{m.abertas} vaga{m.abertas !== 1 ? "s" : ""}</p>
+                  <p className="text-[10px] text-muted-foreground">em aberto</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <section className="rounded-2xl sm:rounded-3xl border border-border/70 bg-card shadow-altar overflow-hidden">
         <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
           <div className="flex items-start justify-between gap-3">
@@ -963,7 +1162,7 @@ function DashboardPage() {
       </div>
 
       {/* ── Alertas urgentes — só aparece quando há itens críticos ── */}
-      {(conflitos.length > 0 || escalasIncompletas.length > 0 || alertasLiturgicos.length > 0 || escalasPresencaPendente.length > 0) && (
+      {(conflitos.length > 0 || escalasIncompletas.length > 0 || alertasLiturgicos.length > 0 || escalasPresencaPendente.length > 0 || substituicoesPendentesCount > 0 || confirmacoesPendentes > 0) && (
         <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 overflow-hidden">
           <div className="flex items-center gap-2.5 px-4 py-3 border-b border-amber-200/60 dark:border-amber-800/60">
             <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
@@ -971,7 +1170,7 @@ function DashboardPage() {
               Precisa de atenção
             </p>
             <span className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1">
-              {conflitos.length + escalasIncompletas.length + alertasLiturgicos.length + escalasPresencaPendente.length}
+              {conflitos.length + escalasIncompletas.length + alertasLiturgicos.length + escalasPresencaPendente.length + (substituicoesPendentesCount > 0 ? 1 : 0) + (confirmacoesPendentes > 0 ? 1 : 0)}
             </span>
           </div>
           <div className="divide-y divide-amber-200/50 dark:divide-amber-800/40">
@@ -1052,6 +1251,37 @@ function DashboardPage() {
                 </span>
               </Link>
             ))}
+            {substituicoesPendentesCount > 0 && (
+              <Link
+                to="/substituicoes"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-100/60 dark:hover:bg-amber-900/20 transition group"
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground leading-snug">
+                    <span className="text-violet-600 font-semibold">{substituicoesPendentesCount} substituição{substituicoesPendentesCount !== 1 ? "ões" : ""}</span> aguardando aprovação
+                  </p>
+                  <p className="text-xs text-muted-foreground">Clique para gerenciar</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition shrink-0" />
+              </Link>
+            )}
+            {confirmacoesPendentes > 0 && (
+              <Link
+                to="/escalas"
+                search={{} as any}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-100/60 dark:hover:bg-amber-900/20 transition group"
+              >
+                <Clock className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground leading-snug">
+                    <span className="text-sky-600 font-semibold">{confirmacoesPendentes} membro{confirmacoesPendentes !== 1 ? "s" : ""}</span> ainda não respondeu{confirmacoesPendentes !== 1 ? "ram" : ""} a escala
+                  </p>
+                  <p className="text-xs text-muted-foreground">Próximos 7 dias · escalas publicadas</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition shrink-0" />
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -1068,6 +1298,138 @@ function DashboardPage() {
           />
         ))}
       </div>
+
+      {/* ── Presença do mês + Membros por atuação ── */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Presença do mês */}
+        {presencaMes && (
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Presença do mês</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-green-500/10 border border-green-500/20 px-3 py-2.5 text-center">
+                <p className="text-2xl font-serif font-bold text-green-600">{presencaMes.presente}</p>
+                <p className="text-[10px] uppercase tracking-wide text-green-700/70 mt-0.5">Presentes</p>
+              </div>
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-center">
+                <p className="text-2xl font-serif font-bold text-red-600">{presencaMes.faltou}</p>
+                <p className="text-[10px] uppercase tracking-wide text-red-700/70 mt-0.5">Faltas</p>
+              </div>
+              <div className="rounded-xl bg-orange-500/10 border border-orange-500/20 px-3 py-2.5 text-center">
+                <p className="text-2xl font-serif font-bold text-orange-600">{presencaMes.atraso}</p>
+                <p className="text-[10px] uppercase tracking-wide text-orange-700/70 mt-0.5">Atrasos</p>
+              </div>
+              <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 text-center">
+                <p className="text-2xl font-serif font-bold text-amber-600">{presencaMes.justificou}</p>
+                <p className="text-[10px] uppercase tracking-wide text-amber-700/70 mt-0.5">Justificadas</p>
+              </div>
+            </div>
+            {presencaMes.total > 0 && (
+              <div className="mt-3 flex items-center gap-2">
+                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-green-500"
+                    style={{ width: `${Math.round((presencaMes.presente / presencaMes.total) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-xs font-semibold text-green-600 shrink-0">
+                  {Math.round((presencaMes.presente / presencaMes.total) * 100)}% presença
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Membros por atuação */}
+        {memberStats && memberStats.byPastoral.length > 0 && (
+          <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Membros por atuação</p>
+            </div>
+            <div className="space-y-2">
+              {memberStats.byPastoral.slice(0, 6).map((p: { nome: string; membros: number; cor: string }) => (
+                <div key={p.nome} className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.cor ?? "#6B7280" }} />
+                  <span className="text-sm flex-1 truncate text-foreground/80">{p.nome}</span>
+                  <span className="text-sm font-semibold tabular-nums">{p.membros}</span>
+                </div>
+              ))}
+              <div className="pt-1 border-t border-border/50 flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Total ativo</span>
+                <span className="text-sm font-bold">{totalMembros}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Próximas 7 celebrações com vagas ── */}
+      {proximasCelebracoes.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-5 py-4 border-b border-border">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Próximas celebrações</p>
+              <h2 className="mt-0.5 font-serif text-lg leading-snug">Escalas publicadas e rascunhos</h2>
+            </div>
+            <Link to="/escalas" search={{} as any}>
+              <Button variant="ghost" size="sm" className="h-8 text-xs rounded-xl">
+                Ver todas <ChevronRight className="h-3 w-3 ml-0.5" />
+              </Button>
+            </Link>
+          </div>
+          <div className="divide-y divide-border/60">
+            {proximasCelebracoes.map((e) => {
+              const d = new Date(e.data + "T00:00:00");
+              const isToday = e.data === format(new Date(), "yyyy-MM-dd");
+              return (
+                <Link
+                  key={e.id}
+                  to="/escalas"
+                  search={{ abrir: e.id } as any}
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40 transition group"
+                >
+                  <div className="w-12 shrink-0 text-center">
+                    <p className={`text-xs font-bold uppercase ${isToday ? "text-primary" : "text-muted-foreground"}`}>
+                      {format(d, "EEE", { locale: ptBR })}
+                    </p>
+                    <p className={`text-xl font-serif leading-none ${isToday ? "text-primary" : "text-foreground"}`}>
+                      {format(d, "d")}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">{format(d, "MMM", { locale: ptBR })}</p>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{e.titulo}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {e.hora_inicio ? e.hora_inicio.slice(0, 5) : "—"}
+                      {e.local ? ` · ${e.local}` : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    {e.vagas > 0 ? (
+                      <>
+                        <p className={`text-sm font-semibold ${e.abertas > 0 ? "text-amber-600" : "text-green-600"}`}>
+                          {e.escalados}/{e.vagas}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">{e.abertas > 0 ? `${e.abertas} vaga${e.abertas !== 1 ? "s" : ""} livre${e.abertas !== 1 ? "s" : ""}` : "completa"}</p>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">sem vagas</span>
+                    )}
+                  </div>
+                  <div className="shrink-0">
+                    <Badge variant={e.status === "publicada" ? "default" : "secondary"} className="text-[10px] uppercase">
+                      {e.status === "publicada" ? "Pub." : "Rasc."}
+                    </Badge>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[2.2fr_1fr]">
         <div className="space-y-4">

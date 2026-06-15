@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Loader2, Settings, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -164,6 +165,12 @@ function ConfiguracaoEscalas() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 lg:px-6 space-y-8 pb-10">
+      <ModuleTabBar tabs={[
+        { label: "Personalização",       to: "/configuracoes/paroquia",        isActive: false },
+        { label: "Config. Escalas",      to: "/configuracoes-escalas",         isActive: true  },
+        { label: "Administradores",      to: "/configuracoes/administradores", isActive: false },
+        { label: "Atividade do Sistema", to: "/auditoria",                     isActive: false },
+      ]} />
 
       {/* Header */}
       <div>

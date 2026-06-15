@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -70,7 +71,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 };
 
 function AdminSubstituicoes() {
-  const { profile } = useAuth();
+  const { profile, isAdmin, isCoordenador } = useAuth();
   const paroquiaId = profile?.paroquia_id ?? null;
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<"gestao" | "relatorios">("gestao");
@@ -79,6 +80,23 @@ function AdminSubstituicoes() {
   const [rejectMotivo, setRejectMotivo] = useState("");
   const [substitutosModal, setSubstitutosModal] = useState<{ substId: string; escalaId: string; ministerioId: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const { data: configEscalas } = useQuery<{ substituicao_ativa: boolean } | null>({
+    queryKey: ["config-escalas", paroquiaId],
+    enabled: !!paroquiaId,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("paroquia_config_escalas")
+        .select("substituicao_ativa")
+        .eq("paroquia_id", paroquiaId)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const substituicaoAtiva = configEscalas?.substituicao_ativa ?? false;
+  const isCoord = isAdmin || isCoordenador;
 
   const { data: substituicoes = [], isLoading, refetch } = useQuery<Substituicao[]>({
     queryKey: ["admin-substituicoes", paroquiaId, statusFilter],
@@ -159,9 +177,17 @@ function AdminSubstituicoes() {
   });
 
   const pendentes = substituicoes.filter((s) => ["com_voluntario", "solicitada"].includes(s.status)).length;
+  const aprovadas = substituicoes.filter((s) => s.status === "aprovada").length;
+  const rejeitadas = substituicoes.filter((s) => s.status === "rejeitada").length;
+  const canceladas = substituicoes.filter((s) => s.status === "cancelada").length;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 lg:px-6 space-y-6 pb-10">
+      <ModuleTabBar tabs={[
+        { label: "Escalas",       to: "/escalas",       isActive: false },
+        { label: "Histórico",     to: "/escalas",       isActive: false },
+        { label: "Substituições", to: "/substituicoes", isActive: true  },
+      ]} />
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -179,8 +205,53 @@ function AdminSubstituicoes() {
         )}
       </div>
 
-      {/* Abas: Gestão | Relatórios */}
-      <div className="flex gap-1 border-b border-border">
+      {/* Estado desabilitado */}
+      {!substituicaoAtiva && (
+        <div className="rounded-2xl border border-border bg-muted/30 p-6 text-center space-y-3">
+          <ArrowLeftRight className="h-8 w-8 mx-auto text-muted-foreground/40" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Substituições desabilitadas</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {isCoord
+                ? <>Para ativar, acesse <span className="font-medium">Configurações → Escalas</span> e habilite o módulo de substituições.</>
+                : "As substituições estão desabilitadas para esta paróquia no momento."}
+            </p>
+          </div>
+          {isCoord && (
+            <a
+              href="/configuracoes-escalas"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition"
+            >
+              Ir para Configurações de Escalas
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Indicadores de status — só quando ativo e com dados */}
+      {substituicaoAtiva && substituicoes.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2.5 text-center">
+            <p className="text-xl font-serif font-bold text-amber-600">{pendentes}</p>
+            <p className="text-[10px] uppercase tracking-wide text-amber-700/70 mt-0.5">Pendentes</p>
+          </div>
+          <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 px-3 py-2.5 text-center">
+            <p className="text-xl font-serif font-bold text-green-600">{aprovadas}</p>
+            <p className="text-[10px] uppercase tracking-wide text-green-700/70 mt-0.5">Aprovadas</p>
+          </div>
+          <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 px-3 py-2.5 text-center">
+            <p className="text-xl font-serif font-bold text-red-600">{rejeitadas}</p>
+            <p className="text-[10px] uppercase tracking-wide text-red-700/70 mt-0.5">Rejeitadas</p>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-center">
+            <p className="text-xl font-serif font-bold text-muted-foreground">{canceladas}</p>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/60 mt-0.5">Canceladas</p>
+          </div>
+        </div>
+      )}
+
+      {/* Abas: Gestão | Relatórios — só quando ativo */}
+      {substituicaoAtiva && <div className="flex gap-1 border-b border-border">
         <button
           type="button"
           onClick={() => setActiveTab("gestao")}
@@ -205,8 +276,9 @@ function AdminSubstituicoes() {
           <BarChart3 className="h-3.5 w-3.5 inline mr-1.5" />
           Relatórios
         </button>
-      </div>
+      </div>}
 
+      {substituicaoAtiva && <>
       {/* Aba Relatórios */}
       {activeTab === "relatorios" && <RelatoriosContent />}
 
@@ -357,6 +429,7 @@ function AdminSubstituicoes() {
       </Dialog>
 
       </> /* fim aba gestao */}
+      </> /* fim substituicaoAtiva */}
     </div>
   );
 }
