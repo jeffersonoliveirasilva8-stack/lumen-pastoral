@@ -41,7 +41,7 @@ function getActiveModule(pathname: string): string {
   if (pathname.startsWith("/escalas") || pathname.startsWith("/substituicoes")) return "/escalas";
   if (pathname.startsWith("/membros") || pathname.startsWith("/ranking") || pathname.startsWith("/ocorrencias")) return "/membros";
   if (pathname.startsWith("/formacoes") || pathname.startsWith("/espiritualidade")) return "/formacoes";
-  if (pathname.startsWith("/configuracoes") || pathname.startsWith("/auditoria")) return "/configuracoes";
+  if (pathname.startsWith("/configuracoes") || pathname.startsWith("/auditoria")) return "/configuracoes/paroquia";
   if (pathname.startsWith("/sacristia")) return "/sacristia";
   if (pathname.startsWith("/painel")) return "/painel";
   return pathname;
@@ -168,7 +168,7 @@ function AuthLayout() {
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
     { to: "/formacoes",      label: "Pastoral",        icon: Leaf,            color: "bg-teal-600" },
     ...(!isLimitedCoord ? [{ to: "/sacristia", label: "Sacristia", icon: ClipboardList, color: "bg-amber-700" }] : []),
-    { to: "/configuracoes",  label: "Configurações",   icon: Settings,        color: "bg-indigo-600" },
+    { to: "/configuracoes/paroquia", label: "Configurações", icon: Settings, color: "bg-indigo-600" },
   ];
 
   // Itens secundários para o drawer "Mais"
