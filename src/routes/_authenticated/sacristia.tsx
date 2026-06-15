@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle2, XCircle, Clock, MapPin, Users, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, MapPin, Users, Loader2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,7 @@ type MembroEscala = {
   id: string;
   membro_id: string;
   ministerio_id: string;
+  escala_id: string;
   status: string;
   membro: { id: string; nome: string; telefone: string | null };
   ministerio: { id: string; nome: string; cor: string };
@@ -37,11 +38,26 @@ type EscalaHoje = {
 };
 
 function SacristiaPage() {
-  const { profile } = useAuth();
+  const { profile, user, isAdministrador } = useAuth();
   const qc = useQueryClient();
   const hojeStr = format(new Date(), "yyyy-MM-dd");
-  const [presencaMap, setPresencaMap] = useState<Record<string, "presente" | "faltou" | "pendente">>({});
+  const [presencaMap, setPresencaMap] = useState<Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente">>({});
   const [savingEscalaId, setSavingEscalaId] = useState<string | null>(null);
+
+  // Para auxiliares: descobre o membro_id do usuário logado para filtrar escalas
+  const { data: meupMembroId } = useQuery<string | null>({
+    queryKey: ["meu-membro-id-sacristia", profile?.paroquia_id, user?.id],
+    enabled: !!profile?.paroquia_id && !!user?.id && !!isAdministrador,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("membros")
+        .select("id")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .eq("auth_user_id", user!.id)
+        .maybeSingle();
+      return data?.id ?? null;
+    },
+  });
 
   const { data: escalasHoje = [], isLoading } = useQuery<EscalaHoje[]>({
     queryKey: ["sacristia-escalas", profile?.paroquia_id, hojeStr],
@@ -76,6 +92,15 @@ function SacristiaPage() {
     },
   });
 
+  // Auxiliares veem apenas as escalas em que estão atribuídos
+  const escalasVisiveis = useMemo(() => {
+    if (!isAdministrador || !meupMembroId || membrosEscala.length === 0) return escalasHoje;
+    const minhasEscalaIds = new Set(
+      membrosEscala.filter((m) => m.membro_id === meupMembroId).map((m) => m.escala_id)
+    );
+    return escalasHoje.filter((e) => minhasEscalaIds.has(e.id));
+  }, [escalasHoje, membrosEscala, isAdministrador, meupMembroId]);
+
   const salvarPresencasMutation = useMutation({
     mutationFn: async (escalaId: string) => {
       const membrosDestaEscala = membrosEscala.filter((m: any) => m.escala_id === escalaId);
@@ -99,7 +124,7 @@ function SacristiaPage() {
     onSettled: () => setSavingEscalaId(null),
   });
 
-  function togglePresenca(id: string, status: "presente" | "faltou") {
+  function togglePresenca(id: string, status: "presente" | "faltou" | "atrasado" | "justificou") {
     setPresencaMap((prev) => ({
       ...prev,
       [id]: prev[id] === status ? "pendente" : status,
@@ -130,14 +155,16 @@ function SacristiaPage() {
             </div>
           ))}
         </div>
-      ) : escalasHoje.length === 0 ? (
+      ) : escalasVisiveis.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
           <CheckCircle2 className="h-8 w-8 mx-auto text-muted-foreground" />
-          <p className="mt-4 text-sm text-muted-foreground">Nenhuma escala para hoje.</p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            {isAdministrador ? "Você não está escalado para nenhuma celebração hoje." : "Nenhuma escala para hoje."}
+          </p>
         </div>
       ) : (
         <div className="space-y-5">
-          {escalasHoje.map((escala) => {
+          {escalasVisiveis.map((escala) => {
             const membros = membrosEscala.filter((m: any) => m.escala_id === escala.id);
             const presentes = membros.filter((m: MembroEscala) => (presencaMap[m.id] ?? "pendente") === "presente").length;
             const isSaving = savingEscalaId === escala.id;
@@ -210,6 +237,10 @@ function SacristiaPage() {
                                     ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30"
                                     : status === "faltou"
                                     ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
+                                    : status === "atrasado"
+                                    ? "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/30"
+                                    : status === "justificou"
+                                    ? "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30"
                                     : "border-border bg-background"
                                 }`}
                               >
@@ -231,6 +262,30 @@ function SacristiaPage() {
                                     }`}
                                   >
                                     <CheckCircle2 className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => togglePresenca(m.id, "atrasado")}
+                                    title="Marcar atrasado"
+                                    className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
+                                      status === "atrasado"
+                                        ? "bg-orange-500 text-white"
+                                        : "bg-muted text-muted-foreground hover:bg-orange-100 hover:text-orange-700"
+                                    }`}
+                                  >
+                                    <Clock className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => togglePresenca(m.id, "justificou")}
+                                    title="Justificativa"
+                                    className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
+                                      status === "justificou"
+                                        ? "bg-blue-500 text-white"
+                                        : "bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+                                    }`}
+                                  >
+                                    <FileText className="h-4 w-4" />
                                   </button>
                                   <button
                                     type="button"

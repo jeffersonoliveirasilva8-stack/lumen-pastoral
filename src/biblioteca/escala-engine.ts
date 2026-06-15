@@ -16,6 +16,7 @@ export type MembroEngine = {
   restricoes_dia_semana?: number[];
   atuacao_ids?: string[];
   sexo?: "M" | "F" | null;
+  prioridade_escala?: string;
 };
 
 export type IndisponibilidadeEngine = {
@@ -47,7 +48,9 @@ export type ConfigParoquia = {
   limite_semanal?: number;
   limite_mensal?: number;
   impedir_repeticao_seguida?: boolean;
-  prioridade_score?: boolean; // true = maior score (mérito); false/undef = equidade
+  prioridade_score?: boolean;    // true = maior score (mérito); false/undef = equidade
+  prioridade_bonus_alto?: number; // bonus pts para prioridade_escala alta/mestre_cerimonia/coordenador (padrão: 15)
+  prioridade_bonus_medio?: number; // bonus pts para prioridade_escala media (padrão: 8)
 };
 
 export type MinisterioBase = {
@@ -81,6 +84,7 @@ export type ScoreBreakdown = {
   ranking_bonus: number;        // 0–100, peso 10%
   aleatoriedade: number;        // 0–100, peso  5%
   penalidade: number;           // subtraída do total (celebração próxima)
+  prioridade_bonus: number;     // bonus fixo por prioridade_escala do membro
   total: number;                // score final 0–100
 };
 
@@ -256,6 +260,7 @@ function calcularScorePrioridade(
   dataEvento: string,
   data30dAtras: string,
   stats: GrupoStats,
+  config?: ConfigParoquia,
 ): ScoreBreakdown {
   const histMembro = historico.filter((h) => h.membro_id === membro.id);
 
@@ -312,7 +317,18 @@ function calcularScorePrioridade(
     PESOS.rankingBonus        * rankingBonus +
     PESOS.aleatoriedade       * aleatoriedade;
 
-  const total = Math.max(0, Math.min(100, raw - penalidade));
+  // ── Bonus por prioridade_escala ──────────────────────────────────────────
+  // 'sempre_solenes' é tratado pela Regra Jefferson; os demais recebem bonus.
+  // Configurável via config.prioridade_bonus_alto / config.prioridade_bonus_medio.
+  let prioridadeBonus = 0;
+  const prio = membro.prioridade_escala;
+  if (prio === "alta" || prio === "mestre_cerimonia" || prio === "coordenador") {
+    prioridadeBonus = config?.prioridade_bonus_alto ?? 15;
+  } else if (prio === "media") {
+    prioridadeBonus = config?.prioridade_bonus_medio ?? 8;
+  }
+
+  const total = Math.max(0, Math.min(100, raw - penalidade + prioridadeBonus));
 
   return {
     tempo_sem_servir:      Math.round(tempoSemServir),
@@ -321,6 +337,7 @@ function calcularScorePrioridade(
     ranking_bonus:         Math.round(rankingBonus),
     aleatoriedade:         Math.round(aleatoriedade),
     penalidade:            Math.round(penalidade),
+    prioridade_bonus:      Math.round(prioridadeBonus),
     total:                 Math.round(total),
   };
 }
@@ -477,7 +494,7 @@ export function alocarMembros(
       const count30d      = hist_m.filter((h) => h.data >= data30dAtras && h.data < contexto.data).length;
       const totalHist     = histAnterior.length;
 
-      const breakdown = calcularScorePrioridade(m, historicoRecente, contexto.data, data30dAtras, stats);
+      const breakdown = calcularScorePrioridade(m, historicoRecente, contexto.data, data30dAtras, stats, config);
 
       return { membro: m, breakdown, diasSemServir, count30d, totalHist };
     });

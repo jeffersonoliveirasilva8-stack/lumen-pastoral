@@ -26,6 +26,7 @@ export type EscalaMembroInput = {
   restricoes_dia_semana?: number[];
   sexo?: "M" | "F" | null;
   atuacao_ids?: string[];
+  prioridade_escala?: string;
 };
 
 export type EscalaFuncaoPedido = {
@@ -167,6 +168,7 @@ function _buildAndAllocate(
         funcoes_nao_pode_ids: naoPodemIds,
         sexo: (m.sexo === "M" || m.sexo === "F") ? m.sexo : null,
         atuacao_ids: m.atuacao_ids ?? [],
+        prioridade_escala: m.prioridade_escala,
       };
     });
 

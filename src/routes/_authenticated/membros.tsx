@@ -88,6 +88,7 @@ type Membro = {
   foto_url: string | null;
   ministerios: Ministerio[];
   atuacao_ids: string[];
+  restricoes_dia_semana: number[];
 };
 
 type Indisponibilidade = {
@@ -495,7 +496,7 @@ function MemberForm({
       <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Disponibilidade</p>
-          {form.restricoes_dia_semana.length === 0 ? (
+          {form.restricoes_dia_semana.length === 0 && form.missas_nao_pode_ids.length === 0 ? (
             <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-500/10 border border-green-500/20 rounded-full px-2 py-0.5">
               <CheckCircle2 className="h-3 w-3" /> Qualquer dia
             </span>
@@ -1760,8 +1761,9 @@ function MembrosPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterMin, setFilterMin] = useState("todos");
-  const [filterAtivo, setFilterAtivo] = useState("ativos");
-  const [filterAtivacao, setFilterAtivacao] = useState("todas");
+  const [filterSituacao, setFilterSituacao] = useState("ativos");
+  const [filterSexo, setFilterSexo] = useState("todos");
+  const [filterDisponibilidade, setFilterDisponibilidade] = useState("todas");
   const [filterAtuacao, setFilterAtuacao] = useState("todas");
   const [filterComunidade, setFilterComunidade] = useState("todas");
   const [filterPrioridade, setFilterPrioridade] = useState("todas");
@@ -1867,7 +1869,7 @@ function MembrosPage() {
     queryFn: async () => {
       const { data: rawMembros, error } = await anyDb
         .from("membros")
-        .select("id, nome, email, telefone, data_nascimento, data_ingresso, observacoes, score, ativo, conta_ativada, forcar_escalacao_solene, prioridade_escala, prioridade_id, tipo_acesso, token_acesso, auth_user_id, comunidade_id, sexo, foto_url")
+        .select("id, nome, email, telefone, data_nascimento, data_ingresso, observacoes, score, ativo, conta_ativada, forcar_escalacao_solene, prioridade_escala, prioridade_id, tipo_acesso, token_acesso, auth_user_id, comunidade_id, sexo, foto_url, restricoes_dia_semana")
         .eq("paroquia_id", pid!).order("nome");
       if (error) throw error;
       const rows = (rawMembros ?? []) as any[];
@@ -1902,6 +1904,7 @@ function MembrosPage() {
         prioridade_id: m.prioridade_id ?? null,
         tipo_acesso: m.tipo_acesso ?? "membro",
         foto_url: m.foto_url ?? null,
+        restricoes_dia_semana: m.restricoes_dia_semana ?? [],
       })) as Membro[];
     },
   });
@@ -2026,10 +2029,13 @@ function MembrosPage() {
 
   const filtered = useMemo(() => {
     let list = membros;
-    if (filterAtivo === "ativos") list = list.filter((m) => m.ativo);
-    if (filterAtivo === "inativos") list = list.filter((m) => !m.ativo);
-    if (filterAtivacao === "pendentes") list = list.filter((m) => m.ativo && m.conta_ativada === false);
-    if (filterAtivacao === "ativados") list = list.filter((m) => m.conta_ativada === true);
+    if (filterSituacao === "ativos") list = list.filter((m) => m.ativo);
+    if (filterSituacao === "inativos") list = list.filter((m) => !m.ativo);
+    if (filterSituacao === "com_acesso") list = list.filter((m) => m.ativo && m.conta_ativada === true);
+    if (filterSituacao === "sem_acesso") list = list.filter((m) => m.ativo && m.conta_ativada !== true);
+    if (filterSexo !== "todos") list = list.filter((m) => m.sexo === filterSexo);
+    if (filterDisponibilidade === "sem_restricoes") list = list.filter((m) => m.restricoes_dia_semana.length === 0);
+    if (filterDisponibilidade === "com_restricoes") list = list.filter((m) => m.restricoes_dia_semana.length > 0);
     if (filterMin !== "todos") list = list.filter((m) => m.ministerios.some((mn) => mn.id === filterMin));
     if (filterAtuacao !== "todas") list = list.filter((m) => m.atuacao_ids.includes(filterAtuacao));
     if (filterComunidade !== "todas") list = list.filter((m) => m.comunidade_id === filterComunidade);
@@ -2043,7 +2049,7 @@ function MembrosPage() {
       );
     }
     return list;
-  }, [membros, debouncedSearch, filterMin, filterAtivo, filterAtivacao, filterAtuacao, filterComunidade, filterPrioridade]);
+  }, [membros, debouncedSearch, filterMin, filterSituacao, filterSexo, filterDisponibilidade, filterAtuacao, filterComunidade, filterPrioridade]);
 
   async function handleExportExcel() {
     const XLSX = await import("xlsx");
@@ -2591,7 +2597,7 @@ function MembrosPage() {
         <TabsContent value="membros">
         {/* Busca + Filtros */}
         {(() => {
-          const hasFilters = filterMin !== "todos" || filterAtuacao !== "todas" || filterComunidade !== "todas" || filterPrioridade !== "todas" || filterAtivo !== "ativos" || filterAtivacao !== "todas";
+          const hasFilters = filterMin !== "todos" || filterAtuacao !== "todas" || filterComunidade !== "todas" || filterPrioridade !== "todas" || filterSituacao !== "ativos" || filterSexo !== "todos" || filterDisponibilidade !== "todas";
           return (
             <div className="mt-3 space-y-2.5">
               {/* Barra de busca destacada */}
@@ -2612,25 +2618,38 @@ function MembrosPage() {
 
               {/* Filtros — chips horizontais roláveis */}
               <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
-                <Select value={filterAtivo} onValueChange={(v) => { setFilterAtivo(v); setSelectedIds(new Set()); }}>
-                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border ${filterAtivo !== "ativos" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
+                <Select value={filterSituacao} onValueChange={(v) => { setFilterSituacao(v); setSelectedIds(new Set()); }}>
+                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterSituacao !== "ativos" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ativos">Ativos</SelectItem>
                     <SelectItem value="inativos">Inativos</SelectItem>
+                    <SelectItem value="com_acesso">Com acesso</SelectItem>
+                    <SelectItem value="sem_acesso">Sem acesso</SelectItem>
                     <SelectItem value="todos">Todos</SelectItem>
                   </SelectContent>
                 </Select>
 
-                <Select value={filterAtivacao} onValueChange={(v) => { setFilterAtivacao(v); setSelectedIds(new Set()); }}>
-                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[180px] ${filterAtivacao !== "todas" ? "border-amber-500/50 bg-amber-500/5 text-amber-700 dark:text-amber-400" : "border-border bg-card"}`}>
-                    <SelectValue placeholder="Ativação" />
+                <Select value={filterSexo} onValueChange={(v) => { setFilterSexo(v); setSelectedIds(new Set()); }}>
+                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[130px] ${filterSexo !== "todos" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
+                    <SelectValue placeholder="Sexo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todas">Todas as contas</SelectItem>
-                    <SelectItem value="pendentes">Aguardando ativação</SelectItem>
-                    <SelectItem value="ativados">Conta ativada</SelectItem>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="M">Masculino</SelectItem>
+                    <SelectItem value="F">Feminino</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterDisponibilidade} onValueChange={(v) => { setFilterDisponibilidade(v); setSelectedIds(new Set()); }}>
+                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[180px] ${filterDisponibilidade !== "todas" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
+                    <SelectValue placeholder="Disponibilidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Disponibilidade</SelectItem>
+                    <SelectItem value="sem_restricoes">Todos os dias</SelectItem>
+                    <SelectItem value="com_restricoes">Com restrições</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -2686,7 +2705,7 @@ function MembrosPage() {
                 {hasFilters && (
                   <button
                     className="h-8 shrink-0 flex items-center gap-1 rounded-full px-3 text-xs text-destructive border border-destructive/30 bg-destructive/5 hover:bg-destructive/10 transition whitespace-nowrap"
-                    onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setFilterAtivo("ativos"); setFilterAtivacao("todas"); setSelectedIds(new Set()); }}
+                    onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setFilterSituacao("ativos"); setFilterSexo("todos"); setFilterDisponibilidade("todas"); setSelectedIds(new Set()); }}
                   >
                     <X className="h-3 w-3" />Limpar
                   </button>
@@ -2767,12 +2786,12 @@ function MembrosPage() {
               />
               <span className="text-xs text-muted-foreground">Selecionar todos</span>
             </label>
-            {filterAtivacao === "pendentes" && filtered.length > 0 && (
+            {filterSituacao === "sem_acesso" && filtered.length > 0 && (
               <button
                 className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
                 onClick={() => setSelectedIds(new Set(filtered.map((m) => m.id)))}
               >
-                Selecionar todos os pendentes ({filtered.length})
+                Selecionar todos sem acesso ({filtered.length})
               </button>
             )}
             <div className="flex items-center gap-1.5">

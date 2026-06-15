@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
   Flame, BookOpen, CalendarRange, Bell, Trophy, UserCircle, X, MessageSquare, Church, ShieldCheck,
-  ArrowLeftRight, Stethoscope,
+  ArrowLeftRight, ClipboardList,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -161,12 +161,12 @@ function AuthLayout() {
     { to: "/formacoes",                   label: "Agenda Pastoral", icon: CalendarRange,   color: "bg-teal-600" },
     { to: "/espiritualidade",             label: "Liturgia",        icon: BookOpen,        color: "bg-purple-600" },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
+    ...(!isLimitedCoord ? [{ to: "/sacristia", label: "Sacristia", icon: ClipboardList, color: "bg-amber-700" }] : []),
     { to: "/ranking",                     label: "Ranking",         icon: Trophy,          color: "bg-amber-500" },
     { to: "/ocorrencias",                 label: "Ocorrências",     icon: MessageSquare,   color: "bg-orange-600" },
     { to: "/notificacoes",                label: "Notificações",    icon: Bell,            color: "bg-rose-500" },
     ...(!isLimitedCoord ? [{ to: "/configuracoes/paroquia", label: "Personalização", icon: Settings, color: "bg-indigo-600" }] : []),
     ...(isAdmin ? [{ to: "/auditoria", label: "Auditoria", icon: ShieldCheck, color: "bg-red-600" }] : []),
-    ...(isAdmin ? [{ to: "/diagnostico-ativacao", label: "Diagnóstico", icon: Stethoscope, color: "bg-violet-600" }] : []),
     ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),
     { to: "/minha-conta",                 label: "Perfil",          icon: UserCircle,      color: "bg-slate-500" },
   ];

@@ -67,6 +67,7 @@ type Membro = {
   forcar_escalacao_solene: boolean;
   restricoes_dia_semana: number[];
   sexo: "M" | "F" | null;
+  prioridade_escala: string;
 };
 
 type Escala = {
@@ -205,13 +206,14 @@ function EscalasPage() {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("membros")
-        .select("id, nome, telefone, email, score, forcar_escalacao_solene, restricoes_dia_semana, sexo")
+        .select("id, nome, telefone, email, score, forcar_escalacao_solene, restricoes_dia_semana, sexo, prioridade_escala")
         .eq("paroquia_id", profile!.paroquia_id!)
         .eq("ativo", true)
         .order("nome");
       return ((data ?? []) as unknown[]).map((m: any) => ({
         ...m,
         restricoes_dia_semana: m.restricoes_dia_semana ?? [],
+        prioridade_escala: m.prioridade_escala ?? "nenhuma",
       })) as Membro[];
     },
   });
@@ -2420,14 +2422,15 @@ function EscalaDetail({
   const hoje = format(new Date(), "yyyy-MM-dd");
   const isPastOrToday = escala.data <= hoje;
   const [presencaOpen, setPresencaOpen] = useState(false);
-  type PresencaStatus = "presente" | "faltou" | "pendente";
+  type PresencaStatus = "presente" | "faltou" | "atrasado" | "justificou" | "pendente";
   const [presencaMap, setPresencaMap] = useState<Record<string, PresencaStatus>>({});
 
   useEffect(() => {
     const map: Record<string, PresencaStatus> = {};
+    const finals: PresencaStatus[] = ["presente", "faltou", "atrasado", "justificou"];
     atribuicoes.forEach((a) => {
       const s = a.status as PresencaStatus;
-      map[a.id] = (s === "presente" || s === "faltou") ? s : "pendente";
+      map[a.id] = (finals as string[]).includes(s) ? s : "pendente";
     });
     setPresencaMap(map);
   }, [atribuicoes]);
@@ -2943,14 +2946,33 @@ function EscalaDetail({
                       <div className="px-3 py-2 space-y-1.5">
 
                       {/* Membros atribuídos */}
-                      {atrib.map((a) => (
-                        <div key={a.id} className="flex items-center justify-between pl-5 text-sm">
-                          <span>{a.membro.nome}</span>
-                          <button className="text-muted-foreground hover:text-destructive" onClick={() => onRemoverAtribuicao(a.id)}>
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
+                      {atrib.map((a) => {
+                        const st = a.status as string;
+                        const badge =
+                          st === "confirmado"  ? { label: "Confirmado",  cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" } :
+                          st === "presente"    ? { label: "Presente",    cls: "bg-emerald-500 text-white" } :
+                          st === "atrasado"    ? { label: "Atrasado",    cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400" } :
+                          st === "justificou"  ? { label: "Justificou",  cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400" } :
+                          st === "faltou"      ? { label: "Faltou",      cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400" } :
+                          st === "ausente"     ? { label: "Ausente",     cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400" } :
+                          st === "recusado"    ? { label: "Recusou",     cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400" } :
+                          null;
+                        return (
+                          <div key={a.id} className="flex items-center justify-between pl-5 text-sm gap-2">
+                            <span className="truncate">{a.membro.nome}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {badge && (
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
+                                  {badge.label}
+                                </span>
+                              )}
+                              <button className="text-muted-foreground hover:text-destructive" onClick={() => onRemoverAtribuicao(a.id)}>
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
 
                       {/* Atribuir membro */}
                       {atrib.length < f.quantidade && disponiveis.length > 0 && (
@@ -3226,25 +3248,51 @@ function EscalaDetail({
                     <div className="flex gap-1 shrink-0">
                       <button
                         type="button"
-                        onClick={() => setPresencaMap((p) => ({ ...p, [a.id]: "presente" }))}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                        onClick={() => setPresencaMap((p) => ({ ...p, [a.id]: p[a.id] === "presente" ? "pendente" : "presente" }))}
+                        title="Presente"
+                        className={`h-7 w-7 rounded-lg flex items-center justify-center transition ${
                           status === "presente"
                             ? "bg-emerald-500 text-white"
                             : "bg-muted text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
                         }`}
                       >
-                        Presente
+                        <CheckCircle2 className="h-3.5 w-3.5" />
                       </button>
                       <button
                         type="button"
-                        onClick={() => setPresencaMap((p) => ({ ...p, [a.id]: "faltou" }))}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                        onClick={() => setPresencaMap((p) => ({ ...p, [a.id]: p[a.id] === "atrasado" ? "pendente" : "atrasado" }))}
+                        title="Atrasado"
+                        className={`h-7 w-7 rounded-lg flex items-center justify-center transition ${
+                          status === "atrasado"
+                            ? "bg-orange-500 text-white"
+                            : "bg-muted text-muted-foreground hover:bg-orange-100 hover:text-orange-700"
+                        }`}
+                      >
+                        <Clock className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPresencaMap((p) => ({ ...p, [a.id]: p[a.id] === "justificou" ? "pendente" : "justificou" }))}
+                        title="Justificou"
+                        className={`h-7 w-7 rounded-lg flex items-center justify-center transition ${
+                          status === "justificou"
+                            ? "bg-blue-500 text-white"
+                            : "bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+                        }`}
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPresencaMap((p) => ({ ...p, [a.id]: p[a.id] === "faltou" ? "pendente" : "faltou" }))}
+                        title="Faltou"
+                        className={`h-7 w-7 rounded-lg flex items-center justify-center transition ${
                           status === "faltou"
                             ? "bg-red-500 text-white"
                             : "bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-700"
                         }`}
                       >
-                        Faltou
+                        <XCircle className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
