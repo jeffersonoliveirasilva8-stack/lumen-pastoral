@@ -75,7 +75,6 @@ type EventoForm = {
   data_inicio: string;
   data_fim: string;
   local: string;
-  pontuacao: number;
   obrigatorio: boolean;
   observacoes: string;
   responsaveis_nomes: string;
@@ -101,7 +100,7 @@ const TIPOS: { value: string; label: string; cor: string }[] = [
 const EMPTY_FORM: EventoForm = {
   titulo: "", descricao: "", tipo: "formacao",
   data_inicio: "", data_fim: "", local: "",
-  pontuacao: 2, obrigatorio: false,
+  obrigatorio: false,
   observacoes: "", responsaveis_nomes: "", comunidade: "", publico_alvo: "todos",
 };
 
@@ -155,7 +154,6 @@ function AgendaPastoralPage() {
         data_inicio: form.data_inicio,
         data_fim: form.data_fim || null,
         local: form.local || null,
-        pontuacao: form.pontuacao,
         obrigatorio: form.obrigatorio,
         observacoes: form.observacoes || null,
         responsaveis_nomes: form.responsaveis_nomes || null,
@@ -404,9 +402,6 @@ function EventoSection({
                   {e.obrigatorio && (
                     <Badge variant="destructive" className="text-xs">Obrigatório</Badge>
                   )}
-                  {e.pontuacao > 0 && (
-                    <span className="text-xs text-emerald-600 font-medium">+{e.pontuacao} pts</span>
-                  )}
                   {e.publico_alvo && e.publico_alvo !== "todos" && (
                     <span className="text-xs text-muted-foreground/70 border border-border rounded-full px-2 py-0.5">
                       {e.publico_alvo}
@@ -547,7 +542,6 @@ function EventoFormSheet({
         data_inicio: initial.data_inicio.slice(0, 16),
         data_fim: initial.data_fim ? initial.data_fim.slice(0, 16) : "",
         local: initial.local ?? "",
-        pontuacao: initial.pontuacao,
         obrigatorio: initial.obrigatorio,
         observacoes: initial.observacoes ?? "",
         responsaveis_nomes: initial.responsaveis_nomes ?? "",
@@ -802,24 +796,14 @@ function EventoFormSheet({
               />
             </div>
 
-            {/* Pontuação e Obrigatório */}
-            <div className="grid grid-cols-2 gap-4 items-end">
-              <div className="space-y-1.5">
-                <Label>Pontuação (pts)</Label>
-                <Input
-                  type="number" min={0}
-                  value={form.pontuacao}
-                  onChange={(e) => f("pontuacao", Number(e.target.value))}
-                />
-              </div>
-              <div className="flex items-center gap-3 pb-1">
-                <Switch
-                  id="obrig-switch"
-                  checked={form.obrigatorio}
-                  onCheckedChange={(v) => f("obrigatorio", v)}
-                />
-                <Label htmlFor="obrig-switch">Obrigatório</Label>
-              </div>
+            {/* Obrigatório */}
+            <div className="flex items-center gap-3 pt-1">
+              <Switch
+                id="obrig-switch"
+                checked={form.obrigatorio}
+                onCheckedChange={(v) => f("obrigatorio", v)}
+              />
+              <Label htmlFor="obrig-switch">Evento obrigatório</Label>
             </div>
           </div>
 
@@ -902,37 +886,18 @@ function PresencaSheet({
 
   const marcarMutation = useMutation({
     mutationFn: async ({ membroId, presente }: { membroId: string; presente: boolean | null }) => {
-      const existing = presencaMap.get(membroId);
-      const oldPontuacao = existing?.pontuacao_recebida ?? 0;
-      const newPontuacao = presente === true ? evento.pontuacao : 0;
-
-      if (existing) {
-        await anyDb.from("presencas_eventos").update({
-          presente,
-          pontuacao_recebida: newPontuacao,
-        }).eq("id", existing.id);
-      } else {
-        await anyDb.from("presencas_eventos").insert({
-          evento_id: evento.id,
-          membro_id: membroId,
-          presente,
-          pontuacao_recebida: newPontuacao,
-        });
-      }
-
-      const delta = newPontuacao - oldPontuacao;
-      if (delta !== 0) {
-        const { data: memData } = await supabase
-          .from("membros")
-          .select("score")
-          .eq("id", membroId)
-          .single();
-        const currentScore = (memData as unknown as { score: number })?.score ?? 0;
-        await supabase
-          .from("membros")
-          .update({ score: Math.max(0, currentScore + delta) })
-          .eq("id", membroId);
-      }
+      // RPC atômica: atualiza presencas_eventos + historico_participacoes
+      // O trigger on_historico_score_recalc cuida de membros.score automaticamente.
+      const { error } = await supabase.rpc("marcar_presenca_evento" as never, {
+        p_paroquia_id: paroquiaId,
+        p_evento_id:   evento.id,
+        p_membro_id:   membroId,
+        p_tipo:        evento.tipo,
+        p_data:        evento.data_inicio.slice(0, 10),
+        p_titulo:      evento.titulo,
+        p_presente:    presente,
+      } as never);
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["presencas", evento.id] });
