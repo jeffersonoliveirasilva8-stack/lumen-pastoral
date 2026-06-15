@@ -41,6 +41,7 @@ export const Route = createFileRoute("/_authenticated/painel")({
 });
 
 type SubstituicaoTarget = { escalaId: string; atribuicaoId: string; ministerioId: string; membroNome: string; data: string };
+type CandidaturaTarget = { escalaId: string; ministerioId: string; titulo: string; data: string; hora_inicio: string | null; ministerio_nome: string };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -637,12 +638,14 @@ function DashboardPage() {
         .from("escala_membros")
         .select("status")
         .in("escala_id", ids)
-        .in("status", ["presente", "faltou", "atraso", "justificou"]);
+        .in("status", ["presente", "faltou", "atrasado", "justificou"]);
       const counts = { presente: 0, faltou: 0, atraso: 0, justificou: 0, total: 0 };
       (data ?? []).forEach((r) => {
-        const s = r.status as keyof typeof counts;
-        if (s in counts) counts[s]++;
-        counts.total++;
+        const s = r.status;
+        if (s === "presente")   { counts.presente++;  counts.total++; }
+        else if (s === "faltou")     { counts.faltou++;   counts.total++; }
+        else if (s === "atrasado")   { counts.atraso++;   counts.total++; }
+        else if (s === "justificou") { counts.justificou++; counts.total++; }
       });
       return counts.total > 0 ? counts : null;
     },
@@ -724,7 +727,7 @@ function DashboardPage() {
   });
 
   // ── Missas compatíveis (portal do membro) ─────────────────────────────────────
-  type MissaParaMembro = { id: string; titulo: string; data: string; hora_inicio: string | null; ministerio_nome: string; abertas: number };
+  type MissaParaMembro = { id: string; escalaId: string; ministerioId: string; titulo: string; data: string; hora_inicio: string | null; ministerio_nome: string; abertas: number };
   const { data: missasParaMembro = [] } = useQuery<MissaParaMembro[]>({
     queryKey: ["missas-para-membro", pid, profile?.id],
     enabled: !!pid && !!profile?.id,
@@ -761,6 +764,8 @@ function DashboardPage() {
             const min = mins.find((m: { ministerio_id: string }) => m.ministerio_id === ministerioId) as { ministerio_id: string; ministerios: { nome: string } | null } | undefined;
             result.push({
               id: `${escala.id}-${ministerioId}`,
+              escalaId: escala.id,
+              ministerioId,
               titulo: escala.titulo,
               data: escala.data,
               hora_inicio: escala.hora_inicio,
