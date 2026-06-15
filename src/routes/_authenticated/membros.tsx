@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -2532,6 +2533,13 @@ function MembrosPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
+      {/* Abas do módulo Membros */}
+      <ModuleTabBar tabs={[
+        { label: "Membros",     to: "/membros",     isActive: true  },
+        { label: "Ranking",     to: "/ranking",     isActive: false },
+        { label: "Ocorrências", to: "/ocorrencias", isActive: false },
+      ]} />
+
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import {
@@ -246,10 +247,16 @@ function AgendaPastoralPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-6 pb-24 lg:pb-10">
+      {/* Abas do módulo Pastoral */}
+      <ModuleTabBar tabs={[
+        { label: "Agenda",   to: "/formacoes",      isActive: true  },
+        { label: "Liturgia", to: "/espiritualidade", isActive: false },
+      ]} />
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Gestão Pastoral</p>
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Pastoral</p>
           <h1 className="mt-2 font-serif text-2xl sm:text-3xl">Agenda Pastoral</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Reuniões, formações, retiros, ensaios, encontros e compromissos.

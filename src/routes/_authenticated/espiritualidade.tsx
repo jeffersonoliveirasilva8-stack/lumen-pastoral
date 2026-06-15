@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -161,11 +162,16 @@ function EspiritualidadePage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-6 pb-24">
+      {/* Abas do módulo Pastoral */}
+      <ModuleTabBar tabs={[
+        { label: "Agenda",   to: "/formacoes",       isActive: false },
+        { label: "Liturgia", to: "/espiritualidade", isActive: true  },
+      ]} />
 
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Espiritualidade</p>
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Pastoral</p>
           <h1 className="mt-2 font-serif text-2xl sm:text-4xl text-foreground">
             Liturgia e Homilia do Dia
           </h1>

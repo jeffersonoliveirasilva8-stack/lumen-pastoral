@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -104,10 +105,16 @@ function OcorrenciasPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto space-y-6 pb-24 lg:pb-10">
+      {/* Abas do módulo Membros */}
+      <ModuleTabBar tabs={[
+        { label: "Membros",     to: "/membros",     isActive: false },
+        { label: "Ranking",     to: "/ranking",     isActive: false },
+        { label: "Ocorrências", to: "/ocorrencias", isActive: true  },
+      ]} />
 
       {/* Header */}
       <div>
-        <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Comunicação</p>
+        <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Membros</p>
         <h1 className="mt-2 font-serif text-2xl sm:text-3xl">Ocorrências</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Comunicações enviadas pelos servidores à coordenação.

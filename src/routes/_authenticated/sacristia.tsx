@@ -1,20 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle2, XCircle, Clock, MapPin, Users, Loader2, FileText } from "lucide-react";
+import {
+  CheckCircle2, XCircle, Clock, MapPin, Users, Loader2, FileText,
+  AlertCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const anyDb = supabase as any;
 import { supabaseErrorMessage } from "@/lib/supabase-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 
 export const Route = createFileRoute("/_authenticated/sacristia")({
   component: SacristiaPage,
-  head: () => ({ meta: [{ title: "Modo Sacristia — Lumen Pastoral" }] }),
+  head: () => ({ meta: [{ title: "Sacristia — Lumen Pastoral" }] }),
 });
 
 type MembroEscala = {
@@ -27,9 +34,10 @@ type MembroEscala = {
   ministerio: { id: string; nome: string; cor: string };
 };
 
-type EscalaHoje = {
+type EscalaItem = {
   id: string;
   titulo: string;
+  data: string;
   hora_inicio: string | null;
   hora_fim: string | null;
   local: string | null;
@@ -37,19 +45,24 @@ type EscalaHoje = {
   status: string;
 };
 
+type Tab = "pendentes" | "em_andamento" | "concluidas";
+
+const STATUS_FINAIS = ["presente", "faltou", "atrasado", "justificou"];
+
 function SacristiaPage() {
   const { profile, user, isAdministrador } = useAuth();
   const qc = useQueryClient();
   const hojeStr = format(new Date(), "yyyy-MM-dd");
   const [presencaMap, setPresencaMap] = useState<Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente">>({});
   const [savingEscalaId, setSavingEscalaId] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("em_andamento");
 
   // Para auxiliares: descobre o membro_id do usuário logado para filtrar escalas
   const { data: meupMembroId } = useQuery<string | null>({
     queryKey: ["meu-membro-id-sacristia", profile?.paroquia_id, user?.id],
     enabled: !!profile?.paroquia_id && !!user?.id && !!isAdministrador,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await anyDb
         .from("membros")
         .select("id")
         .eq("paroquia_id", profile!.paroquia_id!)
@@ -59,25 +72,30 @@ function SacristiaPage() {
     },
   });
 
-  const { data: escalasHoje = [], isLoading } = useQuery<EscalaHoje[]>({
-    queryKey: ["sacristia-escalas", profile?.paroquia_id, hojeStr],
+  // Busca escalas dos últimos 30 dias + hoje
+  const desde = format(subDays(new Date(), 30), "yyyy-MM-dd");
+
+  const { data: todasEscalas = [], isLoading } = useQuery<EscalaItem[]>({
+    queryKey: ["sacristia-todas", profile?.paroquia_id, hojeStr],
     enabled: !!profile?.paroquia_id,
     queryFn: async () => {
       const { data } = await supabase
         .from("escalas")
-        .select("id, titulo, hora_inicio, hora_fim, local, solene, status")
+        .select("id, titulo, data, hora_inicio, hora_fim, local, solene, status")
         .eq("paroquia_id", profile!.paroquia_id!)
-        .eq("data", hojeStr)
+        .gte("data", desde)
+        .lte("data", hojeStr)
         .neq("status", "arquivada")
-        .order("hora_inicio");
-      return (data ?? []) as EscalaHoje[];
+        .order("data", { ascending: false })
+        .order("hora_inicio", { ascending: false });
+      return (data ?? []) as EscalaItem[];
     },
   });
 
-  const escalaIds = useMemo(() => escalasHoje.map((e) => e.id), [escalasHoje]);
+  const escalaIds = useMemo(() => todasEscalas.map((e) => e.id), [todasEscalas]);
 
   const { data: membrosEscala = [], isLoading: isLoadingMembros } = useQuery<MembroEscala[]>({
-    queryKey: ["sacristia-membros", escalaIds],
+    queryKey: ["sacristia-membros-todos", escalaIds],
     enabled: escalaIds.length > 0,
     queryFn: async () => {
       const { data } = await supabase
@@ -92,27 +110,64 @@ function SacristiaPage() {
     },
   });
 
-  // Auxiliares veem apenas as escalas em que estão atribuídos
-  const escalasVisiveis = useMemo(() => {
-    if (!isAdministrador || !meupMembroId || membrosEscala.length === 0) return escalasHoje;
+  // Categoriza as escalas por estado de presença
+  const { pendentes, em_andamento, concluidas } = useMemo(() => {
+    const pendentes: EscalaItem[] = [];
+    const em_andamento: EscalaItem[] = [];
+    const concluidas: EscalaItem[] = [];
+
+    todasEscalas.forEach((escala) => {
+      const membros = membrosEscala.filter((m) => m.escala_id === escala.id);
+      const isHoje = escala.data === hojeStr;
+
+      if (membros.length === 0) {
+        if (isHoje) em_andamento.push(escala);
+        else pendentes.push(escala);
+        return;
+      }
+
+      const finais = membros.filter((m) => STATUS_FINAIS.includes(m.status)).length;
+      const total = membros.length;
+
+      if (finais === total) {
+        concluidas.push(escala);
+      } else if (finais > 0 || isHoje) {
+        em_andamento.push(escala);
+      } else {
+        pendentes.push(escala);
+      }
+    });
+
+    return { pendentes, em_andamento, concluidas };
+  }, [todasEscalas, membrosEscala, hojeStr]);
+
+  // Filtro para auxiliares
+  function filtrarParaUsuario(escalas: EscalaItem[]) {
+    if (!isAdministrador || !meupMembroId || membrosEscala.length === 0) return escalas;
     const minhasEscalaIds = new Set(
       membrosEscala.filter((m) => m.membro_id === meupMembroId).map((m) => m.escala_id)
     );
-    return escalasHoje.filter((e) => minhasEscalaIds.has(e.id));
-  }, [escalasHoje, membrosEscala, isAdministrador, meupMembroId]);
+    return escalas.filter((e) => minhasEscalaIds.has(e.id));
+  }
+
+  const escalasExibidas = useMemo(() => {
+    const lista = tab === "pendentes" ? pendentes : tab === "em_andamento" ? em_andamento : concluidas;
+    return filtrarParaUsuario(lista);
+  }, [tab, pendentes, em_andamento, concluidas, meupMembroId, membrosEscala, isAdministrador]);
 
   const salvarPresencasMutation = useMutation({
     mutationFn: async (escalaId: string) => {
       const membrosDestaEscala = membrosEscala.filter((m: any) => m.escala_id === escalaId);
       await Promise.all(
         membrosDestaEscala.map((m: MembroEscala) =>
-          supabase.from("escala_membros").update({ status: presencaMap[m.id] ?? "pendente" }).eq("id", m.id)
+          supabase.from("escala_membros").update({ status: presencaMap[m.id] ?? m.status }).eq("id", m.id)
         )
       );
     },
     onMutate: (escalaId) => setSavingEscalaId(escalaId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sacristia-membros"] });
+      qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
+      qc.invalidateQueries({ queryKey: ["sacristia-todas"] });
       qc.invalidateQueries({ queryKey: ["escala-membros"] });
       qc.invalidateQueries({ queryKey: ["escala-historico"] });
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
@@ -131,13 +186,33 @@ function SacristiaPage() {
     }));
   }
 
+  // Inicializa presencaMap com o status atual do banco ao carregar a aba em_andamento
+  useMemo(() => {
+    const initial: Record<string, any> = {};
+    membrosEscala.forEach((m) => {
+      if (STATUS_FINAIS.includes(m.status) && !presencaMap[m.id]) {
+        initial[m.id] = m.status;
+      }
+    });
+    if (Object.keys(initial).length > 0) {
+      setPresencaMap((prev) => ({ ...initial, ...prev }));
+    }
+  }, [membrosEscala]);
+
   const loading = isLoading || isLoadingMembros;
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-2xl mx-auto pb-24">
+      {/* Abas do módulo Sacristia */}
+      <ModuleTabBar tabs={[
+        { label: `Pendentes${pendentes.length > 0 ? ` (${pendentes.length})` : ""}`, onClick: () => setTab("pendentes"), isActive: tab === "pendentes" },
+        { label: "Em andamento", onClick: () => setTab("em_andamento"), isActive: tab === "em_andamento" },
+        { label: "Concluídas",   onClick: () => setTab("concluidas"),   isActive: tab === "concluidas" },
+      ]} />
+
       <div className="mb-6">
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Operacional</p>
-        <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Modo Sacristia</h1>
+        <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Sacristia</h1>
         <p className="mt-1 text-sm text-muted-foreground capitalize">
           {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
         </p>
@@ -155,19 +230,26 @@ function SacristiaPage() {
             </div>
           ))}
         </div>
-      ) : escalasVisiveis.length === 0 ? (
+      ) : escalasExibidas.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
           <CheckCircle2 className="h-8 w-8 mx-auto text-muted-foreground" />
           <p className="mt-4 text-sm text-muted-foreground">
-            {isAdministrador ? "Você não está escalado para nenhuma celebração hoje." : "Nenhuma escala para hoje."}
+            {tab === "pendentes" && "Nenhuma missa aguardando conferência."}
+            {tab === "em_andamento" && "Nenhuma missa em andamento."}
+            {tab === "concluidas" && "Nenhuma missa concluída nos últimos 30 dias."}
           </p>
         </div>
       ) : (
         <div className="space-y-5">
-          {escalasVisiveis.map((escala) => {
+          {escalasExibidas.map((escala) => {
             const membros = membrosEscala.filter((m: any) => m.escala_id === escala.id);
-            const presentes = membros.filter((m: MembroEscala) => (presencaMap[m.id] ?? "pendente") === "presente").length;
+            const finais = membros.filter((m: MembroEscala) => {
+              const s = presencaMap[m.id] ?? m.status;
+              return STATUS_FINAIS.includes(s);
+            }).length;
             const isSaving = savingEscalaId === escala.id;
+            const isHoje = escala.data === hojeStr;
+            const d = new Date(escala.data + "T00:00:00");
 
             // Agrupa por ministério
             const grupos: { ministerio: { id: string; nome: string; cor: string }; membros: MembroEscala[] }[] = [];
@@ -183,6 +265,16 @@ function SacristiaPage() {
                 <div className="px-5 py-4 border-b border-border bg-muted/20">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        {isHoje && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">Hoje</span>
+                        )}
+                        {!isHoje && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {format(d, "dd/MM", { locale: ptBR })}
+                          </span>
+                        )}
+                      </div>
                       <h2 className="font-semibold text-base truncate">{escala.titulo}</h2>
                       <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
                         {escala.hora_inicio && (
@@ -199,11 +291,14 @@ function SacristiaPage() {
                         )}
                         <span className="flex items-center gap-1">
                           <Users className="h-3 w-3" />
-                          {presentes}/{membros.length} presentes
+                          {finais}/{membros.length} registrados
                         </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {tab === "pendentes" && membros.length === 0 && (
+                        <AlertCircle className="h-4 w-4 text-amber-500" />
+                      )}
                       {escala.solene && (
                         <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 text-[10px]">
                           Solene
@@ -228,18 +323,19 @@ function SacristiaPage() {
                         </p>
                         <div className="space-y-2">
                           {grupo.membros.map((m) => {
-                            const status = presencaMap[m.id] ?? "pendente";
+                            const status = presencaMap[m.id] ?? m.status;
+                            const statusFinal = STATUS_FINAIS.includes(status) ? status : "pendente";
                             return (
                               <div
                                 key={m.id}
                                 className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 border transition-all ${
-                                  status === "presente"
+                                  statusFinal === "presente"
                                     ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30"
-                                    : status === "faltou"
+                                    : statusFinal === "faltou"
                                     ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
-                                    : status === "atrasado"
+                                    : statusFinal === "atrasado"
                                     ? "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/30"
-                                    : status === "justificou"
+                                    : statusFinal === "justificou"
                                     ? "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30"
                                     : "border-border bg-background"
                                 }`}
@@ -256,7 +352,7 @@ function SacristiaPage() {
                                     onClick={() => togglePresenca(m.id, "presente")}
                                     title="Marcar presente"
                                     className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
-                                      status === "presente"
+                                      statusFinal === "presente"
                                         ? "bg-emerald-500 text-white"
                                         : "bg-muted text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
                                     }`}
@@ -268,7 +364,7 @@ function SacristiaPage() {
                                     onClick={() => togglePresenca(m.id, "atrasado")}
                                     title="Marcar atrasado"
                                     className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
-                                      status === "atrasado"
+                                      statusFinal === "atrasado"
                                         ? "bg-orange-500 text-white"
                                         : "bg-muted text-muted-foreground hover:bg-orange-100 hover:text-orange-700"
                                     }`}
@@ -280,7 +376,7 @@ function SacristiaPage() {
                                     onClick={() => togglePresenca(m.id, "justificou")}
                                     title="Justificativa"
                                     className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
-                                      status === "justificou"
+                                      statusFinal === "justificou"
                                         ? "bg-blue-500 text-white"
                                         : "bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
                                     }`}
@@ -292,7 +388,7 @@ function SacristiaPage() {
                                     onClick={() => togglePresenca(m.id, "faltou")}
                                     title="Marcar falta"
                                     className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
-                                      status === "faltou"
+                                      statusFinal === "faltou"
                                         ? "bg-red-500 text-white"
                                         : "bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-700"
                                     }`}
@@ -308,7 +404,7 @@ function SacristiaPage() {
                     ))
                   )}
 
-                  {membros.length > 0 && (
+                  {membros.length > 0 && tab !== "concluidas" && (
                     <Button
                       className="w-full mt-2"
                       disabled={isSaving}

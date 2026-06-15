@@ -56,9 +56,11 @@ import { Route as AuthenticatedFormacoesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedEspiritualidadeRouteImport } from './routes/_authenticated/espiritualidade'
 import { Route as AuthenticatedEscalasRouteImport } from './routes/_authenticated/escalas'
 import { Route as AuthenticatedConfiguracoesEscalasRouteImport } from './routes/_authenticated/configuracoes-escalas'
+import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedConfiguracoesParoquiaRouteImport } from './routes/_authenticated/configuracoes.paroquia'
+import { Route as AuthenticatedConfiguracoesAdministradoresRouteImport } from './routes/_authenticated/configuracoes.administradores'
 import { Route as AuthenticatedAdminParoquiasRouteImport } from './routes/_authenticated/admin.paroquias'
 import { Route as AuthenticatedAdminLiturgiaRouteImport } from './routes/_authenticated/admin.liturgia'
 
@@ -308,6 +310,12 @@ const AuthenticatedConfiguracoesEscalasRoute =
     path: '/configuracoes-escalas',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedConfiguracoesRoute =
+  AuthenticatedConfiguracoesRouteImport.update({
+    id: '/configuracoes',
+    path: '/configuracoes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedCalendarioRoute = AuthenticatedCalendarioRouteImport.update({
   id: '/calendario',
   path: '/calendario',
@@ -320,9 +328,15 @@ const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
 } as any)
 const AuthenticatedConfiguracoesParoquiaRoute =
   AuthenticatedConfiguracoesParoquiaRouteImport.update({
-    id: '/configuracoes/paroquia',
-    path: '/configuracoes/paroquia',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/paroquia',
+    path: '/paroquia',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+  } as any)
+const AuthenticatedConfiguracoesAdministradoresRoute =
+  AuthenticatedConfiguracoesAdministradoresRouteImport.update({
+    id: '/administradores',
+    path: '/administradores',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
   } as any)
 const AuthenticatedAdminParoquiasRoute =
   AuthenticatedAdminParoquiasRouteImport.update({
@@ -348,6 +362,7 @@ export interface FileRoutesByFullPath {
   '/reset-senha': typeof ResetSenhaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
   '/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
   '/escalas': typeof AuthenticatedEscalasRoute
   '/espiritualidade': typeof AuthenticatedEspiritualidadeRoute
@@ -388,6 +403,7 @@ export interface FileRoutesByFullPath {
   '/portal/$token': typeof PortalTokenRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
+  '/configuracoes/administradores': typeof AuthenticatedConfiguracoesAdministradoresRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 export interface FileRoutesByTo {
@@ -401,6 +417,7 @@ export interface FileRoutesByTo {
   '/reset-senha': typeof ResetSenhaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
   '/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
   '/escalas': typeof AuthenticatedEscalasRoute
   '/espiritualidade': typeof AuthenticatedEspiritualidadeRoute
@@ -441,6 +458,7 @@ export interface FileRoutesByTo {
   '/portal/$token': typeof PortalTokenRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
+  '/configuracoes/administradores': typeof AuthenticatedConfiguracoesAdministradoresRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 export interface FileRoutesById {
@@ -456,6 +474,7 @@ export interface FileRoutesById {
   '/reset-senha': typeof ResetSenhaRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/calendario': typeof AuthenticatedCalendarioRoute
+  '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
   '/_authenticated/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
   '/_authenticated/escalas': typeof AuthenticatedEscalasRoute
   '/_authenticated/espiritualidade': typeof AuthenticatedEspiritualidadeRoute
@@ -496,6 +515,7 @@ export interface FileRoutesById {
   '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/_authenticated/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
+  '/_authenticated/configuracoes/administradores': typeof AuthenticatedConfiguracoesAdministradoresRoute
   '/_authenticated/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 export interface FileRouteTypes {
@@ -511,6 +531,7 @@ export interface FileRouteTypes {
     | '/reset-senha'
     | '/auditoria'
     | '/calendario'
+    | '/configuracoes'
     | '/configuracoes-escalas'
     | '/escalas'
     | '/espiritualidade'
@@ -551,6 +572,7 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/admin/liturgia'
     | '/admin/paroquias'
+    | '/configuracoes/administradores'
     | '/configuracoes/paroquia'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -564,6 +586,7 @@ export interface FileRouteTypes {
     | '/reset-senha'
     | '/auditoria'
     | '/calendario'
+    | '/configuracoes'
     | '/configuracoes-escalas'
     | '/escalas'
     | '/espiritualidade'
@@ -604,6 +627,7 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/admin/liturgia'
     | '/admin/paroquias'
+    | '/configuracoes/administradores'
     | '/configuracoes/paroquia'
   id:
     | '__root__'
@@ -618,6 +642,7 @@ export interface FileRouteTypes {
     | '/reset-senha'
     | '/_authenticated/auditoria'
     | '/_authenticated/calendario'
+    | '/_authenticated/configuracoes'
     | '/_authenticated/configuracoes-escalas'
     | '/_authenticated/escalas'
     | '/_authenticated/espiritualidade'
@@ -658,6 +683,7 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/_authenticated/admin/liturgia'
     | '/_authenticated/admin/paroquias'
+    | '/_authenticated/configuracoes/administradores'
     | '/_authenticated/configuracoes/paroquia'
   fileRoutesById: FileRoutesById
 }
@@ -1015,6 +1041,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConfiguracoesEscalasRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/configuracoes': {
+      id: '/_authenticated/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/calendario': {
       id: '/_authenticated/calendario'
       path: '/calendario'
@@ -1031,10 +1064,17 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/configuracoes/paroquia': {
       id: '/_authenticated/configuracoes/paroquia'
-      path: '/configuracoes/paroquia'
+      path: '/paroquia'
       fullPath: '/configuracoes/paroquia'
       preLoaderRoute: typeof AuthenticatedConfiguracoesParoquiaRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
+    '/_authenticated/configuracoes/administradores': {
+      id: '/_authenticated/configuracoes/administradores'
+      path: '/administradores'
+      fullPath: '/configuracoes/administradores'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesAdministradoresRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
     }
     '/_authenticated/admin/paroquias': {
       id: '/_authenticated/admin/paroquias'
@@ -1053,9 +1093,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedConfiguracoesRouteChildren {
+  AuthenticatedConfiguracoesAdministradoresRoute: typeof AuthenticatedConfiguracoesAdministradoresRoute
+  AuthenticatedConfiguracoesParoquiaRoute: typeof AuthenticatedConfiguracoesParoquiaRoute
+}
+
+const AuthenticatedConfiguracoesRouteChildren: AuthenticatedConfiguracoesRouteChildren =
+  {
+    AuthenticatedConfiguracoesAdministradoresRoute:
+      AuthenticatedConfiguracoesAdministradoresRoute,
+    AuthenticatedConfiguracoesParoquiaRoute:
+      AuthenticatedConfiguracoesParoquiaRoute,
+  }
+
+const AuthenticatedConfiguracoesRouteWithChildren =
+  AuthenticatedConfiguracoesRoute._addFileChildren(
+    AuthenticatedConfiguracoesRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCalendarioRoute: typeof AuthenticatedCalendarioRoute
+  AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRouteWithChildren
   AuthenticatedConfiguracoesEscalasRoute: typeof AuthenticatedConfiguracoesEscalasRoute
   AuthenticatedEscalasRoute: typeof AuthenticatedEscalasRoute
   AuthenticatedEspiritualidadeRoute: typeof AuthenticatedEspiritualidadeRoute
@@ -1074,12 +1133,12 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSubstituicoesRoute: typeof AuthenticatedSubstituicoesRoute
   AuthenticatedAdminLiturgiaRoute: typeof AuthenticatedAdminLiturgiaRoute
   AuthenticatedAdminParoquiasRoute: typeof AuthenticatedAdminParoquiasRoute
-  AuthenticatedConfiguracoesParoquiaRoute: typeof AuthenticatedConfiguracoesParoquiaRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedCalendarioRoute: AuthenticatedCalendarioRoute,
+  AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRouteWithChildren,
   AuthenticatedConfiguracoesEscalasRoute:
     AuthenticatedConfiguracoesEscalasRoute,
   AuthenticatedEscalasRoute: AuthenticatedEscalasRoute,
@@ -1100,8 +1159,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSubstituicoesRoute: AuthenticatedSubstituicoesRoute,
   AuthenticatedAdminLiturgiaRoute: AuthenticatedAdminLiturgiaRoute,
   AuthenticatedAdminParoquiasRoute: AuthenticatedAdminParoquiasRoute,
-  AuthenticatedConfiguracoesParoquiaRoute:
-    AuthenticatedConfiguracoesParoquiaRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
