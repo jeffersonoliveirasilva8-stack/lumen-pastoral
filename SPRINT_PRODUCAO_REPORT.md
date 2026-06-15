@@ -156,7 +156,7 @@ Estes campos existem no banco (via patches manuais históricos) mas NÃO aparece
 
 ## 6. PENDÊNCIAS RESTANTES
 
-### P0 — Executar antes do lançamento
+### P0 — Executar antes do lançamento (ordem obrigatória)
 
 1. **Aplicar `PATCH_REMOVE_TRIGGER_LEGADO.sql`** no Supabase Dashboard  
    Remove `tg_escala_membro_pontuacao` e faz recalculo de scores
@@ -164,30 +164,26 @@ Estes campos existem no banco (via patches manuais históricos) mas NÃO aparece
 2. **Aplicar `036_sprint_estabilizacao.sql`** no Supabase Dashboard  
    Remove `historico_score_trigger`, cria 9 índices, corrige RLS de ministérios
 
-### P1 — Próximo ciclo
+3. **Aplicar `037_missing_columns.sql`** no Supabase Dashboard ✅ Gerado  
+   23 colunas + 6 tabelas + fix `membro_self_link` + RLS `profiles`
 
-3. **Criar `037_missing_columns.sql`**  
-   Documenta todos os campos que existem no banco mas não nas migrations (ver seção 4)
+4. **Executar `supabase/VERIFICAR_RECONSTRUCAO.sql`** e confirmar 0 itens com ❌
 
-4. **Corrigir `membro_self_link`**  
-   Adicionar `paroquia_id = current_paroquia_id()` ao WITH CHECK para evitar sequestro de conta cross-paróquia
-
-5. **RLS para `profiles`**  
-   Verificar se habilitado via dashboard Supabase — não aparece nas migrations. Se não habilitado, dados de usuários de outras paróquias ficam expostos
-
-6. **Escala coordenadores (banco nível)**  
-   Criar tabela `escala_coordenadores` para vincular auxiliar a escalas específicas e mover o filtro do frontend para RLS
+5. **Seguir `CHECKLIST_PRODUCAO.md`** — 53 itens em 10 áreas (DNS, SMTP, Auth URLs, Edge Functions, Env vars)
 
 ### P2 — Dívida técnica
 
-7. **UI de `historico_substituicoes`**  
+6. **UI de `historico_substituicoes`**  
    Dados existem mas nunca são exibidos — painel de auditoria de trocas
 
-8. **ConfigParoquia.prioridade_score** implementar  
+7. **ConfigParoquia.prioridade_score** implementar  
    Flag existe no tipo mas não tem lógica: quando `true`, deveria inverter o `rankingBonus` para premiar os de maior score histórico
 
-9. **`presencas_eventos.pontuacao_recebida`**  
+8. **`presencas_eventos.pontuacao_recebida`**  
    Sem trigger para atualizar `membros.score` quando evento registra presença
+
+9. **`escala_coordenadores` (banco nível)**  
+   Criar tabela para vincular auxiliar a escalas específicas e mover filtro do frontend para RLS
 
 ---
 
@@ -201,12 +197,14 @@ Estes campos existem no banco (via patches manuais históricos) mas NÃO aparece
 | Sacristia / registro de presença | ✅ Pronto | — |
 | Substituições | ✅ Pronto | — |
 | E-mails transacionais | ✅ Pronto | — |
-| Pontuação / ranking | ⚠️ Aplicar patches | Executar PATCH + 036 |
+| Rastreabilidade do esquema | ✅ Pronto | Migration 037 cobre tudo |
+| Segurança cross-paróquia | ✅ Pronto | membro_self_link + profiles RLS em 037 |
+| Pontuação / ranking | ⚠️ Aplicar patches | Executar PATCH + 036 no Supabase |
 | Performance de banco | ⚠️ Aplicar patches | Executar 036 (índices) |
-| RLS completo | ⚠️ Verificar profiles | profiles RLS externo |
-| Multi-paróquia | ⚠️ Dívida técnica | membro_self_link, profiles |
+| Infraestrutura (DNS/SMTP/Auth) | ⚠️ Configurar | Ver CHECKLIST_PRODUCAO.md |
 
-**Prontidão geral: 85% — BLOQUEADA por 2 patches SQL pendentes**
+**Prontidão de código: 100% — Sprints 036 e 037 completos**
 
-Após aplicar `PATCH_REMOVE_TRIGGER_LEGADO.sql` + `036_sprint_estabilizacao.sql`:  
-**Prontidão: 93% — Lançamento viável com pendências P1 em sprint seguinte**
+**Prontidão de infraestrutura: ~40% — 18 BLOQUEADOREs de configuração pendentes**
+
+Ver [CHECKLIST_PRODUCAO.md](CHECKLIST_PRODUCAO.md) para a lista completa e ordem de execução.

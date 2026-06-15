@@ -23,8 +23,23 @@ export const Route = createFileRoute("/_authenticated/ranking")({
 type HistoricoItem = {
   id: string;
   pontos: number;
+  tipo_evento: string;
   escala_titulo: string;
   escala_data: string;
+};
+
+const TIPO_LABELS: Record<string, string> = {
+  escala: "Missa",
+  solene: "Missa solene",
+  bispo: "Missa com bispo",
+  formacao: "Formação",
+  reuniao: "Reunião",
+  retiro: "Retiro",
+  adoracao: "Adoração",
+  ensaio: "Ensaio",
+  encontro: "Encontro",
+  compromisso: "Compromisso pastoral",
+  evento: "Evento especial",
 };
 
 function AdminRanking() {
@@ -218,7 +233,7 @@ function HistoricoSheet({
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("historico_participacoes")
-        .select("id, pontos, escalas(titulo, data)")
+        .select("id, pontos, tipo_evento, descricao, data, escalas(titulo, data)")
         .eq("membro_id", membro!.id)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -226,8 +241,9 @@ function HistoricoSheet({
       return (data ?? []).map((r: any) => ({
         id: r.id,
         pontos: r.pontos ?? 0,
-        escala_titulo: r.escalas?.titulo ?? "—",
-        escala_data: r.escalas?.data ?? "",
+        tipo_evento: r.tipo_evento ?? "escala",
+        escala_titulo: r.escalas?.titulo ?? r.descricao ?? "—",
+        escala_data: r.escalas?.data ?? r.data ?? "",
       }));
     },
   });
@@ -302,15 +318,25 @@ function HistoricoSheet({
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{h.escala_titulo}</p>
-                    {h.escala_data && (
-                      <p className="text-xs text-muted-foreground mt-0.5 capitalize">
-                        {format(new Date(h.escala_data + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                      </p>
-                    )}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-xs text-muted-foreground">
+                        {TIPO_LABELS[h.tipo_evento] ?? h.tipo_evento}
+                      </span>
+                      {h.escala_data && (
+                        <>
+                          <span className="text-xs text-muted-foreground/40">·</span>
+                          <span className="text-xs text-muted-foreground capitalize">
+                            {format(new Date(h.escala_data + "T12:00:00"), "d 'de' MMM yyyy", { locale: ptBR })}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Star className="h-3.5 w-3.5 text-amber-500" />
-                    <span className="text-sm font-semibold text-amber-600">+{h.pontos}</span>
+                    <Star className={`h-3.5 w-3.5 ${h.pontos >= 0 ? "text-amber-500" : "text-red-400"}`} />
+                    <span className={`text-sm font-semibold ${h.pontos >= 0 ? "text-amber-600" : "text-red-500"}`}>
+                      {h.pontos >= 0 ? `+${h.pontos}` : h.pontos}
+                    </span>
                   </div>
                 </div>
               ))}

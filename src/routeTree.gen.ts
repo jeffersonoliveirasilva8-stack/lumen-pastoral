@@ -55,7 +55,6 @@ import { Route as AuthenticatedMembrosRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedFormacoesRouteImport } from './routes/_authenticated/formacoes'
 import { Route as AuthenticatedEspiritualidadeRouteImport } from './routes/_authenticated/espiritualidade'
 import { Route as AuthenticatedEscalasRouteImport } from './routes/_authenticated/escalas'
-import { Route as AuthenticatedDiagnosticoAtivacaoRouteImport } from './routes/_authenticated/diagnostico-ativacao'
 import { Route as AuthenticatedConfiguracoesEscalasRouteImport } from './routes/_authenticated/configuracoes-escalas'
 import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
@@ -303,12 +302,6 @@ const AuthenticatedEscalasRoute = AuthenticatedEscalasRouteImport.update({
   path: '/escalas',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedDiagnosticoAtivacaoRoute =
-  AuthenticatedDiagnosticoAtivacaoRouteImport.update({
-    id: '/diagnostico-ativacao',
-    path: '/diagnostico-ativacao',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedConfiguracoesEscalasRoute =
   AuthenticatedConfiguracoesEscalasRouteImport.update({
     id: '/configuracoes-escalas',
@@ -356,7 +349,6 @@ export interface FileRoutesByFullPath {
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
   '/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
-  '/diagnostico-ativacao': typeof AuthenticatedDiagnosticoAtivacaoRoute
   '/escalas': typeof AuthenticatedEscalasRoute
   '/espiritualidade': typeof AuthenticatedEspiritualidadeRoute
   '/formacoes': typeof AuthenticatedFormacoesRoute
@@ -410,7 +402,6 @@ export interface FileRoutesByTo {
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
   '/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
-  '/diagnostico-ativacao': typeof AuthenticatedDiagnosticoAtivacaoRoute
   '/escalas': typeof AuthenticatedEscalasRoute
   '/espiritualidade': typeof AuthenticatedEspiritualidadeRoute
   '/formacoes': typeof AuthenticatedFormacoesRoute
@@ -466,7 +457,6 @@ export interface FileRoutesById {
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/calendario': typeof AuthenticatedCalendarioRoute
   '/_authenticated/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
-  '/_authenticated/diagnostico-ativacao': typeof AuthenticatedDiagnosticoAtivacaoRoute
   '/_authenticated/escalas': typeof AuthenticatedEscalasRoute
   '/_authenticated/espiritualidade': typeof AuthenticatedEspiritualidadeRoute
   '/_authenticated/formacoes': typeof AuthenticatedFormacoesRoute
@@ -522,7 +512,6 @@ export interface FileRouteTypes {
     | '/auditoria'
     | '/calendario'
     | '/configuracoes-escalas'
-    | '/diagnostico-ativacao'
     | '/escalas'
     | '/espiritualidade'
     | '/formacoes'
@@ -576,7 +565,6 @@ export interface FileRouteTypes {
     | '/auditoria'
     | '/calendario'
     | '/configuracoes-escalas'
-    | '/diagnostico-ativacao'
     | '/escalas'
     | '/espiritualidade'
     | '/formacoes'
@@ -631,7 +619,6 @@ export interface FileRouteTypes {
     | '/_authenticated/auditoria'
     | '/_authenticated/calendario'
     | '/_authenticated/configuracoes-escalas'
-    | '/_authenticated/diagnostico-ativacao'
     | '/_authenticated/escalas'
     | '/_authenticated/espiritualidade'
     | '/_authenticated/formacoes'
@@ -1021,13 +1008,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEscalasRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/diagnostico-ativacao': {
-      id: '/_authenticated/diagnostico-ativacao'
-      path: '/diagnostico-ativacao'
-      fullPath: '/diagnostico-ativacao'
-      preLoaderRoute: typeof AuthenticatedDiagnosticoAtivacaoRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/configuracoes-escalas': {
       id: '/_authenticated/configuracoes-escalas'
       path: '/configuracoes-escalas'
@@ -1077,7 +1057,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCalendarioRoute: typeof AuthenticatedCalendarioRoute
   AuthenticatedConfiguracoesEscalasRoute: typeof AuthenticatedConfiguracoesEscalasRoute
-  AuthenticatedDiagnosticoAtivacaoRoute: typeof AuthenticatedDiagnosticoAtivacaoRoute
   AuthenticatedEscalasRoute: typeof AuthenticatedEscalasRoute
   AuthenticatedEspiritualidadeRoute: typeof AuthenticatedEspiritualidadeRoute
   AuthenticatedFormacoesRoute: typeof AuthenticatedFormacoesRoute
@@ -1103,7 +1082,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCalendarioRoute: AuthenticatedCalendarioRoute,
   AuthenticatedConfiguracoesEscalasRoute:
     AuthenticatedConfiguracoesEscalasRoute,
-  AuthenticatedDiagnosticoAtivacaoRoute: AuthenticatedDiagnosticoAtivacaoRoute,
   AuthenticatedEscalasRoute: AuthenticatedEscalasRoute,
   AuthenticatedEspiritualidadeRoute: AuthenticatedEspiritualidadeRoute,
   AuthenticatedFormacoesRoute: AuthenticatedFormacoesRoute,

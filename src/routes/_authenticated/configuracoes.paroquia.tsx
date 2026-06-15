@@ -6,7 +6,7 @@ import {
   Loader2, Plus, Trash2, GripVertical, Church, Pencil,
   MapPin, Users, Layers, Tag, Copy, BookOpen, ChevronRight, ChevronLeft,
   Settings2, CalendarCheck, Award, FileImage, UserCheck, Gauge,
-  ListOrdered, Music2,
+  ListOrdered, Music2, RotateCcw,
 } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -3368,114 +3368,251 @@ function TipoPrioridadeDialog({
 
 // ── Tab: Pontuação ────────────────────────────────────────────────────────────
 
-const DEFAULT_PONTUACAO: PontuacaoConfig = {
-  presenca_missa: 1,
-  presenca_formacao: 2,
-  presenca_reuniao: 1,
-  presenca_retiro: 3,
-  presenca_adoracao: 1,
-  presenca_evento_especial: 2,
-  presenca_missa_solene: 2,
-  presenca_missa_bispo: 3,
-  falta_sem_justificativa: -2,
-  falta_justificada: -1,
-  atraso: -1,
-  ocorrencia_grave: -3,
+type ConfigEscalasP = {
+  auto_pontuar: boolean;
+  pontuacao_presenca: number;
+  pontuacao_presenca_solene: number;
+  pontuacao_presenca_bispo: number;
+  pontuacao_falta: number;
+  pontuacao_justificou: number;
+  pontuacao_atraso: number;
+  pontuacao_ocorrencia_grave: number;
+  pontuacao_formacao: number;
+  pontuacao_reuniao: number;
+  pontuacao_retiro: number;
+  pontuacao_adoracao: number;
+  pontuacao_ensaio: number;
+  pontuacao_encontro: number;
+  pontuacao_compromisso: number;
+  pontuacao_evento: number;
+  pontuacao_substituicao_aceita: number;
+  pontuacao_substituicao_recusada: number;
 };
 
-const PONTUACAO_FIELDS: { key: keyof PontuacaoConfig; label: string; grupo: "positivo" | "negativo" }[] = [
-  { key: "presenca_missa",          label: "Presença em missa",            grupo: "positivo" },
-  { key: "presenca_missa_solene",   label: "Presença em missa solene",     grupo: "positivo" },
-  { key: "presenca_missa_bispo",    label: "Presença com bispo",           grupo: "positivo" },
-  { key: "presenca_formacao",       label: "Presença em formação",         grupo: "positivo" },
-  { key: "presenca_reuniao",        label: "Presença em reunião",          grupo: "positivo" },
-  { key: "presenca_retiro",         label: "Participação em retiro",       grupo: "positivo" },
-  { key: "presenca_adoracao",       label: "Participação em adoração",     grupo: "positivo" },
-  { key: "presenca_evento_especial",label: "Evento especial",              grupo: "positivo" },
-  { key: "falta_justificada",       label: "Falta justificada",            grupo: "negativo" },
-  { key: "falta_sem_justificativa", label: "Falta sem justificativa",      grupo: "negativo" },
-  { key: "atraso",                  label: "Atraso",                       grupo: "negativo" },
-  { key: "ocorrencia_grave",        label: "Ocorrência grave",             grupo: "negativo" },
-];
+const PONT_DEFAULTS: ConfigEscalasP = {
+  auto_pontuar: false,
+  pontuacao_presenca: 1,
+  pontuacao_presenca_solene: 3,
+  pontuacao_presenca_bispo: 5,
+  pontuacao_falta: -2,
+  pontuacao_justificou: 0,
+  pontuacao_atraso: -1,
+  pontuacao_ocorrencia_grave: -10,
+  pontuacao_formacao: 2,
+  pontuacao_reuniao: 1,
+  pontuacao_retiro: 5,
+  pontuacao_adoracao: 2,
+  pontuacao_ensaio: 1,
+  pontuacao_encontro: 2,
+  pontuacao_compromisso: 2,
+  pontuacao_evento: 3,
+  pontuacao_substituicao_aceita: 3,
+  pontuacao_substituicao_recusada: -1,
+};
+
+function PRow({ label, color, value, onChange }: {
+  label: string; color: string; value: number; onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`text-sm flex-1 ${color}`}>{label}</span>
+      <input
+        type="number" min={-99} max={99}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value) || 0)}
+        className="w-20 rounded-xl border border-input bg-background px-2 py-1.5 text-sm text-center outline-none focus:border-ring"
+      />
+      <span className="text-xs text-muted-foreground w-6">pts</span>
+    </div>
+  );
+}
 
 function PontuacaoConfigTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: () => void }) {
-  const raw = paroquia.pontuacao_config as PontuacaoConfig | null;
-  const [config, setConfig] = useState<PontuacaoConfig>({ ...DEFAULT_PONTUACAO, ...(raw ?? {}) });
+  const qc = useQueryClient();
+  const [form, setForm] = useState<ConfigEscalasP>(PONT_DEFAULTS);
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reprocessLoading, setReprocessLoading] = useState(false);
+  const [recalcLoading, setRecalcLoading] = useState(false);
 
-  function setField(key: keyof PontuacaoConfig, value: number) {
-    setConfig((prev) => ({ ...prev, [key]: value }));
+  const { data: configDb, isLoading } = useQuery({
+    queryKey: ["config-escalas-pont", paroquia.id],
+    queryFn: async () => {
+      const { data, error } = await anyDb
+        .from("paroquia_config_escalas")
+        .select("*")
+        .eq("paroquia_id", paroquia.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (configDb) {
+      setForm({ ...PONT_DEFAULTS, ...configDb });
+      setDirty(false);
+    }
+  }, [configDb]);
+
+  function update<K extends keyof ConfigEscalasP>(key: K, value: ConfigEscalasP[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+    setDirty(true);
   }
 
   async function save() {
     setSaving(true);
-    const { error } = await anyDb.from("paroquias").update({ pontuacao_config: config }).eq("id", paroquia.id);
+    const { error } = await anyDb
+      .from("paroquia_config_escalas")
+      .upsert({ paroquia_id: paroquia.id, ...form }, { onConflict: "paroquia_id" });
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error("Erro ao salvar: " + error.message); return; }
     toast.success("Configuração de pontuação salva.");
+    qc.invalidateQueries({ queryKey: ["config-escalas-pont", paroquia.id] });
+    qc.invalidateQueries({ queryKey: ["config-escalas", paroquia.id] });
     onSaved();
+    setDirty(false);
   }
 
-  const positivos = PONTUACAO_FIELDS.filter((f) => f.grupo === "positivo");
-  const negativos = PONTUACAO_FIELDS.filter((f) => f.grupo === "negativo");
+  async function handleReprocessar() {
+    setReprocessLoading(true);
+    try {
+      const { data, error } = await anyDb.rpc("admin_reprocessar_historico_escala", {
+        p_paroquia_id: paroquia.id,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error);
+      toast.success(`Reprocessado: ${data.registros_atualizados} presenças · ${data.membros_atualizados} membros atualizados.`);
+    } catch (e: unknown) {
+      toast.error("Erro ao reprocessar: " + (e as Error).message);
+    } finally {
+      setReprocessLoading(false);
+    }
+  }
+
+  async function handleRecalcular() {
+    setRecalcLoading(true);
+    try {
+      const { data, error } = await anyDb.rpc("admin_recalcular_scores_paroquia", {
+        p_paroquia_id: paroquia.id,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error);
+      toast.success(`Scores recalculados para ${data.membros_atualizados} membros.`);
+    } catch (e: unknown) {
+      toast.error("Erro ao recalcular: " + (e as Error).message);
+    } finally {
+      setRecalcLoading(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
-    <Card className="space-y-6">
-      <div>
-        <p className="text-sm font-medium">Motor de Pontuação</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Configure os pontos atribuídos a cada ação. Tudo é configurável por paróquia.
-        </p>
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1">
-          <span className="text-emerald-500">+</span> Pontuação positiva
-        </p>
-        <div className="grid sm:grid-cols-2 gap-3">
-          {positivos.map(({ key, label }) => (
-            <div key={key} className="flex items-center gap-3">
-              <label className="text-sm flex-1 text-foreground/80">{label}</label>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-emerald-600 font-bold text-sm w-4">+</span>
-                <input
-                  type="number" min={0} max={100}
-                  value={config[key]}
-                  onChange={(e) => setField(key, Number(e.target.value))}
-                  className="w-16 rounded-lg border border-input bg-background px-2 py-1.5 text-sm text-center outline-none focus:border-ring"
-                />
-              </div>
-            </div>
-          ))}
+    <div className="space-y-6">
+      <Card className="space-y-5">
+        <div>
+          <p className="text-sm font-medium">Motor de Pontuação</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Configure os pontos atribuídos a cada ação. Administradores e coordenadores de escala usam estes valores ao registrar presenças.
+          </p>
         </div>
-      </div>
 
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1">
-          <span className="text-red-500">−</span> Penalidades
-        </p>
-        <div className="grid sm:grid-cols-2 gap-3">
-          {negativos.map(({ key, label }) => (
-            <div key={key} className="flex items-center gap-3">
-              <label className="text-sm flex-1 text-foreground/80">{label}</label>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-red-500 font-bold text-sm w-4">−</span>
-                <input
-                  type="number" min={0} max={100}
-                  value={Math.abs(config[key])}
-                  onChange={(e) => setField(key, -Math.abs(Number(e.target.value)))}
-                  className="w-16 rounded-lg border border-input bg-background px-2 py-1.5 text-sm text-center outline-none focus:border-ring"
-                />
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center justify-between gap-4 py-2 border-b border-border/40">
+          <div>
+            <Label className="text-sm font-medium">Pontuar automaticamente</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Score dos membros é atualizado ao registrar presença em escalas e eventos.
+            </p>
+          </div>
+          <Switch
+            checked={form.auto_pontuar}
+            onCheckedChange={(v) => update("auto_pontuar", v)}
+          />
         </div>
-      </div>
 
-      <button type="button" disabled={saving} onClick={save}
-        className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-2">
-        {saving && <Loader2 className="h-4 w-4 animate-spin" />} Salvar pontuação
-      </button>
-    </Card>
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Escalas de missa</p>
+          <PRow label="Presente — missa normal"  color="text-green-600"   value={form.pontuacao_presenca}        onChange={(v) => update("pontuacao_presenca", v)} />
+          <PRow label="Presente — missa solene"  color="text-emerald-600" value={form.pontuacao_presenca_solene}  onChange={(v) => update("pontuacao_presenca_solene", v)} />
+          <PRow label="Presente — com bispo"     color="text-teal-600"    value={form.pontuacao_presenca_bispo}   onChange={(v) => update("pontuacao_presenca_bispo", v)} />
+          <PRow label="Faltou"                   color="text-red-600"     value={form.pontuacao_falta}            onChange={(v) => update("pontuacao_falta", v)} />
+          <PRow label="Justificou"               color="text-amber-600"   value={form.pontuacao_justificou}       onChange={(v) => update("pontuacao_justificou", v)} />
+          <PRow label="Atrasado"                 color="text-orange-600"  value={form.pontuacao_atraso}           onChange={(v) => update("pontuacao_atraso", v)} />
+          <PRow label="Ocorrência grave"         color="text-rose-700"    value={form.pontuacao_ocorrencia_grave} onChange={(v) => update("pontuacao_ocorrencia_grave", v)} />
+        </div>
+
+        <div className="space-y-3 border-t border-border/40 pt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Agenda pastoral</p>
+          <PRow label="Formação"             color="text-blue-600"   value={form.pontuacao_formacao}    onChange={(v) => update("pontuacao_formacao", v)} />
+          <PRow label="Reunião"              color="text-slate-600"  value={form.pontuacao_reuniao}     onChange={(v) => update("pontuacao_reuniao", v)} />
+          <PRow label="Retiro"               color="text-purple-600" value={form.pontuacao_retiro}      onChange={(v) => update("pontuacao_retiro", v)} />
+          <PRow label="Adoração"             color="text-yellow-600" value={form.pontuacao_adoracao}    onChange={(v) => update("pontuacao_adoracao", v)} />
+          <PRow label="Ensaio"               color="text-green-700"  value={form.pontuacao_ensaio}      onChange={(v) => update("pontuacao_ensaio", v)} />
+          <PRow label="Encontro"             color="text-cyan-600"   value={form.pontuacao_encontro}    onChange={(v) => update("pontuacao_encontro", v)} />
+          <PRow label="Compromisso pastoral" color="text-rose-600"   value={form.pontuacao_compromisso} onChange={(v) => update("pontuacao_compromisso", v)} />
+          <PRow label="Evento especial"      color="text-amber-700"  value={form.pontuacao_evento}      onChange={(v) => update("pontuacao_evento", v)} />
+        </div>
+
+        <div className="space-y-3 border-t border-border/40 pt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Substituições</p>
+          <PRow label="Substituição aceita"   color="text-green-600" value={form.pontuacao_substituicao_aceita}   onChange={(v) => update("pontuacao_substituicao_aceita", v)} />
+          <PRow label="Substituição recusada" color="text-red-600"   value={form.pontuacao_substituicao_recusada} onChange={(v) => update("pontuacao_substituicao_recusada", v)} />
+        </div>
+
+        <button type="button" disabled={saving || !dirty} onClick={save}
+          className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-altar hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-2">
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />} Salvar pontuação
+        </button>
+      </Card>
+
+      <Card className="space-y-4">
+        <div>
+          <p className="text-sm font-medium">Ferramentas de pontuação</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Aplique os valores configurados ao histórico existente ou recalcule os scores dos membros.
+          </p>
+        </div>
+        <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 px-3 py-2.5">
+          <span className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5 text-xs font-bold select-none">i</span>
+          <p className="text-xs text-blue-700 dark:text-blue-400">
+            <strong>Reprocessar pontuação histórica:</strong> recalcula os pontos de cada presença
+            já registrada em escala conforme os valores atuais (normal / solene / bispo / falta…).
+            Use após alterar pontuações para corrigir o histórico existente.
+            <br /><br />
+            <strong>Recalcular scores (soma):</strong> apenas soma o que já está no histórico, sem
+            alterar os pontos individuais de cada registro.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            variant="default" size="sm" className="rounded-xl flex-1"
+            disabled={reprocessLoading || recalcLoading}
+            onClick={handleReprocessar}
+          >
+            {reprocessLoading
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+            Reprocessar pontuação histórica
+          </Button>
+          <Button
+            variant="outline" size="sm" className="rounded-xl flex-1"
+            disabled={recalcLoading || reprocessLoading}
+            onClick={handleRecalcular}
+          >
+            {recalcLoading
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+            Recalcular scores (soma)
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 }

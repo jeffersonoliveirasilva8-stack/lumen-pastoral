@@ -252,6 +252,7 @@ function PortalMembroEscalas() {
           historico_participacoes(pontos)
         `)
         .eq("membro_id", membro!.id)
+        .eq("escalas.status", "publicada")
         .lt("escalas.data", new Date().toISOString().slice(0, 10))
         .order("escalas.data", { ascending: false })
         .limit(30);

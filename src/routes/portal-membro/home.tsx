@@ -252,8 +252,9 @@ function PortalMembroHome() {
 
         const { data: hist } = await anyDb
           .from("escala_membros")
-          .select("status, escalas!inner(data)")
+          .select("status, escalas!inner(data, status)")
           .eq("membro_id", membro!.id)
+          .eq("escalas.status", "publicada")
           .gte("escalas.data", inicio)
           .lte("escalas.data", fim)
           .in("status", ["confirmado", "presente", "atrasado", "ausente", "faltou", "justificou"]);
