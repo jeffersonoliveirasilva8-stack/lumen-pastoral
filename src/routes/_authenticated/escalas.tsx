@@ -1067,6 +1067,37 @@ function EscalasPage() {
     [escalas]
   );
 
+  const pastIds = useMemo(() => past.map((e) => e.id), [past]);
+
+  // Stats agregados do histórico (últimos 6 meses)
+  const { data: historicoStats } = useQuery<{
+    totalEscalas: number; totalAtribuicoes: number;
+    presente: number; faltou: number; atrasado: number; justificou: number;
+    pontosTotais: number;
+  } | null>({
+    queryKey: ["historico-stats-escalas", profile?.paroquia_id, pastIds.length],
+    enabled: view === "historico" && pastIds.length > 0 && !!profile?.paroquia_id,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const [membrosRes, pontosRes] = await Promise.all([
+        supabase.from("escala_membros").select("status").in("escala_id", pastIds),
+        (supabase as any).from("historico_participacoes").select("pontos").in("escala_id", pastIds),
+      ]);
+      const counts = { presente: 0, faltou: 0, atrasado: 0, justificou: 0 };
+      let totalAtribuicoes = 0;
+      ((membrosRes.data ?? []) as { status: string }[]).forEach((r) => {
+        totalAtribuicoes++;
+        const s = r.status;
+        if (s === "presente" || s === "confirmado") counts.presente++;
+        else if (s === "faltou" || s === "ausente") counts.faltou++;
+        else if (s === "atrasado") counts.atrasado++;
+        else if (s === "justificou" || s === "recusado") counts.justificou++;
+      });
+      const pontosTotais = ((pontosRes.data ?? []) as { pontos: number }[]).reduce((s, r) => s + (r.pontos ?? 0), 0);
+      return { totalEscalas: pastIds.length, totalAtribuicoes, ...counts, pontosTotais };
+    },
+  });
+
   // Status counts para indicadores rápidos
   const statusCounts = useMemo(() => {
     const rascunhos  = escalas.filter((e) => e.status === "rascunho"  && new Date(e.data + "T00:00:00") >= new Date(today.toDateString())).length;
@@ -1446,14 +1477,63 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           onReorganizar={() => setReorganizarOpen(true)}
         />
       ) : view === "historico" ? (
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 space-y-4">
+          {/* Resumo estatístico */}
+          {historicoStats && (
+            <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Resumo — {historicoStats.totalEscalas} escalas · {historicoStats.totalAtribuicoes} atribuições
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="rounded-xl bg-green-500/10 border border-green-500/20 px-3 py-2 text-center">
+                  <p className="text-xl font-bold font-serif text-green-600">{historicoStats.presente}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-green-700/70 mt-0.5">Presenças</p>
+                </div>
+                <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2 text-center">
+                  <p className="text-xl font-bold font-serif text-red-600">{historicoStats.faltou}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-red-700/70 mt-0.5">Faltas</p>
+                </div>
+                <div className="rounded-xl bg-orange-500/10 border border-orange-500/20 px-3 py-2 text-center">
+                  <p className="text-xl font-bold font-serif text-orange-600">{historicoStats.atrasado}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-orange-700/70 mt-0.5">Atrasos</p>
+                </div>
+                <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-center">
+                  <p className="text-xl font-bold font-serif text-blue-600">{historicoStats.justificou}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-blue-700/70 mt-0.5">Justificadas</p>
+                </div>
+              </div>
+              {historicoStats.totalAtribuicoes > 0 && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-green-500"
+                        style={{ width: `${Math.round((historicoStats.presente / historicoStats.totalAtribuicoes) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-semibold text-green-600 shrink-0 tabular-nums">
+                      {Math.round((historicoStats.presente / historicoStats.totalAtribuicoes) * 100)}% presença
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Taxa de falta: {Math.round((historicoStats.faltou / historicoStats.totalAtribuicoes) * 100)}%</span>
+                    <span className={`font-semibold ${historicoStats.pontosTotais >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {historicoStats.pontosTotais >= 0 ? `+${historicoStats.pontosTotais}` : historicoStats.pontosTotais} pts gerados
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {past.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
               <History className="h-6 w-6 text-muted-foreground mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">Nenhuma escala passada encontrada.</p>
             </div>
           ) : (
-            past.map((e) => {
+            <div className="space-y-3">
+            {past.map((e) => {
               const d = new Date(e.data + "T00:00:00");
               const counts = escalaCounts[e.id];
               return (
@@ -1485,7 +1565,8 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
                   </div>
                 </button>
               );
-            })
+            })}
+            </div>
           )}
         </div>
       ) : null}

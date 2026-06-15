@@ -326,6 +326,94 @@ function tLembretePresencaAdmin(paroquia: string, escalaTitulo: string, escalaDa
   return baseLayout(paroquia, body, siteUrl);
 }
 
+function tEscalaPublicada(nome: string, paroquia: string, escalaTitulo: string, escalaData: string, escalaHora: string, ministerioNome: string, siteUrl: string): string {
+  const sn = htmlSafe(nome); const sp = htmlSafe(paroquia); const st = htmlSafe(escalaTitulo); const sm = htmlSafe(ministerioNome);
+  let dataFmt = escalaData;
+  try { const [y,mo,d] = escalaData.split("-").map(Number); const M=["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]; dataFmt=`${d} de ${M[mo-1]} de ${y}`; } catch{/**/}
+  const horaFmt = escalaHora ? ` &agrave;s ${htmlSafe(escalaHora)}` : "";
+  const portalUrl = `${siteUrl}/portal-membro/home`;
+  const body = `
+    <h1>Sua escala foi publicada! &#128197;</h1>
+    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
+    <p>A coordena&ccedil;&atilde;o da <span class="hi">${sp}</span> publicou uma escala que inclui voc&ecirc;.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;width:100px;">Escala</td><td style="padding:6px 0;font-weight:600;color:#111;">${st}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Data</td><td style="padding:6px 0;font-weight:600;color:#111;">${dataFmt}${horaFmt}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Fun&ccedil;&atilde;o</td><td style="padding:6px 0;font-weight:600;color:#111;">${sm}</td></tr>
+    </table>
+    <p>Acesse o portal para confirmar sua presen&ccedil;a:</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">Confirmar presen&ccedil;a &rarr;</a></div>
+    <p class="note">Em caso de impossibilidade, registre uma indisponibilidade o quanto antes.</p>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
+function tSubstituicaoCriada(paroquia: string, membroNome: string, escalaTitulo: string, escalaData: string, ministerioNome: string, siteUrl: string): string {
+  const sp = htmlSafe(paroquia); const sm = htmlSafe(membroNome); const st = htmlSafe(escalaTitulo); const sf = htmlSafe(ministerioNome);
+  let dataFmt = escalaData;
+  try { const [y,mo,d] = escalaData.split("-").map(Number); const M=["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]; dataFmt=`${d} de ${M[mo-1]} de ${y}`; } catch{/**/}
+  const subsUrl = `${siteUrl}/substituicoes`;
+  const body = `
+    <h1>Nova solicita&ccedil;&atilde;o de substitui&ccedil;&atilde;o &#128260;</h1>
+    <p><span class="hi">${sm}</span> solicitou substitui&ccedil;&atilde;o na escala da <span class="hi">${sp}</span>.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;width:100px;">Escala</td><td style="padding:6px 0;font-weight:600;color:#111;">${st}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Data</td><td style="padding:6px 0;font-weight:600;color:#111;">${dataFmt}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Fun&ccedil;&atilde;o</td><td style="padding:6px 0;font-weight:600;color:#111;">${sf}</td></tr>
+    </table>
+    <p>Acesse o painel para aprovar ou rejeitar a solicita&ccedil;&atilde;o:</p>
+    <div class="bw"><a href="${subsUrl}" class="btn">Gerenciar substitui&ccedil;&otilde;es &rarr;</a></div>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
+function tSubstituicaoAceita(nome: string, paroquia: string, escalaTitulo: string, escalaData: string, siteUrl: string): string {
+  const sn = htmlSafe(nome); const sp = htmlSafe(paroquia); const st = htmlSafe(escalaTitulo);
+  let dataFmt = escalaData;
+  try { const [y,mo,d] = escalaData.split("-").map(Number); const M=["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]; dataFmt=`${d} de ${M[mo-1]} de ${y}`; } catch{/**/}
+  const portalUrl = `${siteUrl}/portal-membro/home`;
+  const body = `
+    <h1>Substitui&ccedil;&atilde;o aprovada &#9989;</h1>
+    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
+    <p>Sua solicita&ccedil;&atilde;o de substitui&ccedil;&atilde;o na escala <span class="hi">${st}</span> (${dataFmt}) da <span class="hi">${sp}</span> foi <strong>aprovada</strong>.</p>
+    <p>Voc&ecirc; est&aacute; liberado(a) desta escala. Obrigado por avisar com anteced&ecirc;ncia!</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">Acessar o portal &rarr;</a></div>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
+function tSubstituicaoRecusada(nome: string, paroquia: string, escalaTitulo: string, escalaData: string, siteUrl: string): string {
+  const sn = htmlSafe(nome); const sp = htmlSafe(paroquia); const st = htmlSafe(escalaTitulo);
+  let dataFmt = escalaData;
+  try { const [y,mo,d] = escalaData.split("-").map(Number); const M=["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]; dataFmt=`${d} de ${M[mo-1]} de ${y}`; } catch{/**/}
+  const portalUrl = `${siteUrl}/portal-membro/home`;
+  const body = `
+    <h1>Substitui&ccedil;&atilde;o n&atilde;o aprovada &#10060;</h1>
+    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
+    <p>Sua solicita&ccedil;&atilde;o de substitui&ccedil;&atilde;o na escala <span class="hi">${st}</span> (${dataFmt}) da <span class="hi">${sp}</span> <strong>n&atilde;o foi aprovada</strong> pela coordena&ccedil;&atilde;o.</p>
+    <p>Voc&ecirc; <strong>permanece escalado(a)</strong> para esta celebra&ccedil;&atilde;o. Em caso de d&uacute;vidas, entre em contato com a coordena&ccedil;&atilde;o.</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">Ver minha agenda &rarr;</a></div>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
+function tLembreteEscala(nome: string, paroquia: string, escalaTitulo: string, escalaData: string, escalaHora: string, ministerioNome: string, diasRestantes: number, siteUrl: string): string {
+  const sn = htmlSafe(nome); const sp = htmlSafe(paroquia); const st = htmlSafe(escalaTitulo); const sm = htmlSafe(ministerioNome);
+  let dataFmt = escalaData;
+  try { const [y,mo,d] = escalaData.split("-").map(Number); const M=["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]; dataFmt=`${d} de ${M[mo-1]} de ${y}`; } catch{/**/}
+  const horaFmt = escalaHora ? ` &agrave;s ${htmlSafe(escalaHora)}` : "";
+  const prazo = diasRestantes === 0 ? "<strong>hoje</strong>" : diasRestantes === 1 ? "<strong>amanh&atilde;</strong>" : `em <strong>${diasRestantes} dias</strong>`;
+  const portalUrl = `${siteUrl}/portal-membro/home`;
+  const body = `
+    <h1>Lembrete de escala &#128276;</h1>
+    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
+    <p>Voc&ecirc; tem uma escala ${prazo} na <span class="hi">${sp}</span>.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;width:100px;">Escala</td><td style="padding:6px 0;font-weight:600;color:#111;">${st}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Data</td><td style="padding:6px 0;font-weight:600;color:#111;">${dataFmt}${horaFmt}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Fun&ccedil;&atilde;o</td><td style="padding:6px 0;font-weight:600;color:#111;">${sm}</td></tr>
+    </table>
+    <div class="bw"><a href="${portalUrl}" class="btn">Acessar o portal &rarr;</a></div>
+    <p class="note">Se n&atilde;o puder comparecer, solicite substitui&ccedil;&atilde;o com anteced&ecirc;ncia.</p>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
 function tEventoConvite(nome: string, paroquia: string, titulo: string, data: string, hora: string, siteUrl: string): string {
   const sn = htmlSafe(nome) || "Servidor(a)";
   const sp = htmlSafe(paroquia);
@@ -603,6 +691,30 @@ Deno.serve(async (req) => {
     } else if (template === "evento_convite") {
       subject = `${paroquia} — ${escalaTitulo || "Novo evento"}`;
       html    = tEventoConvite(nome, paroquia, escalaTitulo, escalaData, escalaHora, siteUrl);
+
+    // ── Escala publicada (notifica membro escalado) ──────────────────────────
+    } else if (template === "escala_publicada") {
+      subject = `${paroquia} — Escala publicada: ${escalaTitulo}`;
+      html    = tEscalaPublicada(nome, paroquia, escalaTitulo, escalaData, escalaHora, ministerioNome, siteUrl);
+
+    // ── Substituições ────────────────────────────────────────────────────────
+    } else if (template === "substituicao_criada") {
+      subject = `${paroquia} — Substituição solicitada: ${escalaTitulo}`;
+      html    = tSubstituicaoCriada(paroquia, nome, escalaTitulo, escalaData, ministerioNome, siteUrl);
+
+    } else if (template === "substituicao_aceita") {
+      subject = `${paroquia} — Substituição aprovada: ${escalaTitulo}`;
+      html    = tSubstituicaoAceita(nome, paroquia, escalaTitulo, escalaData, siteUrl);
+
+    } else if (template === "substituicao_recusada") {
+      subject = `${paroquia} — Substituição não aprovada: ${escalaTitulo}`;
+      html    = tSubstituicaoRecusada(nome, paroquia, escalaTitulo, escalaData, siteUrl);
+
+    // ── Lembrete de escala (1–2 dias antes) ─────────────────────────────────
+    } else if (template === "lembrete_escala") {
+      const diasRestantes = Number(body.total ?? 1);
+      subject = `${paroquia} — Lembrete: ${escalaTitulo}`;
+      html    = tLembreteEscala(nome, paroquia, escalaTitulo, escalaData, escalaHora, ministerioNome, diasRestantes, siteUrl);
 
     } else {
       return json({ ok: false, error: `Unknown template: ${template}` }, 400);

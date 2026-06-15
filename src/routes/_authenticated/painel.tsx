@@ -423,6 +423,7 @@ function DashboardPage() {
   const [anivTab, setAnivTab] = useState<"hoje" | "semana" | "mes">("hoje");
 
   const [substituicaoTarget, setSubstituicaoTarget] = useState<SubstituicaoTarget | null>(null);
+  const [candidaturaTarget, setCandidaturaTarget] = useState<CandidaturaTarget | null>(null);
   const qcDash = useQueryClient();
 
   const aniversariantesHoje = useMemo(() => {
@@ -672,6 +673,22 @@ function DashboardPage() {
         .select("*", { count: "exact", head: true })
         .in("escala_id", esc.map((e) => e.id))
         .eq("status", "pendente");
+      return count ?? 0;
+    },
+  });
+
+  // ── Membros sem conta ativada (coord only) ────────────────────────────────────
+  const { data: membrosNaoAtivados = 0 } = useQuery<number>({
+    queryKey: ["stats-nao-ativados", pid],
+    enabled: !!pid && isCoord,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { count } = await anyDb
+        .from("membros")
+        .select("*", { count: "exact", head: true })
+        .eq("paroquia_id", pid!)
+        .eq("ativo", true)
+        .eq("conta_ativada", false);
       return count ?? 0;
     },
   });
@@ -1025,6 +1042,31 @@ function DashboardPage() {
     onError: () => toast.error("Erro ao substituir membro."),
   });
 
+  const candidatarMutation = useMutation({
+    mutationFn: async ({ escalaId, ministerioId }: { escalaId: string; ministerioId: string }) => {
+      if (!profile?.id) throw new Error("Usuário não identificado.");
+      const { data: existing } = await supabase.from("escala_membros").select("id").eq("escala_id", escalaId).eq("membro_id", profile.id).eq("ministerio_id", ministerioId).maybeSingle();
+      if (existing) throw new Error("Você já está escalado(a) para esta função nesta missa.");
+      const [vagasRes, escaladosRes] = await Promise.all([
+        supabase.from("escala_funcoes").select("quantidade").eq("escala_id", escalaId).eq("ministerio_id", ministerioId),
+        supabase.from("escala_membros").select("id").eq("escala_id", escalaId).eq("ministerio_id", ministerioId),
+      ]);
+      const totalVagas = ((vagasRes.data ?? []) as any[]).reduce((s: number, v: any) => s + ((v.quantidade as number) ?? 1), 0);
+      if ((escaladosRes.data ?? []).length >= totalVagas) throw new Error("Esta vaga já foi preenchida por outro servidor.");
+      const { error } = await supabase.from("escala_membros").insert({ escala_id: escalaId, membro_id: profile.id, ministerio_id: ministerioId, status: "pendente" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qcDash.invalidateQueries({ queryKey: ["missas-para-membro"] });
+      qcDash.invalidateQueries({ queryKey: ["escala-membros"] });
+      qcDash.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qcDash.invalidateQueries({ queryKey: ["proximas-celebracoes-detalhe"] });
+      setCandidaturaTarget(null);
+      toast.success("Disponibilidade registrada! A coordenação será notificada.");
+    },
+    onError: (e: Error) => toast.error(e.message || "Erro ao registrar disponibilidade."),
+  });
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="p-3 sm:p-6 lg:p-10 max-w-7xl mx-auto space-y-4 sm:space-y-6 pb-24 lg:pb-10">
@@ -1050,11 +1092,11 @@ function DashboardPage() {
           </div>
           <div className="divide-y divide-primary/10">
             {missasParaMembro.map((m) => (
-              <Link
+              <button
                 key={m.id}
-                to="/escalas"
-                search={{} as any}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-primary/10 transition group"
+                type="button"
+                onClick={() => setCandidaturaTarget({ escalaId: m.escalaId, ministerioId: m.ministerioId, titulo: m.titulo, data: m.data, hora_inicio: m.hora_inicio, ministerio_nome: m.ministerio_nome })}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-primary/10 transition group w-full text-left"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground leading-snug truncate">{m.titulo}</p>
@@ -1066,9 +1108,9 @@ function DashboardPage() {
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold text-amber-600">{m.abertas} vaga{m.abertas !== 1 ? "s" : ""}</p>
-                  <p className="text-[10px] text-muted-foreground">em aberto</p>
+                  <p className="text-[10px] text-primary font-semibold">Consigo servir →</p>
                 </div>
-              </Link>
+              </button>
             ))}
           </div>
         </div>
@@ -1167,7 +1209,7 @@ function DashboardPage() {
       </div>
 
       {/* ── Alertas urgentes — só aparece quando há itens críticos ── */}
-      {(conflitos.length > 0 || escalasIncompletas.length > 0 || alertasLiturgicos.length > 0 || escalasPresencaPendente.length > 0 || substituicoesPendentesCount > 0 || confirmacoesPendentes > 0) && (
+      {(conflitos.length > 0 || escalasIncompletas.length > 0 || alertasLiturgicos.length > 0 || escalasPresencaPendente.length > 0 || substituicoesPendentesCount > 0 || confirmacoesPendentes > 0 || membrosNaoAtivados > 0) && (
         <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 overflow-hidden">
           <div className="flex items-center gap-2.5 px-4 py-3 border-b border-amber-200/60 dark:border-amber-800/60">
             <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
@@ -1175,7 +1217,7 @@ function DashboardPage() {
               Precisa de atenção
             </p>
             <span className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1">
-              {conflitos.length + escalasIncompletas.length + alertasLiturgicos.length + escalasPresencaPendente.length + (substituicoesPendentesCount > 0 ? 1 : 0) + (confirmacoesPendentes > 0 ? 1 : 0)}
+              {conflitos.length + escalasIncompletas.length + alertasLiturgicos.length + escalasPresencaPendente.length + (substituicoesPendentesCount > 0 ? 1 : 0) + (confirmacoesPendentes > 0 ? 1 : 0) + (membrosNaoAtivados > 0 ? 1 : 0)}
             </span>
           </div>
           <div className="divide-y divide-amber-200/50 dark:divide-amber-800/40">
@@ -1283,6 +1325,22 @@ function DashboardPage() {
                     <span className="text-sky-600 font-semibold">{confirmacoesPendentes} membro{confirmacoesPendentes !== 1 ? "s" : ""}</span> ainda não respondeu{confirmacoesPendentes !== 1 ? "ram" : ""} a escala
                   </p>
                   <p className="text-xs text-muted-foreground">Próximos 7 dias · escalas publicadas</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition shrink-0" />
+              </Link>
+            )}
+            {isCoord && membrosNaoAtivados > 0 && (
+              <Link
+                to="/membros"
+                search={{} as any}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-100/60 dark:hover:bg-amber-900/20 transition group"
+              >
+                <UserX className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground leading-snug">
+                    <span className="text-slate-600 dark:text-slate-400 font-semibold">{membrosNaoAtivados} membro{membrosNaoAtivados !== 1 ? "s" : ""}</span> sem conta ativada
+                  </p>
+                  <p className="text-xs text-muted-foreground">Não conseguem acessar o portal</p>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition shrink-0" />
               </Link>
@@ -1793,6 +1851,55 @@ function DashboardPage() {
           )}
         </div>
       )}
+
+      {/* ── Dialog Consigo Servir ─────────────────────────────────────────── */}
+      <Dialog open={!!candidaturaTarget} onOpenChange={(o) => { if (!o) setCandidaturaTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmar disponibilidade</DialogTitle>
+          </DialogHeader>
+          {candidaturaTarget && (
+            <div className="py-2 space-y-4">
+              <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-2 text-sm">
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Missa</span>
+                  <span className="font-medium text-right">{candidaturaTarget.titulo}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Data</span>
+                  <span className="font-medium">
+                    {format(new Date(candidaturaTarget.data + "T00:00:00"), "EEE, d 'de' MMMM", { locale: ptBR })}
+                  </span>
+                </div>
+                {candidaturaTarget.hora_inicio && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground shrink-0">Horário</span>
+                    <span className="font-medium">{candidaturaTarget.hora_inicio.slice(0, 5)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Função</span>
+                  <span className="font-medium text-primary">{candidaturaTarget.ministerio_nome}</span>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Ao confirmar, você será adicionado(a) à lista de presença. A coordenação poderá ajustar conforme necessário.
+              </p>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setCandidaturaTarget(null)}>Cancelar</Button>
+            <Button
+              size="sm"
+              disabled={candidatarMutation.isPending || !candidaturaTarget}
+              onClick={() => candidaturaTarget && candidatarMutation.mutate({ escalaId: candidaturaTarget.escalaId, ministerioId: candidaturaTarget.ministerioId })}
+            >
+              {candidatarMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Confirmar presença
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Dialog substituição de membro ─────────────────────────────────── */}
       <Dialog open={!!substituicaoTarget} onOpenChange={(o) => { if (!o) setSubstituicaoTarget(null); }}>
