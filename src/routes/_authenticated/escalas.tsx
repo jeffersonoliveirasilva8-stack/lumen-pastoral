@@ -55,6 +55,7 @@ export const Route = createFileRoute("/_authenticated/escalas")({
 });
 
 import { nomeExibicao } from "@/lib/nome";
+import { AssistenteGeracaoEscalas } from "@/components/escalas/assistente-geracao";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -173,9 +174,7 @@ function EscalasPage() {
   const [autoArchiveTriggered, setAutoArchiveTriggered] = useState(false);
   const [selectedEscalaIds, setSelectedEscalaIds] = useState<Set<string>>(new Set());
   const [bulkDeleteEscalasOpen, setBulkDeleteEscalasOpen] = useState(false);
-  const [gerarPeriodoOpen, setGerarPeriodoOpen] = useState(false);
-  const [gerarInicio, setGerarInicio] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
-  const [gerarFim, setGerarFim] = useState(() => format(addDays(new Date(), 7), "yyyy-MM-dd"));
+  const [assistenteOpen, setAssistenteOpen] = useState(false);
   const [reorganizarOpen, setReorganizarOpen] = useState(false);
   const [reorganizarEscalaId, setReorganizarEscalaId] = useState("");
 
@@ -888,205 +887,6 @@ function EscalasPage() {
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
 
-  const gerarSemanaRapidaMutation = useMutation({
-    mutationFn: async ({ dataInicio, dataFim }: { dataInicio: string; dataFim: string }) => {
-      if (!profile?.paroquia_id) throw new Error("Paróquia não identificada.");
-      if (missasPadrao.length === 0) throw new Error("Nenhuma Missa Padrão cadastrada em Geral → Missas Padrão.");
-
-      const startDate = new Date(dataInicio + "T00:00:00");
-      const endDate = new Date(dataFim + "T00:00:00");
-
-      const created: string[] = [];
-      const skipped: string[] = [];
-      let totalSugestoes = 0;
-
-      // Acumula atribuições feitas neste batch para que o motor as considere
-      // nas escalas seguintes (limites semanais / anti-repetição imediata)
-      const batchHistory: AssignmentHistoryEntry[] = [];
-
-      for (const missa of missasPadrao) {
-        // Collect all dates in range matching this missa's dia_semana
-        const datesForMissa: Date[] = [];
-        const cur = new Date(startDate);
-        while (cur <= endDate) {
-          if (cur.getDay() === missa.dia_semana) datesForMissa.push(new Date(cur));
-          cur.setDate(cur.getDate() + 1);
-        }
-
-        for (const targetDate of datesForMissa) {
-          const dateStr = format(targetDate, "yyyy-MM-dd");
-
-          // Verificar recorrência
-          const recorrencia = missa.recorrencia ?? { tipo: "semanal" };
-          if (recorrencia.tipo !== "semanal") {
-            const weekOfMonth = Math.ceil(targetDate.getDate() / 7);
-            const isLast = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).getDate() - targetDate.getDate() < 7;
-            const passes = (
-              recorrencia.tipo === "quinzenal"     ? [1, 3].includes(weekOfMonth) :
-              recorrencia.tipo === "quinzenal_1_3" ? [1, 3].includes(weekOfMonth) :
-              recorrencia.tipo === "quinzenal_2_4" ? [2, 4].includes(weekOfMonth) :
-              recorrencia.tipo === "mensal_1"      ? weekOfMonth === 1 :
-              recorrencia.tipo === "mensal_2"      ? weekOfMonth === 2 :
-              recorrencia.tipo === "mensal_3"      ? weekOfMonth === 3 :
-              recorrencia.tipo === "mensal_4"      ? weekOfMonth === 4 :
-              recorrencia.tipo === "mensal_ultimo" ? isLast :
-              recorrencia.tipo === "esporadico"    ? false :
-              true
-            );
-            if (!passes) { skipped.push(missa.nome); continue; }
-          }
-
-          // Verificar se escala já existe nessa data para esta missa específica.
-          // Usa match exato (título + local) para não confundir duas missas no
-          // mesmo dia com nomes similares mas comunidades distintas.
-          const tituloGerado = `${missa.nome} — ${format(targetDate, "dd/MM", { locale: ptBR })}`;
-          let existingQuery = (supabase as any)
-            .from("escalas")
-            .select("id")
-            .eq("paroquia_id", profile.paroquia_id!)
-            .eq("data", dateStr)
-            .eq("titulo", tituloGerado);
-          if (missa.local) existingQuery = existingQuery.eq("local", missa.local);
-          const { data: existing } = await existingQuery.limit(1);
-
-          if (existing && existing.length > 0) { skipped.push(missa.nome); continue; }
-
-          // Criar escala — tituloGerado já calculado acima para o check de duplicata
-          const { data: newEscala, error } = await (supabase as any).from("escalas").insert({
-            paroquia_id: profile.paroquia_id!,
-            titulo: tituloGerado,
-            data: dateStr,
-            hora_inicio: missa.hora_inicio,
-            local: missa.local,
-            tipo: missa.tipo_missa_id ? "tipo_missa" : "missa",
-            tipo_missa_id: missa.tipo_missa_id,
-            solene: missa.solene,
-            tem_adoracao: missa.tem_adoracao,
-            tem_bispo: missa.tem_bispo,
-            status: "rascunho",
-            created_by: profile.id,
-          }).select("id").single();
-
-          if (error || !newEscala) continue;
-          created.push(missa.nome);
-
-          // Determinar funções a injetar
-          type FuncaoInjetar = { ministerio_id: string; quantidade_min: number };
-          let funcoesParaInjetar: FuncaoInjetar[] = [];
-
-          if (missa.tipo_missa_id) {
-            const { data: tipoFuncoes } = await (supabase as any)
-              .from("tipo_missa_funcoes")
-              .select("ministerio_id, quantidade_min")
-              .eq("tipo_missa_id", missa.tipo_missa_id)
-              .eq("tipo_vinculo", "obrigatoria");
-            funcoesParaInjetar = (tipoFuncoes ?? []) as FuncaoInjetar[];
-          } else {
-            const { data: padFuncoes } = await (supabase as any)
-              .from("missa_padrao_funcoes")
-              .select("ministerio_id, quantidade")
-              .eq("missa_padrao_id", missa.id);
-            funcoesParaInjetar = ((padFuncoes ?? []) as { ministerio_id: string; quantidade: number }[])
-              .map((pf) => ({ ministerio_id: pf.ministerio_id, quantidade_min: pf.quantidade }));
-          }
-
-          if (funcoesParaInjetar.length > 0) {
-            await (supabase as any).from("escala_funcoes").insert(
-              funcoesParaInjetar.map((tf) => ({
-                escala_id: newEscala.id,
-                ministerio_id: tf.ministerio_id,
-                quantidade: tf.quantidade_min,
-              }))
-            );
-
-            if (membros.length > 0) {
-              const funcoesPedido = funcoesParaInjetar.map((tf) => {
-                const min = ministerios.find((m) => m.id === tf.ministerio_id);
-                return {
-                  ministerio_id: tf.ministerio_id,
-                  quantidade: tf.quantidade_min,
-                  ministerio: { id: tf.ministerio_id, nome: min?.nome ?? "", cor: min?.cor },
-                };
-              });
-
-              const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
-              const engineConfig = {
-                usa_tochas: paroquiaConfig?.usa_tochas ?? false,
-                limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
-                limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
-                impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
-            prioridade_score: (regras.prioridade_score as boolean | undefined) ?? false,
-              };
-
-              // Membros restritos para esta missa específica → indisponíveis nesta data
-              const missaRestricaoIndisp = (membroMissaRestricoes[missa.id] ?? [])
-                .map((mid) => ({ membro_id: mid, data: dateStr }));
-
-              const membrosComAtuacoes = membros.map((m) => ({
-                ...m,
-                atuacao_ids: membroAtuacoes[m.id] ?? [],
-              }));
-
-              const sugestoes = generateEscalaAssignments(
-                { titulo: `${missa.nome} — ${format(targetDate, "dd/MM", { locale: ptBR })}`, data: dateStr, tipo: missa.tipo_missa_id ? "tipo_missa" : "missa", observacoes: null },
-                funcoesPedido,
-                membrosComAtuacoes,
-                membroMinisterios,
-                {
-                  history: [...assignmentHistory, ...batchHistory],
-                  indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
-                  restricoes: funcaoRestricoes,
-                  config: engineConfig,
-                  solene: missa.solene,
-                  tem_adoracao: missa.tem_adoracao,
-                  tem_bispo: missa.tem_bispo,
-                  debug: false,
-                }
-              );
-
-              if (sugestoes.length > 0) {
-                const { error: batchInsertErr } = await (supabase as any).from("escala_membros").insert(
-                  sugestoes.map((s) => ({
-                    escala_id: newEscala.id,
-                    membro_id: s.membro_id,
-                    ministerio_id: s.ministerio_id,
-                    status: "pendente",
-                  }))
-                );
-                if (batchInsertErr) {
-                  console.error(`[BATCH] Erro ao inserir membros para "${missa.nome}" em ${dateStr}:`, batchInsertErr);
-                } else {
-                  totalSugestoes += sugestoes.length;
-                  // Registra no histórico do batch para as próximas escalas
-                  sugestoes.forEach((s) => batchHistory.push({ memberId: s.membro_id, ministerioId: s.ministerio_id, date: dateStr }));
-                }
-              }
-            }
-          }
-        }
-      }
-
-      return { created, skipped, totalSugestoes };
-    },
-    onSuccess: ({ created, skipped, totalSugestoes }) => {
-      qc.invalidateQueries({ queryKey: ["escalas"] });
-      qc.invalidateQueries({ queryKey: ["escalas-counts"] });
-      qc.invalidateQueries({ queryKey: ["escala-membros"] });
-      qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
-      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
-      setGerarPeriodoOpen(false);
-      if (created.length > 0) {
-        const sugestoesMsg = totalSugestoes > 0
-          ? ` ${totalSugestoes} membro(s) distribuído(s) automaticamente.`
-          : " Nenhum membro distribuído — verifique os vínculos em Membros → Funções.";
-        toast.success(`${created.length} escala(s) criada(s).${sugestoesMsg}`, { duration: totalSugestoes > 0 ? 4000 : 8000 });
-      } else {
-        toast.info(skipped.length > 0 ? "Todas as escalas já existem ou foram puladas por recorrência." : "Nenhuma missa padrão ativa encontrada.");
-      }
-    },
-    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
-  });
-
   function openCreate() {
     setFormOpen(true);
   }
@@ -1378,11 +1178,11 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           </Button>
           <Button
             variant="outline" size="sm"
-            onClick={() => setGerarPeriodoOpen(true)}
-            title="Gera escalas automaticamente a partir das Missas Padrão"
+            onClick={() => setAssistenteOpen(true)}
+            title="Assistente de geração de escalas"
           >
             <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline ml-1.5">Gerar semana</span>
+            <span className="hidden sm:inline ml-1.5">Gerar escalas</span>
           </Button>
           <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" /><span className="hidden sm:inline ml-1">Nova escala</span>
@@ -1492,47 +1292,32 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
         />
       ) : null}
 
-      {/* ── Dialog período para gerar escalas ──────────────────────────────── */}
-      <Dialog open={gerarPeriodoOpen} onOpenChange={setGerarPeriodoOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Gerar escalas automaticamente</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-1">
-            <div className="space-y-1.5">
-              <Label>Data de início</Label>
-              <input
-                type="date"
-                value={gerarInicio}
-                onChange={(e) => setGerarInicio(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Data de término</Label>
-              <input
-                type="date"
-                value={gerarFim}
-                onChange={(e) => setGerarFim(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Serão criadas escalas para todas as Missas Padrão que ocorrem no período selecionado, respeitando recorrência e escalas já existentes.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setGerarPeriodoOpen(false)}>Cancelar</Button>
-            <Button
-              disabled={gerarSemanaRapidaMutation.isPending || !gerarInicio || !gerarFim || gerarInicio > gerarFim}
-              onClick={() => gerarSemanaRapidaMutation.mutate({ dataInicio: gerarInicio, dataFim: gerarFim })}
-            >
-              {gerarSemanaRapidaMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Gerar escalas
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ── Assistente de geração de escalas ───────────────────────────────── */}
+      {profile && (
+        <AssistenteGeracaoEscalas
+          open={assistenteOpen}
+          onClose={() => setAssistenteOpen(false)}
+          paroquiaId={profile.paroquia_id!}
+          profileId={profile.id}
+          membros={membros}
+          ministerios={ministerios}
+          missasPadrao={missasPadrao}
+          membroMinisterios={membroMinisterios}
+          membroAtuacoes={membroAtuacoes}
+          assignmentHistory={assignmentHistory}
+          indisponibilidades={indisponibilidades}
+          funcaoRestricoes={funcaoRestricoes}
+          membroMissaRestricoes={membroMissaRestricoes}
+          paroquiaConfig={paroquiaConfig ?? null}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ["escalas"] });
+            qc.invalidateQueries({ queryKey: ["escalas-counts"] });
+            qc.invalidateQueries({ queryKey: ["escala-membros"] });
+            qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
+            qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+          }}
+        />
+      )}
 
       {/* ── Dialog criar ────────────────────────────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={(o) => { if (!o) setFormOpen(false); }}>
