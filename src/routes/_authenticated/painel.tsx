@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import {
   Calendar, CalendarRange, Users, Sparkles, Activity, ChevronRight,
   AlertTriangle, Cake, CheckCircle2, UserX, UserCheck,
-  CalendarOff, Zap, Loader2, FileText, BookOpen, Play, ClipboardList,
-  TrendingUp, ArrowLeftRight, Clock, HandHelping,
+  CalendarOff, Zap, Loader2, FileText, BookOpen, ClipboardList,
+  TrendingUp, ArrowLeftRight, Clock, HandHelping, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -20,8 +20,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useRankingTop } from "@/lib/ranking";
 import { useLiturgiaHoje } from "@/hooks/use-liturgia";
-import { useHomiliaRecente } from "@/hooks/use-homilia";
-import { DashboardMetricCard } from "@/components/dashboard/DashboardMetricCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -109,6 +107,7 @@ function DashboardPage() {
   const { profile, hasAdminAccess, isAdmin, isCoordenador } = useAuth();
   const isCoord = isAdmin || isCoordenador;
   const pid = profile?.paroquia_id;
+  const [showSecondary, setShowSecondary] = useState(false);
 
   // ── Liturgical (pure, no fetch) ───────────────────────────────────────────────
   const today = useMemo(() => new Date(), []);
@@ -236,7 +235,7 @@ function DashboardPage() {
   // ── Insights: membros novos sem escala (últimos 30 dias) ──────────────────────
   const { data: membrosNovos = [] } = useQuery<{ id: string; nome: string }[]>({
     queryKey: ["insights-novos", pid],
-    enabled: !!pid,
+    enabled: showSecondary && !!pid,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const trinta = format(addDays(new Date(), -30), "yyyy-MM-dd");
@@ -317,7 +316,7 @@ function DashboardPage() {
   });
 
   // ── BI: Top membros por score — fonte unificada via useRankingTop ────────────
-  const { data: topMembrosRaw = [] } = useRankingTop(pid ?? undefined, 10);
+  const { data: topMembrosRaw = [] } = useRankingTop(showSecondary ? pid ?? undefined : undefined, 10);
   // Formata para o gráfico (primeiro nome + score)
   const topMembros = topMembrosRaw.map((m) => ({
     nome: m.nome.split(" ")[0],
@@ -327,7 +326,7 @@ function DashboardPage() {
   // ── BI: Distribuição de funções ───────────────────────────────────────────────
   const { data: funcaoDistrib = [] } = useQuery({
     queryKey: ["stats-funcao-distrib", pid],
-    enabled: !!pid,
+    enabled: showSecondary && !!pid,
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const { data: ministerios } = await supabase
@@ -351,7 +350,7 @@ function DashboardPage() {
   // ── Stats: distribuição de membros por pastoral / sexo / faixa etária ─────────
   const { data: memberStats } = useQuery({
     queryKey: ["stats-membros-distrib", pid],
-    enabled: !!pid,
+    enabled: showSecondary && !!pid,
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const [{ data: mbs }, { data: atuacoes }, { data: matuacoes }] = await Promise.all([
@@ -401,7 +400,7 @@ function DashboardPage() {
   const mesAtual = today.getMonth() + 1;
   const { data: aniversariantes = [] } = useQuery<{ id: string; nome: string; data_nascimento: string }[]>({
     queryKey: ["aniversariantes", pid, mesAtual],
-    enabled: !!pid,
+    enabled: showSecondary && !!pid,
     staleTime: 60 * 60 * 1000,
     queryFn: async () => {
       const { data } = await supabase
@@ -452,7 +451,7 @@ function DashboardPage() {
   // ── Insights: membros sem função atribuída ───────────────────────────────────
   const { data: membrosSemFuncao = 0 } = useQuery<number>({
     queryKey: ["insights-sem-funcao", pid],
-    enabled: !!pid,
+    enabled: showSecondary && !!pid,
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const { data: todos } = await supabase
@@ -507,7 +506,7 @@ function DashboardPage() {
 
   const { data: agendaItems = [] } = useQuery<AgendaEvent[]>({
     queryKey: ["dashboard-agenda", pid],
-    enabled: !!pid,
+    enabled: showSecondary && !!pid,
     queryFn: async () => {
       const hoje = format(new Date(), "yyyy-MM-dd");
       const ate = format(addDays(new Date(), 14), "yyyy-MM-dd");
@@ -578,11 +577,6 @@ function DashboardPage() {
   // ── Liturgia do dia — fonte DB (tem precedência sobre o engine local) ─────────
   const { data: liturgiaDB } = useLiturgiaHoje();
 
-  // ── Homilia do dia ────────────────────────────────────────────────────────────
-  const { data: homiliaRecente } = useHomiliaRecente();
-  const [homiliaPlayerAberto, setHomiliaPlayerAberto] = useState(false);
-  const homiliaEHoje = homiliaRecente?.data === todayStr;
-
   // ── Escalas com presenças pendentes (últimos 14 dias) ────────────────────────
   const { data: escalasPresencaPendente = [] } = useQuery<{ id: string; titulo: string; data: string; pendentes: number }[]>({
     queryKey: ["insights-presenca-pendente", pid],
@@ -620,7 +614,7 @@ function DashboardPage() {
   // ── Presença do mês atual ─────────────────────────────────────────────────────
   const { data: presencaMes } = useQuery<{ presente: number; faltou: number; atraso: number; justificou: number; total: number } | null>({
     queryKey: ["stats-presenca-mes", pid],
-    enabled: !!pid,
+    enabled: showSecondary && !!pid,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const now = new Date();
@@ -673,6 +667,22 @@ function DashboardPage() {
         .select("*", { count: "exact", head: true })
         .in("escala_id", esc.map((e) => e.id))
         .eq("status", "pendente");
+      return count ?? 0;
+    },
+  });
+
+  // ── Escalas futuras em rascunho ───────────────────────────────────────────────
+  const { data: escalasRascunhoCount = 0 } = useQuery<number>({
+    queryKey: ["stats-rascunhos-futuros", pid],
+    enabled: !!pid,
+    staleTime: 3 * 60 * 1000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("escalas")
+        .select("*", { count: "exact", head: true })
+        .eq("paroquia_id", pid!)
+        .eq("status", "rascunho")
+        .gte("data", format(new Date(), "yyyy-MM-dd"));
       return count ?? 0;
     },
   });
@@ -815,37 +825,8 @@ function DashboardPage() {
     },
   });
 
-  // ── Stats cards ───────────────────────────────────────────────────────────────
-  const stats = [
-    {
-      label: "Membros ativos",
-      value: totalMembros.toString(),
-      icon: Users,
-      hint: totalMembros === 0 ? "Cadastre membros" : "servidores",
-      href: "/membros",
-    },
-    {
-      label: "Escalas do mês",
-      value: escalasDoMes.toString(),
-      icon: Calendar,
-      hint: format(new Date(), "MMMM", { locale: ptBR }),
-      href: "/escalas",
-    },
-    {
-      label: "Funções litúrgicas",
-      value: totalMinisterios.toString(),
-      icon: Sparkles,
-      hint: totalMinisterios === 0 ? "Configure funções" : "funções ativas",
-      href: "/configuracoes/paroquia",
-    },
-    {
-      label: "Taxa de preenchimento",
-      value: taxaPreenchimento !== null ? `${taxaPreenchimento}%` : "—",
-      icon: Activity,
-      hint: taxaPreenchimento === null ? "Sem escalas no mês" : "escalas do mês",
-      href: "/escalas",
-    },
-  ];
+  // ── KPI: total de presenças pendentes (soma de escalasPresencaPendente) ────────
+  const presencasPendentesTotal = escalasPresencaPendente.reduce((s, e) => s + e.pendentes, 0);
 
   // ── Radar de saúde pastoral (score composto 0–100) ───────────────────────────
   const saudePastoral = useMemo(() => {
@@ -1088,13 +1069,30 @@ function DashboardPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="p-3 sm:p-6 lg:p-10 max-w-7xl mx-auto space-y-4 sm:space-y-6 pb-24 lg:pb-10">
-      <div>
-        <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Painel pastoral</p>
-        <h1 className="mt-1.5 font-serif text-xl sm:text-4xl text-foreground truncate">{paroquia?.nome ?? "Sua paróquia"}</h1>
-        {paroquia?.diocese && (
-          <p className="mt-0.5 text-xs sm:text-sm text-muted-foreground truncate">{paroquia.diocese}</p>
-        )}
+    <div className="p-3 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-4 sm:space-y-6 pb-24 lg:pb-10">
+
+      {/* Header + chip litúrgico inline */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-serif text-xl sm:text-3xl text-foreground truncate">{paroquia?.nome ?? "Sua paróquia"}</h1>
+          {paroquia?.diocese && (
+            <p className="mt-0.5 text-xs text-muted-foreground truncate">{paroquia.diocese}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            to="/espiritualidade"
+            className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition"
+          >
+            <span className={`h-2 w-2 rounded-full shrink-0 ${VESTMENT_DOT[todayColor]}`} />
+            <span className="hidden sm:inline">{VESTMENT_LABEL[todayColor]} · {SEASON_LABELS[season] ?? season}</span>
+            <span className="sm:hidden">{VESTMENT_LABEL[todayColor]}</span>
+          </Link>
+          <Button variant="outline" size="sm" className="h-8 text-xs shrink-0 rounded-xl" onClick={gerarRelatorioMensal}>
+            <FileText className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline ml-1.5">Relatório</span>
+          </Button>
+        </div>
       </div>
 
       {/* ── Portal do membro: Missas precisando de servidores ── */}
@@ -1135,100 +1133,33 @@ function DashboardPage() {
         </div>
       )}
 
-      <section className="rounded-2xl sm:rounded-3xl border border-border/70 bg-card shadow-altar overflow-hidden">
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">Painel litúrgico</p>
-              <h2 className="mt-1.5 text-xl sm:text-3xl font-serif text-foreground">
-                {format(today, "EEEE, d 'de' MMMM", { locale: ptBR })}
-              </h2>
-              <p className="mt-1.5 text-sm text-muted-foreground leading-snug">
-                {primaryCelebration
-                  ? primaryCelebration.name
-                  : "Feria — sem celebração especial registrada."}
-              </p>
-            </div>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-muted/70 px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
-              <span className={`h-2 w-2 rounded-full shrink-0 ${VESTMENT_DOT[todayColor]}`} />
-              <span className="hidden sm:inline">{`${VESTMENT_LABEL[todayColor]} · ${SEASON_LABELS[season] ?? season}`}</span>
-              <span className="sm:hidden">{VESTMENT_LABEL[todayColor]}</span>
-            </div>
-          </div>
-
-          {secondaryCelebrations.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {secondaryCelebrations.map((item) => (
-                <div key={item.name} className="rounded-3xl border border-border bg-background p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Santo do dia</p>
-                  <p className="mt-2 font-semibold text-sm text-foreground truncate">{item.name}</p>
-                  {item.rank && <p className="mt-1 text-xs text-muted-foreground">{item.rank}</p>}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Link para leituras completas em /espiritualidade */}
-          <Link
-            to="/espiritualidade"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition group"
-          >
-            <BookOpen className="h-3 w-3" />
-            Ver leituras do dia
-            <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-          </Link>
-        </div>
-      </section>
-
-      {/* ── Saúde da pastoral — ACIMA dos KPIs (informação de diagnóstico mais útil) ── */}
-      <div className="rounded-3xl border border-border bg-card shadow-altar p-5">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground font-semibold">Saúde da pastoral</p>
-            <p className="mt-0.5 text-xs text-muted-foreground/70">Índice composto das últimas 4 semanas</p>
-          </div>
-          <Button variant="outline" size="sm" className="h-8 text-xs shrink-0 rounded-xl" onClick={gerarRelatorioMensal}>
-            <FileText className="h-3.5 w-3.5 mr-1.5" />Relatório
-          </Button>
-        </div>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground sr-only">Saúde da pastoral</p>
-            <div className="mt-2 flex items-baseline gap-3">
-              <span className={`text-5xl font-serif ${saudePastoral.color}`}>{saudePastoral.score}</span>
-              <span className="text-muted-foreground text-sm">/100</span>
-              <span className={`text-sm font-semibold ${saudePastoral.color}`}>{saudePastoral.label}</span>
-            </div>
-            <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden w-full max-w-xs">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ${saudePastoral.barColor}`}
-                style={{ width: `${saudePastoral.score}%` }}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted-foreground mt-3 sm:mt-0 shrink-0">
-            <div className="flex items-center justify-between gap-2">
-              <span>Preenchimento</span>
-              <span className="font-semibold text-foreground">{saudePastoral.compPreenchimento}%</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span>Atividade</span>
-              <span className="font-semibold text-foreground">{saudePastoral.compAtividade}%</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span>Publicação</span>
-              <span className="font-semibold text-foreground">{saudePastoral.compPublicacao}%</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span>Conflitos</span>
-              <span className="font-semibold text-foreground">{saudePastoral.compConflitos}%</span>
-            </div>
+      {/* ── AGIR AGORA — 4 KPIs operacionais ── */}
+      {hasAdminAccess && (
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground font-semibold mb-3">Agir agora</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Link to="/escalas" className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:bg-primary/5 transition block">
+              <p className={`text-3xl font-serif font-bold ${escalasRascunhoCount > 0 ? "text-amber-600" : "text-muted-foreground/40"}`}>{escalasRascunhoCount}</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-snug">Escalas sem publicar</p>
+            </Link>
+            <Link to="/sacristia" className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:bg-primary/5 transition block">
+              <p className={`text-3xl font-serif font-bold ${presencasPendentesTotal > 0 ? "text-orange-600" : "text-muted-foreground/40"}`}>{presencasPendentesTotal}</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-snug">Presenças pendentes</p>
+            </Link>
+            <Link to="/substituicoes" className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:bg-primary/5 transition block">
+              <p className={`text-3xl font-serif font-bold ${substituicoesPendentesCount > 0 ? "text-violet-600" : "text-muted-foreground/40"}`}>{substituicoesPendentesCount}</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-snug">Substituições aguardando</p>
+            </Link>
+            <Link to="/membros" className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:bg-primary/5 transition block">
+              <p className={`text-3xl font-serif font-bold ${membrosNaoAtivados > 0 ? "text-slate-600" : "text-muted-foreground/40"}`}>{membrosNaoAtivados}</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-snug">Membros sem ativação</p>
+            </Link>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Alertas urgentes — só aparece quando há itens críticos ── */}
-      {(conflitos.length > 0 || escalasIncompletas.length > 0 || alertasLiturgicos.length > 0 || escalasPresencaPendente.length > 0 || substituicoesPendentesCount > 0 || confirmacoesPendentes > 0 || membrosNaoAtivados > 0) && (
+      {(conflitos.length > 0 || escalasIncompletas.length > 0 || alertasLiturgicos.length > 0 || escalasPresencaPendente.length > 0 || substituicoesPendentesCount > 0 || confirmacoesPendentes > 0 || membrosNaoAtivados > 0 || indispAtivasCount > 0 || escalasRascunhoCount > 0) && (
         <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 overflow-hidden">
           <div className="flex items-center gap-2.5 px-4 py-3 border-b border-amber-200/60 dark:border-amber-800/60">
             <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
@@ -1236,10 +1167,26 @@ function DashboardPage() {
               Precisa de atenção
             </p>
             <span className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1">
-              {conflitos.length + escalasIncompletas.length + alertasLiturgicos.length + escalasPresencaPendente.length + (substituicoesPendentesCount > 0 ? 1 : 0) + (confirmacoesPendentes > 0 ? 1 : 0) + (membrosNaoAtivados > 0 ? 1 : 0)}
+              {conflitos.length + escalasIncompletas.length + alertasLiturgicos.length + escalasPresencaPendente.length + (substituicoesPendentesCount > 0 ? 1 : 0) + (confirmacoesPendentes > 0 ? 1 : 0) + (membrosNaoAtivados > 0 ? 1 : 0) + (indispAtivasCount > 0 ? 1 : 0) + (escalasRascunhoCount > 0 ? 1 : 0)}
             </span>
           </div>
           <div className="divide-y divide-amber-200/50 dark:divide-amber-800/40">
+            {escalasRascunhoCount > 0 && (
+              <Link
+                to="/escalas"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-100/60 dark:hover:bg-amber-900/20 transition group"
+              >
+                <Calendar className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground leading-snug">
+                    <span className="text-amber-600 font-semibold">{escalasRascunhoCount} escala{escalasRascunhoCount !== 1 ? "s" : ""}</span>{" "}
+                    {escalasRascunhoCount !== 1 ? "aguardam" : "aguarda"} publicação
+                  </p>
+                  <p className="text-xs text-muted-foreground">Escalas futuras ainda em rascunho</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition shrink-0" />
+              </Link>
+            )}
             {escalasPresencaPendente.slice(0, 2).map((e) => (
               <Link
                 key={`presenca-${e.id}`}
@@ -1317,6 +1264,21 @@ function DashboardPage() {
                 </span>
               </Link>
             ))}
+            {isCoord && indispAtivasCount > 0 && (
+              <Link
+                to="/escalas"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-amber-100/60 dark:hover:bg-amber-900/20 transition group"
+              >
+                <CalendarOff className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground leading-snug">
+                    <span className="text-amber-600 font-semibold">{indispAtivasCount} indisponibilidade{indispAtivasCount !== 1 ? "s" : ""}</span> ativa{indispAtivasCount !== 1 ? "s" : ""} nos próximos 30 dias
+                  </p>
+                  <p className="text-xs text-muted-foreground">Verifique antes de publicar escalas</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition shrink-0" />
+              </Link>
+            )}
             {substituicoesPendentesCount > 0 && (
               <Link
                 to="/substituicoes"
@@ -1368,105 +1330,7 @@ function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        {stats.map((item) => (
-          <DashboardMetricCard
-            key={item.label}
-            label={item.label}
-            value={item.value}
-            hint={item.hint}
-            href={item.href}
-            icon={item.icon}
-          />
-        ))}
-      </div>
-
-      {/* ── Indisponibilidades ativas (próximos 30 dias) ── */}
-      {isCoord && indispAtivasCount > 0 && (
-        <Link to="/escalas" className="block">
-          <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3 hover:bg-amber-100/60 transition-colors">
-            <CalendarOff className="h-4 w-4 text-amber-600 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                {indispAtivasCount} indisponibilidade{indispAtivasCount !== 1 ? "s" : ""} ativa{indispAtivasCount !== 1 ? "s" : ""}
-              </p>
-              <p className="text-xs text-amber-700/70 dark:text-amber-400">
-                Nos próximos 30 dias — verifique antes de publicar escalas
-              </p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-amber-500 shrink-0" />
-          </div>
-        </Link>
-      )}
-
-      {/* ── Presença do mês + Membros por atuação ── */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Presença do mês */}
-        {presencaMes && (
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Presença do mês</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-green-500/10 border border-green-500/20 px-3 py-2.5 text-center">
-                <p className="text-2xl font-serif font-bold text-green-600">{presencaMes.presente}</p>
-                <p className="text-[10px] uppercase tracking-wide text-green-700/70 mt-0.5">Presentes</p>
-              </div>
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-center">
-                <p className="text-2xl font-serif font-bold text-red-600">{presencaMes.faltou}</p>
-                <p className="text-[10px] uppercase tracking-wide text-red-700/70 mt-0.5">Faltas</p>
-              </div>
-              <div className="rounded-xl bg-orange-500/10 border border-orange-500/20 px-3 py-2.5 text-center">
-                <p className="text-2xl font-serif font-bold text-orange-600">{presencaMes.atraso}</p>
-                <p className="text-[10px] uppercase tracking-wide text-orange-700/70 mt-0.5">Atrasos</p>
-              </div>
-              <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 text-center">
-                <p className="text-2xl font-serif font-bold text-amber-600">{presencaMes.justificou}</p>
-                <p className="text-[10px] uppercase tracking-wide text-amber-700/70 mt-0.5">Justificadas</p>
-              </div>
-            </div>
-            {presencaMes.total > 0 && (
-              <div className="mt-3 flex items-center gap-2">
-                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-green-500"
-                    style={{ width: `${Math.round((presencaMes.presente / presencaMes.total) * 100)}%` }}
-                  />
-                </div>
-                <span className="text-xs font-semibold text-green-600 shrink-0">
-                  {Math.round((presencaMes.presente / presencaMes.total) * 100)}% presença
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Membros por atuação */}
-        {memberStats && memberStats.byPastoral.length > 0 && (
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Membros por atuação</p>
-            </div>
-            <div className="space-y-2">
-              {memberStats.byPastoral.slice(0, 6).map((p: { nome: string; membros: number; cor: string }) => (
-                <div key={p.nome} className="flex items-center gap-2.5">
-                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.cor ?? "#6B7280" }} />
-                  <span className="text-sm flex-1 truncate text-foreground/80">{p.nome}</span>
-                  <span className="text-sm font-semibold tabular-nums">{p.membros}</span>
-                </div>
-              ))}
-              <div className="pt-1 border-t border-border/50 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Total ativo</span>
-                <span className="text-sm font-bold">{totalMembros}</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Próximas 7 celebrações com vagas ── */}
+      {/* ── Próximas celebrações ── */}
       {proximasCelebracoes.length > 0 && (
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
           <div className="flex items-center justify-between gap-2 px-5 py-4 border-b border-border">
@@ -1531,363 +1395,314 @@ function DashboardPage() {
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[2.2fr_1fr]">
-        <div className="space-y-4">
-          {/* ── Agenda Pastoral (escalas + eventos unificados) ── */}
-          <div className="rounded-3xl border border-border bg-card shadow-altar overflow-hidden min-w-0">
-            <div className="flex items-center justify-between gap-2 p-4 sm:p-5 border-b border-border">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Agenda Pastoral</p>
-                <h2 className="mt-1 font-serif text-lg sm:text-xl leading-snug">Próximas escalas e eventos</h2>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button variant="ghost" size="sm" className="h-8 text-xs px-2" asChild>
-                  <Link to="/formacoes" search={{}}>Agenda <ChevronRight className="h-3 w-3 ml-0.5" /></Link>
-                </Button>
-                <Button variant="ghost" size="sm" className="h-8 text-xs px-2" asChild>
-                  <Link to="/escalas" search={{}}>Escalas <ChevronRight className="h-3 w-3 ml-0.5" /></Link>
-                </Button>
-              </div>
+      {/* ── Saúde da pastoral ── */}
+      <div className="rounded-3xl border border-border bg-card shadow-altar p-5">
+        <div className="mb-4">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground font-semibold">Saúde da pastoral</p>
+          <p className="mt-0.5 text-xs text-muted-foreground/70">Índice composto das últimas 4 semanas</p>
+        </div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-3">
+              <span className={`text-5xl font-serif ${saudePastoral.color}`}>{saudePastoral.score}</span>
+              <span className="text-muted-foreground text-sm">/100</span>
+              <span className={`text-sm font-semibold ${saudePastoral.color}`}>{saudePastoral.label}</span>
             </div>
-
-            {agendaItems.length === 0 ? (
-              <div className="p-8 text-center">
-                <CalendarRange className="h-6 w-6 mx-auto text-muted-foreground" />
-                <p className="mt-3 text-sm text-muted-foreground">Nenhum evento ou escala nas próximas duas semanas.</p>
-              </div>
-            ) : (() => {
-              const dateGroups = new Map<string, AgendaEvent[]>();
-              agendaItems.forEach((ev) => {
-                const list = dateGroups.get(ev.data) ?? [];
-                list.push(ev);
-                dateGroups.set(ev.data, list);
-              });
-              const grouped = Array.from(dateGroups.entries()).sort(([a], [b]) => a.localeCompare(b));
-              return (
-                <div className="divide-y divide-border/60">
-                  {grouped.map(([date, items]) => {
-                    const d = new Date(date + "T00:00:00");
-                    const isToday = format(d, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
-                    return (
-                      <div key={date} className={`px-4 py-3 ${isToday ? "bg-primary/3" : ""}`}>
-                        <p className={`text-[11px] font-bold uppercase tracking-[0.2em] mb-2.5 ${isToday ? "text-primary" : "text-muted-foreground"}`}>
-                          {isToday ? "Hoje — " : ""}{format(d, "EEE, d 'de' MMM", { locale: ptBR })}
-                        </p>
-                        <div className="space-y-2">
-                          {items.map((ev) => {
-                            const escalaStatus = ev.status ? (STATUS_CONFIG[ev.status] ?? STATUS_CONFIG.rascunho) : null;
-                            return (
-                              <div key={ev.id} className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background px-3 py-2.5 min-w-0 overflow-hidden">
-                                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: ev.cor }} />
-                                <div className="flex-1 min-w-0 overflow-hidden">
-                                  <p className="text-sm font-medium truncate leading-snug">{ev.titulo}</p>
-                                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                                    {ev.hora ? ev.hora.slice(0,5) : ""}
-                                    {ev.local ? (ev.hora ? ` · ${ev.local}` : ev.local) : ""}
-                                  </p>
-                                </div>
-                                {ev.tipo === "Escala" && escalaStatus ? (
-                                  <Badge variant={escalaStatus.variant} className="text-[10px] uppercase shrink-0 max-w-[80px] truncate">
-                                    {escalaStatus.label}
-                                  </Badge>
-                                ) : (
-                                  <span className="inline-flex rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-blue-600 shrink-0">
-                                    {ev.tipo}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+            <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden w-full max-w-xs">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${saudePastoral.barColor}`}
+                style={{ width: `${saudePastoral.score}%` }}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted-foreground mt-3 sm:mt-0 shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <span>Preenchimento</span>
+              <span className="font-semibold text-foreground">{saudePastoral.compPreenchimento}%</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span>Atividade</span>
+              <span className="font-semibold text-foreground">{saudePastoral.compAtividade}%</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span>Publicação</span>
+              <span className="font-semibold text-foreground">{saudePastoral.compPublicacao}%</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span>Conflitos</span>
+              <span className="font-semibold text-foreground">{saudePastoral.compConflitos}%</span>
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="space-y-4">
+      {/* ── Seção secundária (lazy) ── */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowSecondary((v) => !v)}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl border border-border/60 bg-card px-4 py-3 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted/30 transition"
+        >
+          {showSecondary ? "Ocultar estatísticas" : "Ver estatísticas detalhadas"}
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showSecondary ? "rotate-180" : ""}`} />
+        </button>
 
-          {/* ── Homilia do Dia ── */}
-          <div className="rounded-2xl border border-border bg-card overflow-hidden">
-            {homiliaRecente ? (
-              <>
-                {/* Player / Thumbnail */}
-                <div className="relative aspect-video w-full bg-black">
-                  {homiliaPlayerAberto ? (
-                    <iframe
-                      src={`https://www.youtube.com/embed/${homiliaRecente.video_id}?autoplay=1&rel=0&modestbranding=1`}
-                      title={homiliaRecente.titulo}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      className="absolute inset-0 w-full h-full"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <>
-                      {homiliaRecente.thumbnail_url ? (
-                        <img
-                          src={homiliaRecente.thumbnail_url}
-                          alt={homiliaRecente.titulo}
-                          className="absolute inset-0 w-full h-full object-cover"
-                          loading="lazy"
+        {showSecondary && (
+          <div className="mt-4 space-y-4">
+
+            {/* Presença do mês + Membros por atuação */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {presencaMes && (
+                <div className="rounded-2xl border border-border bg-card p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Presença do mês</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-green-500/10 border border-green-500/20 px-3 py-2.5 text-center">
+                      <p className="text-2xl font-serif font-bold text-green-600">{presencaMes.presente}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-green-700/70 mt-0.5">Presentes</p>
+                    </div>
+                    <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-center">
+                      <p className="text-2xl font-serif font-bold text-red-600">{presencaMes.faltou}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-red-700/70 mt-0.5">Faltas</p>
+                    </div>
+                    <div className="rounded-xl bg-orange-500/10 border border-orange-500/20 px-3 py-2.5 text-center">
+                      <p className="text-2xl font-serif font-bold text-orange-600">{presencaMes.atraso}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-orange-700/70 mt-0.5">Atrasos</p>
+                    </div>
+                    <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 text-center">
+                      <p className="text-2xl font-serif font-bold text-amber-600">{presencaMes.justificou}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-amber-700/70 mt-0.5">Justificadas</p>
+                    </div>
+                  </div>
+                  {presencaMes.total > 0 && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-green-500"
+                          style={{ width: `${Math.round((presencaMes.presente / presencaMes.total) * 100)}%` }}
                         />
-                      ) : (
-                        <div className="absolute inset-0 bg-muted" />
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setHomiliaPlayerAberto(true)}
-                        className="absolute inset-0 flex items-center justify-center bg-black/25 hover:bg-black/35 transition-colors w-full"
-                        aria-label="Assistir homilia"
-                      >
-                        <div className="h-14 w-14 rounded-full bg-red-600 flex items-center justify-center shadow-xl hover:scale-105 transition-transform">
-                          <Play className="h-6 w-6 text-white ml-1" />
-                        </div>
-                      </button>
-                      <div className="absolute bottom-3 left-3 pointer-events-none">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] bg-black/60 text-white px-2.5 py-1 rounded-full backdrop-blur-sm">
-                          {homiliaEHoje ? "Homilia do dia" : "Homilia recente"}
-                        </span>
                       </div>
-                      {!homiliaEHoje && (
-                        <div className="absolute bottom-3 right-3 pointer-events-none">
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/90 text-white backdrop-blur-sm">
-                            {format(new Date(homiliaRecente.data + "T12:00:00"), "d/MM", { locale: ptBR })}
-                          </span>
-                        </div>
-                      )}
-                    </>
+                      <span className="text-xs font-semibold text-green-600 shrink-0">
+                        {Math.round((presencaMes.presente / presencaMes.total) * 100)}% presença
+                      </span>
+                    </div>
                   )}
                 </div>
-                {/* Info */}
-                <div className="px-4 pt-3 pb-3.5 flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 mb-0.5">
-                      {homiliaRecente.titulo}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {homiliaRecente.autor ?? "Pe. Paulo Ricardo"}
-                    </p>
+              )}
+              {memberStats && memberStats.byPastoral.length > 0 && (
+                <div className="rounded-2xl border border-border bg-card p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Membros por atuação</p>
                   </div>
-                  <Link
-                    to="/espiritualidade"
-                    className="shrink-0 text-[10px] font-semibold text-primary hover:underline whitespace-nowrap mt-0.5"
-                  >
-                    Ver mais →
-                  </Link>
+                  <div className="space-y-2">
+                    {memberStats.byPastoral.slice(0, 6).map((p: { nome: string; membros: number; cor: string }) => (
+                      <div key={p.nome} className="flex items-center gap-2.5">
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.cor ?? "#6B7280" }} />
+                        <span className="text-sm flex-1 truncate text-foreground/80">{p.nome}</span>
+                        <span className="text-sm font-semibold tabular-nums">{p.membros}</span>
+                      </div>
+                    ))}
+                    <div className="pt-1 border-t border-border/50 flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Total ativo</span>
+                      <span className="text-sm font-bold">{totalMembros}</span>
+                    </div>
+                  </div>
                 </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-3 px-4 py-4">
-                <div className="h-10 w-10 rounded-xl bg-red-600/20 flex items-center justify-center shrink-0">
-                  <Play className="h-4 w-4 text-red-600 ml-0.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-foreground">Homilia do Dia</p>
-                  <p className="text-[11px] text-muted-foreground">Homilia ainda não disponível</p>
-                </div>
-                <Link to="/espiritualidade" className="text-[10px] font-semibold text-primary hover:underline shrink-0">
-                  Ver mais →
-                </Link>
-              </div>
-            )}
-          </div>
-
-          <InsightsPanel
-            membrosOciosos={membrosOciosos}
-            membrosNovos={membrosNovos}
-            conflitos={conflitos}
-            escalasIncompletas={escalasIncompletas}
-            escalasPresencaPendente={escalasPresencaPendente}
-            membrosSemFuncao={membrosSemFuncao}
-            funcoesSemMembros={funcaoDistrib.filter((f) => f.membros === 0)}
-            alertasLiturgicos={alertasLiturgicos}
-            onSugerirSubstituto={setSubstituicaoTarget}
-          />
-
-          <div className="rounded-3xl border border-border bg-card shadow-altar p-5">
-            <div className="mb-4 flex items-center gap-3">
-              <Cake className="h-5 w-5 text-pink-500 shrink-0" />
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Aniversariantes</p>
-              {aniversariantesHoje.length > 0 && (
-                <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-full bg-pink-500 text-white text-[10px] font-bold">
-                  {aniversariantesHoje.length}
-                </span>
               )}
             </div>
-            <Tabs value={anivTab} onValueChange={(v) => setAnivTab(v as typeof anivTab)}>
-              <TabsList className="w-full mb-4">
-                <TabsTrigger value="hoje" className="flex-1 text-xs">
-                  Hoje{aniversariantesHoje.length > 0 ? ` (${aniversariantesHoje.length})` : ""}
-                </TabsTrigger>
-                <TabsTrigger value="semana" className="flex-1 text-xs">
-                  Semana{aniversariantesSemana.length > 0 ? ` (${aniversariantesSemana.length})` : ""}
-                </TabsTrigger>
-                <TabsTrigger value="mes" className="flex-1 text-xs">
-                  Mês{aniversariantes.length > 0 ? ` (${aniversariantes.length})` : ""}
-                </TabsTrigger>
-              </TabsList>
 
-              {(["hoje", "semana", "mes"] as const).map((tab) => {
-                const lista =
-                  tab === "hoje"   ? aniversariantesHoje :
-                  tab === "semana" ? aniversariantesSemana :
-                  aniversariantes;
+            {/* Agenda Pastoral */}
+            <div className="rounded-3xl border border-border bg-card shadow-altar overflow-hidden min-w-0">
+              <div className="flex items-center justify-between gap-2 p-4 sm:p-5 border-b border-border">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Agenda Pastoral</p>
+                  <h2 className="mt-1 font-serif text-lg sm:text-xl leading-snug">Próximas escalas e eventos</h2>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="sm" className="h-8 text-xs px-2" asChild>
+                    <Link to="/formacoes" search={{}}>Agenda <ChevronRight className="h-3 w-3 ml-0.5" /></Link>
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs px-2" asChild>
+                    <Link to="/escalas" search={{}}>Escalas <ChevronRight className="h-3 w-3 ml-0.5" /></Link>
+                  </Button>
+                </div>
+              </div>
+              {agendaItems.length === 0 ? (
+                <div className="p-8 text-center">
+                  <CalendarRange className="h-6 w-6 mx-auto text-muted-foreground" />
+                  <p className="mt-3 text-sm text-muted-foreground">Nenhum evento ou escala nas próximas duas semanas.</p>
+                </div>
+              ) : (() => {
+                const dateGroups = new Map<string, AgendaEvent[]>();
+                agendaItems.forEach((ev) => {
+                  const list = dateGroups.get(ev.data) ?? [];
+                  list.push(ev);
+                  dateGroups.set(ev.data, list);
+                });
+                const grouped = Array.from(dateGroups.entries()).sort(([a], [b]) => a.localeCompare(b));
                 return (
-                  <TabsContent key={tab} value={tab} className="mt-0 space-y-2">
-                    {lista.length === 0 ? (
-                      <p className="py-4 text-center text-sm text-muted-foreground">
-                        {tab === "hoje"   ? "Nenhum aniversariante hoje." :
-                         tab === "semana" ? "Nenhum aniversariante esta semana." :
-                         "Nenhum aniversariante este mês."}
-                      </p>
-                    ) : (
-                      lista.slice(0, 5).map((m) => {
-                        const dia = new Date(m.data_nascimento + "T12:00:00").getDate();
-                        const mes = new Date(m.data_nascimento + "T12:00:00").toLocaleString("pt-BR", { month: "short" });
-                        return (
-                          <div
-                            key={m.id}
-                            className="flex items-center justify-between rounded-3xl border border-border bg-background px-4 py-3"
-                          >
-                            <p className="font-medium truncate text-sm">{m.nome}</p>
-                            <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                              {tab === "mes" ? `${dia} ${mes}` : `Dia ${dia}`}
-                            </span>
+                  <div className="divide-y divide-border/60">
+                    {grouped.map(([date, items]) => {
+                      const d = new Date(date + "T00:00:00");
+                      const isToday = format(d, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
+                      return (
+                        <div key={date} className={`px-4 py-3 ${isToday ? "bg-primary/3" : ""}`}>
+                          <p className={`text-[11px] font-bold uppercase tracking-[0.2em] mb-2.5 ${isToday ? "text-primary" : "text-muted-foreground"}`}>
+                            {isToday ? "Hoje — " : ""}{format(d, "EEE, d 'de' MMM", { locale: ptBR })}
+                          </p>
+                          <div className="space-y-2">
+                            {items.map((ev) => {
+                              const escalaStatus = ev.status ? (STATUS_CONFIG[ev.status] ?? STATUS_CONFIG.rascunho) : null;
+                              return (
+                                <div key={ev.id} className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background px-3 py-2.5 min-w-0 overflow-hidden">
+                                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: ev.cor }} />
+                                  <div className="flex-1 min-w-0 overflow-hidden">
+                                    <p className="text-sm font-medium truncate leading-snug">{ev.titulo}</p>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                                      {ev.hora ? ev.hora.slice(0,5) : ""}
+                                      {ev.local ? (ev.hora ? ` · ${ev.local}` : ev.local) : ""}
+                                    </p>
+                                  </div>
+                                  {ev.tipo === "Escala" && escalaStatus ? (
+                                    <Badge variant={escalaStatus.variant} className="text-[10px] uppercase shrink-0 max-w-[80px] truncate">
+                                      {escalaStatus.label}
+                                    </Badge>
+                                  ) : (
+                                    <span className="inline-flex rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-blue-600 shrink-0">
+                                      {ev.tipo}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })
-                    )}
-                  </TabsContent>
+                        </div>
+                      );
+                    })}
+                  </div>
                 );
-              })}
-            </Tabs>
+              })()}
+            </div>
+
+            {/* Ranking + Distribuição de funções */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
+                <h2 className="font-serif text-lg mb-1">Participação por membro</h2>
+                <p className="text-xs text-muted-foreground mb-5">Top 10 servidores por pontuação acumulada</p>
+                {topMembros.length === 0 ? (
+                  <div className="flex items-center justify-center h-40">
+                    <p className="text-sm text-muted-foreground">Sem dados de participação ainda.</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={topMembros} layout="vertical" margin={{ left: 8, right: 24, top: 0, bottom: 0 }}>
+                      <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                      <YAxis type="category" dataKey="nome" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={72} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
+                      <Bar dataKey="score" radius={[0, 4, 4, 0]} name="Score">
+                        {topMembros.map((_, i) => (
+                          <Cell key={i} fill={i === 0 ? "hsl(var(--primary))" : `hsl(var(--primary) / ${Math.max(0.25, 1 - i * 0.08)})`} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
+                <h2 className="font-serif text-lg mb-1">Distribuição de funções</h2>
+                <p className="text-xs text-muted-foreground mb-5">Membros atribuídos por função litúrgica</p>
+                {funcaoDistrib.length === 0 ? (
+                  <div className="flex items-center justify-center h-40">
+                    <p className="text-sm text-muted-foreground">Nenhuma função configurada ainda.</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={funcaoDistrib} margin={{ left: 0, right: 8, top: 0, bottom: 32 }}>
+                      <XAxis dataKey="nome" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" interval={0} />
+                      <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
+                      <Bar dataKey="membros" radius={[4, 4, 0, 0]} name="Membros">
+                        {funcaoDistrib.map((entry, i) => (
+                          <Cell key={i} fill={entry.cor ?? "hsl(var(--primary))"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            {/* Insights + Aniversariantes */}
+            <div className="grid gap-6 xl:grid-cols-2">
+              <InsightsPanel
+                membrosOciosos={membrosOciosos}
+                membrosNovos={membrosNovos}
+                conflitos={conflitos}
+                escalasIncompletas={escalasIncompletas}
+                escalasPresencaPendente={escalasPresencaPendente}
+                membrosSemFuncao={membrosSemFuncao}
+                funcoesSemMembros={funcaoDistrib.filter((f) => f.membros === 0)}
+                alertasLiturgicos={alertasLiturgicos}
+                onSugerirSubstituto={setSubstituicaoTarget}
+              />
+
+              <div className="rounded-3xl border border-border bg-card shadow-altar p-5">
+                <div className="mb-4 flex items-center gap-3">
+                  <Cake className="h-5 w-5 text-pink-500 shrink-0" />
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Aniversariantes</p>
+                  {aniversariantesHoje.length > 0 && (
+                    <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-full bg-pink-500 text-white text-[10px] font-bold">
+                      {aniversariantesHoje.length}
+                    </span>
+                  )}
+                </div>
+                <Tabs value={anivTab} onValueChange={(v) => setAnivTab(v as typeof anivTab)}>
+                  <TabsList className="w-full mb-4">
+                    <TabsTrigger value="hoje" className="flex-1 text-xs">
+                      Hoje{aniversariantesHoje.length > 0 ? ` (${aniversariantesHoje.length})` : ""}
+                    </TabsTrigger>
+                    <TabsTrigger value="semana" className="flex-1 text-xs">
+                      Semana{aniversariantesSemana.length > 0 ? ` (${aniversariantesSemana.length})` : ""}
+                    </TabsTrigger>
+                    <TabsTrigger value="mes" className="flex-1 text-xs">
+                      Mês{aniversariantes.length > 0 ? ` (${aniversariantes.length})` : ""}
+                    </TabsTrigger>
+                  </TabsList>
+                  {(["hoje", "semana", "mes"] as const).map((tab) => {
+                    const lista = tab === "hoje" ? aniversariantesHoje : tab === "semana" ? aniversariantesSemana : aniversariantes;
+                    return (
+                      <TabsContent key={tab} value={tab} className="mt-0 space-y-2">
+                        {lista.length === 0 ? (
+                          <p className="py-4 text-center text-sm text-muted-foreground">
+                            {tab === "hoje" ? "Nenhum aniversariante hoje." : tab === "semana" ? "Nenhum aniversariante esta semana." : "Nenhum aniversariante este mês."}
+                          </p>
+                        ) : (
+                          lista.slice(0, 5).map((m) => {
+                            const dia = new Date(m.data_nascimento + "T12:00:00").getDate();
+                            const mes = new Date(m.data_nascimento + "T12:00:00").toLocaleString("pt-BR", { month: "short" });
+                            return (
+                              <div key={m.id} className="flex items-center justify-between rounded-3xl border border-border bg-background px-4 py-3">
+                                <p className="font-medium truncate text-sm">{m.nome}</p>
+                                <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                                  {tab === "mes" ? `${dia} ${mes}` : `Dia ${dia}`}
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
+              </div>
+            </div>
+
           </div>
-        </div>
+        )}
       </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
-          <h2 className="font-serif text-lg mb-1">Participação por membro</h2>
-          <p className="text-xs text-muted-foreground mb-5">Top 10 servidores por pontuação acumulada</p>
-          {topMembros.length === 0 ? (
-            <div className="flex items-center justify-center h-40">
-              <p className="text-sm text-muted-foreground">Sem dados de participação ainda.</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={topMembros} layout="vertical" margin={{ left: 8, right: 24, top: 0, bottom: 0 }}>
-                <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis
-                  type="category"
-                  dataKey="nome"
-                  tick={{ fontSize: 12 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={72}
-                />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
-                <Bar dataKey="score" radius={[0, 4, 4, 0]} name="Score">
-                  {topMembros.map((_, i) => (
-                    <Cell
-                      key={i}
-                      fill={i === 0 ? "hsl(var(--primary))" : `hsl(var(--primary) / ${Math.max(0.25, 1 - i * 0.08)})`}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
-          <h2 className="font-serif text-lg mb-1">Distribuição de funções</h2>
-          <p className="text-xs text-muted-foreground mb-5">Membros atribuídos por função litúrgica</p>
-          {funcaoDistrib.length === 0 ? (
-            <div className="flex items-center justify-center h-40">
-              <p className="text-sm text-muted-foreground">Nenhuma função configurada ainda.</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={funcaoDistrib} margin={{ left: 0, right: 8, top: 0, bottom: 32 }}>
-                <XAxis
-                  dataKey="nome"
-                  tick={{ fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={false}
-                  angle={-30}
-                  textAnchor="end"
-                  interval={0}
-                />
-                <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
-                <Bar dataKey="membros" radius={[4, 4, 0, 0]} name="Membros">
-                  {funcaoDistrib.map((entry, i) => (
-                    <Cell key={i} fill={entry.cor ?? "hsl(var(--primary))"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      {/* ── Gráficos pastorais: sexo, faixa etária, pastoral ── */}
-      {memberStats && (memberStats.bySex.length > 0 || memberStats.byAge.length > 0 || memberStats.byPastoral.length > 0) && (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {memberStats.bySex.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
-              <h2 className="font-serif text-lg mb-1">Membros por sexo</h2>
-              <p className="text-xs text-muted-foreground mb-5">Distribuição de membros ativos</p>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={memberStats.bySex} margin={{ left: 0, right: 8, top: 0, bottom: 0 }}>
-                  <XAxis dataKey="nome" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
-                  <Bar dataKey="membros" radius={[4, 4, 0, 0]} name="Membros">
-                    {memberStats.bySex.map((entry, i) => <Cell key={i} fill={entry.cor} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          {memberStats.byAge.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
-              <h2 className="font-serif text-lg mb-1">Faixa etária</h2>
-              <p className="text-xs text-muted-foreground mb-5">Membros ativos com data de nascimento informada</p>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={memberStats.byAge} margin={{ left: 0, right: 8, top: 0, bottom: 0 }}>
-                  <XAxis dataKey="nome" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
-                  <Bar dataKey="membros" radius={[4, 4, 0, 0]} name="Membros">
-                    {memberStats.byAge.map((_, i) => <Cell key={i} fill={`hsl(var(--primary) / ${Math.max(0.4, 1 - i * 0.1)})`} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          {memberStats.byPastoral.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card shadow-sm p-5">
-              <h2 className="font-serif text-lg mb-1">Membros por pastoral</h2>
-              <p className="text-xs text-muted-foreground mb-5">Membros ativos em cada pastoral</p>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={memberStats.byPastoral} margin={{ left: 0, right: 8, top: 0, bottom: 32 }}>
-                  <XAxis dataKey="nome" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" interval={0} />
-                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
-                  <Bar dataKey="membros" radius={[4, 4, 0, 0]} name="Membros">
-                    {memberStats.byPastoral.map((entry: { cor: string }, i: number) => <Cell key={i} fill={entry.cor ?? "hsl(var(--primary))"} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Dialog Consigo Servir ─────────────────────────────────────────── */}
       <Dialog open={!!candidaturaTarget} onOpenChange={(o) => { if (!o) setCandidaturaTarget(null); }}>
