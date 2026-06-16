@@ -5,7 +5,7 @@ import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   CheckCircle2, XCircle, Clock, MapPin, Users, Loader2, FileText,
-  AlertCircle,
+  AlertCircle, TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -72,8 +72,8 @@ function SacristiaPage() {
     },
   });
 
-  // Busca escalas dos últimos 30 dias + hoje
-  const desde = format(subDays(new Date(), 30), "yyyy-MM-dd");
+  // Busca escalas dos últimos 90 dias + hoje
+  const desde = format(subDays(new Date(), 90), "yyyy-MM-dd");
 
   const { data: todasEscalas = [], isLoading } = useQuery<EscalaItem[]>({
     queryKey: ["sacristia-todas", profile?.paroquia_id, hojeStr],
@@ -141,6 +141,19 @@ function SacristiaPage() {
     return { pendentes, em_andamento, concluidas };
   }, [todasEscalas, membrosEscala, hojeStr]);
 
+  const concluidasIds = useMemo(() => new Set(concluidas.map((e) => e.id)), [concluidas]);
+
+  const historicoStats = useMemo(() => {
+    const mc = membrosEscala.filter((m) => concluidasIds.has(m.escala_id));
+    const presentes  = mc.filter((m) => m.status === "presente").length;
+    const atrasados  = mc.filter((m) => m.status === "atrasado").length;
+    const justificou = mc.filter((m) => m.status === "justificou").length;
+    const faltou     = mc.filter((m) => m.status === "faltou").length;
+    const total      = mc.length;
+    const taxa = total > 0 ? Math.round(((presentes + atrasados + justificou) / total) * 100) : 0;
+    return { presentes, atrasados, justificou, faltou, total, taxa, escalas: concluidas.length };
+  }, [membrosEscala, concluidasIds, concluidas]);
+
   // Filtro para auxiliares
   function filtrarParaUsuario(escalas: EscalaItem[]) {
     if (!isAdministrador || !meupMembroId || membrosEscala.length === 0) return escalas;
@@ -203,13 +216,12 @@ function SacristiaPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-2xl mx-auto pb-24">
-      {/* Abas do módulo Escalas — Sacristia como sub-aba operacional */}
+      {/* Abas do módulo Escalas — Sacristia como central operacional */}
       <ModuleTabBar tabs={[
-        { label: "Escalas",      to: "/escalas",       isActive: false },
-        { label: "Sacristia",    onClick: () => {},     isActive: true  },
-        { label: "Histórico",    to: "/escalas?view=historico", isActive: false },
-        { label: "Indisponib.", to: "/escalas?view=indisponibilidades", isActive: false },
-        { label: "Substituições", to: "/substituicoes", isActive: false },
+        { label: "Escalas",       to: "/escalas",                         isActive: false },
+        { label: "Sacristia",     onClick: () => {},                      isActive: true  },
+        { label: "Indisponib.",   to: "/escalas?view=indisponibilidades", isActive: false },
+        { label: "Substituições", to: "/substituicoes",                   isActive: false },
       ]} />
 
       {/* Sub-abas da Sacristia */}
@@ -259,11 +271,39 @@ function SacristiaPage() {
           <p className="mt-4 text-sm text-muted-foreground">
             {tab === "pendentes" && "Nenhuma missa aguardando conferência."}
             {tab === "em_andamento" && "Nenhuma missa em andamento."}
-            {tab === "concluidas" && "Nenhuma missa concluída nos últimos 30 dias."}
+            {tab === "concluidas" && "Nenhuma missa concluída nos últimos 90 dias."}
           </p>
         </div>
       ) : (
         <div className="space-y-5">
+          {tab === "concluidas" && historicoStats.escalas > 0 && (
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Resumo — últimos 90 dias
+                </p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-emerald-600">{historicoStats.taxa}%</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Comparecimento</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{historicoStats.escalas}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Escalas</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-emerald-600">{historicoStats.presentes + historicoStats.atrasados + historicoStats.justificou}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Presentes</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-red-500">{historicoStats.faltou}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Faltas</p>
+                </div>
+              </div>
+            </div>
+          )}
           {escalasExibidas.map((escala) => {
             const membros = membrosEscala.filter((m: any) => m.escala_id === escala.id);
             const finais = membros.filter((m: MembroEscala) => {

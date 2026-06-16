@@ -184,11 +184,10 @@ function AdminSubstituicoes() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 lg:px-6 space-y-6 pb-10">
       <ModuleTabBar tabs={[
-        { label: "Escalas",          to: "/escalas",                         isActive: false },
-        { label: "Sacristia",        to: "/sacristia",                       isActive: false },
-        { label: "Histórico",        to: "/escalas?view=historico",          isActive: false },
-        { label: "Indisponib.",      to: "/escalas?view=indisponibilidades", isActive: false },
-        { label: "Substituições",    to: "/substituicoes",                   isActive: true  },
+        { label: "Escalas",         to: "/escalas",                         isActive: false },
+        { label: "Sacristia",       to: "/sacristia",                       isActive: false },
+        { label: "Indisponib.",     to: "/escalas?view=indisponibilidades", isActive: false },
+        { label: "Substituições",   to: "/substituicoes",                   isActive: true  },
       ]} />
 
       {/* Header */}

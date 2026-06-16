@@ -237,7 +237,7 @@ function MultiCheck({
       <div className="space-y-1.5">
         <Label className="text-sm font-medium">{label}</Label>
         <p className="text-xs text-muted-foreground italic">
-          {emptyMsg ?? "Nenhum item disponível. Cadastre em Personalização."}
+          {emptyMsg ?? "Nenhum item disponível. Cadastre em Geral."}
         </p>
       </div>
     );
@@ -516,7 +516,7 @@ function MemberForm({
         {/* Checklist de missas padrão que o membro não consegue servir */}
         {missasPadrao.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">
-            Nenhuma missa padrão cadastrada em Personalização. Cadastre os horários para indicar quais este membro não pode servir.
+            Nenhuma missa padrão cadastrada em Geral. Cadastre os horários para indicar quais este membro não pode servir.
           </p>
         ) : (
           <div className="space-y-1.5">
@@ -658,7 +658,7 @@ function MemberForm({
           items={atuacoes}
           selected={form.atuacao_ids}
           onToggle={(id) => toggleList("atuacao_ids", id)}
-          emptyMsg="Nenhuma atuação cadastrada. Crie em Personalização → Funções → Atuações Pastorais."
+          emptyMsg="Nenhuma atuação cadastrada. Crie em Geral → Funções → Atuações Pastorais."
         />
       </div>
 
@@ -675,7 +675,7 @@ function MemberForm({
           items={ministerios}
           selected={form.ministerio_ids}
           onToggle={(id) => toggleList("ministerio_ids", id)}
-          emptyMsg="Nenhuma função cadastrada. Crie em Personalização → Funções Litúrgicas."
+          emptyMsg="Nenhuma função cadastrada. Crie em Geral → Funções Litúrgicas."
         />
       </div>
 
@@ -2543,9 +2543,8 @@ function MembrosPage() {
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
       {/* Abas do módulo Membros */}
       <ModuleTabBar tabs={[
-        { label: "Membros",     to: "/membros",     isActive: true  },
-        { label: "Ranking",     to: "/ranking",     isActive: false },
-        { label: "Ocorrências", to: "/ocorrencias", isActive: false },
+        { label: "Membros", to: "/membros", isActive: true  },
+        { label: "Ranking", to: "/ranking", isActive: false },
       ]} />
 
       {/* Header */}

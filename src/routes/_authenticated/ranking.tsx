@@ -78,9 +78,8 @@ function AdminRanking() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <ModuleTabBar tabs={[
-        { label: "Membros",     to: "/membros",     isActive: false },
-        { label: "Ranking",     to: "/ranking",     isActive: true  },
-        { label: "Ocorrências", to: "/ocorrencias", isActive: false },
+        { label: "Membros", to: "/membros", isActive: false },
+        { label: "Ranking", to: "/ranking", isActive: true  },
       ]} />
       <div>
         <h1 className="font-serif text-2xl">Ranking de Servidores</h1>

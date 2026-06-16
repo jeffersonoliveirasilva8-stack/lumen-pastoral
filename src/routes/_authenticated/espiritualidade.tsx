@@ -154,7 +154,14 @@ function EspiritualidadePage() {
       qc.invalidateQueries({ queryKey: ["homilia-hoje"] });
       toast.success("Homilia sincronizada com sucesso.");
     },
-    onError: (e: Error) => toast.error("Erro ao sincronizar: " + e.message),
+    onError: (e: Error) => {
+      const isNetworkError = e.message.toLowerCase().includes("fetch") || e.message.toLowerCase().includes("network");
+      toast.error(
+        isNetworkError
+          ? "Edge function não disponível. Verifique se 'homilia-diaria' está publicada no Supabase."
+          : "Erro ao sincronizar: " + e.message
+      );
+    },
   });
 
   const cor  = liturgia?.cor ?? "verde";
@@ -169,7 +176,7 @@ function EspiritualidadePage() {
       <ModuleTabBar tabs={[
         { label: "Liturgia Diária",      onClick: () => setLitTab("dia"),            isActive: litTab === "dia" },
         { label: "Homilia",              onClick: () => setLitTab("homilia"),        isActive: litTab === "homilia" },
-        { label: "Calendário",           onClick: () => setLitTab("calendario"),     isActive: litTab === "calendario" },
+        { label: "Cal. Litúrgico",         onClick: () => setLitTab("calendario"),     isActive: litTab === "calendario" },
         { label: "Sincronização",        onClick: () => setLitTab("sincronizacao"),  isActive: litTab === "sincronizacao" },
       ]} />
 

@@ -205,7 +205,7 @@ function ConfiguracaoEscalas() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 lg:px-6 space-y-8 pb-10">
       <ModuleTabBar tabs={[
-        { label: "Personalização",       to: "/configuracoes/paroquia",        isActive: false },
+        { label: "Geral",                to: "/configuracoes/paroquia",        isActive: false },
         { label: "Regras da Escala",     to: "/configuracoes-escalas",         isActive: true  },
         { label: "Coordenação",          to: "/configuracoes/administradores", isActive: false },
         { label: "Atividade do Sistema", to: "/auditoria",                     isActive: false },

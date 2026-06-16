@@ -55,7 +55,7 @@ function logDbError(context: string, error: unknown) {
 
 export const Route = createFileRoute("/_authenticated/configuracoes/paroquia")({
   component: PersonalizacaoPage,
-  head: () => ({ meta: [{ title: "Personalização — Lumen Pastoral" }] }),
+  head: () => ({ meta: [{ title: "Geral — Lumen Pastoral" }] }),
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -422,7 +422,7 @@ function PersonalizacaoPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto pb-24">
       <ModuleTabBar tabs={[
-        { label: "Personalização",       to: "/configuracoes/paroquia",        isActive: true  },
+        { label: "Geral",                to: "/configuracoes/paroquia",        isActive: true  },
         { label: "Regras da Escala",     to: "/configuracoes-escalas",         isActive: false },
         { label: "Coordenação",          to: "/configuracoes/administradores", isActive: false },
         { label: "Atividade do Sistema", to: "/auditoria",                     isActive: false },
@@ -436,7 +436,7 @@ function PersonalizacaoPage() {
             className="mb-5 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition"
           >
             <ChevronLeft className="h-4 w-4" />
-            Personalização
+            Geral
           </button>
           <div className="mb-5 pb-4 border-b border-border/60">
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-medium">{activeItem?.label}</p>
@@ -452,7 +452,7 @@ function PersonalizacaoPage() {
           <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
             <div>
               <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-              <h1 className="mt-1.5 font-serif text-2xl">Personalização</h1>
+              <h1 className="mt-1.5 font-serif text-2xl">Geral</h1>
             </div>
             <Link
               to="/admin/liturgia"
@@ -501,7 +501,7 @@ function PersonalizacaoPage() {
         <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
           <div>
             <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-            <h1 className="mt-1.5 font-serif text-4xl">Personalização</h1>
+            <h1 className="mt-1.5 font-serif text-4xl">Geral</h1>
           </div>
           <Link
             to="/admin/liturgia"
@@ -2162,7 +2162,7 @@ function TipoMissaDialog({
               <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
             ) : ministerios.length === 0 ? (
               <p className="text-sm text-muted-foreground italic text-center py-4 rounded-lg border border-dashed border-border">
-                Cadastre Funções Litúrgicas em Personalização → Funções primeiro.
+                Cadastre Funções Litúrgicas em Geral → Funções primeiro.
               </p>
             ) : (
               <div className="space-y-1.5">
