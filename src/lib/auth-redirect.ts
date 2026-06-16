@@ -27,9 +27,7 @@ export type PostLoginRoute =
   | "/acesso-negado"
   | "/auth/admin-mfa";
 
-export async function getPostLoginRoute(
-  supabase: SupabaseClient,
-): Promise<PostLoginRoute> {
+async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return "/membro/login";
@@ -113,4 +111,14 @@ export async function getPostLoginRoute(
   } catch {
     return "/membro/login";
   }
+}
+
+/** Wrapper com timeout de 10s — nunca trava o login independente da velocidade da rede */
+export async function getPostLoginRoute(
+  supabase: SupabaseClient,
+): Promise<PostLoginRoute> {
+  const timeout = new Promise<PostLoginRoute>((resolve) =>
+    setTimeout(() => resolve("/membro/login"), 10_000),
+  );
+  return Promise.race([_resolveRoute(supabase), timeout]);
 }

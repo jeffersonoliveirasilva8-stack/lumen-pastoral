@@ -54,22 +54,23 @@ function LoginPage() {
     e.preventDefault();
     if (lockedUntil && Date.now() < lockedUntil) return;
     setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        recordFailedAttempt();
+        const isInvalidCreds = error.message === "Invalid login credentials"
+          || error.message.toLowerCase().includes("invalid login");
+        toast.error(isInvalidCreds ? "E-mail ou senha incorretos." : "Erro ao autenticar. Tente novamente.");
+        return;
+      }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
+      // getPostLoginRoute tem timeout de 10s internamente — nunca trava indefinidamente
+      const route = await getPostLoginRoute(supabase);
+      toast.success("Bem-vindo de volta.");
+      navigate({ to: route, replace: true });
+    } finally {
       setLoading(false);
-      recordFailedAttempt();
-      const isInvalidCreds = error.message === "Invalid login credentials"
-        || error.message.toLowerCase().includes("invalid login");
-      toast.error(isInvalidCreds ? "E-mail ou senha incorretos." : "Erro ao autenticar. Tente novamente.");
-      return;
     }
-
-    // Redireciona para o portal correto conforme role
-    const route = await getPostLoginRoute(supabase);
-    toast.success("Bem-vindo de volta.");
-    navigate({ to: route, replace: true });
-    setLoading(false);
   }
 
   return (

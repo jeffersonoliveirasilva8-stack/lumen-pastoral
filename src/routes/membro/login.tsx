@@ -19,27 +19,31 @@ function MembroLoginPage() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Timeout de segurança — se getSession demorar >4s em rede lenta, mostra o form
-    const timeout = setTimeout(() => setChecking(false), 4000);
+    // Timeout de segurança — se getSession OU getPostLoginRoute travar, mostra o form
+    const timeout = setTimeout(() => setChecking(false), 8000);
 
     // Listener para capturar tokens processados assincronamente (magic link implicit flow)
     // PASSWORD_RECOVERY é excluído: __root.tsx intercepta e redireciona para /reset-senha
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "PASSWORD_RECOVERY") return;
       if (session?.user) {
-        clearTimeout(timeout);
         const route = await getPostLoginRoute(supabase);
+        clearTimeout(timeout);
         navigate({ to: route, replace: true });
       }
     });
 
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
-        clearTimeout(timeout);
         if (session?.user) {
+          // Não cancela o timeout aqui — deixa ele correr caso getPostLoginRoute trave.
+          // Se o timeout disparar antes de getPostLoginRoute resolver, o form aparece
+          // e o navigate acontece logo em seguida (sem problema).
           const route = await getPostLoginRoute(supabase);
+          clearTimeout(timeout);
           navigate({ to: route, replace: true });
         } else {
+          clearTimeout(timeout);
           setChecking(false);
         }
       })
