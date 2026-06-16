@@ -5,7 +5,7 @@ import {
   Plus, Loader2, Calendar, List, ChevronLeft, ChevronRight, ChevronDown,
   MapPin, Clock, Trash2, Pencil, UserPlus, X, Check, Sparkles,
   MoreVertical, FileText, AlertTriangle, Users, ClipboardCheck,
-  CheckCircle2, XCircle, Church, History, Ban,
+  CheckCircle2, XCircle, Church, History, Ban, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths, addDays } from "date-fns";
@@ -647,20 +647,23 @@ function EscalasPage() {
       refetchAtribuicoes();
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
-      const membro = membros.find((m) => m.id === membro_id);
-      const min = ministerios.find((m) => m.id === ministerio_id);
-      if (membro?.email && detailEscala) {
-        supabase.functions.invoke("send-email", {
-          body: {
-            template: "escala_atribuida",
-            to: membro.email,
-            nome: membro.nome,
-            paroquia: paroquiaNome,
-            escalaTitulo: detailEscala.titulo,
-            escalaData: detailEscala.data,
-            ministerioNome: min?.nome ?? "",
-          },
-        });
+      // Email só quando a escala já está publicada — rascunho não notifica membros
+      if (detailEscala?.status === "publicada") {
+        const membro = membros.find((m) => m.id === membro_id);
+        const min = ministerios.find((m) => m.id === ministerio_id);
+        if (membro?.email) {
+          supabase.functions.invoke("send-email", {
+            body: {
+              template: "escala_atribuida",
+              to: membro.email,
+              nome: membro.nome,
+              paroquia: paroquiaNome,
+              escalaTitulo: detailEscala.titulo,
+              escalaData: detailEscala.data,
+              ministerioNome: min?.nome ?? "",
+            },
+          });
+        }
       }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
@@ -684,13 +687,42 @@ function EscalasPage() {
       const { error } = await supabase.from("escalas").update({ status }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: async (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["escalas"] });
       // Sincroniza com portal do membro quando status é alterado
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       setDetailEscala((prev) => prev ? { ...prev, status: vars.status } : prev);
       toast.success("Status da escala atualizado.");
+
+      // Ao publicar, envia e-mails a todos os membros já atribuídos
+      // (in-app notifications são feitas pelo trigger _trigger_escala_publicada_membros)
+      if (vars.status === "publicada") {
+        const escalaRef = escalas.find((e) => e.id === vars.id) ?? detailEscala;
+        if (escalaRef) {
+          const { data: atrib } = await (supabase as any)
+            .from("escala_membros")
+            .select("membro_id, ministerio_id")
+            .eq("escala_id", vars.id);
+          for (const a of (atrib ?? [])) {
+            const membro = membros.find((m: Membro) => m.id === a.membro_id);
+            const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
+            if (membro?.email) {
+              supabase.functions.invoke("send-email", {
+                body: {
+                  template: "escala_atribuida",
+                  to: membro.email,
+                  nome: membro.nome,
+                  paroquia: paroquiaNome,
+                  escalaTitulo: escalaRef.titulo,
+                  escalaData: escalaRef.data,
+                  ministerioNome: min?.nome ?? "",
+                },
+              });
+            }
+          }
+        }
+      }
     },
   });
 
@@ -2756,21 +2788,24 @@ function EscalaDetail({
       setGenerateNotice(null);
       setEngineInsights([]);
       setShowInsights(false);
-      for (const { membro_id, ministerio_id } of assignments) {
-        const membro = membros.find((m) => m.id === membro_id);
-        const min = ministerios.find((m) => m.id === ministerio_id);
-        if (membro?.email) {
-          supabase.functions.invoke("send-email", {
-            body: {
-              template: "escala_atribuida",
-              to: membro.email,
-              nome: membro.nome,
-              paroquia: paroquiaNome,
-              escalaTitulo: escala.titulo,
-              escalaData: escala.data,
-              ministerioNome: min?.nome ?? "",
-            },
-          });
+      // Emails só quando a escala já está publicada — rascunho não notifica membros
+      if (escala.status === "publicada") {
+        for (const { membro_id, ministerio_id } of assignments) {
+          const membro = membros.find((m) => m.id === membro_id);
+          const min = ministerios.find((m) => m.id === ministerio_id);
+          if (membro?.email) {
+            supabase.functions.invoke("send-email", {
+              body: {
+                template: "escala_atribuida",
+                to: membro.email,
+                nome: membro.nome,
+                paroquia: paroquiaNome,
+                escalaTitulo: escala.titulo,
+                escalaData: escala.data,
+                ministerioNome: min?.nome ?? "",
+              },
+            });
+          }
         }
       }
     },
@@ -2794,6 +2829,36 @@ function EscalaDetail({
       queryClient.invalidateQueries({ queryKey: ["pm-escalas"] });
       queryClient.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       toast.success("Presenças registradas.");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const reenviarMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await (supabase as any).rpc("reenviar_notificacoes_escala", { p_escala_id: escala.id });
+      if (error) throw error;
+      if (data?.ok === false) throw new Error(data.error ?? "Erro ao reenviar notificações.");
+    },
+    onSuccess: () => {
+      toast.success("Notificações reenviadas.");
+      // Envia emails a todos os membros atribuídos
+      for (const a of atribuicoes) {
+        const membro = membros.find((m) => m.id === a.membro_id);
+        const min = ministerios.find((m) => m.id === a.ministerio_id);
+        if (membro?.email) {
+          supabase.functions.invoke("send-email", {
+            body: {
+              template: "escala_atribuida",
+              to: membro.email,
+              nome: membro.nome,
+              paroquia: paroquiaNome,
+              escalaTitulo: escala.titulo,
+              escalaData: escala.data,
+              ministerioNome: min?.nome ?? "",
+            },
+          });
+        }
+      }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
@@ -3059,16 +3124,31 @@ function EscalaDetail({
             )}
             <div className="flex items-center justify-between pt-1">
               <Badge variant={cfg.variant}>{cfg.label}</Badge>
-              <Select value={escala.status} onValueChange={onStatusChange}>
-                <SelectTrigger className="h-7 text-xs w-auto">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="rascunho">Rascunho</SelectItem>
-                  <SelectItem value="publicada">Publicar</SelectItem>
-                  <SelectItem value="arquivada">Arquivar</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                {escala.status === "publicada" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                    disabled={reenviarMutation.isPending}
+                    onClick={() => reenviarMutation.mutate()}
+                    title="Reenviar notificações e e-mails a todos os membros escalados"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${reenviarMutation.isPending ? "animate-spin" : ""}`} />
+                    <span className="hidden sm:inline">Reenviar</span>
+                  </Button>
+                )}
+                <Select value={escala.status} onValueChange={onStatusChange}>
+                  <SelectTrigger className="h-7 text-xs w-auto">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="rascunho">Rascunho</SelectItem>
+                    <SelectItem value="publicada">Publicar</SelectItem>
+                    <SelectItem value="arquivada">Arquivar</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {publicUrl && (
               <div className="mt-3 rounded-xl border border-border bg-background p-3 text-sm text-muted-foreground break-all">
