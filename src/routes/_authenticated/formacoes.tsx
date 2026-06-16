@@ -123,6 +123,7 @@ function AgendaPastoralPage() {
   const pid = profile?.paroquia_id;
   const qc = useQueryClient();
 
+  const [view, setView]                 = useState<"agenda" | "formacoes">("agenda");
   const [formOpen, setFormOpen]         = useState(false);
   const [editTarget, setEditTarget]     = useState<Evento | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Evento | null>(null);
@@ -249,82 +250,96 @@ function AgendaPastoralPage() {
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-6 pb-24 lg:pb-10">
       {/* Abas do módulo Pastoral */}
       <ModuleTabBar tabs={[
-        { label: "Agenda Pastoral", to: "/formacoes",       isActive: true  },
-        { label: "Ocorrências",     to: "/ocorrencias",     isActive: false },
-        { label: "Liturgia",        to: "/espiritualidade", isActive: false },
+        { label: "Agenda Pastoral", onClick: () => setView("agenda"),    isActive: view === "agenda"    },
+        { label: "Formações",       onClick: () => setView("formacoes"), isActive: view === "formacoes" },
+        { label: "Ocorrências",     to: "/ocorrencias",                  isActive: false                },
       ]} />
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Pastoral</p>
-          <h1 className="mt-2 font-serif text-2xl sm:text-3xl">Agenda Pastoral</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Reuniões, formações, retiros, ensaios, encontros e compromissos.
-          </p>
-        </div>
-        <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="shrink-0">
-          <Plus className="h-4 w-4 mr-1" /> Novo evento
-        </Button>
-      </div>
-
-      {/* Tipo filter chips */}
-      {eventos.length > 0 && (
-        <div className="overflow-x-auto -mx-6 px-6 pb-1 lg:-mx-10 lg:px-10">
-          <div className="flex gap-2 min-w-max">
-            {tipoOptions.map((t) => (
-              <button
-                key={t.value}
-                onClick={() => setTipoFilter(t.value)}
-                className={`text-xs px-3 py-1.5 rounded-full border font-medium whitespace-nowrap transition ${
-                  tipoFilter === t.value
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+      {/* ── Agenda Pastoral ── */}
+      {view === "agenda" && (<>
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Pastoral</p>
+            <h1 className="mt-2 font-serif text-2xl sm:text-3xl">Agenda Pastoral</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Reuniões, formações, retiros, ensaios, encontros e compromissos.
+            </p>
           </div>
-        </div>
-      )}
-
-      {/* Content */}
-      {eventos.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-16 text-center">
-          <CalendarRange className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-          <p className="font-medium">Nenhum evento cadastrado</p>
-          <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-            Registre reuniões, formações, retiros, ensaios, encontros e compromissos pastorais.
-          </p>
-          <Button className="mt-4" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1" /> Criar primeiro evento
+          <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="shrink-0">
+            <Plus className="h-4 w-4 mr-1" /> Novo evento
           </Button>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-12 text-center">
-          <p className="text-sm text-muted-foreground">Nenhum evento deste tipo cadastrado.</p>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {proximos.length > 0 && (
-            <EventoSection
-              titulo="Próximos"
-              eventos={proximos}
-              onEdit={(e) => { setEditTarget(e); setFormOpen(true); }}
-              onDelete={setDeleteTarget}
-              onPresenca={setPresencaEvento}
-            />
-          )}
-          {passados.length > 0 && (
-            <EventoSection
-              titulo="Realizados"
-              eventos={passados}
-              onEdit={(e) => { setEditTarget(e); setFormOpen(true); }}
-              onDelete={setDeleteTarget}
-              onPresenca={setPresencaEvento}
-            />
-          )}
+
+        {/* Tipo filter chips */}
+        {eventos.length > 0 && (
+          <div className="overflow-x-auto -mx-6 px-6 pb-1 lg:-mx-10 lg:px-10">
+            <div className="flex gap-2 min-w-max">
+              {tipoOptions.map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => setTipoFilter(t.value)}
+                  className={`text-xs px-3 py-1.5 rounded-full border font-medium whitespace-nowrap transition ${
+                    tipoFilter === t.value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Content */}
+        {eventos.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-16 text-center">
+            <CalendarRange className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
+            <p className="font-medium">Nenhum evento cadastrado</p>
+            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+              Registre reuniões, formações, retiros, ensaios, encontros e compromissos pastorais.
+            </p>
+            <Button className="mt-4" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1" /> Criar primeiro evento
+            </Button>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border p-12 text-center">
+            <p className="text-sm text-muted-foreground">Nenhum evento deste tipo cadastrado.</p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {proximos.length > 0 && (
+              <EventoSection
+                titulo="Próximos"
+                eventos={proximos}
+                onEdit={(e) => { setEditTarget(e); setFormOpen(true); }}
+                onDelete={setDeleteTarget}
+                onPresenca={setPresencaEvento}
+              />
+            )}
+            {passados.length > 0 && (
+              <EventoSection
+                titulo="Realizados"
+                eventos={passados}
+                onEdit={(e) => { setEditTarget(e); setFormOpen(true); }}
+                onDelete={setDeleteTarget}
+                onPresenca={setPresencaEvento}
+              />
+            )}
+          </div>
+        )}
+      </>)}
+
+      {/* ── Formações (placeholder) ── */}
+      {view === "formacoes" && (
+        <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-16 text-center">
+          <Users className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
+          <p className="font-medium">Formações</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+            Em breve: acompanhamento de programas de formação, trilhas e progresso individual.
+          </p>
         </div>
       )}
 

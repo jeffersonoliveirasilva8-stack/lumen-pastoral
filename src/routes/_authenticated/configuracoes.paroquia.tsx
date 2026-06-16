@@ -72,6 +72,8 @@ type RegrasEscala = {
   confirmacao_escala_ativa: boolean;
   // Antecedência mínima para registrar indisponibilidade (dias)
   dias_antecedencia_indisp: number | null;
+  // Distribuição de gênero na escala (% masculino)
+  distribuicao_masc_pct?: number;
 };
 
 type PontuacaoConfig = {
@@ -254,6 +256,7 @@ const DEFAULT_REGRAS: RegrasEscala = {
   permitir_duplicidade: false, peso_solene: 2, peso_normal: 1,
   confirmacao_escala_ativa: false,
   dias_antecedencia_indisp: 3,
+  distribuicao_masc_pct: 50,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -422,10 +425,9 @@ function PersonalizacaoPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto pb-24">
       <ModuleTabBar tabs={[
-        { label: "Geral",                to: "/configuracoes/paroquia",        isActive: true  },
-        { label: "Regras da Escala",     to: "/configuracoes-escalas",         isActive: false },
-        { label: "Coordenação",          to: "/configuracoes/administradores", isActive: false },
-        { label: "Atividade do Sistema", to: "/auditoria",                     isActive: false },
+        { label: "Geral",       to: "/configuracoes/paroquia",        isActive: true  },
+        { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
+        { label: "Auditoria",   to: "/auditoria",                     isActive: false },
       ]} />
 
       {/* ── Mobile: tela de conteúdo com back button ── */}
@@ -3104,6 +3106,32 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
             <input type="number" min={1} value={regras.peso_solene}
               onChange={(e) => r("peso_solene", Number(e.target.value))}
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border p-4 space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Distribuição de gênero</p>
+        <p className="text-xs text-muted-foreground">
+          Proporção desejada de homens e mulheres na escala. O motor tentará respeitar essa distribuição ao sugerir membros.
+        </p>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Masculino</span>
+            <span className="font-semibold text-foreground">{regras.distribuicao_masc_pct ?? 50}% / {100 - (regras.distribuicao_masc_pct ?? 50)}%</span>
+            <span>Feminino</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={regras.distribuicao_masc_pct ?? 50}
+            onChange={(e) => r("distribuicao_masc_pct", Number(e.target.value))}
+            className="w-full accent-primary"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground/60">
+            <span>0%</span><span>50%</span><span>100%</span>
           </div>
         </div>
       </div>

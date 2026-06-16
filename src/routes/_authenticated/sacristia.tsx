@@ -131,7 +131,7 @@ function SacristiaPage() {
 
       if (finais === total) {
         concluidas.push(escala);
-      } else if (finais > 0 || isHoje) {
+      } else if (isHoje) {
         em_andamento.push(escala);
       } else {
         pendentes.push(escala);

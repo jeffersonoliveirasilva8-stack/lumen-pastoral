@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Loader2, Settings, Save, Users } from "lucide-react";
@@ -76,6 +76,10 @@ export const DEFAULTS: ConfigEscalas = {
 };
 
 function ConfiguracaoEscalas() {
+  return <Navigate to="/configuracoes/paroquia" />;
+}
+
+function _ConfiguracaoEscalasUnused() {
   const { profile } = useAuth();
   const paroquiaId = profile?.paroquia_id ?? null;
   const qc = useQueryClient();
