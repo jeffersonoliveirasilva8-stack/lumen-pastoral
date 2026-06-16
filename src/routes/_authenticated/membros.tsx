@@ -2550,8 +2550,7 @@ function MembrosPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Membros</p>
-          <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Membros e funções</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl">Membros</h1>
         </div>
         <div className="flex gap-2 shrink-0">
           <DropdownMenu>

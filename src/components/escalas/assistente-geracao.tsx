@@ -650,13 +650,19 @@ export function AssistenteGeracaoEscalas({
         const cel = preVisualizacao[i];
 
         // P0.1 — Idempotência: verificar existência antes de criar
-        const { data: existing } = await (supabase as any)
+        // hora_inicio incluso para não colidir com missas de mesmo nome mas
+        // horário diferente — espelha o índice escalas_unique_celebration (046)
+        const baseQuery = (supabase as any)
           .from("escalas")
           .select("id")
           .eq("paroquia_id", paroquiaId)
           .eq("data", cel.data)
-          .eq("titulo", cel.titulo)
-          .limit(1);
+          .eq("titulo", cel.titulo);
+        const { data: existing } = await (
+          cel.hora_inicio != null
+            ? baseQuery.eq("hora_inicio", cel.hora_inicio)
+            : baseQuery.is("hora_inicio", null)
+        ).limit(1);
 
         if (existing && existing.length > 0) {
           ignoradas++;

@@ -1154,17 +1154,16 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
       {/* Abas do módulo Escalas */}
       <ModuleTabBar tabs={[
-        { label: "Escalas",        onClick: () => setView("lista"),              isActive: view === "lista" },
-        { label: "Sacristia",      to: "/sacristia",                             isActive: false },
-        { label: "Indisponib.",    onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
-        { label: "Substituições",  to: "/substituicoes",                         isActive: false },
+        { label: "Planejamento",      onClick: () => setView("lista"),              isActive: view === "lista" },
+        { label: "Presença",          to: "/sacristia",                             isActive: false },
+        { label: "Indisponibilidades", onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
+        { label: "Substituições",     to: "/substituicoes",                         isActive: false },
       ]} />
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Escalas</p>
-          <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Escalas pastorais</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl">Planejamento</h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
           <Button

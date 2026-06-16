@@ -21,7 +21,7 @@ import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 
 export const Route = createFileRoute("/_authenticated/sacristia")({
   component: SacristiaPage,
-  head: () => ({ meta: [{ title: "Sacristia — Lumen Pastoral" }] }),
+  head: () => ({ meta: [{ title: "Presença — Lumen Pastoral" }] }),
 });
 
 type MembroEscala = {
@@ -216,12 +216,12 @@ function SacristiaPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-2xl mx-auto pb-24">
-      {/* Abas do módulo Escalas — Sacristia como central operacional */}
+      {/* Abas do módulo Escalas */}
       <ModuleTabBar tabs={[
-        { label: "Escalas",       to: "/escalas",                         isActive: false },
-        { label: "Sacristia",     onClick: () => {},                      isActive: true  },
-        { label: "Indisponib.",   to: "/escalas?view=indisponibilidades", isActive: false },
-        { label: "Substituições", to: "/substituicoes",                   isActive: false },
+        { label: "Planejamento",       to: "/escalas",                         isActive: false },
+        { label: "Presença",           onClick: () => {},                      isActive: true  },
+        { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
+        { label: "Substituições",      to: "/substituicoes",                   isActive: false },
       ]} />
 
       {/* Sub-abas da Sacristia */}
@@ -246,8 +246,7 @@ function SacristiaPage() {
       </div>
 
       <div className="mb-6">
-        <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Operacional</p>
-        <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Sacristia</h1>
+        <h1 className="font-serif text-2xl sm:text-3xl">Presença</h1>
         <p className="mt-1 text-sm text-muted-foreground capitalize">
           {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
         </p>

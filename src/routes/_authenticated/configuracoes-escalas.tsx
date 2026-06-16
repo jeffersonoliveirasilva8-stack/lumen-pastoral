@@ -245,15 +245,14 @@ function ConfiguracaoEscalas() {
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto pb-24 space-y-6">
       <ModuleTabBar tabs={[
-        { label: "Geral",            to: "/configuracoes/paroquia",        isActive: false },
-        { label: "Regras da Escala", to: "/configuracoes-escalas",         isActive: true  },
-        { label: "Coordenação",      to: "/configuracoes/administradores", isActive: false },
-        { label: "Auditoria",        to: "/auditoria",                     isActive: false },
+        { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
+        { label: "Motor",       to: "/configuracoes-escalas",         isActive: true  },
+        { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
+        { label: "Auditoria",   to: "/auditoria",                     isActive: false },
       ]} />
 
       <div>
-        <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-        <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Regras da Escala</h1>
+        <h1 className="font-serif text-2xl sm:text-3xl">Motor de Escalas</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Política de confirmação, motor de alocação, substituições, indisponibilidades e pontuação.
         </p>

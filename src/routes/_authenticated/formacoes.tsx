@@ -250,18 +250,41 @@ function AgendaPastoralPage() {
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-6 pb-24 lg:pb-10">
       {/* Abas do módulo Pastoral */}
       <ModuleTabBar tabs={[
-        { label: "Agenda Pastoral", onClick: () => setView("agenda"),    isActive: view === "agenda"    },
-        { label: "Formações",       onClick: () => setView("formacoes"), isActive: view === "formacoes" },
-        { label: "Ocorrências",     to: "/ocorrencias",                  isActive: false                },
+        { label: "Agenda",      onClick: () => setView("agenda"),    isActive: view === "agenda" || view === "formacoes" },
+        { label: "Ocorrências", to: "/ocorrencias",                  isActive: false },
       ]} />
+      {/* Sub-abas dentro de Agenda */}
+      {(view === "agenda" || view === "formacoes") && (
+        <div className="flex gap-1 border-b border-border/60 mb-4 -mt-4 overflow-x-auto scrollbar-none">
+          {[
+            { id: "agenda",    label: "Eventos" },
+            { id: "formacoes", label: "Formações" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setView(t.id as "agenda" | "formacoes")}
+              className={`relative flex-shrink-0 px-4 py-2 text-sm font-semibold transition-colors whitespace-nowrap ${
+                view === t.id
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+              {view === t.id && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-primary/60" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Agenda Pastoral ── */}
       {view === "agenda" && (<>
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Pastoral</p>
-            <h1 className="mt-2 font-serif text-2xl sm:text-3xl">Agenda Pastoral</h1>
+            <h1 className="font-serif text-2xl sm:text-3xl">Agenda Pastoral</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Reuniões, formações, retiros, ensaios, encontros e compromissos.
             </p>
@@ -337,8 +360,7 @@ function AgendaPastoralPage() {
         <div className="space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Pastoral</p>
-              <h1 className="mt-2 font-serif text-2xl sm:text-3xl">Formações</h1>
+              <h1 className="font-serif text-2xl sm:text-3xl">Formações</h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 Trilhas de formação, materiais e acompanhamento de progresso.
               </p>

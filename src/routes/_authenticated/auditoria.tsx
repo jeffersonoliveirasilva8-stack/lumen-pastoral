@@ -235,10 +235,10 @@ function AtividadePage() {
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto pb-24">
       <ModuleTabBar tabs={[
-        { label: "Geral",            to: "/configuracoes/paroquia",        isActive: false },
-        { label: "Regras da Escala", to: "/configuracoes-escalas",         isActive: false },
-        { label: "Coordenação",      to: "/configuracoes/administradores", isActive: false },
-        { label: "Auditoria",        to: "/auditoria",                     isActive: true  },
+        { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
+        { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
+        { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
+        { label: "Auditoria",   to: "/auditoria",                     isActive: true  },
       ]} />
 
       <div className="mb-6">
