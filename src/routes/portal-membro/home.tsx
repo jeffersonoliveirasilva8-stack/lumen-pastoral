@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useMemo, useEffect, useState } from "react";
 import { format, isToday, isTomorrow, differenceInDays, parseISO, subMonths, startOfMonth, endOfMonth, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -7,7 +7,9 @@ import {
   Calendar, Clock, MapPin,
   Trophy, CheckCircle2, Cake, Play,
   CalendarDays, BookOpen, Bell, User, ChevronRight,
+  Check, X, Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { getLiturgicalDays } from "@/lib/liturgical-calendar";
@@ -292,6 +294,22 @@ function PortalMembroHome() {
   const hora = today.getHours();
   const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
 
+  const confirmarMutation = useMutation({
+    mutationFn: async (escala_membro_id: string) => {
+      const { error } = await anyDb
+        .from("escala_membros")
+        .update({ status: "confirmado", justificativa: null })
+        .eq("id", escala_membro_id)
+        .eq("membro_id", membro!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas", membro!.id] });
+      toast.success("Presença confirmada!");
+    },
+    onError: () => toast.error("Erro ao confirmar. Tente novamente."),
+  });
+
   const nextEscala = escalas[0] ?? null;
   const remainingEscalas = escalas.slice(1);
 
@@ -409,7 +427,11 @@ function PortalMembroHome() {
             <p className="text-sm text-muted-foreground">Nenhuma escala futura publicada.</p>
           </div>
         ) : (
-          <NextEscalaHero esc={nextEscala} />
+          <NextEscalaHero
+            esc={nextEscala}
+            onConfirmar={(id) => confirmarMutation.mutate(id)}
+            confirming={confirmarMutation.isPending}
+          />
         )}
       </section>
 
@@ -720,7 +742,11 @@ function PortalMembroHome() {
 
 // ── NextEscalaHero ────────────────────────────────────────────────────
 
-function NextEscalaHero({ esc }: { esc: EscalaItem }) {
+function NextEscalaHero({ esc, onConfirmar, confirming }: {
+  esc: EscalaItem;
+  onConfirmar: (id: string) => void;
+  confirming: boolean;
+}) {
   const date = new Date(esc.data + "T12:00:00");
   // Diferença em dias calendário (midnight vs midnight — evita imprecisão por horário)
   const diasFaltam = differenceInDays(startOfDay(date), startOfDay(new Date()));
@@ -737,10 +763,13 @@ function NextEscalaHero({ esc }: { esc: EscalaItem }) {
   const monthStr = format(date, "MMM", { locale: ptBR });
   const weekdayLong = format(date, "EEEE", { locale: ptBR });
 
+  const navigate = useNavigate();
+  const isPendente = esc.status === "pendente";
+  const isConfirmado = esc.status === "confirmado";
+
   return (
-    <Link
-      to="/portal-membro/escalas"
-      className="block rounded-2xl border border-border overflow-hidden hover:border-primary/40 transition active:scale-[0.99]"
+    <div
+      className="rounded-2xl border border-border overflow-hidden"
       style={{ borderLeftWidth: "4px", borderLeftColor: esc.ministerio_cor }}
     >
       <div className="p-4" style={{ backgroundColor: esc.ministerio_cor + "0a" }}>
@@ -800,19 +829,70 @@ function NextEscalaHero({ esc }: { esc: EscalaItem }) {
             </div>
           </div>
 
-          {/* Status badge */}
-          <div className="shrink-0 self-start pt-0.5">
-            {esc.status === "confirmado" ? (
+          {/* Status badge — confirmado */}
+          {isConfirmado && (
+            <div className="shrink-0 self-start pt-0.5">
               <CheckCircle2 className="h-5 w-5 text-green-500" />
-            ) : esc.status === "pendente" ? (
-              <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 whitespace-nowrap border border-amber-400/30">
-                Responder
-              </span>
-            ) : null}
-          </div>
+            </div>
+          )}
         </div>
+
+        {/* ── Ações de resposta (só aparece quando pendente) ── */}
+        {isPendente && (
+          <div className="mt-4 pt-3 border-t flex gap-2" style={{ borderColor: esc.ministerio_cor + "30" }}>
+            <button
+              type="button"
+              disabled={confirming}
+              onClick={() => onConfirmar(esc.escala_membro_id)}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white text-sm font-semibold py-2.5 transition disabled:opacity-60"
+            >
+              {confirming ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              Confirmar presença
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate({ to: "/portal-membro/escalas" })}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background hover:bg-muted active:scale-[0.98] text-muted-foreground text-sm font-medium px-4 py-2.5 transition"
+              title="Recusar ou ver detalhes"
+            >
+              <X className="h-4 w-4" />
+              Recusar
+            </button>
+          </div>
+        )}
+
+        {/* Link discreto para ver detalhes */}
+        {isConfirmado && (
+          <div className="mt-3 pt-2.5 border-t" style={{ borderColor: esc.ministerio_cor + "30" }}>
+            <Link
+              to="/portal-membro/escalas"
+              className="flex items-center gap-1 text-xs font-medium"
+              style={{ color: esc.ministerio_cor }}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Presença confirmada · Ver detalhes
+              <ChevronRight className="h-3 w-3 ml-auto" />
+            </Link>
+          </div>
+        )}
+
+        {!isPendente && !isConfirmado && (
+          <div className="mt-3 pt-2.5 border-t" style={{ borderColor: esc.ministerio_cor + "30" }}>
+            <Link
+              to="/portal-membro/escalas"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition"
+            >
+              Ver detalhes da escala
+              <ChevronRight className="h-3 w-3 ml-auto" />
+            </Link>
+          </div>
+        )}
       </div>
-    </Link>
+    </div>
   );
 }
 
