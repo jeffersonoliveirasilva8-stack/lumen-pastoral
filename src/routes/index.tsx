@@ -228,26 +228,28 @@ function Landing() {
             </div>
             <span className="font-serif text-base sm:text-lg font-semibold tracking-tight truncate">Lumen Pastoral</span>
           </Link>
-          <nav className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <nav className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Portal do servidor — visível em todos os tamanhos */}
             <Link
               to="/membro/login"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition"
+              className="inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition"
             >
-              <Users className="h-3.5 w-3.5" />
-              Portal do servidor
+              <Users className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden xs:inline sm:inline">Servidor</span>
             </Link>
             <Link
               to="/login"
-              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition"
+              className="rounded-lg px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition"
             >
-              Coordenação
+              Entrar
             </Link>
             <Link
               to="/cadastro"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition"
+              className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition"
             >
-              Começar grátis
-              <ChevronRight className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Começar grátis</span>
+              <span className="sm:hidden">Cadastrar</span>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
             </Link>
           </nav>
         </div>
@@ -289,19 +291,26 @@ function Landing() {
             </p>
 
             {/* CTAs */}
-            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md">
+            <div className="mt-10 flex flex-col items-stretch sm:flex-row sm:items-center justify-center gap-3 w-full max-w-sm sm:max-w-none">
               <Link
                 to="/cadastro"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-7 py-3.5 text-sm font-bold text-primary-foreground shadow-altar hover:opacity-90 active:scale-[0.98] transition"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-primary-foreground shadow-altar hover:opacity-90 active:scale-[0.98] transition"
               >
                 Criar conta da paróquia
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 to="/login"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-7 py-3.5 text-sm font-semibold text-foreground hover:bg-muted active:scale-[0.98] transition"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 py-3.5 text-sm font-semibold text-foreground hover:bg-muted active:scale-[0.98] transition"
               >
-                Já tenho conta
+                Acesso coordenação
+              </Link>
+              <Link
+                to="/membro/login"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-6 py-3.5 text-sm font-semibold text-primary hover:bg-primary/10 active:scale-[0.98] transition"
+              >
+                <Users className="h-4 w-4" />
+                Portal do servidor
               </Link>
             </div>
 

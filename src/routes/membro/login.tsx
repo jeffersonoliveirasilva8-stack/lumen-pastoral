@@ -19,11 +19,15 @@ function MembroLoginPage() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    // Timeout de segurança — se getSession demorar >4s em rede lenta, mostra o form
+    const timeout = setTimeout(() => setChecking(false), 4000);
+
     // Listener para capturar tokens processados assincronamente (magic link implicit flow)
     // PASSWORD_RECOVERY é excluído: __root.tsx intercepta e redireciona para /reset-senha
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "PASSWORD_RECOVERY") return;
       if (session?.user) {
+        clearTimeout(timeout);
         const route = await getPostLoginRoute(supabase);
         navigate({ to: route, replace: true });
       }
@@ -31,6 +35,7 @@ function MembroLoginPage() {
 
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
+        clearTimeout(timeout);
         if (session?.user) {
           const route = await getPostLoginRoute(supabase);
           navigate({ to: route, replace: true });
@@ -38,9 +43,9 @@ function MembroLoginPage() {
           setChecking(false);
         }
       })
-      .catch(() => setChecking(false));
+      .catch(() => { clearTimeout(timeout); setChecking(false); });
 
-    return () => subscription.unsubscribe();
+    return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
