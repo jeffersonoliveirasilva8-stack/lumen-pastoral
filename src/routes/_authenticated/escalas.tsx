@@ -46,8 +46,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute("/_authenticated/escalas")({
-  validateSearch: (search: Record<string, unknown>): { abrir?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { abrir?: string; view?: string } => ({
     abrir: typeof search.abrir === "string" ? search.abrir : undefined,
+    view: typeof search.view === "string" ? search.view : undefined,
   }),
   component: EscalasPage,
   head: () => ({ meta: [{ title: "Escalas — Lumen Pastoral" }] }),
@@ -158,9 +159,13 @@ type IndispRow = {
 function EscalasPage() {
   const { profile } = useAuth();
   const qc = useQueryClient();
-  const { abrir } = Route.useSearch();
+  const { abrir, view: viewParam } = Route.useSearch();
 
-  const [view, setView] = useState<"lista" | "historico" | "indisponibilidades">("lista");
+  const [view, setView] = useState<"lista" | "historico" | "indisponibilidades">(() => {
+    if (viewParam === "historico") return "historico";
+    if (viewParam === "indisponibilidades") return "indisponibilidades";
+    return "lista";
+  });
   const [calMonth, setCalMonth] = useState(new Date());
   const [formOpen, setFormOpen] = useState(false);
   const [detailEscala, setDetailEscala] = useState<Escala | null>(null);
@@ -1386,10 +1391,11 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
       {/* Abas do módulo Escalas */}
       <ModuleTabBar tabs={[
-        { label: "Escalas",              onClick: () => setView("lista"),                 isActive: view === "lista" },
-        { label: "Histórico",            onClick: () => setView("historico"),             isActive: view === "historico" },
-        { label: "Indisponibilidades",   onClick: () => setView("indisponibilidades"),    isActive: view === "indisponibilidades" },
-        { label: "Substituições",        to: "/substituicoes",                            isActive: false },
+        { label: "Escalas",           onClick: () => setView("lista"),              isActive: view === "lista" },
+        { label: "Sacristia",         to: "/sacristia",                             isActive: false },
+        { label: "Histórico",         onClick: () => setView("historico"),          isActive: view === "historico" },
+        { label: "Indisponib.",       onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
+        { label: "Substituições",     to: "/substituicoes",                         isActive: false },
       ]} />
 
       {/* Header */}

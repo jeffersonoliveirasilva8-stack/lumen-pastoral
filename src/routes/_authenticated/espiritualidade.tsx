@@ -132,11 +132,14 @@ function ProximoDiaCard({ row }: { row: LiturgiaRow }) {
 
 // ── Página ────────────────────────────────────────────────────────────────────
 
+type LitTab = "dia" | "homilia" | "calendario" | "sincronizacao";
+
 function EspiritualidadePage() {
   const { data: liturgia, isLoading: loadingL, isError } = useLiturgiaHoje();
-  const { data: proximos = [] }                           = useLiturgiaProximos(3);
+  const { data: proximos = [] }                           = useLiturgiaProximos(7);
   const { data: homilia,  isLoading: loadingH }           = useHomiliaRecente();
   const [playerAberto, setPlayerAberto]                   = useState(false);
+  const [litTab, setLitTab]                               = useState<LitTab>("dia");
   const hoje = format(new Date(), "yyyy-MM-dd");
   const homiliaEHoje = homilia?.data === hoje;
 
@@ -162,18 +165,23 @@ function EspiritualidadePage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-6 pb-24">
-      {/* Abas do módulo Pastoral */}
+      {/* Abas do módulo Liturgia */}
       <ModuleTabBar tabs={[
-        { label: "Agenda",   to: "/formacoes",       isActive: false },
-        { label: "Liturgia", to: "/espiritualidade", isActive: true  },
+        { label: "Liturgia Diária",      onClick: () => setLitTab("dia"),            isActive: litTab === "dia" },
+        { label: "Homilia",              onClick: () => setLitTab("homilia"),        isActive: litTab === "homilia" },
+        { label: "Calendário",           onClick: () => setLitTab("calendario"),     isActive: litTab === "calendario" },
+        { label: "Sincronização",        onClick: () => setLitTab("sincronizacao"),  isActive: litTab === "sincronizacao" },
       ]} />
 
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Pastoral</p>
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Liturgia</p>
           <h1 className="mt-2 font-serif text-2xl sm:text-4xl text-foreground">
-            Liturgia e Homilia do Dia
+            {litTab === "dia" && "Liturgia do Dia"}
+            {litTab === "homilia" && "Homilia"}
+            {litTab === "calendario" && "Calendário Litúrgico"}
+            {litTab === "sincronizacao" && "Sincronização"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground capitalize">
             {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
@@ -181,10 +189,151 @@ function EspiritualidadePage() {
         </div>
       </div>
 
+      {/* ── Sincronização ── */}
+      {litTab === "sincronizacao" && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
+            <div>
+              <h2 className="font-semibold">Homilia Diária</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Sincroniza a homilia do dia via YouTube. Ocorre automaticamente a cada manhã.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => sincronizarMutation.mutate()}
+                disabled={sincronizarMutation.isPending}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${sincronizarMutation.isPending ? "animate-spin" : ""}`} />
+                {sincronizarMutation.isPending ? "Sincronizando..." : "Sincronizar Agora"}
+              </button>
+            </div>
+            {homilia && (
+              <div className="rounded-xl bg-muted/50 px-4 py-3 text-sm">
+                <p className="text-muted-foreground text-xs uppercase tracking-widest font-semibold mb-1">Última homilia</p>
+                <p className="font-medium">{homilia.titulo}</p>
+                <p className="text-muted-foreground text-xs mt-0.5">
+                  {format(new Date(homilia.data + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-6 space-y-2">
+            <h2 className="font-semibold">Liturgia do Dia</h2>
+            <p className="text-sm text-muted-foreground">
+              As leituras litúrgicas são carregadas do calendário interno e atualizadas automaticamente.
+            </p>
+            {liturgia ? (
+              <p className="text-xs text-green-600 font-medium mt-2">Liturgia de hoje disponível: {liturgia.titulo}</p>
+            ) : (
+              <p className="text-xs text-amber-600 font-medium mt-2">Liturgia de hoje ainda não sincronizada.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Calendário Litúrgico ── */}
+      {litTab === "calendario" && (
+        <div className="space-y-3">
+          <Link
+            to="/calendario"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 text-sm font-semibold text-foreground transition hover:bg-muted/60 hover:border-primary/30 group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <CalendarDays className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold leading-tight">Calendário Litúrgico Completo</p>
+                <p className="text-[11px] text-muted-foreground font-normal mt-0.5">Solenidades, festas e memoriais</p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+          </Link>
+          {proximosDias.length > 0 && (
+            <>
+              <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground font-semibold px-1 pt-2">
+                Próximos Dias
+              </p>
+              <div className="space-y-2">
+                {proximosDias.map((row) => (
+                  <ProximoDiaCard key={row.data} row={row} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Homilia ── */}
+      {litTab === "homilia" && (
+        <div className="max-w-xl">
+          <div className="rounded-[1.75rem] border border-border bg-card overflow-hidden">
+            <div className="p-5">
+              <div className="flex items-center gap-1.5 mb-4">
+                <Play className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground font-semibold flex-1">
+                  {homiliaEHoje ? "Homilia de Hoje" : "Homilia Mais Recente"}
+                </p>
+                {homilia && !homiliaEHoje && (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                    {format(new Date(homilia.data + "T12:00:00"), "d/MM", { locale: ptBR })}
+                  </span>
+                )}
+              </div>
+              {loadingH ? (
+                <div className="space-y-3">
+                  <Skeleton className="aspect-video w-full rounded-xl" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+              ) : homilia ? (
+                <>
+                  <div className="rounded-xl overflow-hidden mb-3 bg-black relative aspect-video">
+                    {playerAberto ? (
+                      <iframe
+                        src={`https://www.youtube.com/embed/${homilia.video_id}?autoplay=1&rel=0&modestbranding=1`}
+                        title={homilia.titulo}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="absolute inset-0 w-full h-full"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <button type="button" onClick={() => setPlayerAberto(true)} className="absolute inset-0 w-full h-full group">
+                        {homilia.thumbnail_url && (
+                          <img src={homilia.thumbnail_url} alt={homilia.titulo} className="w-full h-full object-cover" />
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/25 group-hover:bg-black/40 transition">
+                          <div className="h-12 w-12 rounded-full bg-red-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                            <Play className="h-5 w-5 text-white ml-0.5" />
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm font-semibold leading-snug text-foreground">{homilia.titulo}</p>
+                  {homilia.autor && <p className="text-xs text-muted-foreground mt-1">{homilia.autor}</p>}
+                  {homilia.descricao && (
+                    <p className="text-xs text-muted-foreground/80 mt-2 leading-relaxed">{homilia.descricao}</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground italic py-2 text-center">
+                  Homilia ainda não disponível para hoje.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Liturgia Diária ── */}
+      {litTab === "dia" && (<>
       {isError && (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-4 flex items-center gap-3 text-sm text-destructive">
           <AlertCircle className="h-5 w-5 shrink-0" />
-          <span>Não foi possível carregar a liturgia do dia.</span>
+          <span>Não foi possível carregar a liturgia do dia. Acesse a aba Sincronização para atualizar.</span>
         </div>
       )}
 
@@ -368,7 +517,7 @@ function EspiritualidadePage() {
             </div>
           )}
 
-          {/* Calendário Litúrgico */}
+          {/* Calendário — link rápido na visão de liturgia */}
           <Link
             to="/calendario"
             className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 text-sm font-semibold text-foreground transition hover:bg-muted/60 hover:border-primary/30 group"
@@ -386,6 +535,7 @@ function EspiritualidadePage() {
           </Link>
         </div>
       </div>
+      </>)}
     </div>
   );
 }

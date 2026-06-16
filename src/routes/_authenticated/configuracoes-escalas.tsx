@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { Loader2, Settings, Save } from "lucide-react";
+import { Loader2, Settings, Save, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { ModuleTabBar } from "@/components/ui/module-tab-bar";
@@ -81,6 +81,45 @@ function ConfiguracaoEscalas() {
   const qc = useQueryClient();
   const [form, setForm] = useState<ConfigEscalas>(DEFAULTS);
   const [dirty, setDirty] = useState(false);
+  const [generoMasc, setGeneroMasc] = useState(50);
+  const [generoMascDirty, setGeneroMascDirty] = useState(false);
+
+  const { data: paroquia } = useQuery({
+    queryKey: ["paroquia-regras", paroquiaId],
+    enabled: !!paroquiaId,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("paroquias")
+        .select("regras_escala")
+        .eq("id", paroquiaId)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  useEffect(() => {
+    if (paroquia?.regras_escala?.distribuicao_masc_pct != null) {
+      setGeneroMasc(paroquia.regras_escala.distribuicao_masc_pct);
+    }
+  }, [paroquia]);
+
+  const saveGeneroDist = useMutation({
+    mutationFn: async () => {
+      const { error } = await anyDb
+        .from("paroquias")
+        .update({
+          regras_escala: { ...(paroquia?.regras_escala ?? {}), distribuicao_masc_pct: generoMasc },
+        })
+        .eq("id", paroquiaId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["paroquia-regras", paroquiaId] });
+      toast.success("Distribuição de gênero salva.");
+      setGeneroMascDirty(false);
+    },
+    onError: (e: Error) => toast.error("Erro ao salvar: " + e.message),
+  });
 
   const { data: config, isLoading } = useQuery<ConfigEscalas>({
     queryKey: ["config-escalas", paroquiaId],
@@ -167,16 +206,16 @@ function ConfiguracaoEscalas() {
     <div className="max-w-2xl mx-auto px-4 py-6 lg:px-6 space-y-8 pb-10">
       <ModuleTabBar tabs={[
         { label: "Personalização",       to: "/configuracoes/paroquia",        isActive: false },
-        { label: "Config. Escalas",      to: "/configuracoes-escalas",         isActive: true  },
-        { label: "Administradores",      to: "/configuracoes/administradores", isActive: false },
+        { label: "Regras da Escala",     to: "/configuracoes-escalas",         isActive: true  },
+        { label: "Coordenação",          to: "/configuracoes/administradores", isActive: false },
         { label: "Atividade do Sistema", to: "/auditoria",                     isActive: false },
       ]} />
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-serif">Configurações de Escalas</h1>
+        <h1 className="text-2xl font-serif">Regras da Escala</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Defina as regras de confirmação e substituições da sua paróquia.
+          Confirmação, substituições e distribuição de gênero para geração automática.
         </p>
       </div>
 
@@ -254,6 +293,67 @@ function ConfiguracaoEscalas() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Distribuição por gênero */}
+      <section className="rounded-2xl border border-border bg-card p-5 space-y-5">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Distribuição por gênero</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Define a proporção masculino/feminino que o motor utiliza ao gerar escalas automaticamente.
+        </p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-sm font-medium">
+            <span className="text-blue-600">Masculino: {generoMasc}%</span>
+            <span className="text-rose-500">Feminino: {100 - generoMasc}%</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={generoMasc}
+            onChange={(e) => { setGeneroMasc(Number(e.target.value)); setGeneroMascDirty(true); }}
+            className="w-full h-2 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-blue-400 to-rose-400"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>0% M / 100% F</span>
+            <span>50% / 50%</span>
+            <span>100% M / 0% F</span>
+          </div>
+          <div className="flex gap-2 text-xs text-muted-foreground pt-1">
+            {[
+              { m: 50, label: "50/50" },
+              { m: 60, label: "60/40" },
+              { m: 70, label: "70/30" },
+              { m: 40, label: "40/60" },
+            ].map((p) => (
+              <button
+                key={p.m}
+                onClick={() => { setGeneroMasc(p.m); setGeneroMascDirty(true); }}
+                className={`px-2 py-1 rounded-lg border text-xs font-medium transition ${
+                  generoMasc === p.m
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border hover:border-primary/50 hover:bg-muted"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-xl"
+          disabled={!generoMascDirty || saveGeneroDist.isPending}
+          onClick={() => saveGeneroDist.mutate()}
+        >
+          {saveGeneroDist.isPending ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : <Save className="h-3 w-3 mr-1.5" />}
+          Salvar distribuição
+        </Button>
       </section>
 
       {/* Salvar */}

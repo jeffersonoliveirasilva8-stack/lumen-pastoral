@@ -423,8 +423,8 @@ function PersonalizacaoPage() {
     <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto pb-24">
       <ModuleTabBar tabs={[
         { label: "Personalização",       to: "/configuracoes/paroquia",        isActive: true  },
-        { label: "Config. Escalas",      to: "/configuracoes-escalas",         isActive: false },
-        { label: "Administradores",      to: "/configuracoes/administradores", isActive: false },
+        { label: "Regras da Escala",     to: "/configuracoes-escalas",         isActive: false },
+        { label: "Coordenação",          to: "/configuracoes/administradores", isActive: false },
         { label: "Atividade do Sistema", to: "/auditoria",                     isActive: false },
       ]} />
 

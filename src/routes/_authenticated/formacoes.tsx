@@ -249,8 +249,8 @@ function AgendaPastoralPage() {
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-6 pb-24 lg:pb-10">
       {/* Abas do módulo Pastoral */}
       <ModuleTabBar tabs={[
-        { label: "Agenda",   to: "/formacoes",      isActive: true  },
-        { label: "Liturgia", to: "/espiritualidade", isActive: false },
+        { label: "Agenda Pastoral", to: "/formacoes",        isActive: true  },
+        { label: "Liturgia",        to: "/espiritualidade",  isActive: false },
       ]} />
 
       {/* Header */}

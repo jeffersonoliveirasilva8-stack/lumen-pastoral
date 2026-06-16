@@ -4,8 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
-  Flame, BookOpen, Bell, UserCircle, X, Church,
-  ClipboardList, Leaf,
+  Flame, BookOpen, Bell, UserCircle, X, Church, Leaf,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,11 +37,11 @@ const LITURGICAL_SEASON_LABEL: Record<string, string> = {
 
 // Mapeia qualquer rota para o módulo principal correspondente
 function getActiveModule(pathname: string): string {
-  if (pathname.startsWith("/escalas") || pathname.startsWith("/substituicoes")) return "/escalas";
+  if (pathname.startsWith("/escalas") || pathname.startsWith("/substituicoes") || pathname.startsWith("/sacristia")) return "/escalas";
   if (pathname.startsWith("/membros") || pathname.startsWith("/ranking") || pathname.startsWith("/ocorrencias")) return "/membros";
-  if (pathname.startsWith("/formacoes") || pathname.startsWith("/espiritualidade")) return "/formacoes";
+  if (pathname.startsWith("/espiritualidade")) return "/espiritualidade";
+  if (pathname.startsWith("/formacoes")) return "/formacoes";
   if (pathname.startsWith("/configuracoes") || pathname.startsWith("/auditoria")) return "/configuracoes/paroquia";
-  if (pathname.startsWith("/sacristia")) return "/sacristia";
   if (pathname.startsWith("/painel")) return "/painel";
   return pathname;
 }
@@ -163,12 +162,12 @@ function AuthLayout() {
 
   // 6 módulos principais
   const mainNav: NavItem[] = [
-    { to: "/painel",         label: "Painel",         icon: LayoutDashboard, color: "bg-slate-600" },
-    { to: "/escalas",        label: "Escalas",         icon: Calendar,        color: "bg-blue-600" },
+    { to: "/painel",               label: "Painel",         icon: LayoutDashboard, color: "bg-slate-600" },
+    { to: "/escalas",              label: "Escalas",         icon: Calendar,        color: "bg-blue-600" },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
-    { to: "/formacoes",      label: "Pastoral",        icon: Leaf,            color: "bg-teal-600" },
-    ...(!isLimitedCoord ? [{ to: "/sacristia", label: "Sacristia", icon: ClipboardList, color: "bg-amber-700" }] : []),
-    { to: "/configuracoes/paroquia", label: "Configurações", icon: Settings, color: "bg-indigo-600" },
+    { to: "/espiritualidade",      label: "Liturgia",        icon: BookOpen,        color: "bg-violet-600" },
+    { to: "/formacoes",            label: "Pastoral",        icon: Leaf,            color: "bg-teal-600" },
+    { to: "/configuracoes/paroquia", label: "Configurações", icon: Settings,        color: "bg-indigo-600" },
   ];
 
   // Itens secundários para o drawer "Mais"

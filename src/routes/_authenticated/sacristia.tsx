@@ -203,12 +203,35 @@ function SacristiaPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-2xl mx-auto pb-24">
-      {/* Abas do módulo Sacristia */}
+      {/* Abas do módulo Escalas — Sacristia como sub-aba operacional */}
       <ModuleTabBar tabs={[
-        { label: `Pendentes${pendentes.length > 0 ? ` (${pendentes.length})` : ""}`, onClick: () => setTab("pendentes"), isActive: tab === "pendentes" },
-        { label: "Em andamento", onClick: () => setTab("em_andamento"), isActive: tab === "em_andamento" },
-        { label: "Concluídas",   onClick: () => setTab("concluidas"),   isActive: tab === "concluidas" },
+        { label: "Escalas",      to: "/escalas",       isActive: false },
+        { label: "Sacristia",    onClick: () => {},     isActive: true  },
+        { label: "Histórico",    to: "/escalas?view=historico", isActive: false },
+        { label: "Indisponib.", to: "/escalas?view=indisponibilidades", isActive: false },
+        { label: "Substituições", to: "/substituicoes", isActive: false },
       ]} />
+
+      {/* Sub-abas da Sacristia */}
+      <div className="flex gap-1 border-b border-border/60 pb-0 mb-4 -mt-2">
+        {[
+          { id: "pendentes" as Tab, label: `Pendentes${pendentes.length > 0 ? ` (${pendentes.length})` : ""}` },
+          { id: "em_andamento" as Tab, label: "Em andamento" },
+          { id: "concluidas" as Tab, label: "Concluídas" },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-3 py-1.5 text-sm font-medium rounded-t-lg transition-colors ${
+              tab === t.id
+                ? "text-foreground border-b-2 border-primary -mb-px"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       <div className="mb-6">
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Operacional</p>

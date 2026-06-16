@@ -24,7 +24,7 @@ const anyDb = supabase;
 
 export const Route = createFileRoute("/_authenticated/configuracoes/administradores")({
   component: AdministradoresPage,
-  head: () => ({ meta: [{ title: "Administradores — Lumen Pastoral" }] }),
+  head: () => ({ meta: [{ title: "Coordenação — Lumen Pastoral" }] }),
 });
 
 type AdminUser = {
@@ -37,18 +37,18 @@ type AdminUser = {
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   admin: {
-    label: "Administrador",
+    label: "Coordenador",
     color: "text-red-700 bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
     icon: <ShieldCheck className="h-3 w-3" />,
   },
   coordenador: {
-    label: "Coordenador",
+    label: "Vice-Coordenador",
     color: "text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800",
     icon: <Shield className="h-3 w-3" />,
   },
   auxiliar: {
-    label: "Auxiliar",
-    color: "text-muted-foreground bg-muted border-border",
+    label: "Secretário",
+    color: "text-teal-700 bg-teal-50 border-teal-200 dark:bg-teal-950/20 dark:border-teal-800",
     icon: <User className="h-3 w-3" />,
   },
 };
@@ -113,16 +113,16 @@ function AdministradoresPage() {
     <div className="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto pb-24">
       <ModuleTabBar tabs={[
         { label: "Personalização",       to: "/configuracoes/paroquia",        isActive: false },
-        { label: "Config. Escalas",      to: "/configuracoes-escalas",         isActive: false },
-        { label: "Administradores",      to: "/configuracoes/administradores", isActive: true  },
+        { label: "Regras da Escala",     to: "/configuracoes-escalas",         isActive: false },
+        { label: "Coordenação",          to: "/configuracoes/administradores", isActive: true  },
         { label: "Atividade do Sistema", to: "/auditoria",                     isActive: false },
       ]} />
 
       <div className="mb-6">
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-        <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Administradores</h1>
+        <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Coordenação</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Usuários com acesso ao painel desta paróquia.
+          Membros da equipe de coordenação com acesso ao painel.
         </p>
       </div>
 
