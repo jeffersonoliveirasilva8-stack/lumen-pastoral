@@ -390,14 +390,12 @@ function PersonalizacaoPage() {
       items: [
         { id: "coord",       label: "Coordenadores",        icon: UserCheck,    desc: "Responsáveis por escala",   color: "bg-green-600" },
         { id: "prioridades", label: "Prioridades",          icon: ListOrdered,  desc: "Ordem de alocação",         color: "bg-emerald-500" },
-        { id: "regras",      label: "Regras da Escala",     icon: Settings2,    desc: "Limites e restrições",      color: "bg-cyan-600" },
       ],
     },
     {
       label: "Avançado",
       color: "bg-slate-600",
       items: [
-        { id: "pontuacao",   label: "Pontuação",            icon: Award,        desc: "Gamificação pastoral",      color: "bg-pink-500" },
         { id: "pdf",         label: "Imagens PDF",          icon: FileImage,    desc: "Cabeçalho e rodapé",        color: "bg-slate-600" },
       ],
     },
@@ -425,9 +423,10 @@ function PersonalizacaoPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto pb-24">
       <ModuleTabBar tabs={[
-        { label: "Geral",       to: "/configuracoes/paroquia",        isActive: true  },
-        { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
-        { label: "Auditoria",   to: "/auditoria",                     isActive: false },
+        { label: "Geral",            to: "/configuracoes/paroquia",        isActive: true  },
+        { label: "Regras da Escala", to: "/configuracoes-escalas",         isActive: false },
+        { label: "Coordenação",      to: "/configuracoes/administradores", isActive: false },
+        { label: "Auditoria",        to: "/auditoria",                     isActive: false },
       ]} />
 
       {/* ── Mobile: tela de conteúdo com back button ── */}
@@ -3106,32 +3105,6 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
             <input type="number" min={1} value={regras.peso_solene}
               onChange={(e) => r("peso_solene", Number(e.target.value))}
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-border p-4 space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Distribuição de gênero</p>
-        <p className="text-xs text-muted-foreground">
-          Proporção desejada de homens e mulheres na escala. O motor tentará respeitar essa distribuição ao sugerir membros.
-        </p>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Masculino</span>
-            <span className="font-semibold text-foreground">{regras.distribuicao_masc_pct ?? 50}% / {100 - (regras.distribuicao_masc_pct ?? 50)}%</span>
-            <span>Feminino</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={regras.distribuicao_masc_pct ?? 50}
-            onChange={(e) => r("distribuicao_masc_pct", Number(e.target.value))}
-            className="w-full accent-primary"
-          />
-          <div className="flex justify-between text-[10px] text-muted-foreground/60">
-            <span>0%</span><span>50%</span><span>100%</span>
           </div>
         </div>
       </div>

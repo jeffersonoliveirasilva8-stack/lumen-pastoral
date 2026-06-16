@@ -332,14 +332,55 @@ function AgendaPastoralPage() {
         )}
       </>)}
 
-      {/* ── Formações (placeholder) ── */}
+      {/* ── Formações (prévia visual) ── */}
       {view === "formacoes" && (
-        <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-16 text-center">
-          <Users className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-          <p className="font-medium">Formações</p>
-          <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-            Em breve: acompanhamento de programas de formação, trilhas e progresso individual.
-          </p>
+        <div className="space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Pastoral</p>
+              <h1 className="mt-2 font-serif text-2xl sm:text-3xl">Formações</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Trilhas de formação, materiais e acompanhamento de progresso.
+              </p>
+            </div>
+            <span className="mt-2 text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium shrink-0">Em breve</span>
+          </div>
+
+          <div className="rounded-2xl border border-dashed border-border bg-muted/10 p-4 text-center text-xs text-muted-foreground">
+            Prévia do módulo — sem dados reais ainda
+          </div>
+
+          {/* Trilhas de formação (simulado) */}
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground font-semibold px-1">Trilhas</p>
+            {[
+              { tipo: "PDF",    cor: "bg-red-500/10 text-red-700 border-red-200",    titulo: "Manual do Ministério da Eucaristia", desc: "18 páginas · Atualizado em 2025", icon: "📄" },
+              { tipo: "Vídeo", cor: "bg-blue-500/10 text-blue-700 border-blue-200",  titulo: "Formação de Coroinhas — Módulo 1",   desc: "32 min · Pe. Carlos Mendes",       icon: "▶️" },
+              { tipo: "Vídeo", cor: "bg-blue-500/10 text-blue-700 border-blue-200",  titulo: "Liturgia das Horas — Introdução",    desc: "45 min · Série Oração",            icon: "▶️" },
+              { tipo: "Artigo", cor: "bg-green-500/10 text-green-700 border-green-200", titulo: "A Missão do Leitor na Missa",     desc: "Leitura estimada: 8 min",          icon: "📝" },
+              { tipo: "PDF",    cor: "bg-red-500/10 text-red-700 border-red-200",    titulo: "Guia de Canto Gregoriano",           desc: "6 páginas · Coro Paroquial",       icon: "📄" },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-4 rounded-2xl border border-border bg-card px-4 py-3.5 opacity-70 cursor-not-allowed select-none">
+                <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0 text-lg">
+                  {item.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{item.titulo}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${item.cor}`}>
+                  {item.tipo}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-5 text-center space-y-2">
+            <p className="font-semibold text-sm">Este módulo está em desenvolvimento</p>
+            <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+              Trilhas de formação com materiais em PDF, vídeo e artigo, com acompanhamento individual de progresso dos ministros.
+            </p>
+          </div>
         </div>
       )}
 
