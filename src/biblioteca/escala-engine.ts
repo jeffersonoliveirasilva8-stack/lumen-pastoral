@@ -52,9 +52,10 @@ export type ConfigParoquia = {
   limite_semanal?: number;
   limite_mensal?: number;
   impedir_repeticao_seguida?: boolean;
-  prioridade_score?: boolean;    // true = maior score (mérito); false/undef = equidade
-  prioridade_bonus_alto?: number; // bonus pts para prioridade_escala alta/mestre_cerimonia/coordenador (padrão: 15)
-  prioridade_bonus_medio?: number; // bonus pts para prioridade_escala media (padrão: 8)
+  prioridade_score?: boolean;       // true = maior score (mérito); false/undef = equidade
+  prioridade_bonus_alto?: number;   // bonus pts para prioridade_escala alta/mestre_cerimonia/coordenador (padrão: 15)
+  prioridade_bonus_medio?: number;  // bonus pts para prioridade_escala media (padrão: 8)
+  distribuicao_masc_pct?: number;   // % masculino alvo (0-100); undefined = sem controle de gênero
 };
 
 export type MinisterioBase = {
@@ -514,19 +515,43 @@ export function alocarMembros(
     // Ordena por score decrescente (maior score = maior prioridade = será escolhido primeiro)
     candidatosComScore.sort((a, b) => b.breakdown.total - a.breakdown.total);
 
-    // ── Fase 3: Mix de gênero ───────────────────────────────────────────────
+    // ── Fase 3: Distribuição de gênero configurada ─────────────────────────
+    // Usa distribuicao_masc_pct da config (default 50 = equidade).
+    // undefined = sem controle (pega os top N por score puro).
     const selecionados = (() => {
-      const top = candidatosComScore.slice(0, vagas);
-      if (vagas < 2 || top.length < 2) return top;
-      const comGenero = top.filter((c) => c.membro.sexo === "M" || c.membro.sexo === "F");
-      if (comGenero.length === 0) return top;
-      const generoBase = comGenero[0].membro.sexo;
-      if (!comGenero.every((c) => c.membro.sexo === generoBase)) return top;
-      const diferente = candidatosComScore.slice(vagas).find(
-        (c) => c.membro.sexo !== generoBase && (c.membro.sexo === "M" || c.membro.sexo === "F"),
-      );
-      if (!diferente) return top;
-      return [...top.slice(0, vagas - 1), diferente];
+      const mascPct = config?.distribuicao_masc_pct;
+      if (mascPct === undefined || vagas < 2 || candidatosComScore.length < 2) {
+        return candidatosComScore.slice(0, vagas);
+      }
+      const alvoMasc = Math.round(vagas * mascPct / 100);
+      const alvoFem  = vagas - alvoMasc;
+      const machos  = candidatosComScore.filter((c) => c.membro.sexo === "M");
+      const femeas  = candidatosComScore.filter((c) => c.membro.sexo === "F");
+      const escolhidos = [
+        ...machos.slice(0, alvoMasc),
+        ...femeas.slice(0, alvoFem),
+      ];
+      const escolhidosIds = new Set(escolhidos.map((c) => c.membro.id));
+      // Preenche vagas restantes com os melhores de qualquer gênero
+      const faltam = vagas - escolhidos.length;
+      if (faltam > 0) {
+        const restantes = candidatosComScore.filter((c) => !escolhidosIds.has(c.membro.id));
+        escolhidos.push(...restantes.slice(0, faltam));
+      }
+      // Alerta quando a proporção configurada não pôde ser atingida
+      const mascObtidos = escolhidos.filter((c) => c.membro.sexo === "M").length;
+      const femObtidos  = escolhidos.filter((c) => c.membro.sexo === "F").length;
+      if (
+        (alvoMasc > 0 && mascObtidos < alvoMasc && machos.length < alvoMasc) ||
+        (alvoFem  > 0 && femObtidos  < alvoFem  && femeas.length < alvoFem)
+      ) {
+        alertas.push(
+          `⚠ "${funcao.ministerio_nome}": proporção ${mascPct}/${100 - mascPct} (M/F) não atingida` +
+          ` — M disponíveis: ${machos.length} (alvo ${alvoMasc}), F disponíveis: ${femeas.length} (alvo ${alvoFem}).` +
+          " Número insuficiente de candidatos para atingir a proporção configurada.",
+        );
+      }
+      return escolhidos;
     })();
 
     // ── Fase 4: Registrar alocações ─────────────────────────────────────────
