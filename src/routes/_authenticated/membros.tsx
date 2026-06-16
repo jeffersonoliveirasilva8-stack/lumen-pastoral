@@ -3271,10 +3271,10 @@ function MembrosPage() {
               )}
               <div className="flex gap-2">
                 <Input type="date" className="flex-1 h-8 text-sm" value={newIndisp} onChange={(e) => setNewIndisp(e.target.value)} />
-                <Input placeholder="Motivo (opcional)" className="flex-1 h-8 text-sm" value={newIndispMotivo} onChange={(e) => setNewIndispMotivo(e.target.value)} />
+                <Input placeholder="Motivo *" className="flex-1 h-8 text-sm" value={newIndispMotivo} onChange={(e) => setNewIndispMotivo(e.target.value)} />
                 <Button
                   size="sm" className="h-8 shrink-0"
-                  disabled={!newIndisp || addIndispMutation.isPending}
+                  disabled={!newIndisp || !newIndispMotivo.trim() || addIndispMutation.isPending}
                   onClick={() => addIndispMutation.mutate({ data: newIndisp, motivo: newIndispMotivo })}
                 >
                   {addIndispMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}

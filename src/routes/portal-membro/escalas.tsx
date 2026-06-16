@@ -1242,7 +1242,7 @@ function IndisponibilidadeTab({
     ? (() => { const d = new Date(); d.setDate(d.getDate() + diasAntecedencia); return d.toISOString().slice(0, 10); })()
     : new Date().toISOString().slice(0, 10);
 
-  const canAdd = !!newData && (newTipo === "dia" || !!newHoraInicio);
+  const canAdd = !!newData && !!newMotivo.trim() && (newTipo === "dia" || !!newHoraInicio);
 
   function handleAdd() {
     if (!canAdd) return;
@@ -1366,10 +1366,10 @@ function IndisponibilidadeTab({
         <div className="flex gap-2 items-end">
           <div className="flex-1 space-y-1">
             <label className="text-xs text-muted-foreground/70">
-              Motivo <span className="text-muted-foreground/40">(opcional)</span>
+              Motivo <span className="text-destructive">*</span>
             </label>
             <input
-              placeholder="Ex: viagem, compromisso…"
+              placeholder="Ex: viagem, compromisso familiar, trabalho…"
               value={newMotivo}
               onChange={(e) => setNewMotivo(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAdd()}
