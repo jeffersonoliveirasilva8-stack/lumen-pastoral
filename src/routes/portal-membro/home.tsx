@@ -5,7 +5,7 @@ import { format, isToday, isTomorrow, differenceInDays, parseISO, subMonths, sta
 import { ptBR } from "date-fns/locale";
 import {
   Calendar, Clock, MapPin,
-  Trophy, Loader2, CheckCircle2, Cake, Play,
+  Trophy, CheckCircle2, Cake, Play,
   CalendarDays, BookOpen, Bell, User, ChevronRight,
 } from "lucide-react";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
@@ -17,6 +17,7 @@ import { useHomiliaHoje } from "@/hooks/use-homilia";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import { SkeletonEscalaCard, Skeleton } from "@/components/ui/skeleton";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const anyDb = supabase as any;
@@ -401,10 +402,7 @@ function PortalMembroHome() {
           <Link to="/portal-membro/escalas" className="text-xs text-primary hover:underline">Ver todas</Link>
         </div>
         {loadingEscalas ? (
-          <div className="rounded-2xl border border-border bg-card p-5 flex items-center gap-3">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Carregando...</span>
-          </div>
+          <SkeletonEscalaCard />
         ) : !nextEscala ? (
           <div className="rounded-2xl border border-dashed border-border bg-background p-6 text-center">
             <Calendar className="h-6 w-6 mx-auto text-muted-foreground/40 mb-2" />

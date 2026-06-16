@@ -112,6 +112,15 @@
   --sidebar-border: oklch(0.3 0.025 260);
   --sidebar-ring: oklch(0.74 0.135 80);
 
+  /* Cores litúrgicas — usadas no calendário e badges */
+  --liturgy-verde:    #16a34a;
+  --liturgy-roxo:     #9333ea;
+  --liturgy-vermelho: #dc2626;
+  --liturgy-branco:   #d1d5db;
+  --liturgy-rosa:     #ec4899;
+  --liturgy-dourado:  #f59e0b;
+  --liturgy-preto:    #374151;
+
   --gradient-gold: linear-gradient(135deg, oklch(0.78 0.14 85), oklch(0.68 0.13 70));
   --gradient-sacro: linear-gradient(180deg, oklch(0.22 0.03 260), oklch(0.15 0.03 270));
   --shadow-altar: 0 20px 50px -20px oklch(0.22 0.03 260 / 0.25);
@@ -198,6 +207,9 @@
 @keyframes spin-once {
   from { transform: rotate(0deg); }
   to   { transform: rotate(180deg); }
+}
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
 }
 
 @layer utilities {
