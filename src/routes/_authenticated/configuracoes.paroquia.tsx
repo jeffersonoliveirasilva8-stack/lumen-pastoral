@@ -327,8 +327,17 @@ function PersonalizacaoPage() {
 
   if (authLoading || isPending) {
     return (
-      <div className="p-10 flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
+      <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto space-y-4">
+        <div className="flex gap-2 mb-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-9 w-20 rounded-full bg-muted animate-pulse" />
+          ))}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-20 rounded-2xl border border-border bg-card animate-pulse" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -502,7 +511,10 @@ function PersonalizacaoPage() {
         <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
           <div>
             <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-            <h1 className="mt-1.5 font-serif text-4xl">Geral</h1>
+            <h1 className="mt-1.5 font-serif text-3xl">{paroquia.nome}</h1>
+            {paroquia.diocese && (
+              <p className="text-sm text-muted-foreground mt-0.5">{paroquia.diocese}</p>
+            )}
           </div>
           <Link
             to="/admin/liturgia"
