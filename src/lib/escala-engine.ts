@@ -201,7 +201,14 @@ function _buildAndAllocate(
     .map((h) => ({ membro_id: h.membro_id, data: evento.data }));
 
   const indisponibilidades: IndisponibilidadeEngine[] = [
-    ...(options?.indisponibilidades ?? []).map((i) => ({ membro_id: i.membro_id, data: i.data.slice(0, 10) })),
+    ...(options?.indisponibilidades ?? []).map((i) => ({
+      membro_id: i.membro_id,
+      data: i.data.slice(0, 10),
+      tipo: i.tipo,
+      hora_inicio: i.hora_inicio,
+      hora_fim: i.hora_fim,
+      data_fim: i.data_fim,
+    })),
     ...sameDayBlocks,
   ];
 

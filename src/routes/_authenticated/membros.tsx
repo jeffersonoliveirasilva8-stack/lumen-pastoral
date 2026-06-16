@@ -97,6 +97,10 @@ type Indisponibilidade = {
   membro_id: string;
   data: string;
   motivo: string | null;
+  tipo: string;
+  hora_inicio: string | null;
+  hora_fim: string | null;
+  cancelada: boolean;
 };
 
 type MissaPadrao = {
@@ -2428,10 +2432,14 @@ function MembrosPage() {
     queryKey: ["indisponibilidades-membro", editId],
     enabled: !!editId,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("indisponibilidades").select("id, membro_id, data, motivo")
-        .eq("membro_id", editId!).order("data");
-      return (data ?? []) as Indisponibilidade[];
+      const { data } = await (supabase as any)
+        .from("indisponibilidades")
+        .select("id, membro_id, data, motivo, tipo, hora_inicio, hora_fim, cancelada")
+        .eq("membro_id", editId!)
+        .order("data");
+      return (data ?? []).map((r: any) => ({
+        ...r, tipo: r.tipo ?? "dia", cancelada: r.cancelada ?? false,
+      })) as Indisponibilidade[];
     },
   });
 
@@ -3228,20 +3236,37 @@ function MembrosPage() {
                 <p className="text-xs text-muted-foreground italic">Nenhuma indisponibilidade cadastrada.</p>
               ) : (
                 <div className="space-y-1.5">
-                  {indisponibilidades.map((ind) => (
-                    <div key={ind.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm">
-                      <div>
-                        <span className="font-medium">
-                          {new Date(ind.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
-                        </span>
-                        {ind.motivo && <span className="ml-2 text-xs text-muted-foreground">{ind.motivo}</span>}
+                  {indisponibilidades.map((ind) => {
+                    const isPast = ind.data < new Date().toISOString().slice(0, 10);
+                    return (
+                      <div key={ind.id} className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
+                        ind.cancelada ? "opacity-40 border-border" : isPast ? "border-border opacity-60" : "border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/10"
+                      }`}>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`font-medium ${isPast || ind.cancelada ? "" : "text-amber-900 dark:text-amber-200"}`}>
+                              {new Date(ind.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
+                            </span>
+                            {ind.tipo === "periodo" && ind.hora_inicio && (
+                              <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 px-1.5 py-0.5 rounded">
+                                {ind.hora_inicio.slice(0, 5)}{ind.hora_fim ? `–${ind.hora_fim.slice(0, 5)}` : ""}
+                              </span>
+                            )}
+                            {ind.cancelada && (
+                              <span className="text-[10px] text-red-500">cancelada</span>
+                            )}
+                          </div>
+                          {ind.motivo && <span className="text-xs text-muted-foreground">{ind.motivo}</span>}
+                        </div>
+                        {!ind.cancelada && (
+                          <button
+                            onClick={() => removeIndispMutation.mutate(ind.id)}
+                            className="shrink-0 text-muted-foreground hover:text-destructive"
+                          ><X className="h-3.5 w-3.5" /></button>
+                        )}
                       </div>
-                      <button
-                        onClick={() => removeIndispMutation.mutate(ind.id)}
-                        className="text-muted-foreground hover:text-destructive"
-                      ><X className="h-3.5 w-3.5" /></button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <div className="flex gap-2">

@@ -29,7 +29,11 @@ export const Route = createFileRoute("/portal-membro/escalas")({
   head: () => ({ meta: [{ title: "Escalas — Portal do Servidor" }] }),
 });
 
-type IndispItem = { id: string; data: string; motivo: string | null };
+type IndispItem = {
+  id: string; data: string; motivo: string | null;
+  tipo: string; hora_inicio: string | null; hora_fim: string | null;
+  cancelada: boolean;
+};
 
 type HistoricoItem = {
   escala_membro_id: string;
@@ -230,12 +234,17 @@ function PortalMembroEscalas() {
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("indisponibilidades")
-        .select("id, data, motivo")
+        .select("id, data, motivo, tipo, hora_inicio, hora_fim, cancelada")
         .eq("membro_id", membro!.id)
+        .eq("cancelada", false)
         .gte("data", new Date().toISOString().slice(0, 10))
         .order("data");
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({ id: r.id, data: r.data, motivo: r.motivo }));
+      return (data ?? []).map((r: any) => ({
+        id: r.id, data: r.data, motivo: r.motivo,
+        tipo: r.tipo ?? "dia", hora_inicio: r.hora_inicio ?? null,
+        hora_fim: r.hora_fim ?? null, cancelada: r.cancelada ?? false,
+      }));
     },
   });
 
@@ -374,14 +383,17 @@ function PortalMembroEscalas() {
   });
 
   const addIndispMutation = useMutation({
-    mutationFn: async (args: { data: string; motivo: string }) => {
+    mutationFn: async (args: { data: string; motivo: string; tipo: string; hora_inicio: string | null; hora_fim: string | null }) => {
       const { error } = await anyDb
         .from("indisponibilidades")
         .insert({
           paroquia_id: membro!.paroquia_id,
           membro_id: membro!.id,
           data: args.data,
-          motivo: args.motivo,
+          motivo: args.motivo || null,
+          tipo: args.tipo,
+          hora_inicio: args.hora_inicio || null,
+          hora_fim: args.hora_fim || null,
         });
       if (error) throw error;
     },
@@ -574,7 +586,9 @@ function PortalMembroEscalas() {
             indisps={indisps}
             loading={loadingIndisps}
             diasAntecedencia={diasAntecedencia}
-            onAdd={(data, motivo) => addIndispMutation.mutate({ data, motivo })}
+            onAdd={(data, motivo, tipo, hora_inicio, hora_fim) =>
+              addIndispMutation.mutate({ data, motivo, tipo, hora_inicio, hora_fim })
+            }
             onRemove={(id) => removeIndispMutation.mutate(id)}
             saving={addIndispMutation.isPending}
           />
@@ -1213,29 +1227,41 @@ function IndisponibilidadeTab({
   indisps: IndispItem[];
   loading: boolean;
   diasAntecedencia: number;
-  onAdd: (data: string, motivo: string) => void;
+  onAdd: (data: string, motivo: string, tipo: string, hora_inicio: string | null, hora_fim: string | null) => void;
   onRemove: (id: string) => void;
   saving: boolean;
 }) {
   const [newData, setNewData] = useState("");
   const [newMotivo, setNewMotivo] = useState("");
+  const [newTipo, setNewTipo] = useState<"dia" | "periodo">("dia");
+  const [newHoraInicio, setNewHoraInicio] = useState("");
+  const [newHoraFim, setNewHoraFim] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const minDate = diasAntecedencia > 0
     ? (() => { const d = new Date(); d.setDate(d.getDate() + diasAntecedencia); return d.toISOString().slice(0, 10); })()
     : new Date().toISOString().slice(0, 10);
 
-  const canAdd = !!newData;
+  const canAdd = !!newData && (newTipo === "dia" || !!newHoraInicio);
 
   function handleAdd() {
     if (!canAdd) return;
-    if (indisps.some((i) => i.data === newData)) {
+    if (indisps.some((i) => i.data === newData && i.tipo === "dia")) {
       toast.error("Essa data já está bloqueada.");
       return;
     }
-    onAdd(newData, newMotivo.trim());
+    onAdd(
+      newData,
+      newMotivo.trim(),
+      newTipo,
+      newTipo === "periodo" ? (newHoraInicio || null) : null,
+      newTipo === "periodo" ? (newHoraFim || null) : null,
+    );
     setNewData("");
     setNewMotivo("");
+    setNewHoraInicio("");
+    setNewHoraFim("");
+    setNewTipo("dia");
   }
 
   // Agrupa por mês (key = "2026-06")
@@ -1278,7 +1304,9 @@ function IndisponibilidadeTab({
       {/* Formulário */}
       <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nova indisponibilidade</p>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+
+        {/* Data + Tipo */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground/70">Data <span className="text-destructive">*</span></label>
             <input
@@ -1286,11 +1314,57 @@ function IndisponibilidadeTab({
               value={newData}
               min={minDate}
               onChange={(e) => setNewData(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
               className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
             />
           </div>
           <div className="space-y-1">
+            <label className="text-xs text-muted-foreground/70">Tipo</label>
+            <div className="flex gap-1.5">
+              {(["dia", "periodo"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setNewTipo(t)}
+                  className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                    newTipo === t
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-muted-foreground border-input hover:border-ring"
+                  }`}
+                >
+                  {t === "dia" ? "Dia inteiro" : "Horário"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Horário (só para tipo periodo) */}
+        {newTipo === "periodo" && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground/70">De <span className="text-destructive">*</span></label>
+              <input
+                type="time"
+                value={newHoraInicio}
+                onChange={(e) => setNewHoraInicio(e.target.value)}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground/70">Até <span className="text-muted-foreground/40">(opcional)</span></label>
+              <input
+                type="time"
+                value={newHoraFim}
+                onChange={(e) => setNewHoraFim(e.target.value)}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Motivo + Botão */}
+        <div className="flex gap-2 items-end">
+          <div className="flex-1 space-y-1">
             <label className="text-xs text-muted-foreground/70">
               Motivo <span className="text-muted-foreground/40">(opcional)</span>
             </label>
@@ -1306,7 +1380,7 @@ function IndisponibilidadeTab({
             size="sm"
             disabled={!canAdd || saving}
             onClick={handleAdd}
-            className="h-[42px] px-4 sm:self-end"
+            className="h-[42px] px-4 shrink-0"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
             <span className="ml-1">Registrar</span>
@@ -1367,11 +1441,18 @@ function IndisponibilidadeTab({
                             <p className="text-sm font-medium capitalize leading-snug">
                               {format(dateObj, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
                             </p>
-                            {ind.motivo ? (
-                              <p className="text-xs text-muted-foreground mt-0.5">{ind.motivo}</p>
-                            ) : (
-                              <p className="text-xs text-muted-foreground/35 mt-0.5 italic">Sem motivo</p>
-                            )}
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              {ind.tipo === "periodo" && ind.hora_inicio ? (
+                                <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded-md">
+                                  {ind.hora_inicio.slice(0, 5)}{ind.hora_fim ? ` – ${ind.hora_fim.slice(0, 5)}` : ""}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground/50">Dia inteiro</span>
+                              )}
+                              {ind.motivo && (
+                                <span className="text-xs text-muted-foreground truncate">{ind.motivo}</span>
+                              )}
+                            </div>
                           </div>
                           <button
                             type="button"

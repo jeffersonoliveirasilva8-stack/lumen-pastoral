@@ -693,6 +693,25 @@ function DashboardPage() {
     },
   });
 
+  // ── Indisponibilidades ativas (próximos 30 dias) ──────────────────────────────
+  const { data: indispAtivasCount = 0 } = useQuery<number>({
+    queryKey: ["stats-indisp-ativas", pid],
+    enabled: !!pid && isCoord,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const hoje = new Date().toISOString().slice(0, 10);
+      const em30 = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+      const { count } = await anyDb
+        .from("indisponibilidades")
+        .select("*", { count: "exact", head: true })
+        .eq("paroquia_id", pid!)
+        .eq("cancelada", false)
+        .gte("data", hoje)
+        .lte("data", em30);
+      return count ?? 0;
+    },
+  });
+
   // ── Substituições pendentes ───────────────────────────────────────────────────
   const { data: substituicoesPendentesCount = 0 } = useQuery<number>({
     queryKey: ["stats-substituicoes-pendentes", pid],
@@ -1361,6 +1380,24 @@ function DashboardPage() {
           />
         ))}
       </div>
+
+      {/* ── Indisponibilidades ativas (próximos 30 dias) ── */}
+      {isCoord && indispAtivasCount > 0 && (
+        <Link to="/escalas" className="block">
+          <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3 hover:bg-amber-100/60 transition-colors">
+            <CalendarOff className="h-4 w-4 text-amber-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                {indispAtivasCount} indisponibilidade{indispAtivasCount !== 1 ? "s" : ""} ativa{indispAtivasCount !== 1 ? "s" : ""}
+              </p>
+              <p className="text-xs text-amber-700/70 dark:text-amber-400">
+                Nos próximos 30 dias — verifique antes de publicar escalas
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-amber-500 shrink-0" />
+          </div>
+        </Link>
+      )}
 
       {/* ── Presença do mês + Membros por atuação ── */}
       <div className="grid gap-4 sm:grid-cols-2">

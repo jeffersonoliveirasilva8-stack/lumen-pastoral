@@ -5,7 +5,7 @@ import {
   Plus, Loader2, Calendar, List, ChevronLeft, ChevronRight, ChevronDown,
   MapPin, Clock, Trash2, Pencil, UserPlus, X, Check, Sparkles,
   MoreVertical, FileText, AlertTriangle, Users, ClipboardCheck,
-  CheckCircle2, XCircle, Church, History,
+  CheckCircle2, XCircle, Church, History, Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths, addDays } from "date-fns";
@@ -147,6 +147,12 @@ type FuncaoPreview = {
 };
 type EscalaPreview = { needed: number; filled: number; funcoes: FuncaoPreview[] };
 
+type IndispRow = {
+  id: string; membro_id: string; data: string;
+  hora_inicio: string | null; hora_fim: string | null;
+  tipo: string; data_fim: string | null; cancelada: boolean; motivo: string | null;
+};
+
 // ── Componente principal ─────────────────────────────────────────────────────
 
 function EscalasPage() {
@@ -154,7 +160,7 @@ function EscalasPage() {
   const qc = useQueryClient();
   const { abrir } = Route.useSearch();
 
-  const [view, setView] = useState<"lista" | "historico">("lista");
+  const [view, setView] = useState<"lista" | "historico" | "indisponibilidades">("lista");
   const [calMonth, setCalMonth] = useState(new Date());
   const [formOpen, setFormOpen] = useState(false);
   const [detailEscala, setDetailEscala] = useState<Escala | null>(null);
@@ -371,15 +377,16 @@ function EscalasPage() {
     },
   });
 
-  const { data: indisponibilidades = [] } = useQuery<{ membro_id: string; data: string }[]>({
+  const { data: indisponibilidades = [] } = useQuery<IndispRow[]>({
     queryKey: ["indisponibilidades", profile?.paroquia_id],
     enabled: !!profile?.paroquia_id,
     queryFn: async () => {
       const { data } = await supabase
         .from("indisponibilidades")
-        .select("membro_id, data")
-        .eq("paroquia_id", profile!.paroquia_id!);
-      return (data ?? []) as { membro_id: string; data: string }[];
+        .select("id, membro_id, data, hora_inicio, hora_fim, tipo, data_fim, cancelada, motivo")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .order("data", { ascending: false });
+      return (data ?? []) as unknown as IndispRow[];
     },
   });
 
@@ -1347,9 +1354,10 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
       {/* Abas do módulo Escalas */}
       <ModuleTabBar tabs={[
-        { label: "Escalas",       onClick: () => setView("lista"),     isActive: view === "lista" },
-        { label: "Histórico",     onClick: () => setView("historico"), isActive: view === "historico" },
-        { label: "Substituições", to: "/substituicoes",                isActive: false },
+        { label: "Escalas",              onClick: () => setView("lista"),                 isActive: view === "lista" },
+        { label: "Histórico",            onClick: () => setView("historico"),             isActive: view === "historico" },
+        { label: "Indisponibilidades",   onClick: () => setView("indisponibilidades"),    isActive: view === "indisponibilidades" },
+        { label: "Substituições",        to: "/substituicoes",                            isActive: false },
       ]} />
 
       {/* Header */}
@@ -1569,6 +1577,12 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
             </div>
           )}
         </div>
+      ) : view === "indisponibilidades" ? (
+        <IndisponibilidadesTab
+          indisponibilidades={indisponibilidades}
+          membros={membros}
+          onRefresh={() => qc.invalidateQueries({ queryKey: ["indisponibilidades", profile?.paroquia_id] })}
+        />
       ) : null}
 
       {/* ── Dialog período para gerar escalas ──────────────────────────────── */}
@@ -1919,6 +1933,185 @@ function groupFuncoesByCategoria(funcoes: FuncaoPreview[]) {
     return a.categoria.localeCompare(b.categoria, "pt-BR");
   });
 }
+
+// ── IndisponibilidadesTab ─────────────────────────────────────────────────────
+
+function IndisponibilidadesTab({
+  indisponibilidades,
+  membros,
+  onRefresh,
+}: {
+  indisponibilidades: IndispRow[];
+  membros: { id: string; nome: string }[];
+  onRefresh: () => void;
+}) {
+  const [filtro, setFiltro] = useState<"ativas" | "todas">("ativas");
+  const [cancelTarget, setCancelTarget] = useState<IndispRow | null>(null);
+  const [canceling, setCanceling] = useState(false);
+
+  const hoje = format(new Date(), "yyyy-MM-dd");
+
+  const lista = useMemo(() => {
+    const base = filtro === "ativas"
+      ? indisponibilidades.filter((i) => !i.cancelada && i.data >= hoje)
+      : indisponibilidades;
+    return base.sort((a, b) => a.data.localeCompare(b.data));
+  }, [indisponibilidades, filtro, hoje]);
+
+  const ativas  = indisponibilidades.filter((i) => !i.cancelada && i.data >= hoje).length;
+  const passadas = indisponibilidades.filter((i) => !i.cancelada && i.data < hoje).length;
+  const canceladas = indisponibilidades.filter((i) => i.cancelada).length;
+
+  function nomeMembro(id: string) {
+    return membros.find((m) => m.id === id)?.nome ?? "—";
+  }
+
+  function labelData(row: IndispRow) {
+    if (row.tipo === "intervalo" && row.data_fim) {
+      return `${format(new Date(row.data + "T00:00:00"), "dd/MM/yyyy")} → ${format(new Date(row.data_fim + "T00:00:00"), "dd/MM/yyyy")}`;
+    }
+    return format(new Date(row.data + "T00:00:00"), "dd/MM/yyyy, EEEE", { locale: ptBR });
+  }
+
+  function labelHorario(row: IndispRow) {
+    if (row.tipo === "periodo" && row.hora_inicio) {
+      return `${row.hora_inicio.slice(0, 5)}${row.hora_fim ? ` – ${row.hora_fim.slice(0, 5)}` : ""}`;
+    }
+    return "Dia inteiro";
+  }
+
+  async function handleCancelar() {
+    if (!cancelTarget) return;
+    setCanceling(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("indisponibilidades")
+        .update({ cancelada: true })
+        .eq("id", cancelTarget.id);
+      if (error) throw error;
+      toast.success("Indisponibilidade cancelada.");
+      onRefresh();
+    } catch {
+      toast.error("Erro ao cancelar indisponibilidade.");
+    } finally {
+      setCanceling(false);
+      setCancelTarget(null);
+    }
+  }
+
+  return (
+    <div className="mt-6 space-y-4">
+      {/* Resumo */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 text-center">
+          <p className="text-xl font-bold font-serif text-amber-600">{ativas}</p>
+          <p className="text-[10px] uppercase tracking-wide text-amber-700/70 mt-0.5">Ativas</p>
+        </div>
+        <div className="rounded-xl bg-muted border border-border px-3 py-2.5 text-center">
+          <p className="text-xl font-bold font-serif text-muted-foreground">{passadas}</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Passadas</p>
+        </div>
+        <div className="rounded-xl bg-muted border border-border px-3 py-2.5 text-center">
+          <p className="text-xl font-bold font-serif text-muted-foreground">{canceladas}</p>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Canceladas</p>
+        </div>
+      </div>
+
+      {/* Filtro */}
+      <div className="flex gap-2">
+        {(["ativas", "todas"] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFiltro(f)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              filtro === f
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            {f === "ativas" ? "Apenas ativas" : "Todas"}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista */}
+      {lista.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
+          <Ban className="h-6 w-6 text-muted-foreground mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Nenhuma indisponibilidade encontrada.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {lista.map((row) => (
+            <div
+              key={row.id}
+              className={`rounded-2xl border bg-card px-4 py-3.5 flex items-start justify-between gap-3 ${
+                row.cancelada ? "opacity-50" : ""
+              }`}
+            >
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="text-sm font-semibold truncate">{nomeMembro(row.membro_id)}</p>
+                <p className="text-xs text-muted-foreground">{labelData(row)}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                    {labelHorario(row)}
+                  </Badge>
+                  {row.cancelada && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-red-600 border-red-300">
+                      Cancelada
+                    </Badge>
+                  )}
+                  {row.motivo && (
+                    <span className="text-[11px] text-muted-foreground truncate max-w-[160px]">
+                      {row.motivo}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {!row.cancelada && row.data >= hoje && (
+                <button
+                  type="button"
+                  onClick={() => setCancelTarget(row)}
+                  className="shrink-0 mt-0.5 text-muted-foreground hover:text-red-600 transition-colors"
+                  title="Cancelar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Confirmar cancelamento */}
+      <AlertDialog open={!!cancelTarget} onOpenChange={(o) => { if (!o) setCancelTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar indisponibilidade?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cancelTarget && (
+                <>
+                  <strong>{nomeMembro(cancelTarget.membro_id)}</strong> — {labelData(cancelTarget)}.
+                  O membro poderá voltar a ser escalado nessa data.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Não</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelar} disabled={canceling}>
+              {canceling && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Cancelar indisponibilidade
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ── ListaView ─────────────────────────────────────────────────────────────────
 
 function ListaView({
   escalas, allEscalas, selectedIds, escalaCounts, onToggleSelect, onSelectAll,
@@ -2467,7 +2660,7 @@ function EscalaDetail({
   membroMinisterios: Record<string, string[]>;
   assignmentHistory: AssignmentHistoryEntry[];
   membroAtuacoes: Record<string, string[]>;
-  indisponibilidades: { membro_id: string; data: string }[];
+  indisponibilidades: IndispRow[];
   funcaoRestricoes: FuncaoRestricao[];
   missasPadrao: { id: string; dia_semana: number; hora_inicio: string | null }[];
   membroMissaRestricoes: Record<string, string[]>;

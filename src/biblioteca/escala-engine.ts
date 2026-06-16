@@ -21,7 +21,11 @@ export type MembroEngine = {
 
 export type IndisponibilidadeEngine = {
   membro_id: string;
-  data: string; // YYYY-MM-DD
+  data: string;       // YYYY-MM-DD
+  tipo?: string;      // 'dia' | 'periodo' | 'intervalo'
+  hora_inicio?: string | null; // HH:MM
+  hora_fim?: string | null;    // HH:MM
+  data_fim?: string | null;    // YYYY-MM-DD (for 'intervalo')
 };
 
 export type FuncaoNecessaria = {
@@ -189,7 +193,15 @@ function estaIndisponivel(
   data: string,
   indisponibilidades: IndisponibilidadeEngine[],
 ): boolean {
-  return indisponibilidades.some((i) => i.membro_id === membro_id && i.data === data);
+  return indisponibilidades.some((i) => {
+    if (i.membro_id !== membro_id) return false;
+    // 'intervalo': unavailable for a date range [data, data_fim]
+    if (i.tipo === "intervalo" && i.data_fim) {
+      return data >= i.data && data <= i.data_fim;
+    }
+    // 'dia' or 'periodo': match exact date (partial-time treated conservatively as full day)
+    return i.data === data;
+  });
 }
 
 function ehDomingo(data: string): boolean {
