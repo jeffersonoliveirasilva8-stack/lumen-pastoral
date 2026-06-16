@@ -272,6 +272,7 @@ function PortalMembroNotificacoes() {
         .select("id, titulo, mensagem, tipo, created_at, link_referencia, destinatario_id")
         .eq("paroquia_id", membro!.paroquia_id)
         .eq("apenas_admin", false)
+        .eq("apenas_coordenacao", false)
         .or(`destinatario_id.is.null,destinatario_id.eq.${membro!.id}`)
         .order("created_at", { ascending: false })
         .limit(80);
