@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useMemo, useEffect, useState } from "react";
 import { format, isToday, isTomorrow, differenceInDays, parseISO, subMonths, startOfMonth, endOfMonth, startOfDay } from "date-fns";
@@ -763,7 +763,6 @@ function NextEscalaHero({ esc, onConfirmar, confirming }: {
   const monthStr = format(date, "MMM", { locale: ptBR });
   const weekdayLong = format(date, "EEEE", { locale: ptBR });
 
-  const navigate = useNavigate();
   const isPendente = esc.status === "pendente";
   const isConfirmado = esc.status === "confirmado";
 
@@ -853,15 +852,14 @@ function NextEscalaHero({ esc, onConfirmar, confirming }: {
               )}
               Confirmar presença
             </button>
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/portal-membro/escalas" })}
+            <Link
+              to="/portal-membro/escalas"
               className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background hover:bg-muted active:scale-[0.98] text-muted-foreground text-sm font-medium px-4 py-2.5 transition"
               title="Recusar ou ver detalhes"
             >
               <X className="h-4 w-4" />
               Recusar
-            </button>
+            </Link>
           </div>
         )}
 
