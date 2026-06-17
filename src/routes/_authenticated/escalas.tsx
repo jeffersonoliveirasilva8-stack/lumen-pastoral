@@ -3812,6 +3812,7 @@ function EscalaDetail({
                     <SelectItem value="rascunho">Rascunho</SelectItem>
                     <SelectItem value="publicada">Publicar</SelectItem>
                     <SelectItem value="arquivada">Arquivar</SelectItem>
+                    <SelectItem value="cancelada">Cancelar escala</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
