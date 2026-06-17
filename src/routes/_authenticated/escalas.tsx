@@ -517,8 +517,9 @@ function EscalasPage() {
             usa_tochas: paroquiaConfig?.usa_tochas ?? false,
             limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
             limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
-            impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
+            impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
             prioridade_score: (regras.prioridade_score as boolean | undefined) ?? false,
+            distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
           };
 
           const sugestoes = generateEscalaAssignments(
@@ -799,7 +800,9 @@ function EscalasPage() {
         usa_tochas: paroquiaConfig?.usa_tochas ?? false,
         limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
         limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
-        impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
+        impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+        prioridade_score: (regras.prioridade_score as boolean | undefined) ?? false,
+        distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
       };
 
       const membrosComAtuacoes = membros.map((m) => ({
@@ -2556,8 +2559,9 @@ function EscalaDetail({
       usa_tochas: paroquiaConfig?.usa_tochas ?? false,
       limite_semanal: regras.limite_semanal ?? undefined,
       limite_mensal: regras.limite_mensal ?? undefined,
-      impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? true,
+      impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? false,
       prioridade_score: regras.prioridade_score ?? false,
+      distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
     };
 
     // Encontra missas_padrao que correspondem a esta escala (mesmo dia da semana + hora)

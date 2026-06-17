@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -56,6 +56,7 @@ function SacristiaPage() {
   const [presencaMap, setPresencaMap] = useState<Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente">>({});
   const [savingEscalaId, setSavingEscalaId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("em_andamento");
+  const autoSwitchedRef = useRef(false);
 
   // Para auxiliares: descobre o membro_id do usuário logado para filtrar escalas
   const { data: meupMembroId } = useQuery<string | null>({
@@ -213,6 +214,15 @@ function SacristiaPage() {
   }, [membrosEscala]);
 
   const loading = isLoading || isLoadingMembros;
+
+  // Auto-seleciona "Pendentes" na primeira carga quando não há escalas hoje
+  useEffect(() => {
+    if (loading || autoSwitchedRef.current) return;
+    if (tab === "em_andamento" && em_andamento.length === 0 && pendentes.length > 0) {
+      setTab("pendentes");
+    }
+    autoSwitchedRef.current = true;
+  }, [loading]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-2xl mx-auto pb-24">

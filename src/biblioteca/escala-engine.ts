@@ -300,10 +300,13 @@ function calcularScorePrioridade(
     ? (1 - totalHist / stats.maxTotal) * 100
     : 100;
 
-  // ── Critério 4: Ranking / comprometimento (10%) ─────────────────────────────
-  // Pequeno bônus para membros comprometidos (score do banco)
+  // ── Critério 4: Equidade / mérito pelo score acumulado (10%) ──────────────────
+  // prioridade_score=true (mérito): maior score histórico = mais prioridade
+  // prioridade_score=false/undef (equidade): menor score = mais prioridade → rodízio real
   const rankingBonus = stats.maxDbScore > 0
-    ? (membro.score / stats.maxDbScore) * 100
+    ? config?.prioridade_score
+      ? (membro.score / stats.maxDbScore) * 100
+      : (1 - membro.score / stats.maxDbScore) * 100
     : 0;
 
   // ── Critério 5: Aleatoriedade controlada (5%) ───────────────────────────────
@@ -410,6 +413,9 @@ export function alocarMembros(
   const data30dAtras = somarDias(contexto.data, -30);
   const stats        = computeGrupoStats(membros, historicoRecente, data30dAtras);
 
+  // ── Pré-computação: ontem (para impedir_repeticao_seguida) ─────────────────
+  const ontemStr = somarDias(contexto.data, -1);
+
   // ── Limites de participação (semanal / mensal) ─────────────────────────────
   const acima_limite = new Set<string>();
   if (historicoRecente.length > 0 && (config?.limite_semanal || config?.limite_mensal)) {
@@ -484,6 +490,11 @@ export function alocarMembros(
       if (ja_alocados.has(m.id)) { excluidos.ja_alocado++; continue; }
       if (estaIndisponivel(m.id, contexto.data, indisponibilidades)) { excluidos.indisponibilidade++; continue; }
       if (m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data))) { excluidos.dia_semana++; continue; }
+      // Hard-block: impede escalação em dias consecutivos quando configurado
+      if (config?.impedir_repeticao_seguida) {
+        const serviuOntem = historicoRecente.some((h) => h.membro_id === m.id && h.data === ontemStr);
+        if (serviuOntem) { excluidos.indisponibilidade++; continue; }
+      }
 
       if (acima_limite.has(m.id)) {
         excluidos.acima_limite++;
