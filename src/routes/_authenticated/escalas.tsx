@@ -45,6 +45,10 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const Route = createFileRoute("/_authenticated/escalas")({
   validateSearch: (search: Record<string, unknown>): { abrir?: string; view?: string } => ({
@@ -2353,6 +2357,7 @@ function ListaView({
 }) {
   const [radarOpen, setRadarOpen] = useState(false);
   const [filtro, setFiltro] = useState<"todos" | "semana" | "2semanas" | "incompletas" | "rascunho">("todos");
+  const [paginaEscalas, setPaginaEscalas] = useState(20);
   const [swapTarget, setSwapTarget] = useState<{ membroId: string; nome: string } | null>(null);
   const allSelected = escalas.length > 0 && escalas.every((e) => selectedIds.has(e.id));
   const publishedCount = escalas.filter((e) => e.status === "publicada").length;
@@ -2436,6 +2441,7 @@ function ListaView({
 
   // Filter escalas by quick filter
   const escalasVisiveis = useMemo(() => {
+    setPaginaEscalas(20); // reset ao mudar filtro
     const hojeStr = new Date().toISOString().slice(0, 10);
     const em7 = new Date(); em7.setDate(em7.getDate() + 7);
     const em14 = new Date(); em14.setDate(em14.getDate() + 14);
@@ -2449,6 +2455,8 @@ function ListaView({
       return true;
     });
   }, [escalas, filtro, escalaCounts]);
+
+  const escalasPagina = useMemo(() => escalasVisiveis.slice(0, paginaEscalas), [escalasVisiveis, paginaEscalas]);
 
   const repeatedAlerts = useMemo(() => {
     type AlertEntry = {
@@ -2835,11 +2843,11 @@ function ListaView({
               {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : "Selecionar todas"}
             </span>
           </label>
-          <span className="text-xs text-muted-foreground">{escalasVisiveis.length} escala(s)</span>
+          <span className="text-xs text-muted-foreground">{escalasPagina.length} de {escalasVisiveis.length} escala(s)</span>
         </div>
 
         <div className="space-y-3 p-4 animate-fade-in">
-          {escalasVisiveis.map((e, idx) => {
+          {escalasPagina.map((e, idx) => {
             const cfg = STATUS_CONFIG[e.status] ?? STATUS_CONFIG.rascunho;
             const borderColor = STATUS_BORDER[e.status] ?? STATUS_BORDER.rascunho;
             const d = new Date(e.data + "T00:00:00");
@@ -3034,6 +3042,20 @@ function ListaView({
               </div>
             );
           })}
+
+          {/* ── Carregar mais ── */}
+          {paginaEscalas < escalasVisiveis.length && (
+            <div className="flex justify-center pt-2 pb-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => setPaginaEscalas((p) => p + 20)}
+              >
+                Carregar mais ({escalasVisiveis.length - paginaEscalas} restantes)
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -3217,6 +3239,7 @@ function EscalaDetail({
   } | null>(null);
   const [notificarVaga, setNotificarVaga] = useState(true);
   const [confirmarCancelamento, setConfirmarCancelamento] = useState(false);
+  const [membroBuscaOpen, setMembroBuscaOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setEditMode(initialEditMode);
@@ -4061,51 +4084,74 @@ function EscalaDetail({
                       {/* Atribuir membro */}
                       {atrib.length < f.quantidade && (() => {
                         const { disponiveis: disp, indisponiveis: indisp } = membrosClassificadosParaMinisterio(f.ministerio_id);
+                        const membroSelecionado = membros.find((m) => m.id === selectedMembro);
+                        const isOpen = !!membroBuscaOpen[f.ministerio_id];
                         return (
                           <>
-                            {disp.length > 0 ? (
+                            {disp.length > 0 || indisp.length > 0 ? (
                               <div className="flex gap-2 pl-5">
-                                <Select
-                                  value={selectedMembro}
-                                  onValueChange={(v) => setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: v }))}
+                                <Popover
+                                  open={isOpen}
+                                  onOpenChange={(o) => setMembroBuscaOpen((prev) => ({ ...prev, [f.ministerio_id]: o }))}
                                 >
-                                  <SelectTrigger className="h-7 text-xs flex-1">
-                                    <SelectValue placeholder="Selecionar membro..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <div className="px-2 pt-1.5 pb-1">
-                                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Disponíveis ({disp.length})
-                                      </p>
-                                    </div>
-                                    {disp.map((m) => (
-                                      <SelectItem key={m.id} value={m.id}>
-                                        <span className="flex items-center gap-2 w-full">
-                                          <span className="flex-1 truncate">{nomeExibicao(m.nome)}</span>
-                                          <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
-                                            {m.score > 0 ? `${m.score}pts` : "0pts"}
-                                            {m.diasSemServir !== null ? ` · ${m.diasSemServir}d` : " · novo"}
-                                          </span>
-                                        </span>
-                                      </SelectItem>
-                                    ))}
-                                    {indisp.length > 0 && (
-                                      <>
-                                        <div className="px-2 pt-2 pb-1 border-t border-border/50 mt-1">
-                                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                            Indisponíveis ({indisp.length})
-                                          </p>
-                                        </div>
-                                        {indisp.map((m) => (
-                                          <SelectItem key={m.id} value={m.id} className="opacity-50">
-                                            <span>{nomeExibicao(m.nome)}</span>
-                                            <span className="ml-1.5 text-[10px] text-muted-foreground">· {m.motivo}</span>
-                                          </SelectItem>
-                                        ))}
-                                      </>
-                                    )}
-                                  </SelectContent>
-                                </Select>
+                                  <PopoverTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-7 text-xs flex-1 justify-between font-normal">
+                                      <span className="truncate">
+                                        {membroSelecionado ? nomeExibicao(membroSelecionado.nome) : "Selecionar membro..."}
+                                      </span>
+                                      <ChevronDown className="h-3 w-3 ml-1 text-muted-foreground shrink-0" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-72 p-0" align="start">
+                                    <Command>
+                                      <CommandInput placeholder="Buscar membro..." className="h-8 text-xs" />
+                                      <CommandList className="max-h-56">
+                                        <CommandEmpty className="text-xs py-3 text-center text-muted-foreground">Nenhum membro encontrado.</CommandEmpty>
+                                        {disp.length > 0 && (
+                                          <CommandGroup heading={`Disponíveis (${disp.length})`}>
+                                            {disp.map((m) => (
+                                              <CommandItem
+                                                key={m.id}
+                                                value={nomeExibicao(m.nome)}
+                                                onSelect={() => {
+                                                  setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: m.id }));
+                                                  setMembroBuscaOpen((prev) => ({ ...prev, [f.ministerio_id]: false }));
+                                                }}
+                                                className="text-xs"
+                                              >
+                                                <Check className={`h-3 w-3 mr-1.5 shrink-0 ${selectedMembro === m.id ? "opacity-100" : "opacity-0"}`} />
+                                                <span className="flex-1 truncate">{nomeExibicao(m.nome)}</span>
+                                                <span className="ml-2 text-[10px] text-muted-foreground tabular-nums shrink-0">
+                                                  {m.score > 0 ? `${m.score}pts` : "0pts"}
+                                                  {m.diasSemServir !== null ? ` · ${m.diasSemServir}d` : " · novo"}
+                                                </span>
+                                              </CommandItem>
+                                            ))}
+                                          </CommandGroup>
+                                        )}
+                                        {indisp.length > 0 && (
+                                          <CommandGroup heading={`Indisponíveis (${indisp.length})`}>
+                                            {indisp.map((m) => (
+                                              <CommandItem
+                                                key={m.id}
+                                                value={nomeExibicao(m.nome)}
+                                                onSelect={() => {
+                                                  setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: m.id }));
+                                                  setMembroBuscaOpen((prev) => ({ ...prev, [f.ministerio_id]: false }));
+                                                }}
+                                                className="text-xs opacity-60"
+                                              >
+                                                <Check className={`h-3 w-3 mr-1.5 shrink-0 ${selectedMembro === m.id ? "opacity-100" : "opacity-0"}`} />
+                                                <span className="flex-1 truncate">{nomeExibicao(m.nome)}</span>
+                                                <span className="ml-2 text-[10px] text-amber-600 shrink-0 truncate max-w-[100px]">· {m.motivo}</span>
+                                              </CommandItem>
+                                            ))}
+                                          </CommandGroup>
+                                        )}
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
                                 <Button
                                   size="sm"
                                   className="h-7 text-xs"
@@ -4119,19 +4165,6 @@ function EscalaDetail({
                                 >
                                   <UserPlus className="h-3 w-3" />
                                 </Button>
-                              </div>
-                            ) : indisp.length > 0 ? (
-                              <div className="pl-5 space-y-1">
-                                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                                  Todos os membros vinculados estão indisponíveis:
-                                </p>
-                                {indisp.map((m) => (
-                                  <div key={m.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <Ban className="h-3 w-3 text-amber-500 shrink-0" />
-                                    <span className="font-medium">{nomeExibicao(m.nome)}</span>
-                                    <span>· {m.motivo}</span>
-                                  </div>
-                                ))}
                               </div>
                             ) : (
                               <p className="pl-5 text-xs text-muted-foreground">
