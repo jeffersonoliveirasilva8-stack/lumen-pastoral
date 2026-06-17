@@ -1860,6 +1860,7 @@ function IndisponibilidadesTab({
 function SwapMembroModal({
   membroId, membroNome, escalas, escalaCounts, radarData, membros,
   indisponibilidades, membroMinisterios, funcaoRestricoes,
+  paroquiaConfig, assignmentHistory,
   onSwap, onClose,
 }: {
   membroId: string;
@@ -1871,6 +1872,8 @@ function SwapMembroModal({
   indisponibilidades: IndispRow[];
   membroMinisterios: Record<string, string[]>;
   funcaoRestricoes: FuncaoRestricao[];
+  paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
+  assignmentHistory: AssignmentHistoryEntry[];
   onSwap: (args: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
   onClose: () => void;
 }) {
@@ -1901,7 +1904,15 @@ function SwapMembroModal({
     return null;
   }
 
-  // Escalas futuras onde este membro ainda não está
+  // Pré-computa regras do motor para o membro
+  const regrasSwap = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
+  const swapLimiteSem   = regrasSwap.limite_semanal        as number | undefined;
+  const swapLimiteMen   = regrasSwap.limite_mensal         as number | undefined;
+  const swapImpedirRep  = (regrasSwap.impedir_repeticao_consecutiva as boolean) ?? false;
+  const swapIntervaloMin = regrasSwap.intervalo_minimo_dias as number | undefined;
+  const membroHistAll   = assignmentHistory.filter((h) => h.memberId === membroId);
+
+  // Escalas futuras onde este membro ainda não está e é elegível (todas as regras do motor)
   const hojeStr = new Date().toISOString().slice(0, 10);
   const escalasDisponiveis = escalas.filter((e) => {
     if (e.data < hojeStr) return false;
@@ -1909,9 +1920,51 @@ function SwapMembroModal({
     if (!counts) return false;
     const jaEsta = counts.funcoes.some((f) => f.membros.some((m) => m.id === membroId));
     if (jaEsta) return false;
-    // Deve ter ao menos uma função em que o membro pode servir
-    const temFuncaoCompativel = counts.funcoes.some((f) => funcoesDoMembro.includes(f.ministerio_id));
-    return temFuncaoCompativel;
+    const temFuncaoCompativel = counts.funcoes.some((f) =>
+      funcoesDoMembro.includes(f.ministerio_id) &&
+      !funcaoRestricoes.some((r) => r.membro_id === membroId && r.ministerio_id === f.ministerio_id && r.tipo === "nao_pode")
+    );
+    if (!temFuncaoCompativel) return false;
+
+    // Restrição de dia da semana
+    const membro = membros.find((m) => m.id === membroId);
+    if (membro?.restricoes_dia_semana?.includes(new Date(e.data + "T12:00:00").getDay())) return false;
+
+    // Indisponibilidade
+    const indispAtiva = indisponibilidades.some((i) => {
+      if (i.membro_id !== membroId || i.cancelada) return false;
+      if (i.tipo === "intervalo" && i.data_fim) return e.data >= i.data && e.data <= i.data_fim;
+      return i.data === e.data;
+    });
+    if (indispAtiva) return false;
+
+    // Anti-repetição consecutiva
+    if (swapImpedirRep) {
+      const ontemE = format(addDays(new Date(e.data + "T00:00:00"), -1), "yyyy-MM-dd");
+      if (membroHistAll.some((h) => h.date === ontemE)) return false;
+    }
+
+    // Intervalo mínimo
+    if (swapIntervaloMin && swapIntervaloMin > 0) {
+      const limite = format(addDays(new Date(e.data + "T00:00:00"), -swapIntervaloMin), "yyyy-MM-dd");
+      if (membroHistAll.some((h) => (h.date ?? "") > limite && (h.date ?? "") < e.data)) return false;
+    }
+
+    // Limite semanal
+    if (swapLimiteSem) {
+      const sem7 = format(addDays(new Date(e.data + "T00:00:00"), -6), "yyyy-MM-dd");
+      const cnt = membroHistAll.filter((h) => (h.date ?? "") >= sem7 && (h.date ?? "") <= e.data).length;
+      if (cnt >= swapLimiteSem) return false;
+    }
+
+    // Limite mensal
+    if (swapLimiteMen) {
+      const mesInicio = e.data.slice(0, 7) + "-01";
+      const cnt = membroHistAll.filter((h) => (h.date ?? "") >= mesInicio && (h.date ?? "") <= e.data).length;
+      if (cnt >= swapLimiteMen) return false;
+    }
+
+    return true;
   });
 
   const escalaObj = escalasDisponiveis.find((e) => e.id === selectedEscala);
@@ -2517,6 +2570,8 @@ function ListaView({
           indisponibilidades={indisponibilidades}
           membroMinisterios={membroMinisterios}
           funcaoRestricoes={funcaoRestricoes}
+          paroquiaConfig={paroquiaConfig}
+          assignmentHistory={assignmentHistory}
           onSwap={onSwapMembro}
           onClose={() => setSwapTarget(null)}
         />
@@ -3105,49 +3160,108 @@ function EscalaDetail({
   const funcaoMinsIds = funcoes.map((f) => f.ministerio_id);
   const ministeriosDisponiveis = ministerios.filter((m) => !funcaoMinsIds.includes(m.id));
 
-  // Classifica membros para um ministério com motivo de disponibilidade
+  // Fonte única de elegibilidade — mesmas regras do motor automático
   function membrosClassificadosParaMinisterio(ministerioId: string): {
-    disponiveis: (Membro & { motivo?: string })[];
+    disponiveis: (Membro & { motivo?: string; diasSemServir: number | null })[];
     indisponiveis: (Membro & { motivo: string })[];
   } {
     const atribuidos = new Set(atribuicoes.filter((a) => a.ministerio_id === ministerioId).map((a) => a.membro_id));
     const desteMinisterio = new Set(membroMinisterios[ministerioId] ?? []);
     const diaSemana = new Date(escala.data + "T12:00:00").getDay();
 
-    const disponiveis: (Membro & { motivo?: string })[] = [];
+    // Regras do motor lidas da config da paróquia
+    const regrasEngine = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
+    const limiteSem   = regrasEngine.limite_semanal         as number  | undefined;
+    const limiteMen   = regrasEngine.limite_mensal          as number  | undefined;
+    const impedirRep  = (regrasEngine.impedir_repeticao_consecutiva as boolean) ?? false;
+    const intervaloMin = regrasEngine.intervalo_minimo_dias  as number  | undefined;
+
+    // Pré-computa quem atingiu limite semanal/mensal
+    const acima_limite = new Set<string>();
+    if ((limiteSem || limiteMen) && assignmentHistory.length > 0) {
+      const sem7     = format(addDays(new Date(escala.data + "T00:00:00"), -6), "yyyy-MM-dd");
+      const mesInicio = escala.data.slice(0, 7) + "-01";
+      membros.forEach((m) => {
+        const hist = assignmentHistory.filter((h) => h.memberId === m.id);
+        if (limiteSem) {
+          const cnt = hist.filter((h) => (h.date ?? "") >= sem7 && (h.date ?? "") <= escala.data).length;
+          if (cnt >= limiteSem) { acima_limite.add(m.id); return; }
+        }
+        if (limiteMen) {
+          const cnt = hist.filter((h) => (h.date ?? "") >= mesInicio && (h.date ?? "") <= escala.data).length;
+          if (cnt >= limiteMen) acima_limite.add(m.id);
+        }
+      });
+    }
+
+    const ontemStr = format(addDays(new Date(escala.data + "T00:00:00"), -1), "yyyy-MM-dd");
+
+    const disponiveis: (Membro & { motivo?: string; diasSemServir: number | null })[] = [];
     const indisponiveis: (Membro & { motivo: string })[] = [];
 
     membros.forEach((m) => {
-      if (!desteMinisterio.has(m.id)) return; // sem vínculo — não aparece
-      if (atribuidos.has(m.id)) return; // já atribuído
+      if (!desteMinisterio.has(m.id)) return; // sem vínculo
+      if (atribuidos.has(m.id)) return;        // já atribuído nesta escala
 
-      const naoPodevExercer = funcaoRestricoes.some((r) => r.membro_id === m.id && r.ministerio_id === ministerioId && r.tipo === "nao_pode");
-      if (naoPodevExercer) {
-        indisponiveis.push({ ...m, motivo: "Não pode exercer esta função" });
-        return;
-      }
+      // Restrição de função (nao_pode)
+      const naoPode = funcaoRestricoes.some((r) => r.membro_id === m.id && r.ministerio_id === ministerioId && r.tipo === "nao_pode");
+      if (naoPode) { indisponiveis.push({ ...m, motivo: "Não pode exercer esta função" }); return; }
+
+      // Restrição de dia da semana
       if (m.restricoes_dia_semana?.includes(diaSemana)) {
         const dias = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-        indisponiveis.push({ ...m, motivo: `Restrito às ${dias[diaSemana]}` });
-        return;
+        indisponiveis.push({ ...m, motivo: `Restrito às ${dias[diaSemana]}` }); return;
       }
+
+      // Indisponibilidade registrada
       const indisp = indisponibilidades.find((i) => {
-        if (i.membro_id !== m.id) return false;
-        if (i.cancelada) return false;
+        if (i.membro_id !== m.id || i.cancelada) return false;
         if (i.tipo === "intervalo" && i.data_fim) return escala.data >= i.data && escala.data <= i.data_fim;
         return i.data === escala.data;
       });
-      if (indisp) {
-        indisponiveis.push({ ...m, motivo: indisp.motivo ? `Indisponível: ${indisp.motivo}` : "Indisponível nesta data" });
-        return;
+      if (indisp) { indisponiveis.push({ ...m, motivo: indisp.motivo ? `Indisponível: ${indisp.motivo}` : "Indisponível nesta data" }); return; }
+
+      // Anti-repetição consecutiva
+      if (impedirRep) {
+        const serviuOntem = assignmentHistory.some((h) => h.memberId === m.id && h.date === ontemStr);
+        if (serviuOntem) { indisponiveis.push({ ...m, motivo: "Serviu ontem (anti-repetição ativa)" }); return; }
       }
-      disponiveis.push(m);
+
+      // Intervalo mínimo entre escalações
+      if (intervaloMin && intervaloMin > 0) {
+        const limite = format(addDays(new Date(escala.data + "T00:00:00"), -intervaloMin), "yyyy-MM-dd");
+        const serviuRecente = assignmentHistory.some((h) => h.memberId === m.id && (h.date ?? "") > limite && (h.date ?? "") < escala.data);
+        if (serviuRecente) { indisponiveis.push({ ...m, motivo: `Serviu nos últimos ${intervaloMin} dias (intervalo mínimo)` }); return; }
+      }
+
+      // Limite semanal/mensal
+      if (acima_limite.has(m.id)) {
+        const motivo = limiteSem ? `Limite semanal (${limiteSem}×/sem) atingido` : `Limite mensal (${limiteMen}×/mês) atingido`;
+        indisponiveis.push({ ...m, motivo }); return;
+      }
+
+      // Candidato elegível — calcula dias sem servir para ordenação
+      const histMembro = assignmentHistory.filter((h) => h.memberId === m.id && (h.date ?? "") < escala.data);
+      const ultimaData = histMembro.length > 0
+        ? histMembro.reduce((acc, h) => (h.date ?? "") > acc ? (h.date ?? acc) : acc, histMembro[0].date ?? "")
+        : null;
+      const diasSemServir = ultimaData
+        ? Math.floor((new Date(escala.data + "T00:00:00").getTime() - new Date(ultimaData + "T00:00:00").getTime()) / 86400000)
+        : null;
+
+      disponiveis.push({ ...m, diasSemServir });
+    });
+
+    // Ordenação: menor score acumulado = maior prioridade; tiebreaker: mais dias sem servir
+    disponiveis.sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      return (b.diasSemServir ?? 365) - (a.diasSemServir ?? 365);
     });
 
     return { disponiveis, indisponiveis };
   }
 
-  // Compat com uso antigo (só disponíveis, sem classificação)
+  // Compat com uso legado
   function membrosParaMinisterio(ministerioId: string) {
     return membrosClassificadosParaMinisterio(ministerioId).disponiveis;
   }
@@ -3714,7 +3828,13 @@ function EscalaDetail({
                                     </div>
                                     {disp.map((m) => (
                                       <SelectItem key={m.id} value={m.id}>
-                                        {nomeExibicao(m.nome)}
+                                        <span className="flex items-center gap-2 w-full">
+                                          <span className="flex-1 truncate">{nomeExibicao(m.nome)}</span>
+                                          <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                                            {m.score > 0 ? `${m.score}pts` : "0pts"}
+                                            {m.diasSemServir !== null ? ` · ${m.diasSemServir}d` : " · novo"}
+                                          </span>
+                                        </span>
                                       </SelectItem>
                                     ))}
                                     {indisp.length > 0 && (

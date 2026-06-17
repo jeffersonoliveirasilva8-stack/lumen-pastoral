@@ -90,7 +90,7 @@ function SacristiaPage() {
         .eq("paroquia_id", profile!.paroquia_id!)
         .gte("data", desde)
         .lte("data", hojeStr)
-        .neq("status", "arquivada")
+        .neq("status", "rascunho")
         .order("data", { ascending: false })
         .order("hora_inicio", { ascending: false });
       return (data ?? []) as EscalaItem[];

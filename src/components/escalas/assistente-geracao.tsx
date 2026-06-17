@@ -641,7 +641,7 @@ export function AssistenteGeracaoEscalas({
         usa_tochas:              paroquiaConfig?.usa_tochas ?? false,
         limite_semanal:          regras.limite_semanal   as number | undefined,
         limite_mensal:           regras.limite_mensal    as number | undefined,
-        impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? true,
+        impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
         prioridade_score:        (regras.prioridade_score as boolean | undefined) ?? false,
         distribuicao_masc_pct:   regras.distribuicao_masc_pct as number | undefined, // P1.1
       };
