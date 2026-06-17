@@ -284,6 +284,7 @@ function SacristiaPage() {
         { label: "Presença",           onClick: () => {},                      isActive: true  },
         { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
         { label: "Substituições",      to: "/substituicoes",                   isActive: false },
+        { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: false },
       ]} />
 
       {/* Sub-abas da Sacristia */}

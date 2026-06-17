@@ -44,6 +44,7 @@ import { Route as AuthenticatedSubstituicoesRouteImport } from './routes/_authen
 import { Route as AuthenticatedSolicitacoesRouteImport } from './routes/_authenticated/solicitacoes'
 import { Route as AuthenticatedSacristiaRouteImport } from './routes/_authenticated/sacristia'
 import { Route as AuthenticatedRelatoriosSubstituicoesRouteImport } from './routes/_authenticated/relatorios-substituicoes'
+import { Route as AuthenticatedRelatoriosEquilibrioRouteImport } from './routes/_authenticated/relatorios-equilibrio'
 import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
 import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authenticated/planejamento'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
@@ -244,6 +245,12 @@ const AuthenticatedRelatoriosSubstituicoesRoute =
     path: '/relatorios-substituicoes',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRelatoriosEquilibrioRoute =
+  AuthenticatedRelatoriosEquilibrioRouteImport.update({
+    id: '/relatorios-equilibrio',
+    path: '/relatorios-equilibrio',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
   id: '/ranking',
   path: '/ranking',
@@ -375,6 +382,7 @@ export interface FileRoutesByFullPath {
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/ranking': typeof AuthenticatedRankingRoute
+  '/relatorios-equilibrio': typeof AuthenticatedRelatoriosEquilibrioRoute
   '/relatorios-substituicoes': typeof AuthenticatedRelatoriosSubstituicoesRoute
   '/sacristia': typeof AuthenticatedSacristiaRoute
   '/solicitacoes': typeof AuthenticatedSolicitacoesRoute
@@ -430,6 +438,7 @@ export interface FileRoutesByTo {
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/ranking': typeof AuthenticatedRankingRoute
+  '/relatorios-equilibrio': typeof AuthenticatedRelatoriosEquilibrioRoute
   '/relatorios-substituicoes': typeof AuthenticatedRelatoriosSubstituicoesRoute
   '/sacristia': typeof AuthenticatedSacristiaRoute
   '/solicitacoes': typeof AuthenticatedSolicitacoesRoute
@@ -487,6 +496,7 @@ export interface FileRoutesById {
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/_authenticated/ranking': typeof AuthenticatedRankingRoute
+  '/_authenticated/relatorios-equilibrio': typeof AuthenticatedRelatoriosEquilibrioRoute
   '/_authenticated/relatorios-substituicoes': typeof AuthenticatedRelatoriosSubstituicoesRoute
   '/_authenticated/sacristia': typeof AuthenticatedSacristiaRoute
   '/_authenticated/solicitacoes': typeof AuthenticatedSolicitacoesRoute
@@ -544,6 +554,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/planejamento'
     | '/ranking'
+    | '/relatorios-equilibrio'
     | '/relatorios-substituicoes'
     | '/sacristia'
     | '/solicitacoes'
@@ -599,6 +610,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/planejamento'
     | '/ranking'
+    | '/relatorios-equilibrio'
     | '/relatorios-substituicoes'
     | '/sacristia'
     | '/solicitacoes'
@@ -655,6 +667,7 @@ export interface FileRouteTypes {
     | '/_authenticated/painel'
     | '/_authenticated/planejamento'
     | '/_authenticated/ranking'
+    | '/_authenticated/relatorios-equilibrio'
     | '/_authenticated/relatorios-substituicoes'
     | '/_authenticated/sacristia'
     | '/_authenticated/solicitacoes'
@@ -957,6 +970,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRelatoriosSubstituicoesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/relatorios-equilibrio': {
+      id: '/_authenticated/relatorios-equilibrio'
+      path: '/relatorios-equilibrio'
+      fullPath: '/relatorios-equilibrio'
+      preLoaderRoute: typeof AuthenticatedRelatoriosEquilibrioRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ranking': {
       id: '/_authenticated/ranking'
       path: '/ranking'
@@ -1127,6 +1147,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedPlanejamentoRoute: typeof AuthenticatedPlanejamentoRoute
   AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
+  AuthenticatedRelatoriosEquilibrioRoute: typeof AuthenticatedRelatoriosEquilibrioRoute
   AuthenticatedRelatoriosSubstituicoesRoute: typeof AuthenticatedRelatoriosSubstituicoesRoute
   AuthenticatedSacristiaRoute: typeof AuthenticatedSacristiaRoute
   AuthenticatedSolicitacoesRoute: typeof AuthenticatedSolicitacoesRoute
@@ -1152,6 +1173,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedPlanejamentoRoute: AuthenticatedPlanejamentoRoute,
   AuthenticatedRankingRoute: AuthenticatedRankingRoute,
+  AuthenticatedRelatoriosEquilibrioRoute:
+    AuthenticatedRelatoriosEquilibrioRoute,
   AuthenticatedRelatoriosSubstituicoesRoute:
     AuthenticatedRelatoriosSubstituicoesRoute,
   AuthenticatedSacristiaRoute: AuthenticatedSacristiaRoute,
@@ -1222,13 +1245,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
