@@ -496,15 +496,15 @@ function PortalMembroEscalas() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 pb-24 lg:px-6">
       <Tabs defaultValue={isCoordinator ? "coordenacao" : "escalas"}>
-        <TabsList className="w-full mb-4 rounded-full border border-border bg-background/80 p-1 shadow-sm overflow-x-auto flex-nowrap">
+        <TabsList className="w-full mb-5 h-auto p-1 gap-0.5 bg-muted/60 rounded-xl overflow-x-auto flex-nowrap">
           {isCoordinator && (
-            <TabsTrigger value="coordenacao" className="flex-1 min-w-[80px] rounded-full py-2 text-xs sm:text-sm flex items-center gap-1 whitespace-nowrap">
+            <TabsTrigger value="coordenacao" className="flex-1 min-w-[80px] rounded-lg py-1.5 text-xs sm:text-sm flex items-center gap-1 whitespace-nowrap">
               <Shield className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden sm:inline">Gestão de escala</span>
+              <span className="hidden sm:inline">Gestão</span>
               <span className="sm:hidden">Gestão</span>
             </TabsTrigger>
           )}
-          <TabsTrigger value="escalas" className="flex-1 min-w-[70px] rounded-full py-2 text-xs sm:text-sm whitespace-nowrap">
+          <TabsTrigger value="escalas" className="flex-1 min-w-[70px] rounded-lg py-1.5 text-xs sm:text-sm whitespace-nowrap">
             Escalas
             {pendentes > 0 && (
               <span className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold px-1.5">
@@ -512,8 +512,8 @@ function PortalMembroEscalas() {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="indisponivel" className="flex-1 min-w-[80px] text-xs sm:text-sm whitespace-nowrap">Indisponível</TabsTrigger>
-          <TabsTrigger value="historico" className="flex-1 min-w-[70px] text-xs sm:text-sm whitespace-nowrap">Histórico</TabsTrigger>
+          <TabsTrigger value="indisponivel" className="flex-1 min-w-[80px] rounded-lg py-1.5 text-xs sm:text-sm whitespace-nowrap">Indisponível</TabsTrigger>
+          <TabsTrigger value="historico" className="flex-1 min-w-[70px] rounded-lg py-1.5 text-xs sm:text-sm whitespace-nowrap">Histórico</TabsTrigger>
         </TabsList>
 
         {/* ── Tab: Coordenação ── */}
@@ -564,13 +564,16 @@ function PortalMembroEscalas() {
           </div>
 
           {loadingTodas ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <div className="space-y-2.5 mt-2">
+              {[1,2,3].map(i => (
+                <div key={i} className="h-24 rounded-2xl bg-muted/50 animate-pulse" />
+              ))}
             </div>
           ) : todasEscalas.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-border p-10 text-center">
-              <Calendar className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">Nenhuma escala publicada.</p>
+            <div className="empty-state">
+              <div className="empty-state-icon"><Calendar className="h-5 w-5" /></div>
+              <p className="empty-state-title">Nenhuma escala publicada</p>
+              <p className="empty-state-desc">As escalas publicadas pela coordenação aparecerão aqui.</p>
             </div>
           ) : (() => {
             const escalasVisiveis = somenteMinha
@@ -1036,17 +1039,18 @@ function CoordinatorTab({
 }: CoordinatorTabProps) {
   if (loading) {
     return (
-      <div className="flex justify-center py-10">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      <div className="space-y-2.5">
+        {[1,2,3].map(i => <div key={i} className="h-28 rounded-2xl bg-muted/50 animate-pulse" />)}
       </div>
     );
   }
 
   if (coordEscalas.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-border p-10 text-center">
-        <Shield className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
-        <p className="text-sm text-muted-foreground">Nenhuma escala publicada nos últimos 30 dias.</p>
+      <div className="empty-state">
+        <div className="empty-state-icon"><Shield className="h-5 w-5" /></div>
+        <p className="empty-state-title">Nenhuma escala recente</p>
+        <p className="empty-state-desc">Nenhuma escala publicada nos últimos 30 dias.</p>
       </div>
     );
   }
@@ -1311,9 +1315,9 @@ function IndisponibilidadeTab({
 
       {/* Header */}
       <div>
-        <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground">Escalas</p>
-        <h2 className="mt-1 font-serif text-2xl">Minhas indisponibilidades</h2>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="section-label mb-2">Escalas</p>
+        <h2 className="page-header-title">Indisponibilidades</h2>
+        <p className="page-header-sub">
           Registre as datas em que não poderá servir. O motor de escalas vai respeitá-las.
         </p>
       </div>
@@ -1430,14 +1434,14 @@ function IndisponibilidadeTab({
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <div className="space-y-2">
+            {[1,2].map(i => <div key={i} className="h-16 rounded-2xl bg-muted/50 animate-pulse" />)}
           </div>
         ) : indisps.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border p-10 text-center">
-            <CalendarOff className="h-7 w-7 mx-auto text-muted-foreground/30 mb-2" />
-            <p className="text-sm text-muted-foreground">Nenhuma data bloqueada.</p>
-            <p className="text-xs text-muted-foreground/50 mt-1">
+          <div className="empty-state py-8">
+            <div className="empty-state-icon"><CalendarOff className="h-5 w-5" /></div>
+            <p className="empty-state-title">Nenhuma data bloqueada</p>
+            <p className="empty-state-desc">
               Use o formulário acima para registrar suas indisponibilidades.
             </p>
           </div>

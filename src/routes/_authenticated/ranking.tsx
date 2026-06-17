@@ -82,41 +82,43 @@ function AdminRanking() {
         { label: "Membros", to: "/membros", isActive: false },
         { label: "Ranking", to: "/ranking", isActive: true  },
       ]} />
-      <div>
-        <h1 className="font-serif text-2xl">Ranking de Servidores</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Clique em um servidor para ver o histórico de pontuação.
-        </p>
+      <div className="page-header">
+        <div>
+          <h1 className="page-header-title">Ranking de Servidores</h1>
+          <p className="page-header-sub">Clique em um servidor para ver o histórico.</p>
+        </div>
       </div>
 
       {/* Summary */}
       {membros.length > 0 && !isLoading && (
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <div className="rounded-2xl border border-border bg-card px-3 py-3 sm:px-4 text-center">
-            <p className="text-xl sm:text-2xl font-serif">{membros.length}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">servidores</p>
-          </div>
-          <div className="rounded-2xl border border-border bg-card px-3 py-3 sm:px-4 text-center">
-            <p className="text-xl sm:text-2xl font-serif">{membros[0]?.score ?? 0}</p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">maior score</p>
-          </div>
-          <div className="rounded-2xl border border-border bg-card px-3 py-3 sm:px-4 text-center">
-            <p className="text-xl sm:text-2xl font-serif">
-              {membros.length > 0
-                ? Math.round(membros.reduce((s, m) => s + m.score, 0) / membros.length)
-                : 0}
-            </p>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">média</p>
-          </div>
+          {[
+            { value: membros.length, label: "servidores", icon: "👥" },
+            { value: membros[0]?.score ?? 0, label: "maior score", icon: "🏆" },
+            {
+              value: membros.length > 0 ? Math.round(membros.reduce((s, m) => s + m.score, 0) / membros.length) : 0,
+              label: "média geral",
+              icon: "⭐",
+            },
+          ].map(({ value, label, icon }) => (
+            <div key={label} className="stat-card text-center items-center">
+              <span className="text-xl">{icon}</span>
+              <p className="text-xl sm:text-2xl font-serif font-bold leading-none">{value}</p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground">{label}</p>
+            </div>
+          ))}
         </div>
       )}
 
       {isLoading ? (
         <ListSkeleton rows={6} />
       ) : membros.length === 0 ? (
-        <div className="rounded-[1.75rem] border border-dashed border-border p-14 text-center">
-          <Trophy className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhum membro com pontuação ainda.</p>
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <Trophy className="h-5 w-5" />
+          </div>
+          <p className="empty-state-title">Ranking vazio</p>
+          <p className="empty-state-desc">Nenhum membro com pontuação ainda. As pontuações aparecem conforme as presenças são registradas.</p>
         </div>
       ) : (
         <>
@@ -160,7 +162,7 @@ function AdminRanking() {
                 <button
                   key={m.id}
                   onClick={() => setSelectedMembro(m)}
-                  className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-left hover:bg-muted/40 transition group"
+                  className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-left interactive-card group"
                 >
                   <div className="flex items-center gap-3 mb-1.5">
                     <span className="text-sm text-muted-foreground font-medium w-7 text-center shrink-0">

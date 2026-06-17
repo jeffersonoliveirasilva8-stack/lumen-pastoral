@@ -1358,13 +1358,14 @@ ${rodapeUrl
       ]} />
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="page-header mt-4">
         <div>
-          <h1 className="font-serif text-2xl sm:text-3xl">Planejamento</h1>
+          <h1 className="page-header-title">Planejamento</h1>
+          <p className="page-header-sub">Organize e publique as escalas litúrgicas da paróquia.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
           <Button
-            variant="outline" size="sm"
+            variant="outline" size="sm" className="rounded-xl h-9"
             onClick={() => archivePastEscalasMutation.mutate()}
             disabled={archivePastEscalasMutation.isPending}
             title="Arquivar escalas passadas"
@@ -1373,14 +1374,14 @@ ${rodapeUrl
             <span className="sm:hidden">Arquivar</span>
           </Button>
           <Button
-            variant="outline" size="sm"
+            variant="outline" size="sm" className="rounded-xl h-9"
             onClick={() => setAssistenteOpen(true)}
             title="Assistente de geração de escalas"
           >
             <Sparkles className="h-4 w-4" />
             <span className="hidden sm:inline ml-1.5">Gerar escalas</span>
           </Button>
-          <Button size="sm" onClick={openCreate}>
+          <Button size="sm" className="rounded-xl h-9" onClick={openCreate}>
             <Plus className="h-4 w-4" /><span className="hidden sm:inline ml-1">Nova escala</span>
           </Button>
         </div>

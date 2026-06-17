@@ -2548,16 +2548,20 @@ function MembrosPage() {
       ]} />
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1 className="font-serif text-2xl sm:text-3xl">Membros</h1>
+          <h1 className="page-header-title">Membros</h1>
+          <p className="page-header-sub">
+            {membros.filter(m => m.ativo).length} ativo{membros.filter(m => m.ativo).length !== 1 ? "s" : ""}
+            {membros.filter(m => !m.ativo).length > 0 && ` · ${membros.filter(m => !m.ativo).length} inativo${membros.filter(m => !m.ativo).length !== 1 ? "s" : ""}`}
+          </p>
         </div>
         <div className="flex gap-2 shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="h-9 rounded-xl">
                 <MoreVertical className="h-4 w-4" />
-                <span className="hidden sm:inline ml-1">Mais ações</span>
+                <span className="hidden sm:inline ml-1">Ações</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -2581,20 +2585,23 @@ function MembrosPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" onClick={openCreate}>
+          <Button size="sm" className="h-9 rounded-xl" onClick={openCreate}>
             <Plus className="h-4 w-4" /> <span className="hidden sm:inline ml-1">Novo membro</span>
           </Button>
         </div>
       </div>
 
       {/* ── Tabs: Membros | Solicitações | Auditoria ── */}
-      <Tabs defaultValue="membros" className="mt-6">
-        <TabsList className="w-full sm:w-auto mb-2">
-          <TabsTrigger value="membros">
-            Membros ({membros.length})
+      <Tabs defaultValue="membros" className="mt-5">
+        <TabsList className="h-auto p-1 gap-0.5 bg-muted/60 rounded-xl w-full sm:w-auto">
+          <TabsTrigger value="membros" className="rounded-lg text-xs px-3 py-1.5 data-[state=active]:shadow-sm">
+            Membros
+            <span className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-muted-foreground/20 text-[9px] font-bold px-1">
+              {membros.length}
+            </span>
           </TabsTrigger>
-          <TabsTrigger value="solicitacoes" className="gap-1.5">
-            <ClipboardList className="h-3.5 w-3.5" />
+          <TabsTrigger value="solicitacoes" className="rounded-lg text-xs px-3 py-1.5 gap-1.5 data-[state=active]:shadow-sm">
+            <ClipboardList className="h-3 w-3" />
             Solicitações
             {solPendentes.length > 0 && (
               <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold px-1">
@@ -2602,8 +2609,8 @@ function MembrosPage() {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="auditoria" className="gap-1.5">
-            <AlertCircle className="h-3.5 w-3.5" />
+          <TabsTrigger value="auditoria" className="rounded-lg text-xs px-3 py-1.5 gap-1.5 data-[state=active]:shadow-sm">
+            <AlertCircle className="h-3 w-3" />
             Auditoria
           </TabsTrigger>
         </TabsList>
@@ -2775,14 +2782,21 @@ function MembrosPage() {
           </p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-border bg-card p-12 text-center">
-          <Users className="h-8 w-8 mx-auto text-muted-foreground" />
-          <p className="mt-4 text-sm text-muted-foreground">
-            {membros.length === 0 ? "Nenhum membro cadastrado ainda." : "Nenhum membro encontrado com os filtros aplicados."}
+        <div className="mt-8 empty-state">
+          <div className="empty-state-icon">
+            <Users className="h-5 w-5" />
+          </div>
+          <p className="empty-state-title">
+            {membros.length === 0 ? "Nenhum membro cadastrado" : "Nenhum resultado"}
+          </p>
+          <p className="empty-state-desc">
+            {membros.length === 0
+              ? "Cadastre o primeiro membro da sua comunidade pastoral."
+              : "Nenhum membro corresponde aos filtros aplicados. Tente ajustar os critérios."}
           </p>
           {membros.length === 0 && (
-            <Button className="mt-4" onClick={openCreate}>
-              <Plus className="h-4 w-4" /> Cadastrar primeiro membro
+            <Button className="mt-2 rounded-xl" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" /> Cadastrar primeiro membro
             </Button>
           )}
         </div>

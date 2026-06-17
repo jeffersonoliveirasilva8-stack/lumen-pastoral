@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Loader2, Layers } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Layers, Users } from "lucide-react";
+import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -243,67 +244,74 @@ function MinisteriosPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto pb-24 lg:pb-10">
-      <div className="flex items-end justify-between gap-4">
+      <div className="page-header">
         <div>
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-          <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Grupos</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Configure os grupos de serviço litúrgico da sua paróquia.
+          <p className="section-label text-gold mb-2">Configurações</p>
+          <h1 className="page-header-title">Grupos de Serviço</h1>
+          <p className="page-header-sub">
+            Configure os grupos litúrgicos da paróquia.
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" /> Novo grupo
+        <Button onClick={openCreate} className="h-9 rounded-xl shrink-0">
+          <Plus className="h-4 w-4 mr-1" /> Novo grupo
         </Button>
       </div>
 
       {isLoading ? (
-        <div className="mt-12 flex justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <ListSkeleton rows={5} />
       ) : ministerios.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-border bg-card p-12 text-center">
-          <Layers className="h-8 w-8 mx-auto text-muted-foreground" />
-          <p className="mt-4 text-sm text-muted-foreground">Nenhum grupo cadastrado.</p>
-          <div className="mt-4 flex justify-center gap-3">
-            <Button variant="outline" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
-              {seedMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <Layers className="h-5 w-5" />
+          </div>
+          <p className="empty-state-title">Nenhum grupo cadastrado</p>
+          <p className="empty-state-desc">
+            Crie os grupos de serviço litúrgico (acólitos, leitores, músicos, etc.) para começar a organizar sua pastoral.
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center mt-2">
+            <Button variant="outline" className="rounded-xl" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
+              {seedMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               Criar grupos padrão
             </Button>
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" /> Criar manualmente
+            <Button className="rounded-xl" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1" /> Criar manualmente
             </Button>
           </div>
         </div>
       ) : (
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-2.5 sm:grid-cols-2">
           {ministerios.map((m) => (
             <div
               key={m.id}
-              className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm"
+              className="flex items-center gap-3.5 rounded-2xl border border-border bg-card p-4 interactive-card group"
             >
+              {/* Color swatch — iOS-style rounded square */}
               <div
-                className="h-10 w-10 shrink-0 rounded-full"
+                className="h-10 w-10 shrink-0 rounded-xl shadow-sm"
                 style={{ backgroundColor: m.cor }}
               />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium truncate">{m.nome}</span>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="font-semibold text-sm truncate">{m.nome}</span>
                   {!m.ativo && (
-                    <Badge variant="secondary" className="text-xs">inativo</Badge>
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">inativo</Badge>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground truncate">
-                  {m.descricao ?? "—"} · {contagens[m.id] ?? 0} membro(s)
-                </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Users className="h-3 w-3 shrink-0" />
+                  <span>{contagens[m.id] ?? 0} membro{(contagens[m.id] ?? 0) !== 1 ? "s" : ""}</span>
+                  {m.descricao && (
+                    <><span className="text-border">·</span><span className="truncate">{m.descricao}</span></>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(m)}>
+              <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-xl" onClick={() => openEdit(m)}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  size="icon" variant="ghost"
+                  className="h-8 w-8 rounded-xl text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={() => setDeleteTarget(m)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

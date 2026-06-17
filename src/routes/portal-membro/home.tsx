@@ -409,20 +409,22 @@ function PortalMembroHome() {
 
       {/* ── Atalhos rápidos ── */}
       <section>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-2.5">
           {[
-            { to: "/portal-membro/escalas",  icon: Calendar,     label: "Escalas"    },
-            { to: "/portal-membro/eventos",  icon: CalendarDays, label: "Eventos"    },
-            { to: "/portal-membro/liturgia", icon: BookOpen,     label: "Liturgia"   },
-            { to: "/portal-membro/notificacoes", icon: Bell,     label: "Avisos"     },
-          ].map(({ to, icon: Icon, label }) => (
+            { to: "/portal-membro/escalas",      icon: Calendar,     label: "Escalas",  bg: "bg-blue-500"    },
+            { to: "/portal-membro/eventos",      icon: CalendarDays, label: "Eventos",  bg: "bg-violet-500"  },
+            { to: "/portal-membro/liturgia",     icon: BookOpen,     label: "Liturgia", bg: "bg-amber-500"   },
+            { to: "/portal-membro/notificacoes", icon: Bell,         label: "Avisos",   bg: "bg-rose-500"    },
+          ].map(({ to, icon: Icon, label, bg }) => (
             <Link
               key={to}
               to={to}
-              className="flex flex-col items-center gap-1.5 rounded-2xl bg-muted/50 border border-border/60 py-3 px-1 text-center hover:bg-muted transition active:scale-95"
+              className="flex flex-col items-center gap-2 py-3.5 px-1 text-center active:scale-95 transition-transform"
             >
-              <Icon className="h-5 w-5 text-primary" />
-              <span className="text-[10px] font-semibold text-muted-foreground leading-none">{label}</span>
+              <div className={`h-12 w-12 rounded-2xl ${bg} flex items-center justify-center shadow-sm`}>
+                <Icon className="h-5.5 w-5.5 text-white" />
+              </div>
+              <span className="text-[11px] font-medium text-foreground/70 leading-none">{label}</span>
             </Link>
           ))}
         </div>

@@ -9,7 +9,9 @@ import { ptBR } from "date-fns/locale";
 import {
   BellOff, CheckCheck, Loader2, Trash2, Calendar, ArrowLeftRight,
   Megaphone, Users, Church, AlertTriangle, Zap, Settings2, X, ChevronRight,
+  Bell,
 } from "lucide-react";
+import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -413,59 +415,56 @@ function PortalMembroNotificacoes() {
       </div>
 
       {/* ── Filtros de categoria ────────────────────────────────── */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 mb-4 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
-        {FILTROS_ORDENADOS.map((cat) => {
-          const isAll = cat === "todas";
-          const cfg = isAll ? null : CATEGORIA_CONFIG[cat as Exclude<Categoria, "todas">];
-          const count = isAll ? naoLidasTotal : (contagemPorCategoria[cat] ?? 0);
-          const ativo = filtro === cat;
-          return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setFiltro(cat)}
-              className={[
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0",
-                ativo
-                  ? "bg-foreground text-background shadow-sm"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80",
-              ].join(" ")}
-            >
-              {cfg && (
-                <span className={`inline-flex h-4 w-4 rounded-full items-center justify-center ${cfg.iconBg}`} />
-              )}
-              {isAll ? "Todas" : cfg!.label}
-              {count > 0 && (
-                <span className={[
-                  "h-4 min-w-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center",
-                  ativo ? "bg-background/20 text-background" : "bg-blue-500 text-white",
-                ].join(" ")}>
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="relative -mx-4 px-4 sm:mx-0 sm:px-0 mb-4">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none scroll-x-fade">
+          {FILTROS_ORDENADOS.map((cat) => {
+            const isAll = cat === "todas";
+            const cfg = isAll ? null : CATEGORIA_CONFIG[cat as Exclude<Categoria, "todas">];
+            const count = isAll ? naoLidasTotal : (contagemPorCategoria[cat] ?? 0);
+            const ativo = filtro === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setFiltro(cat)}
+                className={`filter-chip shrink-0 ${ativo ? "filter-chip-active" : ""}`}
+              >
+                {cfg && (
+                  <span className={`inline-flex h-3.5 w-3.5 rounded-full items-center justify-center shrink-0 ${cfg.iconBg}`} />
+                )}
+                {isAll ? "Todas" : cfg!.label}
+                {count > 0 && (
+                  <span className={`filter-chip-count ${ativo ? "bg-primary/20 text-primary" : "bg-blue-500 text-white"}`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Conteúdo ───────────────────────────────────────────── */}
       {isLoading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
-        </div>
+        <ListSkeleton rows={6} />
       ) : notifsFiltradas.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <div className="h-16 w-16 rounded-3xl bg-muted flex items-center justify-center">
-            <BellOff className="h-7 w-7 text-muted-foreground/30" />
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <BellOff className="h-5 w-5" />
           </div>
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className="empty-state-title">
             {filtro === "todas" ? "Nenhuma notificação" : "Nenhuma notificação nesta categoria"}
+          </p>
+          <p className="empty-state-desc">
+            {filtro === "todas"
+              ? "Você receberá avisos sobre escalas, eventos e comunicados da paróquia aqui."
+              : "Tente outra categoria ou limpe o filtro para ver todas."}
           </p>
           {filtro !== "todas" && (
             <button
               type="button"
               onClick={() => setFiltro("todas")}
-              className="flex items-center gap-1 text-xs text-blue-500 hover:underline"
+              className="flex items-center gap-1 text-xs text-primary hover:underline font-medium mt-1"
             >
               <X className="h-3 w-3" /> Limpar filtro
             </button>

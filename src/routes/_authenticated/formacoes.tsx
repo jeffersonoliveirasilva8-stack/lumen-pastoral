@@ -261,25 +261,28 @@ function AgendaPastoralPage() {
       ]} />
       {/* Sub-abas dentro de Agenda */}
       {(view === "agenda" || view === "formacoes") && (
-        <div className="flex gap-1 border-b border-border/60 mb-4 -mt-4 overflow-x-auto scrollbar-none">
+        <div className="flex gap-0.5 border-b border-border -mt-4 mb-4 overflow-x-auto no-scrollbar">
           {[
-            { id: "agenda",    label: "Eventos" },
-            { id: "formacoes", label: "Formações" },
+            { id: "agenda",    label: "Eventos",    count: eventos.length },
+            { id: "formacoes", label: "Formações",  count: null },
           ].map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setView(t.id as "agenda" | "formacoes")}
-              className={`relative flex-shrink-0 px-4 py-2 text-sm font-semibold transition-colors whitespace-nowrap ${
+              className={`relative flex-shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm transition-all duration-150 rounded-lg whitespace-nowrap ${
                 view === t.id
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "text-primary font-semibold bg-primary/8"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/70 font-medium"
               }`}
             >
               {t.label}
-              {view === t.id && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-primary/60" />
+              {t.count !== null && t.count > 0 && (
+                <span className={`text-[9px] font-bold min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center ${
+                  view === t.id ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
+                }`}>{t.count}</span>
               )}
+              {view === t.id && <span className="absolute bottom-0 inset-x-3 h-0.5 rounded-t-full bg-primary" />}
             </button>
           ))}
         </div>
@@ -288,54 +291,55 @@ function AgendaPastoralPage() {
       {/* ── Agenda Pastoral ── */}
       {view === "agenda" && (<>
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="page-header">
           <div>
-            <h1 className="font-serif text-2xl sm:text-3xl">Agenda Pastoral</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Reuniões, formações, retiros, ensaios, encontros e compromissos.
+            <h1 className="page-header-title">Agenda Pastoral</h1>
+            <p className="page-header-sub">
+              Reuniões, retiros, ensaios, encontros e compromissos.
             </p>
           </div>
-          <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="shrink-0">
+          <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="shrink-0 h-9 rounded-xl">
             <Plus className="h-4 w-4 mr-1" /> Novo evento
           </Button>
         </div>
 
         {/* Tipo filter chips */}
         {eventos.length > 0 && (
-          <div className="overflow-x-auto -mx-6 px-6 pb-1 lg:-mx-10 lg:px-10">
-            <div className="flex gap-2 min-w-max">
-              {tipoOptions.map((t) => (
-                <button
-                  key={t.value}
-                  onClick={() => setTipoFilter(t.value)}
-                  className={`text-xs px-3 py-1.5 rounded-full border font-medium whitespace-nowrap transition ${
-                    tipoFilter === t.value
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+            {tipoOptions.map((t) => (
+              <button
+                key={t.value}
+                onClick={() => setTipoFilter(t.value)}
+                className={`filter-chip shrink-0 ${tipoFilter === t.value ? "filter-chip-active" : ""}`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
         )}
 
         {/* Content */}
         {eventos.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-16 text-center">
-            <CalendarRange className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-            <p className="font-medium">Nenhum evento cadastrado</p>
-            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-              Registre reuniões, formações, retiros, ensaios, encontros e compromissos pastorais.
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <CalendarRange className="h-5 w-5" />
+            </div>
+            <p className="empty-state-title">Nenhum evento cadastrado</p>
+            <p className="empty-state-desc">
+              Registre reuniões, formações, retiros, ensaios e compromissos pastorais.
             </p>
-            <Button className="mt-4" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
+            <Button className="mt-2 rounded-xl" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
               <Plus className="h-4 w-4 mr-1" /> Criar primeiro evento
             </Button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border p-12 text-center">
-            <p className="text-sm text-muted-foreground">Nenhum evento deste tipo cadastrado.</p>
+          <div className="empty-state">
+            <p className="empty-state-title">Nenhum evento nesta categoria</p>
+            <p className="empty-state-desc">Tente outro filtro de tipo.</p>
+            <button
+              className="mt-2 text-xs text-primary hover:underline"
+              onClick={() => setTipoFilter("todos")}
+            >Limpar filtro</button>
           </div>
         ) : (
           <div className="space-y-8">
