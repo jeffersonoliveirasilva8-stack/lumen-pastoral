@@ -379,7 +379,12 @@ function PortalMembroEscalas() {
       qc.invalidateQueries({ queryKey: ["pm-substituicoes", membro!.id] });
       toast.success(args.status === "recusado" ? "Recusa registrada." : "Resposta registrada.");
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      const msg = e.message === "confirmacao_desativada"
+        ? "A coordenação desativou o sistema de confirmação."
+        : e.message;
+      toast.error(msg);
+    },
   });
 
   const addIndispMutation = useMutation({

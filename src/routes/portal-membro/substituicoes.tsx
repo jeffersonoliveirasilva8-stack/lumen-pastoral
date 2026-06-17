@@ -105,6 +105,21 @@ function PortalMembroSubstituicoes() {
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [showHistorico, setShowHistorico] = useState(false);
 
+  const { data: confirmacaoAtiva } = useQuery<boolean>({
+    queryKey: ["pm-config-confirmacao", membro?.paroquia_id],
+    enabled: !!membro?.paroquia_id,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("paroquias")
+        .select("regras_escala")
+        .eq("id", membro!.paroquia_id)
+        .single();
+      const regras = (data?.regras_escala as Record<string, unknown>) ?? {};
+      return (regras.confirmacao_escala_ativa as boolean) ?? false;
+    },
+  });
+
   const { data: substituicoes = [], isLoading } = useQuery<Substituicao[]>({
     queryKey: ["pm-substituicoes", membro?.id],
     enabled: !!membro?.id,
@@ -169,7 +184,9 @@ function PortalMembroSubstituicoes() {
       setMotivo("");
     },
     onError: (e: Error) => {
-      const msg = e.message === "prazo_expirado"
+      const msg = e.message === "confirmacao_desativada"
+        ? "A coordenação desativou confirmações e substituições."
+        : e.message === "prazo_expirado"
         ? "Prazo para solicitação expirado."
         : e.message === "substituicao_ja_ativa"
         ? "Já existe uma solicitação ativa para esta escala."
@@ -194,7 +211,9 @@ function PortalMembroSubstituicoes() {
       toast.success("Você se voluntariou! Aguardando aprovação da coordenação.");
     },
     onError: (e: Error) => {
-      const msg = e.message === "proprio_solicitante"
+      const msg = e.message === "confirmacao_desativada"
+        ? "A coordenação desativou confirmações e substituições."
+        : e.message === "proprio_solicitante"
         ? "Você não pode se voluntariar para sua própria substituição."
         : e.message === "substituicao_nao_disponivel"
         ? "Esta substituição não está mais disponível."
@@ -235,7 +254,21 @@ function PortalMembroSubstituicoes() {
         </p>
       </div>
 
-      {/* Botão nova solicitação */}
+      {/* Aviso quando confirmação está desativada */}
+      {confirmacaoAtiva === false && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800">Confirmação desativada</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              A paróquia desativou o sistema de confirmação e substituições. Entre em contato com a coordenação se precisar de uma troca.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Botão nova solicitação — oculto quando confirmação desativada */}
+      {confirmacaoAtiva && (
       <Button
         onClick={() => { setShowForm((v) => !v); setSelectedEscala(""); setMotivo(""); }}
         className="w-full rounded-xl"
@@ -244,9 +277,10 @@ function PortalMembroSubstituicoes() {
         {showForm ? <X className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
         {showForm ? "Cancelar" : "Nova solicitação"}
       </Button>
+      )}
 
       {/* Formulário */}
-      {showForm && (
+      {showForm && confirmacaoAtiva && (
         <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
           <p className="text-sm font-semibold">Solicitar substituição</p>
 
@@ -323,8 +357,8 @@ function PortalMembroSubstituicoes() {
         </div>
       )}
 
-      {/* Disponíveis para voluntariar */}
-      {abertasParaVoluntariar.length > 0 && (
+      {/* Disponíveis para voluntariar — só quando confirmação ativa */}
+      {confirmacaoAtiva && abertasParaVoluntariar.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
             <HandHelping className="h-4 w-4 text-violet-500" />
