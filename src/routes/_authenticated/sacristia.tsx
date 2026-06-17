@@ -5,8 +5,9 @@ import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   CheckCircle2, XCircle, Clock, MapPin, Users, Loader2, FileText,
-  AlertCircle, TrendingUp,
+  AlertCircle, TrendingUp, Search, X, CheckCheck,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,6 +57,9 @@ function SacristiaPage() {
   const [presencaMap, setPresencaMap] = useState<Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente">>({});
   const [savingEscalaId, setSavingEscalaId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("em_andamento");
+  const [busca, setBusca] = useState("");
+  const [filtroMinisterio, setFiltroMinisterio] = useState<string | null>(null);
+  const [salvandoTodos, setSalvandoTodos] = useState(false);
   const autoSwitchedRef = useRef(false);
 
   // Para auxiliares: descobre o membro_id do usuário logado para filtrar escalas
@@ -215,6 +219,53 @@ function SacristiaPage() {
 
   const loading = isLoading || isLoadingMembros;
 
+  // Ministérios únicos do conjunto exibido (para chips de filtro)
+  const ministeriosDisponiveis = useMemo(() => {
+    const visibleEscalaIds = new Set(escalasExibidas.map((e) => e.id));
+    const map = new Map<string, { id: string; nome: string; cor: string }>();
+    membrosEscala.forEach((m) => {
+      if (visibleEscalaIds.has(m.escala_id)) {
+        map.set(m.ministerio.id, m.ministerio);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [escalasExibidas, membrosEscala]);
+
+  // Salvar presenças de todas as escalas abertas em lote
+  async function salvarTodos() {
+    setSalvandoTodos(true);
+    try {
+      const escalaIds = escalasExibidas.map((e) => e.id);
+      const membrosParaSalvar = membrosEscala.filter((m) => escalaIds.includes(m.escala_id));
+      await Promise.all(
+        membrosParaSalvar.map((m: MembroEscala) =>
+          supabase.from("escala_membros").update({ status: presencaMap[m.id] ?? m.status }).eq("id", m.id)
+        )
+      );
+      qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
+      qc.invalidateQueries({ queryKey: ["sacristia-todas"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros"] });
+      qc.invalidateQueries({ queryKey: ["escala-historico"] });
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      toast.success("Todas as presenças salvas.");
+    } catch (e) {
+      toast.error(supabaseErrorMessage(e));
+    } finally {
+      setSalvandoTodos(false);
+    }
+  }
+
+  function marcarTodosPresentes(escalaId: string) {
+    const membrosDestaEscala = membrosEscala.filter((m) => m.escala_id === escalaId);
+    setPresencaMap((prev) => {
+      const next = { ...prev };
+      membrosDestaEscala.forEach((m) => { next[m.id] = "presente"; });
+      return next;
+    });
+  }
+
   // Auto-seleciona a aba mais relevante na primeira carga
   useEffect(() => {
     if (loading || autoSwitchedRef.current) return;
@@ -286,6 +337,71 @@ function SacristiaPage() {
         </div>
       ) : (
         <div className="space-y-5">
+          {/* Busca + filtro por ministério */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Buscar membro..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="pl-9 pr-8"
+              />
+              {busca && (
+                <button
+                  type="button"
+                  onClick={() => setBusca("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {ministeriosDisponiveis.length > 1 && (
+              <div className="flex gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setFiltroMinisterio(null)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    filtroMinisterio === null
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  Todos
+                </button>
+                {ministeriosDisponiveis.map((min) => (
+                  <button
+                    key={min.id}
+                    type="button"
+                    onClick={() => setFiltroMinisterio(filtroMinisterio === min.id ? null : min.id)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      filtroMinisterio === min.id
+                        ? "text-white"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                    style={filtroMinisterio === min.id ? { backgroundColor: min.cor } : {}}
+                  >
+                    {min.nome}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Botão salvar tudo em lote (quando não em concluídas) */}
+          {tab !== "concluidas" && escalasExibidas.length > 1 && (
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              disabled={salvandoTodos}
+              onClick={salvarTodos}
+            >
+              {salvandoTodos ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+              Salvar presenças de todas as missas
+            </Button>
+          )}
+
           {tab === "concluidas" && historicoStats.escalas > 0 && (
             <div className="rounded-2xl border border-border bg-card p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -324,13 +440,23 @@ function SacristiaPage() {
             const isHoje = escala.data === hojeStr;
             const d = new Date(escala.data + "T00:00:00");
 
-            // Agrupa por ministério
+            // Agrupa por ministério com filtros aplicados
+            const buscaNorm = busca.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+            const membrosVisiveis = membros.filter((m: MembroEscala) => {
+              if (filtroMinisterio && m.ministerio.id !== filtroMinisterio) return false;
+              if (buscaNorm) {
+                const nomeNorm = m.membro.nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+                if (!nomeNorm.includes(buscaNorm)) return false;
+              }
+              return true;
+            });
             const grupos: { ministerio: { id: string; nome: string; cor: string }; membros: MembroEscala[] }[] = [];
-            membros.forEach((m: MembroEscala) => {
+            membrosVisiveis.forEach((m: MembroEscala) => {
               const g = grupos.find((x) => x.ministerio.id === m.ministerio.id);
               if (g) g.membros.push(m);
               else grupos.push({ ministerio: m.ministerio, membros: [m] });
             });
+            if ((busca || filtroMinisterio) && membrosVisiveis.length === 0) return null;
 
             return (
               <div key={escala.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
@@ -478,14 +604,25 @@ function SacristiaPage() {
                   )}
 
                   {membros.length > 0 && tab !== "concluidas" && (
-                    <Button
-                      className="w-full mt-2"
-                      disabled={isSaving}
-                      onClick={() => salvarPresencasMutation.mutate(escala.id)}
-                    >
-                      {isSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                      Salvar presenças
-                    </Button>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 shrink-0"
+                        onClick={() => marcarTodosPresentes(escala.id)}
+                      >
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        Todos presentes
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        disabled={isSaving}
+                        onClick={() => salvarPresencasMutation.mutate(escala.id)}
+                      >
+                        {isSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                        Salvar presenças
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
