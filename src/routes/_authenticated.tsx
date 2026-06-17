@@ -5,9 +5,11 @@ import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
   Flame, BookOpen, Bell, UserCircle, X, Church, Leaf,
+  PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { PageTransition } from "@/components/ui/page-transition";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const anyDb = supabase as any;
@@ -144,6 +146,16 @@ function AuthLayout() {
   }, [loading, user, profile, pathname, hasAdminAccess, navigate]);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
+    localStorage.getItem("sidebar-collapsed") === "true"
+  );
+  function toggleSidebar() {
+    setSidebarCollapsed((v) => {
+      const next = !v;
+      localStorage.setItem("sidebar-collapsed", String(next));
+      return next;
+    });
+  }
 
   if (loading || !user) {
     return (
@@ -187,19 +199,24 @@ function AuthLayout() {
   return (
     <div className="h-screen flex overflow-hidden bg-background">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col w-56 bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border/70 shrink-0 shadow-altar overflow-y-auto">
-        <div className="flex h-20 items-center gap-3 px-5 border-b border-sidebar-border/70">
+      <aside className={`hidden lg:flex flex-col bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border/70 shrink-0 shadow-altar overflow-hidden transition-all duration-[260ms] ease-[cubic-bezier(0.34,1.56,0.64,1)] ${sidebarCollapsed ? "w-16" : "w-56"}`}>
+        {/* Logo */}
+        <div className={`flex h-20 items-center border-b border-sidebar-border/70 ${sidebarCollapsed ? "justify-center px-2" : "gap-3 px-5"}`}>
           <Link to="/painel" className="flex items-center gap-3 min-w-0">
-            <div className="grid h-12 w-12 place-items-center rounded-3xl bg-primary text-white shadow-gold">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary text-white shadow-gold transition-transform duration-200 hover:scale-105">
               <Flame className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold truncate">Lumen Pastoral</p>
-              <p className="text-[11px] text-sidebar-foreground/60 truncate">Painel Pastoral</p>
-            </div>
+            {!sidebarCollapsed && (
+              <div className="min-w-0 animate-fade-in">
+                <p className="text-sm font-semibold truncate">Lumen Pastoral</p>
+                <p className="text-[11px] text-sidebar-foreground/60 truncate">Painel Pastoral</p>
+              </div>
+            )}
           </Link>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+
+        {/* Nav */}
+        <nav className={`flex-1 py-4 space-y-1 overflow-y-auto ${sidebarCollapsed ? "px-2" : "px-3"}`}>
           {mainNav.map((item) => {
             const active = activeModule === item.to;
             return (
@@ -207,42 +224,72 @@ function AuthLayout() {
                 key={item.to}
                 to={item.to}
                 title={item.label}
-                className={`group flex items-center gap-3 rounded-3xl px-3 py-3 text-sm font-semibold transition ${
+                className={`group relative flex items-center rounded-2xl py-2.5 text-sm font-semibold transition-all duration-150 press-scale tap-highlight ${
+                  sidebarCollapsed ? "justify-center px-2" : "gap-3 px-3"
+                } ${
                   active
                     ? "bg-sidebar-accent/90 text-sidebar-primary shadow-gold"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
                 }`}
               >
-                <item.icon className="h-4 w-4 shrink-0 transition-colors" />
-                <span className="truncate flex-1">{item.label}</span>
-                {(item.badge ?? 0) > 0 && (
-                  <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold px-1 shrink-0">
+                {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-primary" />}
+                <item.icon className={`shrink-0 transition-all duration-150 ${active ? "h-[18px] w-[18px]" : "h-4 w-4"}`} />
+                {!sidebarCollapsed && (
+                  <span className="truncate flex-1 animate-fade-in">{item.label}</span>
+                )}
+                {!sidebarCollapsed && (item.badge ?? 0) > 0 && (
+                  <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold px-1 shrink-0 animate-bounce-in">
                     {item.badge}
+                  </span>
+                )}
+                {sidebarCollapsed && (item.badge ?? 0) > 0 && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-500" />
+                )}
+                {sidebarCollapsed && (
+                  <span className="absolute left-full ml-2 z-50 hidden group-hover:flex items-center rounded-lg bg-popover border border-border px-2.5 py-1.5 text-xs font-medium text-popover-foreground shadow-lg whitespace-nowrap pointer-events-none">
+                    {item.label}
                   </span>
                 )}
               </Link>
             );
           })}
         </nav>
-        <div className="p-4 border-t border-sidebar-border/70">
-          <div className="rounded-3xl border border-border/70 bg-background/90 p-3">
-            <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground truncate">Conectado como</p>
-            <p className="mt-2 text-sm font-semibold text-foreground truncate">{profile?.nome_completo}</p>
-            <p className="text-[11px] text-muted-foreground truncate">{profile?.email}</p>
-          </div>
+
+        {/* Footer */}
+        <div className={`border-t border-sidebar-border/70 ${sidebarCollapsed ? "p-2 space-y-2" : "p-4 space-y-2"}`}>
+          {!sidebarCollapsed && (
+            <div className="rounded-2xl border border-border/70 bg-background/90 p-3 animate-fade-in">
+              <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground truncate">Conectado como</p>
+              <p className="mt-1.5 text-sm font-semibold text-foreground truncate">{profile?.nome_completo}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{profile?.email}</p>
+            </div>
+          )}
           <Link
             to="/minha-conta"
-            className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-3xl bg-muted/60 px-3 py-2.5 text-sm font-semibold text-foreground/70 transition hover:bg-muted hover:text-foreground"
+            title="Minha Conta"
+            className={`w-full inline-flex items-center rounded-2xl bg-muted/60 text-sm font-semibold text-foreground/70 transition hover:bg-muted hover:text-foreground press-scale tap-highlight ${sidebarCollapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2.5"}`}
           >
-            <UserCircle className="h-4 w-4" />
-            Minha Conta
+            <UserCircle className="h-4 w-4 shrink-0" />
+            {!sidebarCollapsed && <span className="animate-fade-in">Minha Conta</span>}
           </Link>
           <button
             onClick={logout}
-            className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-3xl bg-destructive/10 px-3 py-3 text-sm font-semibold text-destructive transition hover:bg-destructive/15"
+            title="Sair"
+            className={`w-full inline-flex items-center rounded-2xl bg-destructive/10 text-sm font-semibold text-destructive transition hover:bg-destructive/15 press-scale tap-highlight ${sidebarCollapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2.5"}`}
           >
-            <LogOut className="h-4 w-4" />
-            Sair
+            <LogOut className="h-4 w-4 shrink-0" />
+            {!sidebarCollapsed && <span className="animate-fade-in">Sair</span>}
+          </button>
+          {/* Toggle colapso */}
+          <button
+            onClick={toggleSidebar}
+            title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            className={`w-full inline-flex items-center rounded-2xl bg-muted/40 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground press-scale tap-highlight ${sidebarCollapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2"}`}
+          >
+            {sidebarCollapsed
+              ? <PanelLeftOpen className="h-4 w-4 shrink-0" />
+              : <><PanelLeftClose className="h-4 w-4 shrink-0" /><span className="animate-fade-in">Recolher</span></>
+            }
           </button>
         </div>
       </aside>
@@ -320,7 +367,9 @@ function AuthLayout() {
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full">
           <div className="mx-auto max-w-7xl px-4 pt-6 pb-32 sm:px-6 lg:px-8 lg:pb-10 min-w-0 w-full overflow-hidden">
-            <Outlet />
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
           </div>
         </main>
 
@@ -393,30 +442,31 @@ function AuthLayout() {
         </Drawer>
 
         {/* ── Mobile bottom navigation — 6 módulos principais ───────── */}
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-card/98 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-t border-border/80 safe-area-pb shadow-[0_-1px_8px_rgba(0,0,0,0.06)]">
-          <div className="flex items-stretch h-[60px]">
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 glass border-t border-border/60 safe-area-pb shadow-[0_-1px_12px_rgba(0,0,0,0.08)]">
+          <div className="flex items-stretch h-[62px]">
             {mainNav.map((item) => {
               const active = activeModule === item.to;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 transition-colors relative ${
-                    active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 relative tap-highlight transition-colors duration-150 active:scale-[0.88] ${
+                    active ? "text-primary" : "text-muted-foreground"
                   }`}
                 >
-                  <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-b-full transition-all duration-200 ${
-                    active ? "w-6 bg-primary" : "w-0 bg-transparent"
-                  }`} />
-                  <div className="relative mt-2">
-                    <item.icon className={`h-[18px] w-[18px] shrink-0 transition-all duration-150 ${active ? "stroke-[2.2] scale-110" : "stroke-[1.7]"}`} />
+                  {active && (
+                    <span className="nav-active-pip" />
+                  )}
+                  <div className={`relative mt-2 transition-all duration-200 ${active ? "scale-110" : "scale-100"}`}>
+                    <div className={`absolute inset-[-6px] rounded-xl transition-all duration-200 ${active ? "bg-primary/10" : "bg-transparent"}`} />
+                    <item.icon className={`h-[19px] w-[19px] shrink-0 transition-all duration-200 relative ${active ? "stroke-[2.3]" : "stroke-[1.6]"}`} />
                     {(item.badge ?? 0) > 0 && (
-                      <span className="absolute -top-1 -right-1.5 h-3.5 min-w-[0.875rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
+                      <span className="absolute -top-1 -right-2 h-3.5 min-w-[0.875rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5 animate-bounce-in">
                         {(item.badge ?? 0) > 9 ? "9+" : item.badge}
                       </span>
                     )}
                   </div>
-                  <span className={`text-[9px] leading-none truncate max-w-full px-0.5 mt-0.5 ${active ? "font-semibold" : "font-medium"}`}>
+                  <span className={`text-[9px] leading-none truncate max-w-full px-1 mt-0.5 transition-all duration-150 ${active ? "font-bold" : "font-medium"}`}>
                     {item.label}
                   </span>
                 </Link>

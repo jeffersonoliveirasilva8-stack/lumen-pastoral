@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
@@ -1542,7 +1543,11 @@ function HistoricoTab({ historico, canceladas, loading }: { historico: Historico
   const servidas = historico.filter((h) => h.status === "presente" || h.status === "confirmado" || h.status === "atrasado").length;
 
   if (loading) {
-    return <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+    return (
+      <div className="p-4 pb-24">
+        <PageSkeleton cards={4} />
+      </div>
+    );
   }
 
   return (

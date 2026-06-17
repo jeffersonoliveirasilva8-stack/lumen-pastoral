@@ -304,6 +304,36 @@
 @keyframes shimmer {
   100% { transform: translateX(100%); }
 }
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes page-enter-slide {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pull-indicator {
+  0%   { transform: scaleX(0); opacity: 0; }
+  50%  { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
+@keyframes sidebar-collapse {
+  from { width: 14rem; }
+  to   { width: 4rem; }
+}
+@keyframes sidebar-expand {
+  from { width: 4rem; }
+  to   { width: 14rem; }
+}
+@keyframes nav-pip {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes bounce-in {
+  0%   { transform: scale(0.85); opacity: 0; }
+  60%  { transform: scale(1.06); }
+  100% { transform: scale(1);    opacity: 1; }
+}
 
 @layer utilities {
   /* Gradientes */
@@ -395,6 +425,70 @@
   .animate-scale-in   { animation: scale-in var(--duration-fast) var(--ease-out-ios) both; }
   .animate-fade-in    { animation: fade-in var(--duration-fast) var(--ease-ios) both; }
   .animate-sheet-in   { animation: sheet-in var(--duration-slow) var(--ease-out-ios) both; }
+  .animate-page       { animation: page-enter 220ms var(--ease-out-ios) both; }
+  .animate-page-slide { animation: page-enter-slide 220ms var(--ease-out-ios) both; }
+  .animate-bounce-in  { animation: bounce-in 320ms var(--ease-spring) both; }
+  .animate-nav-pip    { animation: nav-pip 200ms var(--ease-spring) both; }
+
+  /* Sidebar colapsável */
+  .sidebar-expanded  { width: 14rem; transition: width 260ms var(--ease-spring); }
+  .sidebar-collapsed { width: 4rem;  transition: width 260ms var(--ease-spring); }
+
+  /* Skeleton shimmer melhorado */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--color-muted) 0%,
+      color-mix(in oklch, var(--color-muted) 60%, var(--color-background)) 50%,
+      var(--color-muted) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer-slide 1.6s ease-in-out infinite;
+  }
+  @keyframes shimmer-slide {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Pull-to-refresh indicator */
+  .ptr-indicator {
+    height: 3px;
+    background: var(--color-primary);
+    transform-origin: left;
+    animation: pull-indicator 600ms var(--ease-ios) both;
+  }
+
+  /* Bottom nav active pip */
+  .nav-active-pip {
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    height: 3px; width: 1.5rem;
+    border-radius: 0 0 3px 3px;
+    background: var(--color-primary);
+    animation: nav-pip 200ms var(--ease-spring) both;
+  }
+
+  /* Hover lift para cards */
+  .card-lift {
+    transition: transform 180ms var(--ease-ios), box-shadow 180ms var(--ease-ios);
+  }
+  .card-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Ripple on tap (mobile) */
+  .tap-highlight { -webkit-tap-highlight-color: transparent; }
+
+  /* Stagger children para listas */
+  .stagger > *:nth-child(1)  { animation-delay: 0ms; }
+  .stagger > *:nth-child(2)  { animation-delay: 40ms; }
+  .stagger > *:nth-child(3)  { animation-delay: 80ms; }
+  .stagger > *:nth-child(4)  { animation-delay: 120ms; }
+  .stagger > *:nth-child(5)  { animation-delay: 160ms; }
+  .stagger > *:nth-child(6)  { animation-delay: 200ms; }
+  .stagger > *:nth-child(n+7){ animation-delay: 240ms; }
 
   /* Transição padrão iOS em elementos interativos */
   .transition-ios {

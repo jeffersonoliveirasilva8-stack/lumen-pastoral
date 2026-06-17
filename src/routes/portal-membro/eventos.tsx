@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -163,9 +164,7 @@ function PortalMembroEventos() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <ListSkeleton rows={5} />
       ) : eventos.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-12 text-center">
           <GraduationCap className="h-8 w-8 mx-auto text-muted-foreground mb-3" />

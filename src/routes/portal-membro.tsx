@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useNavigate, Link, useRouterState } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { PageTransition } from "@/components/ui/page-transition";
 import { format } from "date-fns";
 import {
   Loader2, Home, Calendar, Trophy, User, LogOut, Flame,
@@ -66,6 +67,24 @@ function PortalMembroLayout() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  // Pull-to-refresh
+  const mainRef = useRef<HTMLElement>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const touchStartY = useRef(0);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (mainRef.current && mainRef.current.scrollTop === 0) {
+      touchStartY.current = e.touches[0].clientY;
+    }
+  }, []);
+  const handleTouchEnd = useCallback(async (e: React.TouchEvent) => {
+    const delta = e.changedTouches[0].clientY - touchStartY.current;
+    if (delta > 80 && mainRef.current && mainRef.current.scrollTop === 0) {
+      setRefreshing(true);
+      await qc.invalidateQueries();
+      setTimeout(() => setRefreshing(false), 600);
+    }
+  }, [qc]);
   const today = useMemo(() => new Date(), []);
   const liturgy = useMemo(() => {
     const days = getLiturgicalDays(today.getFullYear());
@@ -420,8 +439,23 @@ function PortalMembroLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto">
-          <Outlet />
+        <main
+          ref={mainRef}
+          className="flex-1 overflow-auto"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {refreshing && (
+            <div className="flex justify-center py-3 animate-fade-in">
+              <div className="flex items-center gap-2 rounded-full bg-card border border-border px-3 py-1.5 shadow-md">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                <span className="text-xs font-medium text-muted-foreground">Atualizando...</span>
+              </div>
+            </div>
+          )}
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </main>
       </div>
 
@@ -473,8 +507,8 @@ function PortalMembroLayout() {
       </Drawer>
 
       {/* ── Bottom nav mobile — FAB "Mais" centralizado ── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-card/98 backdrop-blur supports-[backdrop-filter]:bg-card/90 border-t border-border/80 safe-area-pb shadow-[0_-1px_8px_rgba(0,0,0,0.06)]">
-        <div className="flex items-stretch h-[60px]">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 glass border-t border-border/60 safe-area-pb shadow-[0_-1px_12px_rgba(0,0,0,0.08)]">
+        <div className="flex items-stretch h-[62px]">
 
           {/* ── 2 itens esquerda: Início, Escalas ── */}
           {NAV_BOTTOM.slice(0, 2).map((item) => {
@@ -483,17 +517,16 @@ function PortalMembroLayout() {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 relative transition-colors ${
-                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 relative tap-highlight transition-colors duration-150 active:scale-[0.88] ${
+                  active ? "text-primary" : "text-muted-foreground"
                 }`}
               >
-                <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-b-full transition-all duration-200 ${
-                  active ? "w-8 bg-primary" : "w-0 bg-transparent"
-                }`} />
-                <div className="mt-2">
-                  <item.icon className={`h-5 w-5 shrink-0 transition-all duration-150 ${active ? "stroke-[2.2] scale-110" : "stroke-[1.7]"}`} />
+                {active && <span className="nav-active-pip" />}
+                <div className={`relative mt-2 transition-all duration-200 ${active ? "scale-110" : "scale-100"}`}>
+                  <div className={`absolute inset-[-6px] rounded-xl transition-all duration-200 ${active ? "bg-primary/10" : "bg-transparent"}`} />
+                  <item.icon className={`h-[19px] w-[19px] shrink-0 relative transition-all duration-200 ${active ? "stroke-[2.3]" : "stroke-[1.6]"}`} />
                 </div>
-                <span className={`text-[10px] leading-none truncate max-w-full px-0.5 mt-0.5 ${active ? "font-semibold" : "font-medium"}`}>
+                <span className={`text-[9px] leading-none truncate max-w-full px-1 mt-0.5 transition-all duration-150 ${active ? "font-bold" : "font-medium"}`}>
                   {item.label}
                 </span>
               </Link>
@@ -504,22 +537,19 @@ function PortalMembroLayout() {
           <div className="flex-1 relative flex flex-col items-center justify-end pb-1.5">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className={`absolute -top-4 h-[52px] w-[52px] rounded-full bg-primary text-primary-foreground
-                flex items-center justify-center shadow-[0_6px_24px_oklch(0.22_0.03_260/0.40)]
-                transition-all duration-200 active:scale-95
-                ${menuOpen ? "scale-95 shadow-sm" : "scale-100 hover:scale-105"}`}
+              className={`absolute -top-5 h-[54px] w-[54px] rounded-full bg-primary text-primary-foreground
+                flex items-center justify-center tap-highlight
+                shadow-[0_8px_28px_oklch(0.22_0.03_260/0.45)]
+                transition-all duration-200 active:scale-90
+                ${menuOpen ? "scale-95 rotate-90" : "scale-100 hover:scale-105"}`}
               aria-label="Menu"
             >
-              <span className={`transition-all duration-200 ${menuOpen ? "rotate-90 scale-90" : "rotate-0 scale-100"}`}>
-                {menuOpen
-                  ? <X className="h-[22px] w-[22px]" />
-                  : <Flame className="h-[22px] w-[22px]" />
-                }
-              </span>
+              {menuOpen
+                ? <X className="h-[22px] w-[22px] transition-all duration-200" />
+                : <Flame className="h-[22px] w-[22px] transition-all duration-200" />
+              }
             </button>
-            <span className={`text-[9px] font-semibold leading-none transition-colors duration-150 ${
-              menuOpen ? "text-primary" : "text-muted-foreground"
-            }`}>
+            <span className={`text-[9px] font-semibold leading-none transition-colors duration-150 ${menuOpen ? "text-primary" : "text-muted-foreground"}`}>
               Mais
             </span>
           </div>
@@ -532,20 +562,19 @@ function PortalMembroLayout() {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 relative transition-colors ${
-                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 relative tap-highlight transition-colors duration-150 active:scale-[0.88] ${
+                  active ? "text-primary" : "text-muted-foreground"
                 }`}
               >
-                <span className={`absolute top-0 left-1/2 -translate-x-1/2 h-[3px] rounded-b-full transition-all duration-200 ${
-                  active ? "w-8 bg-primary" : "w-0 bg-transparent"
-                }`} />
-                <div className="mt-2 relative">
-                  <item.icon className={`h-5 w-5 shrink-0 transition-all duration-150 ${active ? "stroke-[2.2] scale-110" : "stroke-[1.7]"}`} />
+                {active && <span className="nav-active-pip" />}
+                <div className={`relative mt-2 transition-all duration-200 ${active ? "scale-110" : "scale-100"}`}>
+                  <div className={`absolute inset-[-6px] rounded-xl transition-all duration-200 ${active ? "bg-primary/10" : "bg-transparent"}`} />
+                  <item.icon className={`h-[19px] w-[19px] shrink-0 relative transition-all duration-200 ${active ? "stroke-[2.3]" : "stroke-[1.6]"}`} />
                   {isBell && hasUnread && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-card" />
+                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-card animate-bounce-in" />
                   )}
                 </div>
-                <span className={`text-[10px] leading-none truncate max-w-full px-0.5 mt-0.5 ${active ? "font-semibold" : "font-medium"}`}>
+                <span className={`text-[9px] leading-none truncate max-w-full px-1 mt-0.5 transition-all duration-150 ${active ? "font-bold" : "font-medium"}`}>
                   {item.label}
                 </span>
               </Link>

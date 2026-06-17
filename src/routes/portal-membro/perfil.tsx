@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, User, Save, Star, Calendar, Phone, Shield, Camera } from "lucide-react";
@@ -265,8 +266,8 @@ function PortalMembroPerfil() {
 
   if (isLoading || !membroData) {
     return (
-      <div className="flex justify-center py-20">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      <div className="p-4 sm:p-6 pb-24">
+        <PageSkeleton cards={3} />
       </div>
     );
   }

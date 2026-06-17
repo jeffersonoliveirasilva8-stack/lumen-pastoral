@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import {
@@ -245,8 +246,8 @@ function AgendaPastoralPage() {
 
   if (isLoading) {
     return (
-      <div className="p-10 flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+      <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-24 lg:pb-10">
+        <PageSkeleton cards={4} />
       </div>
     );
   }

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -157,9 +158,7 @@ function PortalMembroRanking() {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <ListSkeleton rows={6} />
       ) : hasScores && top3ComScore.length >= 2 ? (
         /* Pódio — só exibe quando há membros com score */
         <div className="rounded-2xl border border-border bg-card p-4 pb-0 overflow-hidden">

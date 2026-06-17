@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -111,9 +112,7 @@ function AdminRanking() {
       )}
 
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
+        <ListSkeleton rows={6} />
       ) : membros.length === 0 ? (
         <div className="rounded-[1.75rem] border border-dashed border-border p-14 text-center">
           <Trophy className="h-8 w-8 mx-auto text-muted-foreground mb-3" />

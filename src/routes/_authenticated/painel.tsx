@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { DashboardSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
@@ -133,7 +134,7 @@ function DashboardPage() {
     },
   });
 
-  const { data: totalMembros = 0 } = useQuery({
+  const { data: totalMembros = 0, isLoading: loadingStats } = useQuery({
     queryKey: ["stats-membros", pid],
     enabled: !!pid,
     staleTime: 5 * 60 * 1000,
@@ -1068,6 +1069,14 @@ function DashboardPage() {
   });
 
   // ── Render ────────────────────────────────────────────────────────────────────
+  if (loadingStats) {
+    return (
+      <div className="p-3 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-24 lg:pb-10">
+        <DashboardSkeleton />
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-4 sm:space-y-6 pb-24 lg:pb-10">
 
