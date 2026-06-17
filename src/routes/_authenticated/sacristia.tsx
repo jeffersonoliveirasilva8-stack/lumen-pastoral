@@ -176,11 +176,16 @@ function SacristiaPage() {
   const salvarPresencasMutation = useMutation({
     mutationFn: async (escalaId: string) => {
       const membrosDestaEscala = membrosEscala.filter((m: any) => m.escala_id === escalaId);
-      await Promise.all(
-        membrosDestaEscala.map((m: MembroEscala) =>
-          supabase.from("escala_membros").update({ status: presencaMap[m.id] ?? m.status }).eq("id", m.id)
-        )
-      );
+      if (membrosDestaEscala.length === 0) return;
+      const updates = membrosDestaEscala.map((m: MembroEscala) => ({
+        id: m.id,
+        status: presencaMap[m.id] ?? m.status,
+      }));
+      const { error } = await supabase.rpc("salvar_presencas_escala", {
+        p_escala_id: escalaId,
+        p_updates: updates,
+      });
+      if (error) throw error;
     },
     onMutate: (escalaId) => setSavingEscalaId(escalaId),
     onSuccess: () => {
@@ -204,11 +209,11 @@ function SacristiaPage() {
     }));
   }
 
-  // Inicializa presencaMap com o status atual do banco ao carregar a aba em_andamento
-  useMemo(() => {
-    const initial: Record<string, any> = {};
+  // Inicializa presencaMap com status já gravados ao carregar membrosEscala
+  useEffect(() => {
+    const initial: Record<string, string> = {};
     membrosEscala.forEach((m) => {
-      if (STATUS_FINAIS.includes(m.status) && !presencaMap[m.id]) {
+      if (STATUS_FINAIS.includes(m.status)) {
         initial[m.id] = m.status;
       }
     });
@@ -235,13 +240,19 @@ function SacristiaPage() {
   async function salvarTodos() {
     setSalvandoTodos(true);
     try {
-      const escalaIds = escalasExibidas.map((e) => e.id);
-      const membrosParaSalvar = membrosEscala.filter((m) => escalaIds.includes(m.escala_id));
-      await Promise.all(
-        membrosParaSalvar.map((m: MembroEscala) =>
-          supabase.from("escala_membros").update({ status: presencaMap[m.id] ?? m.status }).eq("id", m.id)
-        )
-      );
+      for (const escala of escalasExibidas) {
+        const membrosDestaEscala = membrosEscala.filter((m) => m.escala_id === escala.id);
+        if (membrosDestaEscala.length === 0) continue;
+        const updates = membrosDestaEscala.map((m: MembroEscala) => ({
+          id: m.id,
+          status: presencaMap[m.id] ?? m.status,
+        }));
+        const { error } = await supabase.rpc("salvar_presencas_escala", {
+          p_escala_id: escala.id,
+          p_updates: updates,
+        });
+        if (error) throw error;
+      }
       qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
       qc.invalidateQueries({ queryKey: ["sacristia-todas"] });
       qc.invalidateQueries({ queryKey: ["escala-membros"] });

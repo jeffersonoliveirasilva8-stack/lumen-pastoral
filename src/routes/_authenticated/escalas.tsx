@@ -3108,11 +3108,15 @@ function EscalaDetail({
 
   const marcarPresencasMutation = useMutation({
     mutationFn: async () => {
-      await Promise.all(
-        atribuicoes.map((a) =>
-          supabase.from("escala_membros").update({ status: presencaMap[a.id] ?? "pendente" }).eq("id", a.id)
-        )
-      );
+      const updates = atribuicoes.map((a) => ({
+        id: a.id,
+        status: presencaMap[a.id] ?? "pendente",
+      }));
+      const { error } = await supabase.rpc("salvar_presencas_escala", {
+        p_escala_id: escala.id,
+        p_updates: updates,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["escala-membros", escala.id] });
@@ -4595,11 +4599,16 @@ function SacristiaTab({ paroquiaId }: { paroquiaId: string }) {
   const salvarPresencasMutation = useMutation({
     mutationFn: async (escalaId: string) => {
       const membrosDestaEscala = membrosEscala.filter((m: any) => m.escala_id === escalaId);
-      await Promise.all(
-        membrosDestaEscala.map((m: MembroEscalaS) =>
-          supabase.from("escala_membros").update({ status: presencaMap[m.id] ?? "pendente" }).eq("id", m.id)
-        )
-      );
+      if (membrosDestaEscala.length === 0) return;
+      const updates = membrosDestaEscala.map((m: MembroEscalaS) => ({
+        id: m.id,
+        status: presencaMap[m.id] ?? "pendente",
+      }));
+      const { error } = await supabase.rpc("salvar_presencas_escala", {
+        p_escala_id: escalaId,
+        p_updates: updates,
+      });
+      if (error) throw error;
     },
     onMutate: (escalaId) => setSavingEscalaId(escalaId),
     onSuccess: () => {
