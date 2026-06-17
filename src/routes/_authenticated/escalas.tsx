@@ -3162,28 +3162,34 @@ function EscalaDetail({
       const { data, error } = await (supabase as any).rpc("reenviar_notificacoes_escala", { p_escala_id: escala.id });
       if (error) throw error;
       if (data?.ok === false) throw new Error(data.error ?? "Erro ao reenviar notificações.");
-    },
-    onSuccess: () => {
-      toast.success("Notificações reenviadas.");
+
+      // Envia e-mails com await para capturar erros da Edge Function
+      const erros: string[] = [];
       for (const a of atribuicoes) {
         const membro = membros.find((m) => m.id === a.membro_id);
         const min = ministerios.find((m) => m.id === a.ministerio_id);
-        if (membro?.email) {
-          supabase.functions.invoke("send-email", {
-            body: {
-              template: "escala_publicada",
-              to: membro.email,
-              nome: membro.nome,
-              paroquia: paroquiaNome,
-              escalaTitulo: escala.titulo,
-              escalaData: escala.data,
-              escalaHora: escala.hora_inicio?.slice(0, 5) ?? "",
-              ministerioNome: min?.nome ?? "",
-            },
-          });
+        if (!membro?.email) continue;
+        const { error: efErr, data: efData } = await supabase.functions.invoke("send-email", {
+          body: {
+            template: "escala_publicada",
+            to: membro.email,
+            nome: membro.nome,
+            paroquia: paroquiaNome,
+            escalaTitulo: escala.titulo,
+            escalaData: escala.data,
+            escalaHora: escala.hora_inicio?.slice(0, 5) ?? "",
+            ministerioNome: min?.nome ?? "",
+          },
+        });
+        if (efErr || efData?.ok === false) {
+          const msg = efErr?.message ?? efData?.error ?? "erro desconhecido";
+          erros.push(`${membro.email}: ${msg}`);
+          console.error("[send-email]", membro.email, msg);
         }
       }
+      if (erros.length > 0) throw new Error(`E-mails com falha (${erros.length}): ${erros[0]}`);
     },
+    onSuccess: () => toast.success("Notificações e e-mails reenviados."),
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
 
