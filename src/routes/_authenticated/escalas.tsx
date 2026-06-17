@@ -1831,6 +1831,7 @@ function EscalaFormContent({
             <SelectItem value="rascunho">Rascunho</SelectItem>
             <SelectItem value="publicada">Publicada</SelectItem>
             <SelectItem value="arquivada">Arquivada</SelectItem>
+            <SelectItem value="cancelada">Cancelada</SelectItem>
           </SelectContent>
         </Select>
       </div>
