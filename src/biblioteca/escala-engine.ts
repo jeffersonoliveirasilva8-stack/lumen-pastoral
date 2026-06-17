@@ -52,10 +52,12 @@ export type ConfigParoquia = {
   limite_semanal?: number;
   limite_mensal?: number;
   impedir_repeticao_seguida?: boolean;
+  intervalo_minimo_dias?: number;   // dias mínimos entre escalações do mesmo membro
   prioridade_score?: boolean;       // true = maior score (mérito); false/undef = equidade
   prioridade_bonus_alto?: number;   // bonus pts para prioridade_escala alta/mestre_cerimonia/coordenador (padrão: 15)
   prioridade_bonus_medio?: number;  // bonus pts para prioridade_escala media (padrão: 8)
   distribuicao_masc_pct?: number;   // % masculino alvo (0-100); undefined = sem controle de gênero
+  variedade_ministerio?: boolean;   // bonus para membros que servirão em ministério diferente do último
 };
 
 export type MinisterioBase = {
@@ -495,6 +497,12 @@ export function alocarMembros(
         const serviuOntem = historicoRecente.some((h) => h.membro_id === m.id && h.data === ontemStr);
         if (serviuOntem) { excluidos.indisponibilidade++; continue; }
       }
+      // Hard-block: intervalo mínimo entre escalações
+      if (config?.intervalo_minimo_dias && config.intervalo_minimo_dias > 0) {
+        const limite = somarDias(contexto.data, -config.intervalo_minimo_dias);
+        const serviuRecente = historicoRecente.some((h) => h.membro_id === m.id && h.data > limite && h.data < contexto.data);
+        if (serviuRecente) { excluidos.indisponibilidade++; continue; }
+      }
 
       if (acima_limite.has(m.id)) {
         excluidos.acima_limite++;
@@ -522,6 +530,19 @@ export function alocarMembros(
 
       return { membro: m, breakdown, diasSemServir, count30d, totalHist };
     });
+
+    // Bonus de variedade de ministério: membro que servirá em ministério diferente do último
+    if (config?.variedade_ministerio) {
+      candidatosComScore.forEach((c) => {
+        const histMembro = historicoRecente.filter((h) => h.membro_id === c.membro.id && h.data < contexto.data);
+        if (histMembro.length > 0) {
+          const ultimaEntry = histMembro.reduce((acc, h) => h.data > acc.data ? h : acc, histMembro[0]);
+          if (ultimaEntry.ministerio_id !== funcao.ministerio_id) {
+            c.breakdown.total = Math.min(100, c.breakdown.total + 8);
+          }
+        }
+      });
+    }
 
     // Ordena por score decrescente (maior score = maior prioridade = será escolhido primeiro)
     candidatosComScore.sort((a, b) => b.breakdown.total - a.breakdown.total);

@@ -25,10 +25,12 @@ type RegrasEscala = {
   prioridade_score: boolean;
   impedir_repeticao_consecutiva: boolean;
   permitir_duplicidade: boolean;
+  variedade_ministerio: boolean;
   peso_solene: number;
   peso_normal: number;
   limite_semanal: number | null;
   limite_mensal: number | null;
+  intervalo_minimo_dias: number | null;
   dias_antecedencia_indisp: number | null;
   distribuicao_masc_pct: number;
 };
@@ -63,10 +65,12 @@ const DEFAULT_REGRAS: RegrasEscala = {
   prioridade_score: true,
   impedir_repeticao_consecutiva: false,
   permitir_duplicidade: false,
+  variedade_ministerio: false,
   peso_solene: 2,
   peso_normal: 1,
   limite_semanal: null,
   limite_mensal: null,
+  intervalo_minimo_dias: null,
   dias_antecedencia_indisp: 3,
   distribuicao_masc_pct: 50,
 };
@@ -306,6 +310,7 @@ function ConfiguracaoEscalas() {
             { key: "prioridade_score" as const,                label: "Priorizar por score",                    desc: "Membros com menor score servem primeiro" },
             { key: "impedir_repeticao_consecutiva" as const,   label: "Impedir escalação consecutiva",          desc: "Evita escalar o mesmo membro em dois eventos seguidos" },
             { key: "permitir_duplicidade" as const,            label: "Permitir mesmo membro em duas funções",  desc: "Permite o mesmo membro em grupos diferentes na mesma escala" },
+            { key: "variedade_ministerio" as const,            label: "Variedade de ministério",                desc: "Bonus para membros que servirão em ministério diferente do último — incentiva rotação" },
           ]).map(({ key, label, desc }) => (
             <div key={key} className="flex items-start justify-between gap-4">
               <div>
@@ -341,6 +346,13 @@ function ConfiguracaoEscalas() {
             <input type="number" min={0} placeholder="Sem limite" value={regras.limite_mensal ?? ""}
               onChange={(e) => r("limite_mensal", e.target.value === "" ? null : Number(e.target.value))}
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs text-muted-foreground">Intervalo mínimo entre escalações (dias)</Label>
+            <p className="text-[11px] text-muted-foreground/70 mb-1">O motor bloqueia membros que já serviram dentro deste intervalo. Ex: 7 = no máximo uma vez por semana.</p>
+            <input type="number" min={0} placeholder="Sem intervalo mínimo" value={regras.intervalo_minimo_dias ?? ""}
+              onChange={(e) => r("intervalo_minimo_dias", e.target.value === "" ? null : Number(e.target.value))}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           </div>
         </div>
 

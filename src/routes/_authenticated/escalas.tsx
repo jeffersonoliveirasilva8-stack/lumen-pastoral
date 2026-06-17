@@ -521,6 +521,8 @@ function EscalasPage() {
             impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
             prioridade_score: (regras.prioridade_score as boolean | undefined) ?? false,
             distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
+            intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
+            variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
           };
 
           const sugestoes = generateEscalaAssignments(
@@ -763,6 +765,42 @@ function EscalasPage() {
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
 
+  const bulkPublishMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await (supabase as any)
+        .from("escalas")
+        .update({ status: "publicada" })
+        .in("id", ids)
+        .eq("paroquia_id", profile!.paroquia_id!);
+      if (error) throw error;
+    },
+    onSuccess: (_, ids) => {
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+      qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      setSelectedEscalaIds(new Set());
+      toast.success(`${ids.length} escala(s) publicada(s).`);
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const swapMembroMutation = useMutation({
+    mutationFn: async ({ removeId, escalaId, membroId, ministerioId }: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => {
+      const { error: delErr } = await (supabase as any).from("escala_membros").delete().eq("id", removeId);
+      if (delErr) throw delErr;
+      const { error: insErr } = await (supabase as any).from("escala_membros").insert({ escala_id: escalaId, membro_id: membroId, ministerio_id: ministerioId, status: "pendente" });
+      if (insErr) throw insErr;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["escalas-counts"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros"] });
+      qc.invalidateQueries({ queryKey: ["escala-historico"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      toast.success("Substituição realizada.");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   const reorganizarMutation = useMutation({
@@ -804,6 +842,8 @@ function EscalasPage() {
         impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
         prioridade_score: (regras.prioridade_score as boolean | undefined) ?? false,
         distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
+        intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
+        variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
       };
 
       const membrosComAtuacoes = membros.map((m) => ({
@@ -1276,6 +1316,7 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           escalaCounts={escalaCounts}
           membros={membros}
           assignmentHistory={assignmentHistory}
+          paroquiaConfig={paroquiaConfig}
           onToggleSelect={(id) => {
             const next = new Set(selectedEscalaIds);
             if (next.has(id)) next.delete(id); else next.add(id);
@@ -1288,6 +1329,9 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           onCreate={openCreate}
           onExportPDF={(id: string) => exportarEscalasPDF([id])}
           onReorganizar={() => setReorganizarOpen(true)}
+          onBulkPublish={(ids) => bulkPublishMutation.mutate(ids)}
+          onSwapMembro={(args) => swapMembroMutation.mutate(args)}
+          isBulkPublishing={bulkPublishMutation.isPending}
         />
       ) : view === "indisponibilidades" ? (
         <IndisponibilidadesTab
@@ -1808,11 +1852,163 @@ function IndisponibilidadesTab({
   );
 }
 
+// ── SwapMembroModal ───────────────────────────────────────────────────────────
+
+function SwapMembroModal({
+  membroId, membroNome, escalas, escalaCounts, radarData, membros, onSwap, onClose,
+}: {
+  membroId: string;
+  membroNome: string;
+  escalas: Escala[];
+  escalaCounts: Record<string, EscalaPreview>;
+  radarData: { id: string; nome: string; status: string; vezes7dias: number }[];
+  membros: Membro[];
+  onSwap: (args: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
+  onClose: () => void;
+}) {
+  const [selectedEscala, setSelectedEscala] = useState<string>("");
+  const [selectedAtrib, setSelectedAtrib] = useState<string>("");
+
+  // Escalas futuras onde este membro ainda não está
+  const hojeStr = new Date().toISOString().slice(0, 10);
+  const escalasDisponiveis = escalas.filter((e) => {
+    if (e.data < hojeStr) return false;
+    const counts = escalaCounts[e.id];
+    if (!counts) return false;
+    const jaEsta = counts.funcoes.some((f) => f.membros.some((m) => m.id === membroId));
+    return !jaEsta;
+  });
+
+  const escalaObj = escalasDisponiveis.find((e) => e.id === selectedEscala);
+  const counts = escalaObj ? escalaCounts[escalaObj.id] : null;
+
+  // Membros já na escala, ordenados por mais frequência (sobrecargados primeiro)
+  type AtribEntry = { atribId: string; membroId: string; nome: string; vezes7dias: number; ministerioId: string; ministerioNome: string };
+  const membrosNaEscala: AtribEntry[] = useMemo(() => {
+    if (!counts) return [];
+    const entries: AtribEntry[] = [];
+    counts.funcoes.forEach((f) => {
+      f.membros.forEach((m) => {
+        if (m.id === membroId) return;
+        const r = radarData.find((rd) => rd.id === m.id);
+        entries.push({ atribId: "", membroId: m.id, nome: m.nome, vezes7dias: r?.vezes7dias ?? 0, ministerioId: f.ministerio_id, ministerioNome: f.nome });
+      });
+    });
+    return entries.sort((a, b) => b.vezes7dias - a.vezes7dias);
+  }, [counts, membroId, radarData]);
+
+  // Find atribuicao ID for selected member
+  // We don't have the real DB IDs here, so we'll pass the membro_id + escala context to the parent
+  // The parent mutation will find and delete by (escala_id, membro_id)
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Incluir {nomeExibicao(membroNome)} em uma escala</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Escolha a escala</p>
+            {escalasDisponiveis.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma escala futura disponível para este membro.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {escalasDisponiveis.map((e) => {
+                  const d = new Date(e.data + "T00:00:00");
+                  const c = escalaCounts[e.id];
+                  const pct = c && c.needed > 0 ? c.filled / c.needed : 1;
+                  return (
+                    <button key={e.id} type="button"
+                      className={`w-full text-left rounded-2xl border px-3 py-2.5 transition-all ${selectedEscala === e.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
+                      onClick={() => { setSelectedEscala(e.id); setSelectedAtrib(""); }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{e.titulo}</p>
+                          <p className="text-xs text-muted-foreground">{format(d, "EEE d 'de' MMM", { locale: ptBR })}</p>
+                        </div>
+                        {pct < 1 && <span className="text-[10px] rounded-full bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 font-semibold">{c?.filled}/{c?.needed}</span>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {selectedEscala && membrosNaEscala.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                Substituir quem? <span className="normal-case font-normal">(mais frequentes primeiro)</span>
+              </p>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {membrosNaEscala.map((m, i) => (
+                  <button key={`${m.membroId}-${m.ministerioId}`} type="button"
+                    className={`w-full text-left rounded-2xl border px-3 py-2.5 transition-all ${selectedAtrib === `${m.membroId}:${m.ministerioId}` ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
+                    onClick={() => setSelectedAtrib(`${m.membroId}:${m.ministerioId}`)}>
+                    <div className="flex items-center gap-3">
+                      {m.vezes7dias >= 2 && <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />}
+                      {m.vezes7dias === 1 && <div className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />}
+                      {m.vezes7dias === 0 && <div className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{nomeExibicao(m.nome)}</p>
+                        <p className="text-xs text-muted-foreground">{m.ministerioNome} · {m.vezes7dias}× esta semana</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedEscala && membrosNaEscala.length === 0 && (
+            <p className="text-sm text-muted-foreground">Esta escala não tem membros ainda. Você pode adicioná-lo diretamente.</p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button
+            disabled={!selectedEscala || (membrosNaEscala.length > 0 && !selectedAtrib)}
+            onClick={async () => {
+              if (!selectedEscala) return;
+              const [repMembroId, repMinisterioId] = selectedAtrib.split(":");
+              if (membrosNaEscala.length > 0 && (!repMembroId || !repMinisterioId)) return;
+
+              if (selectedAtrib) {
+                // Find the real atribuicao id — we need to query it
+                // For now, use a workaround: delete by membro_id + escala_id + ministerio_id and insert new
+                const { data: atribs } = await (supabase as any)
+                  .from("escala_membros")
+                  .select("id")
+                  .eq("escala_id", selectedEscala)
+                  .eq("membro_id", repMembroId)
+                  .eq("ministerio_id", repMinisterioId)
+                  .limit(1);
+                const atribId = atribs?.[0]?.id;
+                if (atribId) {
+                  onSwap({ removeId: atribId, escalaId: selectedEscala, membroId, ministerioId: repMinisterioId });
+                }
+              }
+              onClose();
+            }}
+          >
+            <UserPlus className="h-4 w-4 mr-1.5" />
+            {selectedAtrib ? "Substituir e incluir" : "Incluir na escala"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── ListaView ─────────────────────────────────────────────────────────────────
 
 function ListaView({
-  escalas, allEscalas, selectedIds, escalaCounts, membros, assignmentHistory,
+  escalas, allEscalas, selectedIds, escalaCounts, membros, assignmentHistory, paroquiaConfig,
   onToggleSelect, onSelectAll, onOpenDetail, onEdit, onDelete, onCreate, onExportPDF, onReorganizar,
+  onBulkPublish, onSwapMembro, isBulkPublishing,
 }: {
   escalas: Escala[];
   allEscalas: Escala[];
@@ -1820,6 +2016,7 @@ function ListaView({
   escalaCounts: Record<string, EscalaPreview>;
   membros: Membro[];
   assignmentHistory: AssignmentHistoryEntry[];
+  paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
   onToggleSelect: (id: string) => void;
   onSelectAll: (ids: string[]) => void;
   onOpenDetail: (e: Escala) => void;
@@ -1828,8 +2025,13 @@ function ListaView({
   onCreate: () => void;
   onExportPDF: (id: string) => void;
   onReorganizar: () => void;
+  onBulkPublish: (ids: string[]) => void;
+  onSwapMembro: (args: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
+  isBulkPublishing: boolean;
 }) {
   const [radarOpen, setRadarOpen] = useState(false);
+  const [filtro, setFiltro] = useState<"todos" | "semana" | "2semanas" | "incompletas" | "rascunho">("todos");
+  const [swapTarget, setSwapTarget] = useState<{ membroId: string; nome: string } | null>(null);
   const allSelected = escalas.length > 0 && escalas.every((e) => selectedIds.has(e.id));
   const publishedCount = escalas.filter((e) => e.status === "publicada").length;
   const draftCount = escalas.filter((e) => e.status === "rascunho").length;
@@ -1885,6 +2087,46 @@ function ListaView({
   const inativos = radarData.filter((m) => m.status === "inativo");
   const ausentes = radarData.filter((m) => m.status === "ausente");
   const ativos = radarData.filter((m) => m.status === "ativo");
+
+  // Limits from config
+  const regrasConfig = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
+  const limiteSemanal = (regrasConfig.limite_semanal as number | null) ?? null;
+  const limiteMensal = (regrasConfig.limite_mensal as number | null) ?? null;
+  const membrosNoLimite = useMemo(() => {
+    if (!limiteSemanal && !limiteMensal) return new Set<string>();
+    const hoje2 = new Date();
+    const semanaInicio = new Date(hoje2); semanaInicio.setDate(hoje2.getDate() - 6);
+    const mesInicio = hoje2.toISOString().slice(0, 7) + "-01";
+    const set = new Set<string>();
+    membros.forEach((m) => {
+      const hist = assignmentHistory.filter((h) => h.memberId === m.id);
+      if (limiteSemanal) {
+        const cnt = hist.filter((h) => (h.date ?? "") >= semanaInicio.toISOString().slice(0, 10)).length;
+        if (cnt >= limiteSemanal) set.add(m.id);
+      }
+      if (limiteMensal && !set.has(m.id)) {
+        const cnt = hist.filter((h) => (h.date ?? "") >= mesInicio).length;
+        if (cnt >= limiteMensal) set.add(m.id);
+      }
+    });
+    return set;
+  }, [membros, assignmentHistory, limiteSemanal, limiteMensal]);
+
+  // Filter escalas by quick filter
+  const escalasVisiveis = useMemo(() => {
+    const hojeStr = new Date().toISOString().slice(0, 10);
+    const em7 = new Date(); em7.setDate(em7.getDate() + 7);
+    const em14 = new Date(); em14.setDate(em14.getDate() + 14);
+    const em7Str = em7.toISOString().slice(0, 10);
+    const em14Str = em14.toISOString().slice(0, 10);
+    return escalas.filter((e) => {
+      if (filtro === "semana") return e.data >= hojeStr && e.data <= em7Str;
+      if (filtro === "2semanas") return e.data >= hojeStr && e.data <= em14Str;
+      if (filtro === "incompletas") { const c = escalaCounts[e.id]; return c ? c.filled < c.needed : false; }
+      if (filtro === "rascunho") return e.status === "rascunho";
+      return true;
+    });
+  }, [escalas, filtro, escalaCounts]);
 
   const repeatedAlerts = useMemo(() => {
     type AlertEntry = {
@@ -2080,9 +2322,10 @@ function ListaView({
                           {m.diasSemServir !== null ? `${m.diasSemServir}d sem servir` : "sem histórico recente"}
                         </p>
                       </div>
-                      <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
-                        {m.diasSemServir !== null ? `${m.diasSemServir}d` : "—"}
-                      </span>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30 shrink-0"
+                        onClick={() => setSwapTarget({ membroId: m.id, nome: m.nome })}>
+                        <UserPlus className="h-3 w-3 mr-1" /> Incluir
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -2107,9 +2350,10 @@ function ListaView({
                           {m.diasSemServir !== null ? `${m.diasSemServir}d sem servir` : "nunca escalado"}
                         </p>
                       </div>
-                      <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                        {m.diasSemServir !== null ? `${m.diasSemServir}d` : "—"}
-                      </span>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 shrink-0"
+                        onClick={() => setSwapTarget({ membroId: m.id, nome: m.nome })}>
+                        <UserPlus className="h-3 w-3 mr-1" /> Incluir
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -2204,22 +2448,71 @@ function ListaView({
         </div>
       )}
 
+      {/* ── Modal de troca de membro ──────────────────────────────────────── */}
+      {swapTarget && (
+        <SwapMembroModal
+          membroId={swapTarget.membroId}
+          membroNome={swapTarget.nome}
+          escalas={escalas}
+          escalaCounts={escalaCounts}
+          radarData={radarData}
+          membros={membros}
+          onSwap={onSwapMembro}
+          onClose={() => setSwapTarget(null)}
+        />
+      )}
+
+      {/* ── Filtros rápidos ─────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
+        {([
+          { id: "todos", label: "Todas" },
+          { id: "semana", label: "Esta semana" },
+          { id: "2semanas", label: "Próx. 2 sem" },
+          { id: "incompletas", label: "Incompletas" },
+          { id: "rascunho", label: "Rascunho" },
+        ] as const).map((f) => (
+          <button key={f.id} onClick={() => setFiltro(f.id)}
+            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+              filtro === f.id
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}>
+            {f.label}
+          </button>
+        ))}
+        <span className="ml-auto shrink-0 text-xs text-muted-foreground">{escalasVisiveis.length} de {escalas.length}</span>
+      </div>
+
+      {/* ── Barra de ações em lote ──────────────────────────────────────────── */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-2 rounded-2xl bg-primary/5 border border-primary/20 px-4 py-2.5">
+          <span className="text-sm font-semibold text-primary flex-1">{selectedIds.size} selecionada(s)</span>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onBulkPublish(Array.from(selectedIds))} disabled={isBulkPublishing}>
+            {isBulkPublishing ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Check className="h-3 w-3 mr-1" />}
+            Publicar todas
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => onSelectAll([])}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-3xl border border-border bg-card overflow-hidden">
         <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border/40">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <Checkbox
               checked={allSelected}
-              onCheckedChange={(checked) => onSelectAll(checked ? escalas.map((e) => e.id) : [])}
+              onCheckedChange={(checked) => onSelectAll(checked ? escalasVisiveis.map((e) => e.id) : [])}
             />
             <span className="text-xs text-muted-foreground">
               {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : "Selecionar todas"}
             </span>
           </label>
-          <span className="text-xs text-muted-foreground">{escalas.length} escala(s)</span>
+          <span className="text-xs text-muted-foreground">{escalasVisiveis.length} escala(s)</span>
         </div>
 
         <div className="space-y-3 p-4 animate-fade-in">
-          {escalas.map((e, idx) => {
+          {escalasVisiveis.map((e, idx) => {
             const cfg = STATUS_CONFIG[e.status] ?? STATUS_CONFIG.rascunho;
             const borderColor = STATUS_BORDER[e.status] ?? STATUS_BORDER.rascunho;
             const d = new Date(e.data + "T00:00:00");
@@ -2289,13 +2582,16 @@ function ListaView({
 
                     {pct !== null && (
                       <div className="mt-3 flex items-center gap-2">
+                        {pct < 1 && (
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Escala incompleta" />
+                        )}
                         <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all ${pct >= 1 ? "bg-green-500" : pct >= 0.5 ? "bg-amber-400" : "bg-red-400"}`}
                             style={{ width: `${Math.round(pct * 100)}%` }}
                           />
                         </div>
-                        <span className="text-[11px] text-muted-foreground shrink-0 tabular-nums">
+                        <span className={`text-[11px] shrink-0 tabular-nums font-medium ${pct >= 1 ? "text-green-600" : pct >= 0.5 ? "text-amber-600" : "text-red-500"}`}>
                           {counts!.filled}/{counts!.needed}
                         </span>
                       </div>
@@ -2775,6 +3071,8 @@ function EscalaDetail({
       impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? false,
       prioridade_score: regras.prioridade_score ?? false,
       distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
+      intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
+      variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
     };
 
     // Encontra missas_padrao que correspondem a esta escala (mesmo dia da semana + hora)
