@@ -3182,9 +3182,14 @@ function EscalaDetail({
           },
         });
         if (efErr || efData?.ok === false) {
-          const msg = efErr?.message ?? efData?.error ?? "erro desconhecido";
+          let msg = efErr?.message ?? efData?.error ?? "erro desconhecido";
+          // Tenta extrair corpo real da resposta (ex: "RESEND_API_KEY not configured")
+          try {
+            const body = await (efErr as any)?.context?.json?.();
+            if (body?.error) msg = body.error;
+          } catch { /* ignora */ }
           erros.push(`${membro.email}: ${msg}`);
-          console.error("[send-email]", membro.email, msg);
+          console.error("[send-email]", membro.email, msg, efErr);
         }
       }
       if (erros.length > 0) throw new Error(`E-mails com falha (${erros.length}): ${erros[0]}`);
