@@ -712,23 +712,24 @@ function EscalasPage() {
             .from("escala_membros")
             .select("membro_id, ministerio_id")
             .eq("escala_id", vars.id);
-          for (const a of (atrib ?? [])) {
+          for (let i = 0; i < (atrib ?? []).length; i++) {
+            const a = (atrib ?? [])[i];
             const membro = membros.find((m: Membro) => m.id === a.membro_id);
             const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
-            if (membro?.email) {
-              supabase.functions.invoke("send-email", {
-                body: {
-                  template: "escala_publicada",
-                  to: membro.email,
-                  nome: membro.nome,
-                  paroquia: paroquiaNome,
-                  escalaTitulo: escalaRef.titulo,
-                  escalaData: escalaRef.data,
-                  escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
-                  ministerioNome: min?.nome ?? "",
-                },
-              });
-            }
+            if (!membro?.email) continue;
+            if (i > 0) await new Promise((r) => setTimeout(r, 400));
+            supabase.functions.invoke("send-email", {
+              body: {
+                template: "escala_publicada",
+                to: membro.email,
+                nome: membro.nome,
+                paroquia: paroquiaNome,
+                escalaTitulo: escalaRef.titulo,
+                escalaData: escalaRef.data,
+                escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+                ministerioNome: min?.nome ?? "",
+              },
+            });
           }
         }
       }
@@ -753,24 +754,26 @@ function EscalasPage() {
           .from("escala_membros")
           .select("membro_id, ministerio_id, escala_id")
           .in("escala_id", ids);
-        for (const a of (atrib ?? [])) {
+        const allAtrib = atrib ?? [];
+        for (let i = 0; i < allAtrib.length; i++) {
+          const a = allAtrib[i];
           const escalaRef = escalas.find((e) => e.id === a.escala_id);
           const membro = membros.find((m: Membro) => m.id === a.membro_id);
           const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
-          if (membro?.email && escalaRef) {
-            supabase.functions.invoke("send-email", {
-              body: {
-                template: "escala_publicada",
-                to: membro.email,
-                nome: membro.nome,
-                paroquia: paroquiaNome,
-                escalaTitulo: escalaRef.titulo,
-                escalaData: escalaRef.data,
-                escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
-                ministerioNome: min?.nome ?? "",
-              },
-            });
-          }
+          if (!membro?.email || !escalaRef) continue;
+          if (i > 0) await new Promise((r) => setTimeout(r, 400));
+          supabase.functions.invoke("send-email", {
+            body: {
+              template: "escala_publicada",
+              to: membro.email,
+              nome: membro.nome,
+              paroquia: paroquiaNome,
+              escalaTitulo: escalaRef.titulo,
+              escalaData: escalaRef.data,
+              escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+              ministerioNome: min?.nome ?? "",
+            },
+          });
         }
       }
     },
@@ -3163,12 +3166,14 @@ function EscalaDetail({
       if (error) throw error;
       if (data?.ok === false) throw new Error(data.error ?? "Erro ao reenviar notificações.");
 
-      // Envia e-mails com await para capturar erros da Edge Function
+      // Envia e-mails com stagger de 400ms para respeitar rate limit da edge function
       const erros: string[] = [];
-      for (const a of atribuicoes) {
+      for (let i = 0; i < atribuicoes.length; i++) {
+        const a = atribuicoes[i];
         const membro = membros.find((m) => m.id === a.membro_id);
         const min = ministerios.find((m) => m.id === a.ministerio_id);
         if (!membro?.email) continue;
+        if (i > 0) await new Promise((r) => setTimeout(r, 400));
         const { error: efErr, data: efData } = await supabase.functions.invoke("send-email", {
           body: {
             template: "escala_publicada",
@@ -3183,7 +3188,6 @@ function EscalaDetail({
         });
         if (efErr || efData?.ok === false) {
           let msg = efErr?.message ?? efData?.error ?? "erro desconhecido";
-          // Tenta extrair corpo real da resposta (ex: "RESEND_API_KEY not configured")
           try {
             const body = await (efErr as any)?.context?.json?.();
             if (body?.error) msg = body.error;
