@@ -1551,6 +1551,8 @@ ${rodapeUrl
               onNotificarVaga={async ({ escalaId, ministerioId, ministerioNome }) => {
                 const paroquiaId = profile?.paroquia_id;
                 if (!paroquiaId) return;
+                // Busca dados da escala para o e-mail
+                const escalaRef = escalas.find((e) => e.id === escalaId) ?? detailEscala;
                 // Busca membros elegíveis: no ministério e não já na escala nesta função
                 const { data: memMinData } = await supabase
                   .from("membro_ministerios")
@@ -1564,19 +1566,43 @@ ${rodapeUrl
                   .eq("escala_id", escalaId)
                   .eq("ministerio_id", ministerioId);
                 const jaAtrib = new Set((jaAtribData ?? []).map((a: { membro_id: string }) => a.membro_id));
-                const destinatarios = elegiveisIds.filter((id: string) => !jaAtrib.has(id));
-                if (destinatarios.length === 0) return;
-                const notifs = destinatarios.map((membro_id: string) => ({
+                const destinatariosIds = elegiveisIds.filter((id: string) => !jaAtrib.has(id));
+                if (destinatariosIds.length === 0) return;
+                // Busca dados dos membros (nome + e-mail)
+                const { data: membrosData } = await supabase
+                  .from("membros")
+                  .select("id, nome, email")
+                  .in("id", destinatariosIds)
+                  .eq("ativo", true);
+                const membrosList = membrosData ?? [];
+                // Notificações in-app
+                const notifs = membrosList.map((m: { id: string; nome: string; email: string | null }) => ({
                   paroquia_id: paroquiaId,
-                  membro_id,
+                  membro_id: m.id,
                   titulo: `Vaga disponível: ${ministerioNome}`,
-                  mensagem: `Uma vaga em ${ministerioNome} ficou disponível. Se você puder servir, entre em contato com a coordenação.`,
+                  mensagem: `Uma vaga em ${ministerioNome} ficou disponível na escala "${escalaRef?.titulo ?? ""}". Se você puder servir, entre em contato com a coordenação.`,
                   tipo: "info" as const,
                   lida: false,
                   apenas_admin: false,
                   link_referencia: "/escalas",
                 }));
                 await (supabase as any).from("notificacoes").insert(notifs);
+                // E-mails individuais
+                for (const m of membrosList as { id: string; nome: string; email: string | null }[]) {
+                  if (!m.email) continue;
+                  await supabase.functions.invoke("send-email", {
+                    body: {
+                      template: "vaga_disponivel",
+                      to: m.email,
+                      nome: m.nome,
+                      paroquia: paroquiaNome ?? "",
+                      ministerioNome,
+                      escalaTitulo: escalaRef?.titulo ?? "",
+                      escalaData: escalaRef?.data ?? "",
+                      escalaHora: escalaRef?.hora_inicio?.slice(0, 5) ?? "",
+                    },
+                  });
+                }
               }}
             />
           )}
@@ -4680,12 +4706,12 @@ function EscalaDetail({
       </Dialog>
 
       {/* ── Confirmar remoção de membro ─────────────────────────────────────── */}
-      <AlertDialog open={!!removerPendente} onOpenChange={(o) => { if (!o) setRemoverPendente(null); }}>
+      {removerPendente && <AlertDialog open onOpenChange={(o) => { if (!o) setRemoverPendente(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover {removerPendente?.membroNome}?</AlertDialogTitle>
+            <AlertDialogTitle>Remover {removerPendente.membroNome}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Este membro será retirado da função <strong>{removerPendente?.ministerioNome}</strong> nesta escala.
+              Este membro será retirado da função <strong>{removerPendente.ministerioNome}</strong> nesta escala.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex items-center gap-2 px-1 pb-2">
@@ -4697,7 +4723,7 @@ function EscalaDetail({
               className="h-4 w-4 rounded border-input accent-primary"
             />
             <label htmlFor="notif-vaga-check" className="text-sm cursor-pointer">
-              Notificar membros disponíveis para <strong>{removerPendente?.ministerioNome}</strong>
+              Notificar membros disponíveis para <strong>{removerPendente.ministerioNome}</strong>
             </label>
           </div>
           <AlertDialogFooter>
@@ -4721,7 +4747,7 @@ function EscalaDetail({
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog>}
     </div>
   );
 }

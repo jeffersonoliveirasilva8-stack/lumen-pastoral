@@ -347,6 +347,26 @@ function tEscalaPublicada(nome: string, paroquia: string, escalaTitulo: string, 
   return baseLayout(paroquia, body, siteUrl);
 }
 
+function tVagaDisponivel(nome: string, paroquia: string, ministerioNome: string, escalaTitulo: string, escalaData: string, escalaHora: string, siteUrl: string): string {
+  const sn = htmlSafe(nome); const sp = htmlSafe(paroquia); const sf = htmlSafe(ministerioNome); const st = htmlSafe(escalaTitulo);
+  let dataFmt = escalaData;
+  try { const [y,mo,d] = escalaData.split("-").map(Number); const M=["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]; dataFmt=`${d} de ${M[mo-1]} de ${y}`; } catch{/**/}
+  const horaFmt = escalaHora ? ` &agrave;s ${htmlSafe(escalaHora)}` : "";
+  const portalUrl = `${siteUrl}/portal-membro/home`;
+  const body = `
+    <h1>Vaga dispon&iacute;vel &#128276;</h1>
+    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
+    <p>Uma vaga em <span class="hi">${sf}</span> ficou dispon&iacute;vel na escala da <span class="hi">${sp}</span>.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;width:100px;">Escala</td><td style="padding:6px 0;font-weight:600;color:#111;">${st}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Data</td><td style="padding:6px 0;font-weight:600;color:#111;">${dataFmt}${horaFmt}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Fun&ccedil;&atilde;o</td><td style="padding:6px 0;font-weight:600;color:#111;">${sf}</td></tr>
+    </table>
+    <p>Se voc&ecirc; puder servir nesta data, entre em contato com a coordena&ccedil;&atilde;o o quanto antes.</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">Acessar o portal &rarr;</a></div>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
 function tSubstituicaoCriada(paroquia: string, membroNome: string, escalaTitulo: string, escalaData: string, ministerioNome: string, siteUrl: string): string {
   const sp = htmlSafe(paroquia); const sm = htmlSafe(membroNome); const st = htmlSafe(escalaTitulo); const sf = htmlSafe(ministerioNome);
   let dataFmt = escalaData;
@@ -698,6 +718,10 @@ Deno.serve(async (req) => {
       html    = tEscalaPublicada(nome, paroquia, escalaTitulo, escalaData, escalaHora, ministerioNome, siteUrl);
 
     // ── Substituições ────────────────────────────────────────────────────────
+    } else if (template === "vaga_disponivel") {
+      subject = `${paroquia} — Vaga disponível: ${ministerioNome}`;
+      html    = tVagaDisponivel(nome, paroquia, ministerioNome, escalaTitulo, escalaData, escalaHora, siteUrl);
+
     } else if (template === "substituicao_criada") {
       subject = `${paroquia} — Substituição solicitada: ${escalaTitulo}`;
       html    = tSubstituicaoCriada(paroquia, nome, escalaTitulo, escalaData, ministerioNome, siteUrl);
