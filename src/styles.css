@@ -58,6 +58,24 @@
   --color-gold: var(--gold);
   --color-gold-soft: var(--gold-soft);
   --color-incense: var(--incense);
+
+  /* ── Tokens litúrgicos ── */
+  --color-liturgy-verde:    var(--liturgy-verde);
+  --color-liturgy-roxo:     var(--liturgy-roxo);
+  --color-liturgy-vermelho: var(--liturgy-vermelho);
+  --color-liturgy-branco:   var(--liturgy-branco);
+  --color-liturgy-rosa:     var(--liturgy-rosa);
+  --color-liturgy-dourado:  var(--liturgy-dourado);
+  --color-liturgy-preto:    var(--liturgy-preto);
+
+  /* Variantes soft (fundo de badge) */
+  --color-liturgy-verde-soft:    var(--liturgy-verde-soft);
+  --color-liturgy-roxo-soft:     var(--liturgy-roxo-soft);
+  --color-liturgy-vermelho-soft: var(--liturgy-vermelho-soft);
+  --color-liturgy-branco-soft:   var(--liturgy-branco-soft);
+  --color-liturgy-rosa-soft:     var(--liturgy-rosa-soft);
+  --color-liturgy-dourado-soft:  var(--liturgy-dourado-soft);
+  --color-liturgy-preto-soft:    var(--liturgy-preto-soft);
 }
 
 :root {
@@ -112,14 +130,32 @@
   --sidebar-border: oklch(0.3 0.025 260);
   --sidebar-ring: oklch(0.74 0.135 80);
 
-  /* Cores litúrgicas — usadas no calendário e badges */
-  --liturgy-verde:    #16a34a;
-  --liturgy-roxo:     #9333ea;
-  --liturgy-vermelho: #dc2626;
-  --liturgy-branco:   #d1d5db;
-  --liturgy-rosa:     #ec4899;
-  --liturgy-dourado:  #f59e0b;
-  --liturgy-preto:    #374151;
+  /* ── Cores litúrgicas ── */
+  /* Cores base (texto / ícone) */
+  --liturgy-verde:    oklch(0.52 0.17 145);   /* Tempo Comum */
+  --liturgy-roxo:     oklch(0.46 0.22 305);   /* Advento / Quaresma */
+  --liturgy-vermelho: oklch(0.53 0.22 27);    /* Pentecostes / Mártires */
+  --liturgy-branco:   oklch(0.88 0.02 80);    /* Natal / Páscoa / Festas */
+  --liturgy-rosa:     oklch(0.68 0.18 350);   /* Gaudete / Laetare */
+  --liturgy-dourado:  oklch(0.74 0.135 80);   /* Solenidades / Corpus Christi */
+  --liturgy-preto:    oklch(0.32 0.02 260);   /* Sexta-feira Santa */
+
+  /* Variantes soft — fundo de badges e chips */
+  --liturgy-verde-soft:    oklch(0.94 0.06 145);
+  --liturgy-roxo-soft:     oklch(0.94 0.06 305);
+  --liturgy-vermelho-soft: oklch(0.95 0.06 27);
+  --liturgy-branco-soft:   oklch(0.96 0.01 80);
+  --liturgy-rosa-soft:     oklch(0.95 0.06 350);
+  --liturgy-dourado-soft:  oklch(0.96 0.06 85);
+  --liturgy-preto-soft:    oklch(0.94 0.01 260);
+
+  /* Tokens semânticos por tempo litúrgico */
+  --tempo-advento:   var(--liturgy-roxo);
+  --tempo-natal:     var(--liturgy-branco);
+  --tempo-quaresma:  var(--liturgy-roxo);
+  --tempo-pascal:    var(--liturgy-branco);
+  --tempo-comum:     var(--liturgy-verde);
+  --tempo-solenidade: var(--liturgy-dourado);
 
   --gradient-gold: linear-gradient(135deg, oklch(0.78 0.14 85), oklch(0.68 0.13 70));
   --gradient-sacro: linear-gradient(180deg, oklch(0.22 0.03 260), oklch(0.15 0.03 270));
@@ -224,6 +260,23 @@
   .animate-slide-up { animation: slide-up-fade 0.2s ease-out both; }
   .animate-scale-in { animation: scale-in 0.15s ease-out both; }
   .animate-fade-in  { animation: fade-in 0.2s ease-out both; }
+  /* ── Utilitários litúrgicos ── */
+  .liturgy-verde    { color: var(--liturgy-verde); }
+  .liturgy-roxo     { color: var(--liturgy-roxo); }
+  .liturgy-vermelho { color: var(--liturgy-vermelho); }
+  .liturgy-branco   { color: var(--liturgy-branco); }
+  .liturgy-rosa     { color: var(--liturgy-rosa); }
+  .liturgy-dourado  { color: var(--liturgy-dourado); }
+  .liturgy-preto    { color: var(--liturgy-preto); }
+
+  .bg-liturgy-verde    { background-color: var(--liturgy-verde-soft);    color: var(--liturgy-verde); }
+  .bg-liturgy-roxo     { background-color: var(--liturgy-roxo-soft);     color: var(--liturgy-roxo); }
+  .bg-liturgy-vermelho { background-color: var(--liturgy-vermelho-soft); color: var(--liturgy-vermelho); }
+  .bg-liturgy-branco   { background-color: var(--liturgy-branco-soft);   color: var(--liturgy-preto); }
+  .bg-liturgy-rosa     { background-color: var(--liturgy-rosa-soft);     color: var(--liturgy-rosa); }
+  .bg-liturgy-dourado  { background-color: var(--liturgy-dourado-soft);  color: oklch(0.58 0.13 75); }
+  .bg-liturgy-preto    { background-color: var(--liturgy-preto-soft);    color: var(--liturgy-preto); }
+
   /* Garantia global contra scroll horizontal */
   .no-overflow-x { overflow-x: hidden; max-width: 100vw; }
   /* Oculta scrollbar mas mantém funcionalidade de scroll */

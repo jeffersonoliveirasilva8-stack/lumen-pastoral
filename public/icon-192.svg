@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Maskable: safe zone = inner 75% (144x144, offset 24) -->
+  <rect width="192" height="192" fill="#0f172a"/>
+
+  <!-- Chama exterior -->
+  <path d="M96 28 C80 46 63 60 58 82 C53 104 60 124 78 138 C73 130 70 120 72 109 C74 98 83 90 96 85 C109 90 118 98 120 109 C122 120 119 130 114 138 C132 124 139 104 134 82 C129 60 112 46 96 28Z"
+    fill="#f59e0b" opacity="0.3"/>
+
+  <!-- Chama principal -->
+  <path d="M96 36 C83 54 73 68 70 87 C67 106 74 124 96 140 C118 124 125 106 122 87 C119 68 109 54 96 36Z"
+    fill="#f59e0b"/>
+
+  <!-- Brilho interno -->
+  <path d="M96 52 C89 65 84 77 84 90 C84 105 89 116 96 121 C103 116 108 105 108 90 C108 77 103 65 96 52Z"
+    fill="#fde68a" opacity="0.55"/>
+
+  <!-- Cruz integrada na chama -->
+  <rect x="91.5" y="57" width="9" height="72" rx="4.5" fill="#0f172a"/>
+  <rect x="69"   y="87" width="54" height="9"  rx="4.5" fill="#0f172a"/>
+
+  <!-- Âncora: barra horizontal -->
+  <rect x="76" y="147" width="40" height="7.5" rx="3.75" fill="#f59e0b"/>
+  <!-- Âncora: haste vertical -->
+  <line x1="96" y1="140" x2="96" y2="174" stroke="#f59e0b" stroke-width="7" stroke-linecap="round"/>
+  <!-- Âncora: gancho esquerdo -->
+  <path d="M76 151 Q66 158 66 168 Q67 176 76 177" fill="none" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Âncora: gancho direito -->
+  <path d="M116 151 Q126 158 126 168 Q125 176 116 177" fill="none" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
