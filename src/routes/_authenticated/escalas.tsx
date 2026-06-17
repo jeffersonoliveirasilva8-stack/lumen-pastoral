@@ -135,9 +135,10 @@ const EMPTY_FORM: EscalaForm = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
-  rascunho: { label: "Rascunho", variant: "secondary" },
-  publicada: { label: "Publicada", variant: "default" },
-  arquivada: { label: "Arquivada", variant: "outline" },
+  rascunho:  { label: "Rascunho",  variant: "secondary"    },
+  publicada: { label: "Publicada", variant: "default"      },
+  arquivada: { label: "Arquivada", variant: "outline"      },
+  cancelada: { label: "Cancelada", variant: "destructive"  },
 };
 
 type FuncaoPreview = {
@@ -1045,7 +1046,8 @@ function EscalasPage() {
     const rascunhos  = escalas.filter((e) => e.status === "rascunho"  && new Date(e.data + "T00:00:00") >= new Date(today.toDateString())).length;
     const publicadas = escalas.filter((e) => e.status === "publicada" && new Date(e.data + "T00:00:00") >= new Date(today.toDateString())).length;
     const arquivadas = escalas.filter((e) => e.status === "arquivada").length;
-    return { rascunhos, publicadas, arquivadas };
+    const canceladas = escalas.filter((e) => e.status === "cancelada").length;
+    return { rascunhos, publicadas, arquivadas, canceladas };
   }, [escalas, today]);
 
   useEffect(() => {
@@ -1398,6 +1400,12 @@ ${rodapeUrl
           {statusCounts.arquivadas > 0 && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/50 border border-border/50 px-3 py-1 text-xs font-medium text-muted-foreground/60">
               {statusCounts.arquivadas} arquivada{statusCounts.arquivadas !== 1 ? "s" : ""}
+            </span>
+          )}
+          {statusCounts.canceladas > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-3 py-1 text-xs font-semibold text-red-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              {statusCounts.canceladas} cancelada{statusCounts.canceladas !== 1 ? "s" : ""}
             </span>
           )}
         </div>
@@ -3208,6 +3216,7 @@ function EscalaDetail({
     atribId: string; membroNome: string; ministerioId: string; ministerioNome: string;
   } | null>(null);
   const [notificarVaga, setNotificarVaga] = useState(true);
+  const [confirmarCancelamento, setConfirmarCancelamento] = useState(false);
 
   useEffect(() => {
     setEditMode(initialEditMode);
@@ -3805,7 +3814,10 @@ function EscalaDetail({
                     <span className="hidden sm:inline">Reenviar</span>
                   </Button>
                 )}
-                <Select value={escala.status} onValueChange={onStatusChange}>
+                <Select value={escala.status} onValueChange={(v) => {
+                  if (v === "cancelada") { setConfirmarCancelamento(true); return; }
+                  onStatusChange(v);
+                }}>
                   <SelectTrigger className="h-7 text-xs w-auto">
                     <SelectValue />
                   </SelectTrigger>
@@ -4766,6 +4778,29 @@ function EscalaDetail({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Confirmar cancelamento da escala ────────────────────────────────── */}
+      {confirmarCancelamento && (
+        <AlertDialog open onOpenChange={(o) => { if (!o) setConfirmarCancelamento(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancelar escala?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Todos os membros atribuídos serão notificados por e-mail e notificação no app. Esta ação não pode ser desfeita automaticamente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setConfirmarCancelamento(false)}>Voltar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-white hover:bg-destructive/90"
+                onClick={() => { setConfirmarCancelamento(false); onStatusChange("cancelada"); }}
+              >
+                Cancelar escala
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       {/* ── Confirmar remoção de membro ─────────────────────────────────────── */}
       {removerPendente && <AlertDialog open onOpenChange={(o) => { if (!o) setRemoverPendente(null); }}>

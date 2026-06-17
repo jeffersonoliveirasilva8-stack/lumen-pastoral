@@ -43,6 +43,7 @@ type HistoricoItem = {
   ministerio_nome: string;
   ministerio_cor: string;
   pontos: number | null;
+  cancelada?: boolean;
 };
 
 type MembroEscalado = {
@@ -274,6 +275,31 @@ function PortalMembroEscalas() {
         ministerio_nome: row.ministerios?.nome ?? "—",
         ministerio_cor: row.ministerios?.cor ?? "#6B7280",
         pontos: row.historico_participacoes?.[0]?.pontos ?? null,
+      }));
+    },
+  });
+
+  const { data: escalasCanceladas = [] } = useQuery<HistoricoItem[]>({
+    queryKey: ["pm-escalas-canceladas", membro?.id],
+    enabled: !!membro?.id,
+    queryFn: async () => {
+      const { data, error } = await anyDb
+        .from("escala_membros")
+        .select(`id, status, escalas!inner(titulo, data, status), ministerios(nome, cor)`)
+        .eq("membro_id", membro!.id)
+        .eq("escalas.status", "cancelada")
+        .order("escalas.data", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data ?? []).map((row: any) => ({
+        escala_membro_id: row.id,
+        status: row.status,
+        titulo: row.escalas.titulo,
+        data: row.escalas.data,
+        ministerio_nome: row.ministerios?.nome ?? "—",
+        ministerio_cor: row.ministerios?.cor ?? "#6B7280",
+        pontos: null,
+        cancelada: true,
       }));
     },
   });
@@ -601,7 +627,7 @@ function PortalMembroEscalas() {
 
         {/* ── Tab: Histórico ── */}
         <TabsContent value="historico">
-          <HistoricoTab historico={historico} loading={loadingHistorico} />
+          <HistoricoTab historico={historico} canceladas={escalasCanceladas} loading={loadingHistorico} />
         </TabsContent>
       </Tabs>
     </div>
@@ -1511,7 +1537,7 @@ function IndisponibilidadeTab({
 
 // ── HistoricoTab ──────────────────────────────────────────────────────
 
-function HistoricoTab({ historico, loading }: { historico: HistoricoItem[]; loading: boolean }) {
+function HistoricoTab({ historico, canceladas, loading }: { historico: HistoricoItem[]; canceladas: HistoricoItem[]; loading: boolean }) {
   const totalPontos = historico.reduce((s, h) => s + (h.pontos ?? 0), 0);
   const servidas = historico.filter((h) => h.status === "presente" || h.status === "confirmado" || h.status === "atrasado").length;
 
@@ -1533,7 +1559,7 @@ function HistoricoTab({ historico, loading }: { historico: HistoricoItem[]; load
           </div>
         </div>
       )}
-      {historico.length === 0 ? (
+      {historico.length === 0 && canceladas.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-10 text-center">
           <History className="h-7 w-7 mx-auto text-muted-foreground mb-2" />
           <p className="text-sm text-muted-foreground">Nenhuma participação registrada ainda.</p>
@@ -1569,6 +1595,29 @@ function HistoricoTab({ historico, loading }: { historico: HistoricoItem[]; load
               )}
             </div>
           ))}
+
+          {canceladas.length > 0 && (
+            <>
+              <p className="text-xs font-semibold uppercase text-muted-foreground pt-2 pb-1">Escalas canceladas</p>
+              {canceladas.map((h) => (
+                <div key={h.escala_membro_id} className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3 opacity-70">
+                  <CalendarOff className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate line-through text-muted-foreground">{h.titulo}</p>
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 shrink-0">Cancelada</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: h.ministerio_cor }} />
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(h.data + "T12:00:00"), "d MMM yyyy", { locale: ptBR })} · {h.ministerio_nome}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>
