@@ -289,11 +289,6 @@ function PortalMembroHome() {
     },
   });
 
-  if (!membro) return null;
-
-  const hora = today.getHours();
-  const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
-
   const confirmarMutation = useMutation({
     mutationFn: async (escala_membro_id: string) => {
       const { error } = await anyDb
@@ -309,6 +304,11 @@ function PortalMembroHome() {
     },
     onError: () => toast.error("Erro ao confirmar. Tente novamente."),
   });
+
+  if (!membro) return null;
+
+  const hora = today.getHours();
+  const saudacao = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
 
   const nextEscala = escalas[0] ?? null;
   const remainingEscalas = escalas.slice(1);
