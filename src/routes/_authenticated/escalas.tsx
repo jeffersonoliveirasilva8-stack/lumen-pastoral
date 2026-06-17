@@ -1548,6 +1548,36 @@ ${rodapeUrl
               onAtribuir={(mid, minid) => atribuirMutation.mutate({ membro_id: mid, ministerio_id: minid })}
               onRemoverAtribuicao={(id) => removerAtribuicaoMutation.mutate(id)}
               onStatusChange={(status) => updateStatusMutation.mutate({ id: detailEscala.id, status })}
+              onNotificarVaga={async ({ escalaId, ministerioId, ministerioNome }) => {
+                const paroquiaId = profile?.paroquia_id;
+                if (!paroquiaId) return;
+                // Busca membros elegíveis: no ministério e não já na escala nesta função
+                const { data: memMinData } = await supabase
+                  .from("membro_ministerios")
+                  .select("membro_id")
+                  .eq("ministerio_id", ministerioId);
+                const elegiveisIds = (memMinData ?? []).map((m: { membro_id: string }) => m.membro_id);
+                if (elegiveisIds.length === 0) return;
+                const { data: jaAtribData } = await supabase
+                  .from("escala_membros")
+                  .select("membro_id")
+                  .eq("escala_id", escalaId)
+                  .eq("ministerio_id", ministerioId);
+                const jaAtrib = new Set((jaAtribData ?? []).map((a: { membro_id: string }) => a.membro_id));
+                const destinatarios = elegiveisIds.filter((id: string) => !jaAtrib.has(id));
+                if (destinatarios.length === 0) return;
+                const notifs = destinatarios.map((membro_id: string) => ({
+                  paroquia_id: paroquiaId,
+                  membro_id,
+                  titulo: `Vaga disponível: ${ministerioNome}`,
+                  mensagem: `Uma vaga em ${ministerioNome} ficou disponível. Se você puder servir, entre em contato com a coordenação.`,
+                  tipo: "info" as const,
+                  lida: false,
+                  apenas_admin: false,
+                  link_referencia: "/escalas",
+                }));
+                await (supabase as any).from("notificacoes").insert(notifs);
+              }}
             />
           )}
         </SheetContent>
@@ -3055,7 +3085,7 @@ function EscalaDetail({
   membroAtuacoes,
   indisponibilidades, funcaoRestricoes, missasPadrao, membroMissaRestricoes, paroquiaConfig,
   paroquiaNome, initialEditMode, comunidades, tiposMissa, isSaving, onSave,
-  onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onStatusChange,
+  onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onStatusChange, onNotificarVaga,
 }: {
   escala: Escala;
   ministerios: Ministerio[];
@@ -3082,10 +3112,15 @@ function EscalaDetail({
   onAtribuir: (memberId: string, ministerioId: string) => void;
   onRemoverAtribuicao: (id: string) => void;
   onStatusChange: (status: string) => void;
+  onNotificarVaga: (args: { escalaId: string; ministerioId: string; ministerioNome: string }) => void;
 }) {
   const [editMode, setEditMode] = useState(initialEditMode);
   const [escalaForm, setEscalaForm] = useState<EscalaForm>(EMPTY_FORM);
   const [equilibrioOpen, setEquilibrioOpen] = useState(false);
+  const [removerPendente, setRemoverPendente] = useState<{
+    atribId: string; membroNome: string; ministerioId: string; ministerioNome: string;
+  } | null>(null);
+  const [notificarVaga, setNotificarVaga] = useState(true);
 
   useEffect(() => {
     setEditMode(initialEditMode);
@@ -3903,7 +3938,19 @@ function EscalaDetail({
                                   {badge.label}
                                 </span>
                               )}
-                              <button className="text-muted-foreground hover:text-destructive" onClick={() => onRemoverAtribuicao(a.id)}>
+                              <button
+                                className="text-muted-foreground hover:text-destructive"
+                                title="Remover desta escala"
+                                onClick={() => {
+                                  setNotificarVaga(true);
+                                  setRemoverPendente({
+                                    atribId: a.id,
+                                    membroNome: a.membro.nome,
+                                    ministerioId: f.ministerio_id,
+                                    ministerioNome: f.nome,
+                                  });
+                                }}
+                              >
                                 <X className="h-3 w-3" />
                               </button>
                             </div>
@@ -4631,6 +4678,50 @@ function EscalaDetail({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Confirmar remoção de membro ─────────────────────────────────────── */}
+      <AlertDialog open={!!removerPendente} onOpenChange={(o) => { if (!o) setRemoverPendente(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover {removerPendente?.membroNome}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este membro será retirado da função <strong>{removerPendente?.ministerioNome}</strong> nesta escala.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center gap-2 px-1 pb-2">
+            <input
+              id="notif-vaga-check"
+              type="checkbox"
+              checked={notificarVaga}
+              onChange={(e) => setNotificarVaga(e.target.checked)}
+              className="h-4 w-4 rounded border-input accent-primary"
+            />
+            <label htmlFor="notif-vaga-check" className="text-sm cursor-pointer">
+              Notificar membros disponíveis para <strong>{removerPendente?.ministerioNome}</strong>
+            </label>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                if (!removerPendente) return;
+                onRemoverAtribuicao(removerPendente.atribId);
+                if (notificarVaga) {
+                  onNotificarVaga({
+                    escalaId: escala.id,
+                    ministerioId: removerPendente.ministerioId,
+                    ministerioNome: removerPendente.ministerioNome,
+                  });
+                }
+                setRemoverPendente(null);
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
