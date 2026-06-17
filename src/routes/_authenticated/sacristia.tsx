@@ -215,14 +215,15 @@ function SacristiaPage() {
 
   const loading = isLoading || isLoadingMembros;
 
-  // Auto-seleciona "Pendentes" na primeira carga quando não há escalas hoje
+  // Auto-seleciona a aba mais relevante na primeira carga
   useEffect(() => {
     if (loading || autoSwitchedRef.current) return;
-    if (tab === "em_andamento" && em_andamento.length === 0 && pendentes.length > 0) {
+    if (em_andamento.length === 0 && pendentes.length > 0) {
       setTab("pendentes");
     }
     autoSwitchedRef.current = true;
-  }, [loading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, em_andamento.length, pendentes.length]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-2xl mx-auto pb-24">

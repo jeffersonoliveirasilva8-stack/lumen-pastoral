@@ -5,7 +5,8 @@ import {
   Plus, Loader2, Calendar, List, ChevronLeft, ChevronRight, ChevronDown,
   MapPin, Clock, Trash2, Pencil, UserPlus, X, Check, Sparkles,
   MoreVertical, FileText, AlertTriangle, Users, ClipboardCheck,
-  CheckCircle2, XCircle, Church, Ban, RefreshCw,
+  CheckCircle2, XCircle, Church, Ban, RefreshCw, Activity,
+  TrendingUp, TrendingDown, Minus, ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths, addDays } from "date-fns";
@@ -1273,6 +1274,8 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           allEscalas={escalas}
           selectedIds={selectedEscalaIds}
           escalaCounts={escalaCounts}
+          membros={membros}
+          assignmentHistory={assignmentHistory}
           onToggleSelect={(id) => {
             const next = new Set(selectedEscalaIds);
             if (next.has(id)) next.delete(id); else next.add(id);
@@ -1808,13 +1811,15 @@ function IndisponibilidadesTab({
 // ── ListaView ─────────────────────────────────────────────────────────────────
 
 function ListaView({
-  escalas, allEscalas, selectedIds, escalaCounts, onToggleSelect, onSelectAll,
-  onOpenDetail, onEdit, onDelete, onCreate, onExportPDF, onReorganizar,
+  escalas, allEscalas, selectedIds, escalaCounts, membros, assignmentHistory,
+  onToggleSelect, onSelectAll, onOpenDetail, onEdit, onDelete, onCreate, onExportPDF, onReorganizar,
 }: {
   escalas: Escala[];
   allEscalas: Escala[];
   selectedIds: Set<string>;
   escalaCounts: Record<string, EscalaPreview>;
+  membros: Membro[];
+  assignmentHistory: AssignmentHistoryEntry[];
   onToggleSelect: (id: string) => void;
   onSelectAll: (ids: string[]) => void;
   onOpenDetail: (e: Escala) => void;
@@ -1824,10 +1829,62 @@ function ListaView({
   onExportPDF: (id: string) => void;
   onReorganizar: () => void;
 }) {
+  const [radarOpen, setRadarOpen] = useState(false);
   const allSelected = escalas.length > 0 && escalas.every((e) => selectedIds.has(e.id));
   const publishedCount = escalas.filter((e) => e.status === "publicada").length;
   const draftCount = escalas.filter((e) => e.status === "rascunho").length;
   const archivedCount = escalas.filter((e) => e.status === "arquivada").length;
+
+  // ── Radar de atividade dos membros ──────────────────────────────────────────
+  const radarData = useMemo(() => {
+    const hoje = new Date();
+    const seteDiasAtras = new Date(hoje);
+    seteDiasAtras.setDate(hoje.getDate() - 7);
+    const trinteSeteDiasAtras = new Date(hoje);
+    trinteSeteDiasAtras.setDate(hoje.getDate() - 37);
+
+    return membros.map((m) => {
+      const historico = assignmentHistory.filter((h) => h.memberId === m.id);
+      const na7dias = historico.filter((h) => {
+        const d = new Date(h.date + "T00:00:00");
+        return d >= seteDiasAtras && d <= hoje;
+      });
+      const na37dias = historico.filter((h) => {
+        const d = new Date(h.date + "T00:00:00");
+        return d >= trinteSeteDiasAtras && d <= hoje;
+      });
+
+      const ultimaData: string | null = historico.length
+        ? historico.reduce((acc: string, h) => ((h.date ?? "") > acc ? (h.date ?? acc) : acc), historico[0].date ?? "")
+        : null;
+      const diasSemServir = ultimaData
+        ? Math.floor((hoje.getTime() - new Date(ultimaData + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      let status: "sobrecargado" | "ativo" | "inativo" | "ausente";
+      if (na7dias.length >= 2) status = "sobrecargado";
+      else if (na7dias.length >= 1) status = "ativo";
+      else if (diasSemServir !== null && diasSemServir <= 30) status = "inativo";
+      else status = "ausente";
+
+      return {
+        id: m.id,
+        nome: m.nome,
+        status,
+        vezes7dias: na7dias.length,
+        vezes37dias: na37dias.length,
+        diasSemServir,
+      };
+    }).sort((a, b) => {
+      const order = { sobrecargado: 0, inativo: 1, ausente: 2, ativo: 3 };
+      return order[a.status] - order[b.status];
+    });
+  }, [membros, assignmentHistory]);
+
+  const sobrecargados = radarData.filter((m) => m.status === "sobrecargado");
+  const inativos = radarData.filter((m) => m.status === "inativo");
+  const ausentes = radarData.filter((m) => m.status === "ausente");
+  const ativos = radarData.filter((m) => m.status === "ativo");
 
   const repeatedAlerts = useMemo(() => {
     type AlertEntry = {
@@ -1916,41 +1973,197 @@ function ListaView({
 
   return (
     <div className="mt-6 space-y-4">
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-        <div className="rounded-3xl border border-border bg-card p-5">
-          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Visão geral</p>
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="col-span-2 sm:col-span-2 rounded-3xl border border-border bg-card p-5">
+          <div className="flex items-start justify-between">
             <div>
-              <p className="text-3xl font-serif">{escalas.length}</p>
-              <p className="text-sm text-muted-foreground">Escalas agendadas</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Escalas</p>
+              <p className="mt-1.5 text-4xl font-serif leading-none">{escalas.length}</p>
+              <p className="mt-1 text-xs text-muted-foreground">agendadas</p>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:grid-cols-3">
-              <div className="rounded-2xl bg-background p-2">
-                <p className="text-foreground">{publishedCount}</p>
-                <p>Publicadas</p>
-              </div>
-              <div className="rounded-2xl bg-background p-2">
-                <p className="text-foreground">{draftCount}</p>
-                <p>Rascunho</p>
-              </div>
-              <div className="rounded-2xl bg-background p-2">
-                <p className="text-foreground">{archivedCount}</p>
-                <p>Arquivadas</p>
-              </div>
+            <div className="flex gap-1.5 mt-1">
+              {publishedCount > 0 && (
+                <span className="rounded-full bg-green-100 dark:bg-green-950/40 px-2 py-0.5 text-[11px] font-semibold text-green-700 dark:text-green-400">
+                  {publishedCount} pub.
+                </span>
+              )}
+              {draftCount > 0 && (
+                <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  {draftCount} rasc.
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="rounded-3xl border border-border bg-card p-5 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Membros</p>
-            <p className="mt-2 text-sm text-foreground">Redistribuir automaticamente.</p>
+        <div className="rounded-3xl border border-border bg-card p-4 flex flex-col justify-between">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Ativos</p>
+          <div className="mt-2">
+            <p className="text-3xl font-serif leading-none">{ativos.length}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">na semana</p>
           </div>
-          <Button variant="outline" onClick={onReorganizar}>
-            <Users className="h-4 w-4 mr-1.5" /> Reorganizar
-          </Button>
+        </div>
+
+        <div
+          className="rounded-3xl border border-border bg-card p-4 flex flex-col justify-between cursor-pointer hover:border-primary/40 transition-colors"
+          onClick={() => setRadarOpen((v) => !v)}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Radar</p>
+            <Activity className={`h-3.5 w-3.5 ${sobrecargados.length > 0 || ausentes.length > 0 ? "text-amber-500" : "text-muted-foreground"}`} />
+          </div>
+          <div className="mt-2">
+            <p className="text-3xl font-serif leading-none">
+              {sobrecargados.length + inativos.length + ausentes.length}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">precisam atenção</p>
+          </div>
         </div>
       </div>
+
+      {/* ── Radar de atividade ──────────────────────────────────────────────── */}
+      {radarOpen && (
+        <div className="rounded-3xl border border-border bg-card overflow-hidden animate-fade-in">
+          <div className="flex items-center justify-between gap-2 px-5 py-3.5 border-b border-border/50">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" />
+              <p className="text-sm font-semibold">Radar de atividade</p>
+              <span className="text-xs text-muted-foreground">· últimos 7 dias</span>
+            </div>
+            <button onClick={() => setRadarOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {sobrecargados.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <TrendingUp className="h-3.5 w-3.5 text-red-500" />
+                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wider">
+                    Sobrecarga · {sobrecargados.length}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {sobrecargados.map((m) => (
+                    <div key={m.id} className="flex items-center gap-3 rounded-2xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 px-3 py-2.5">
+                      <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{nomeExibicao(m.nome)}</p>
+                        <p className="text-xs text-muted-foreground">{m.vezes7dias}× nesta semana</p>
+                      </div>
+                      <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">
+                        {m.vezes7dias}×
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {inativos.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Minus className="h-3.5 w-3.5 text-amber-500" />
+                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                    Sem servir esta semana · {inativos.length}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {inativos.map((m) => (
+                    <div key={m.id} className="flex items-center gap-3 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 px-3 py-2.5">
+                      <div className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{nomeExibicao(m.nome)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {m.diasSemServir !== null ? `${m.diasSemServir}d sem servir` : "sem histórico recente"}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">
+                        {m.diasSemServir !== null ? `${m.diasSemServir}d` : "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {ausentes.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <TrendingDown className="h-3.5 w-3.5 text-slate-400" />
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Ausentes há mais de 30 dias · {ausentes.length}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {ausentes.map((m) => (
+                    <div key={m.id} className="flex items-center gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-3 py-2.5">
+                      <div className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{nomeExibicao(m.nome)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {m.diasSemServir !== null ? `${m.diasSemServir}d sem servir` : "nunca escalado"}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        {m.diasSemServir !== null ? `${m.diasSemServir}d` : "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {ativos.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  <p className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider">
+                    Escalados esta semana · {ativos.length}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {ativos.map((m) => (
+                    <span key={m.id} className="inline-flex items-center gap-1.5 rounded-full bg-green-50 dark:bg-green-950/20 border border-green-100 dark:border-green-900/30 px-2.5 py-1 text-xs font-medium text-green-700 dark:text-green-400">
+                      <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                      {nomeExibicao(m.nome)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {radarData.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum membro cadastrado.</p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-border/50 bg-muted/20">
+            <p className="text-xs text-muted-foreground">
+              {membros.length} membro{membros.length !== 1 ? "s" : ""} · histórico de 6 meses
+            </p>
+            <Button size="sm" variant="outline" onClick={onReorganizar} className="h-7 text-xs gap-1.5">
+              <RefreshCw className="h-3 w-3" /> Reorganizar escalas
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Ação rápida reorganizar (quando radar fechado) ───────────────────── */}
+      {!radarOpen && (
+        <div className="flex items-center gap-2 px-1">
+          <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground" onClick={() => setRadarOpen(true)}>
+            <Activity className={`h-3.5 w-3.5 ${sobrecargados.length > 0 || ausentes.length > 0 ? "text-amber-500" : ""}`} />
+            Ver radar de membros
+          </Button>
+          <span className="text-muted-foreground/30">·</span>
+          <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground" onClick={onReorganizar}>
+            <RefreshCw className="h-3.5 w-3.5" /> Reorganizar
+          </Button>
+        </div>
+      )}
 
       {repeatedAlerts.length > 0 && (
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
