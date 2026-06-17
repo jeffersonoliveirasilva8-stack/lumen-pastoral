@@ -296,80 +296,89 @@ function PortalMembroLayout() {
       )}
 
       {/* ── Sidebar desktop ── */}
-      <aside className="hidden lg:flex flex-col w-56 bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border shrink-0 shadow-altar lg:h-screen lg:overflow-y-auto">
-        <div className="flex items-center gap-2 p-5 border-b border-sidebar-border">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-sidebar-accent text-gold">
-            <Flame className="h-4 w-4" />
+      <aside className="hidden lg:flex flex-col w-56 bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border/60 shrink-0 shadow-altar lg:h-screen lg:overflow-y-auto">
+        {/* Logo */}
+        <div className="flex h-16 items-center gap-3 px-4 border-b border-sidebar-border/60 shrink-0">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-gold shadow-gold">
+            <Flame className="h-4 w-4 text-white" />
           </div>
           <div className="min-w-0">
-            <p className="font-serif text-sm leading-tight truncate">{membro.paroquia_nome}</p>
+            <p className="text-[13px] font-bold truncate text-sidebar-foreground leading-tight">{membro.paroquia_nome}</p>
             <p className="text-[10px] text-sidebar-foreground/40 leading-tight">Portal do Servidor</p>
           </div>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-3 px-2.5 space-y-0.5 overflow-y-auto">
           {NAV_SIDEBAR.map((item) => {
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
+            const isBell = item.icon === Bell;
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                className={`relative flex items-center gap-3 rounded-xl px-2.5 py-2 text-[13px] transition-all duration-150 press-scale ${
                   active
-                    ? "bg-sidebar-accent text-sidebar-primary shadow-sm"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    ? "bg-sidebar-accent text-sidebar-primary font-semibold"
+                    : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground font-medium"
                 }`}
               >
-                <span className="relative shrink-0">
-                  <item.icon className="h-4 w-4" />
-                  {item.icon === Bell && hasUnread && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive ring-1 ring-sidebar" />
+                {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-sidebar-primary" />}
+                <span className={`relative shrink-0 h-7 w-7 rounded-lg flex items-center justify-center transition-all duration-150 ${
+                  active ? "bg-sidebar-primary/20" : "bg-sidebar-foreground/8"
+                }`}>
+                  <item.icon className={`h-3.5 w-3.5 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/60"}`} />
+                  {isBell && hasUnread && (
+                    <span className="absolute top-0 right-0 h-1.5 w-1.5 rounded-full bg-destructive ring-1 ring-sidebar" />
                   )}
                 </span>
-                {item.label}
+                <span className="flex-1 truncate">{item.label}</span>
+                {isBell && hasUnread && (
+                  <span className="h-4 min-w-[1rem] flex items-center justify-center rounded-full bg-destructive text-white text-[9px] font-bold px-1 shrink-0">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-3 border-t border-sidebar-border">
-          {/* Indicador de completude — sidebar */}
+        <div className="border-t border-sidebar-border/60 p-2.5 space-y-1 shrink-0">
           {profileCompleteness && !profileCompleteness.complete && (
             <Link
               to={COMPLETAR_CADASTRO_PATH as any}
-              className="flex items-center gap-2 mb-2 rounded-xl bg-amber-500/10 border border-amber-500/25 px-3 py-2 hover:bg-amber-500/15 transition"
+              className="flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 px-2.5 py-2 hover:bg-amber-500/15 transition mb-1"
             >
               <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 leading-tight">
                   Perfil {profileCompleteness.percentage}% completo
-                </p>
-                <p className="text-[9px] text-amber-600/80 leading-tight truncate">
-                  Clique para completar
                 </p>
               </div>
             </Link>
           )}
-          <div className="px-3 py-2 mb-2">
-            <p className="text-xs font-semibold truncate">{membro.nome}</p>
-            <p className="text-[11px] text-sidebar-foreground/50 truncate">{membro.email}</p>
-            {isAdministrador && (
-              <span className="mt-1.5 inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-400/30 font-medium">
-                Administrador
-              </span>
-            )}
-          </div>
+          <Link
+            to="/portal-membro/perfil"
+            className="flex items-center gap-2.5 rounded-xl px-2 py-2 hover:bg-sidebar-accent/50 transition group"
+          >
+            <div className="h-7 w-7 rounded-lg bg-sidebar-foreground/10 flex items-center justify-center text-[10px] font-bold text-sidebar-foreground shrink-0">
+              {membro.nome.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold text-sidebar-foreground/90 truncate leading-tight">{membro.nome.split(" ")[0]}</p>
+              <p className="text-[10px] text-sidebar-foreground/40 truncate">{membro.email}</p>
+            </div>
+          </Link>
           <button
             onClick={logout}
-            className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
+            className="w-full flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10 transition"
           >
-            <LogOut className="h-4 w-4" /> Sair
+            <LogOut className="h-3.5 w-3.5" /> Sair da conta
           </button>
         </div>
       </aside>
 
       {/* ── Main ── */}
-      <div className="flex-1 flex flex-col min-w-0 pb-[72px] lg:pb-0 lg:h-screen lg:overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 pb-[68px] lg:pb-0 lg:h-screen lg:overflow-y-auto">
 
         {/* ── Cabeçalho desktop ── */}
         <header className="hidden lg:block sticky top-0 z-20 border-b border-border/70 bg-card/90 backdrop-blur px-6 py-3 shadow-sm">
@@ -405,37 +414,41 @@ function PortalMembroLayout() {
           </div>
         </header>
 
-        {/* ── Cabeçalho mobile (minimalista) ── */}
-        <header className="lg:hidden sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur-sm">
+        {/* ── Cabeçalho mobile ── */}
+        <header className="lg:hidden sticky top-0 z-20 glass border-b border-border/50 shrink-0">
           {liturgy && (
             <div
-              className="h-[3px] w-full"
-              style={{ background: LITURGICAL_COLOR_HEX[liturgy.color] ?? "#16a34a" }}
+              className="h-0.5 w-full"
+              style={{ background: `linear-gradient(to right, ${LITURGICAL_COLOR_HEX[liturgy.color] ?? "#16a34a"}cc, ${LITURGICAL_COLOR_HEX[liturgy.color] ?? "#16a34a"}33)` }}
             />
           )}
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary text-white shadow-sm">
-                <Flame className="h-3.5 w-3.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-serif text-sm leading-tight truncate max-w-[190px]">
-                  {membro.paroquia_nome}
-                </p>
-                <p className="text-[10px] text-muted-foreground leading-none mt-0.5">
-                  {membro.nome.split(" ")[0]}
-                </p>
-              </div>
+          <div className="flex items-center gap-3 px-4 h-12">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-gold shadow-sm">
+              <Flame className="h-3.5 w-3.5 text-white" />
             </div>
-            {liturgy && (
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <span
-                  className="h-2 w-2 rounded-full shrink-0"
-                  style={{ background: LITURGICAL_COLOR_HEX[liturgy.color] ?? "#16a34a" }}
-                />
-                <span className="hidden sm:block truncate max-w-[120px]">{liturgy.name}</span>
-              </div>
-            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-foreground truncate leading-tight">
+                {membro.paroquia_nome}
+              </p>
+              {liturgy ? (
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: LITURGICAL_COLOR_HEX[liturgy.color] }} />
+                  <span className="text-[10px] text-muted-foreground truncate">{liturgy.name}</span>
+                </div>
+              ) : (
+                <p className="text-[10px] text-muted-foreground">{membro.nome.split(" ")[0]}</p>
+              )}
+            </div>
+            <Link
+              to="/portal-membro/notificacoes"
+              className="relative btn-icon shrink-0"
+              aria-label="Notificações"
+            >
+              <Bell className="h-4 w-4" />
+              {hasUnread && (
+                <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-destructive ring-1 ring-card" />
+              )}
+            </Link>
           </div>
         </header>
 
@@ -507,8 +520,8 @@ function PortalMembroLayout() {
       </Drawer>
 
       {/* ── Bottom nav mobile — FAB "Mais" centralizado ── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 glass border-t border-border/60 safe-area-pb shadow-[0_-1px_12px_rgba(0,0,0,0.08)]">
-        <div className="flex items-stretch h-[62px]">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 glass border-t border-border/50 safe-area-pb" style={{ boxShadow: "0 -1px 0 0 var(--color-border), 0 -8px 24px rgba(0,0,0,0.07)" }}>
+        <div className="flex items-stretch h-[58px]">
 
           {/* ── 2 itens esquerda: Início, Escalas ── */}
           {NAV_BOTTOM.slice(0, 2).map((item) => {

@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
-  Flame, BookOpen, Bell, UserCircle, X, Church, Leaf,
-  PanelLeftClose, PanelLeftOpen,
+  Flame, BookOpen, Bell, UserCircle, Church, Leaf,
+  PanelLeftClose, PanelLeftOpen, Menu, Trophy,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -178,13 +178,15 @@ function AuthLayout() {
     { to: "/painel",               label: "Painel",         icon: LayoutDashboard, color: "bg-slate-600" },
     { to: "/escalas",              label: "Escalas",         icon: Calendar,        color: "bg-blue-600" },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
+    { to: "/ranking",              label: "Ranking",         icon: Trophy,          color: "bg-amber-600" },
     { to: "/espiritualidade",      label: "Liturgia",        icon: BookOpen,        color: "bg-violet-600" },
     { to: "/formacoes",            label: "Pastoral",        icon: Leaf,            color: "bg-teal-600" },
-    { to: "/configuracoes/paroquia", label: "Configurações", icon: Settings,        color: "bg-indigo-600" },
+    { to: "/configuracoes/paroquia", label: "Config.",       icon: Settings,        color: "bg-indigo-600" },
   ];
 
-  // Itens secundários para o drawer "Mais"
+  // Itens secundários para o drawer "Mais" (inclui itens extra do nav + secundários)
   const drawerItems: NavItem[] = [
+    ...mainNav.slice(5), // itens que não cabem no bottom nav
     { to: "/notificacoes",   label: "Notificações",    icon: Bell,            color: "bg-rose-500" },
     { to: "/minha-conta",    label: "Minha Conta",     icon: UserCircle,      color: "bg-slate-500" },
     ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),
@@ -201,52 +203,59 @@ function AuthLayout() {
       {/* Desktop sidebar */}
       <aside className={`hidden lg:flex flex-col bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border/70 shrink-0 shadow-altar overflow-hidden transition-all duration-[260ms] ease-[cubic-bezier(0.34,1.56,0.64,1)] ${sidebarCollapsed ? "w-16" : "w-56"}`}>
         {/* Logo */}
-        <div className={`flex h-20 items-center border-b border-sidebar-border/70 ${sidebarCollapsed ? "justify-center px-2" : "gap-3 px-5"}`}>
+        <div className={`flex h-16 items-center border-b border-sidebar-border/70 shrink-0 ${sidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"}`}>
           <Link to="/painel" className="flex items-center gap-3 min-w-0">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary text-white shadow-gold transition-transform duration-200 hover:scale-105">
-              <Flame className="h-5 w-5" />
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-gold shadow-gold transition-transform duration-200 hover:scale-105">
+              <Flame className="h-4.5 w-4.5 text-white" />
             </div>
             {!sidebarCollapsed && (
               <div className="min-w-0 animate-fade-in">
-                <p className="text-sm font-semibold truncate">Lumen Pastoral</p>
-                <p className="text-[11px] text-sidebar-foreground/60 truncate">Painel Pastoral</p>
+                <p className="text-[13px] font-bold truncate text-sidebar-foreground">Lumen Pastoral</p>
+                <p className="text-[10px] text-sidebar-foreground/50 truncate">Gestão Paroquial</p>
               </div>
             )}
           </Link>
         </div>
 
         {/* Nav */}
-        <nav className={`flex-1 py-4 space-y-1 overflow-y-auto ${sidebarCollapsed ? "px-2" : "px-3"}`}>
+        <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${sidebarCollapsed ? "px-2" : "px-2.5"}`}>
           {mainNav.map((item) => {
             const active = activeModule === item.to;
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                title={item.label}
-                className={`group relative flex items-center rounded-2xl py-2.5 text-sm font-semibold transition-all duration-150 press-scale tap-highlight ${
-                  sidebarCollapsed ? "justify-center px-2" : "gap-3 px-3"
+                title={sidebarCollapsed ? item.label : undefined}
+                className={`group relative flex items-center rounded-xl py-2 text-sm transition-all duration-150 press-scale tap-highlight ${
+                  sidebarCollapsed ? "justify-center px-2" : "gap-3 px-2.5"
                 } ${
                   active
-                    ? "bg-sidebar-accent/90 text-sidebar-primary shadow-gold"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                    ? "bg-sidebar-accent text-sidebar-primary font-semibold"
+                    : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground font-medium"
                 }`}
               >
-                {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-primary" />}
-                <item.icon className={`shrink-0 transition-all duration-150 ${active ? "h-[18px] w-[18px]" : "h-4 w-4"}`} />
+                {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-sidebar-primary animate-nav-pip" />}
+                {/* Icon badge iOS-style */}
+                <span className={`shrink-0 h-7 w-7 rounded-lg flex items-center justify-center transition-all duration-150 ${
+                  active
+                    ? `${item.color ?? "bg-primary"} shadow-sm`
+                    : "bg-sidebar-foreground/8 group-hover:bg-sidebar-foreground/14"
+                }`}>
+                  <item.icon className={`h-3.5 w-3.5 ${active ? "text-white" : "text-sidebar-foreground/70"}`} />
+                </span>
                 {!sidebarCollapsed && (
-                  <span className="truncate flex-1 animate-fade-in">{item.label}</span>
+                  <span className="truncate flex-1 animate-fade-in text-[13px]">{item.label}</span>
                 )}
                 {!sidebarCollapsed && (item.badge ?? 0) > 0 && (
-                  <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold px-1 shrink-0 animate-bounce-in">
-                    {item.badge}
+                  <span className="inline-flex h-4.5 min-w-[1.125rem] items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold px-1 shrink-0 animate-bounce-in">
+                    {(item.badge ?? 0) > 9 ? "9+" : item.badge}
                   </span>
                 )}
                 {sidebarCollapsed && (item.badge ?? 0) > 0 && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-500 ring-1 ring-sidebar" />
                 )}
                 {sidebarCollapsed && (
-                  <span className="absolute left-full ml-2 z-50 hidden group-hover:flex items-center rounded-lg bg-popover border border-border px-2.5 py-1.5 text-xs font-medium text-popover-foreground shadow-lg whitespace-nowrap pointer-events-none">
+                  <span className="absolute left-full ml-2.5 z-50 hidden group-hover:flex items-center rounded-lg bg-popover border border-border px-2.5 py-1.5 text-xs font-semibold text-popover-foreground shadow-lg whitespace-nowrap pointer-events-none">
                     {item.label}
                   </span>
                 )}
@@ -256,110 +265,126 @@ function AuthLayout() {
         </nav>
 
         {/* Footer */}
-        <div className={`border-t border-sidebar-border/70 ${sidebarCollapsed ? "p-2 space-y-2" : "p-4 space-y-2"}`}>
+        <div className={`border-t border-sidebar-border/60 shrink-0 ${sidebarCollapsed ? "p-2 space-y-1.5" : "p-2.5 space-y-1"}`}>
           {!sidebarCollapsed && (
-            <div className="rounded-2xl border border-border/70 bg-background/90 p-3 animate-fade-in">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground truncate">Conectado como</p>
-              <p className="mt-1.5 text-sm font-semibold text-foreground truncate">{profile?.nome_completo}</p>
-              <p className="text-[11px] text-muted-foreground truncate">{profile?.email}</p>
-            </div>
+            <Link
+              to="/minha-conta"
+              className="flex items-center gap-2.5 rounded-xl px-2 py-2 hover:bg-sidebar-accent/60 transition group animate-fade-in"
+            >
+              <div className="h-7 w-7 rounded-lg bg-sidebar-foreground/10 flex items-center justify-center text-[10px] font-bold text-sidebar-foreground shrink-0">
+                {(profile?.nome_completo ?? "?").split(" ").filter(Boolean).slice(0, 2).map((n: string) => n[0]).join("").toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-semibold text-sidebar-foreground/90 truncate leading-tight">{profile?.nome_completo?.split(" ")[0]}</p>
+                <p className="text-[10px] text-sidebar-foreground/40 truncate">{profile?.email}</p>
+              </div>
+              <UserCircle className="h-3.5 w-3.5 text-sidebar-foreground/30 group-hover:text-sidebar-foreground/60 transition shrink-0" />
+            </Link>
           )}
-          <Link
-            to="/minha-conta"
-            title="Minha Conta"
-            className={`w-full inline-flex items-center rounded-2xl bg-muted/60 text-sm font-semibold text-foreground/70 transition hover:bg-muted hover:text-foreground press-scale tap-highlight ${sidebarCollapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2.5"}`}
-          >
-            <UserCircle className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && <span className="animate-fade-in">Minha Conta</span>}
-          </Link>
-          <button
-            onClick={logout}
-            title="Sair"
-            className={`w-full inline-flex items-center rounded-2xl bg-destructive/10 text-sm font-semibold text-destructive transition hover:bg-destructive/15 press-scale tap-highlight ${sidebarCollapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2.5"}`}
-          >
-            <LogOut className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && <span className="animate-fade-in">Sair</span>}
-          </button>
-          {/* Toggle colapso */}
-          <button
-            onClick={toggleSidebar}
-            title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-            className={`w-full inline-flex items-center rounded-2xl bg-muted/40 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground press-scale tap-highlight ${sidebarCollapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2"}`}
-          >
-            {sidebarCollapsed
-              ? <PanelLeftOpen className="h-4 w-4 shrink-0" />
-              : <><PanelLeftClose className="h-4 w-4 shrink-0" /><span className="animate-fade-in">Recolher</span></>
-            }
-          </button>
+          {sidebarCollapsed && (
+            <Link to="/minha-conta" title="Minha Conta"
+              className="w-full flex justify-center items-center rounded-xl p-2 hover:bg-sidebar-accent/50 transition"
+            >
+              <UserCircle className="h-4 w-4 text-sidebar-foreground/50" />
+            </Link>
+          )}
+          <div className={`flex ${sidebarCollapsed ? "flex-col" : "flex-row"} gap-1`}>
+            <button
+              onClick={logout}
+              title="Sair"
+              className={`flex-1 inline-flex items-center rounded-xl bg-destructive/10 text-xs font-semibold text-destructive transition hover:bg-destructive/20 press-scale tap-highlight ${sidebarCollapsed ? "justify-center p-2" : "gap-1.5 px-2.5 py-2"}`}
+            >
+              <LogOut className="h-3.5 w-3.5 shrink-0" />
+              {!sidebarCollapsed && <span className="animate-fade-in">Sair</span>}
+            </button>
+            <button
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+              className={`inline-flex items-center rounded-xl bg-sidebar-foreground/6 text-xs text-sidebar-foreground/40 transition hover:bg-sidebar-foreground/12 hover:text-sidebar-foreground/70 press-scale tap-highlight ${sidebarCollapsed ? "justify-center p-2 w-full" : "gap-1.5 px-2.5 py-2"}`}
+            >
+              {sidebarCollapsed
+                ? <PanelLeftOpen className="h-3.5 w-3.5 shrink-0" />
+                : <><PanelLeftClose className="h-3.5 w-3.5 shrink-0" /><span className="animate-fade-in">Recolher</span></>
+              }
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="sticky top-0 z-30 border-b border-border/70 bg-card/90 backdrop-blur-sm shadow-sm">
-          <div className="mx-auto flex h-14 items-center gap-3 px-4 sm:px-6 lg:px-8 max-w-7xl w-full">
+        <header className="sticky top-0 z-30 border-b border-border/60 glass shadow-[0_1px_0_0_var(--color-border)]">
+          {/* Faixa litúrgica no topo */}
+          {liturgy && (
+            <div
+              className="h-0.5 w-full"
+              style={{ background: `linear-gradient(to right, ${LITURGICAL_COLOR_HEX[liturgy.color]}cc, ${LITURGICAL_COLOR_HEX[liturgy.color]}44)` }}
+            />
+          )}
+          <div className="mx-auto flex h-13 items-center gap-3 px-4 sm:px-5 lg:px-6 max-w-7xl w-full">
+            {/* Mobile: logo pequena */}
+            <Link to="/painel" className="lg:hidden flex items-center gap-2 shrink-0 mr-1">
+              <div className="h-8 w-8 grid place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                <Flame className="h-4 w-4" />
+              </div>
+            </Link>
+
             <div className="flex-1 min-w-0 overflow-hidden">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground leading-none">Painel Pastoral</p>
-              <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                <h1 className="text-[15px] font-semibold text-foreground truncate leading-snug">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-sm font-semibold text-foreground truncate leading-snug">
                   {paroquia?.nome ?? "Sua paróquia"}
                 </h1>
                 {paroquia?.diocese && (
-                  <span className="hidden md:inline text-xs text-muted-foreground truncate shrink-0">
-                    {paroquia.diocese}
+                  <span className="hidden md:inline text-xs text-muted-foreground/70 truncate shrink-0 font-normal">
+                    · {paroquia.diocese}
                   </span>
                 )}
               </div>
-              {liturgy && (
-                <div className="hidden lg:flex items-center gap-1.5 mt-0.5">
+              {liturgy ? (
+                <div className="flex items-center gap-1.5 mt-0.5">
                   <span
                     className="h-1.5 w-1.5 rounded-full shrink-0"
                     style={{ backgroundColor: LITURGICAL_COLOR_HEX[liturgy.color] }}
                   />
                   <span className="text-[10px] text-muted-foreground truncate">
-                    {liturgy.name} · {LITURGICAL_COLOR_LABEL[liturgy.color]} · {LITURGICAL_SEASON_LABEL[(liturgy.season as string) ?? "comum"]}
+                    {liturgy.name}
+                    <span className="hidden sm:inline"> · {LITURGICAL_COLOR_LABEL[liturgy.color]} · {LITURGICAL_SEASON_LABEL[(liturgy.season as string) ?? "comum"]}</span>
                   </span>
                 </div>
+              ) : (
+                <p className="text-[10px] text-muted-foreground">Painel Pastoral</p>
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:flex items-center gap-2">
-                <Link
-                  to="/notificacoes"
-                  className="relative inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-muted/70 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                  title="Notificações"
-                >
-                  <Bell className="h-4 w-4" />
-                </Link>
-                <Link
-                  to="/minha-conta"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-muted/70 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                  title="Minha conta"
-                >
-                  <UserCircle className="h-4 w-4" />
-                </Link>
-                <button
-                  onClick={logout}
-                  className="inline-flex h-10 items-center justify-center rounded-2xl bg-destructive/10 px-3 text-sm font-semibold text-destructive transition hover:bg-destructive/15"
-                >
-                  Sair
-                </button>
-              </div>
-              {/* Mobile: ícones de notificações e perfil no header */}
+            <div className="flex items-center gap-1.5">
               <Link
                 to="/notificacoes"
-                className="sm:hidden relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+                className="btn-icon"
+                title="Notificações"
                 aria-label="Notificações"
               >
-                <Bell className="h-5 w-5" />
+                <Bell className="h-4 w-4" />
+              </Link>
+              <Link
+                to="/minha-conta"
+                className="hidden sm:inline-flex btn-icon"
+                title="Minha conta"
+              >
+                <UserCircle className="h-4 w-4" />
               </Link>
               <button
-                onClick={() => setMenuOpen(true)}
-                className="sm:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground transition"
-                aria-label="Mais opções"
+                onClick={logout}
+                className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-destructive/8 text-xs font-semibold text-destructive transition hover:bg-destructive/15 active:scale-95"
               >
-                <BookOpen className="h-5 w-5" />
+                <LogOut className="h-3.5 w-3.5" />
+                Sair
+              </button>
+              <button
+                onClick={() => setMenuOpen(true)}
+                className="sm:hidden btn-icon"
+                aria-label="Menu"
+              >
+                <Menu className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -441,37 +466,43 @@ function AuthLayout() {
           </DrawerContent>
         </Drawer>
 
-        {/* ── Mobile bottom navigation — 6 módulos principais ───────── */}
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 glass border-t border-border/60 safe-area-pb shadow-[0_-1px_12px_rgba(0,0,0,0.08)]">
-          <div className="flex items-stretch h-[62px]">
-            {mainNav.map((item) => {
+        {/* ── Mobile bottom navigation ───────── */}
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 glass border-t border-border/50 safe-area-pb" style={{ boxShadow: "0 -1px 0 0 var(--color-border), 0 -8px 24px rgba(0,0,0,0.07)" }}>
+          <div className="flex items-stretch h-[58px]">
+            {mainNav.slice(0, 5).map((item) => {
               const active = activeModule === item.to;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 relative tap-highlight transition-colors duration-150 active:scale-[0.88] ${
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 min-w-0 relative tap-highlight transition-all duration-150 active:opacity-70 ${
                     active ? "text-primary" : "text-muted-foreground"
                   }`}
                 >
-                  {active && (
-                    <span className="nav-active-pip" />
-                  )}
-                  <div className={`relative mt-2 transition-all duration-200 ${active ? "scale-110" : "scale-100"}`}>
-                    <div className={`absolute inset-[-6px] rounded-xl transition-all duration-200 ${active ? "bg-primary/10" : "bg-transparent"}`} />
-                    <item.icon className={`h-[19px] w-[19px] shrink-0 transition-all duration-200 relative ${active ? "stroke-[2.3]" : "stroke-[1.6]"}`} />
+                  {active && <span className="nav-active-pip" />}
+                  <div className={`relative transition-all duration-200 ${active ? "scale-[1.08]" : "scale-100"}`}>
+                    <div className={`absolute inset-[-5px] rounded-xl transition-all duration-200 ${active ? "bg-primary/10" : "bg-transparent"}`} />
+                    <item.icon className={`h-[18px] w-[18px] shrink-0 transition-all duration-200 relative ${active ? "stroke-[2.2]" : "stroke-[1.7]"}`} />
                     {(item.badge ?? 0) > 0 && (
                       <span className="absolute -top-1 -right-2 h-3.5 min-w-[0.875rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5 animate-bounce-in">
                         {(item.badge ?? 0) > 9 ? "9+" : item.badge}
                       </span>
                     )}
                   </div>
-                  <span className={`text-[9px] leading-none truncate max-w-full px-1 mt-0.5 transition-all duration-150 ${active ? "font-bold" : "font-medium"}`}>
+                  <span className={`text-[9.5px] leading-none truncate max-w-full px-0.5 mt-1 transition-all duration-150 ${active ? "font-bold" : "font-medium"}`}>
                     {item.label}
                   </span>
                 </Link>
               );
             })}
+            {/* "Mais" — abre drawer */}
+            <button
+              onClick={() => setMenuOpen(true)}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 min-w-0 relative tap-highlight text-muted-foreground active:opacity-70 transition-all duration-150"
+            >
+              <Menu className="h-[18px] w-[18px] stroke-[1.7]" />
+              <span className="text-[9.5px] leading-none font-medium mt-1">Mais</span>
+            </button>
           </div>
         </nav>
       </div>

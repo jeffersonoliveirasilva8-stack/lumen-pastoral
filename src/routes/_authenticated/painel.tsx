@@ -1145,41 +1145,69 @@ function DashboardPage() {
       {/* ── AGIR AGORA — 4 KPIs operacionais ── */}
       {hasAdminAccess && (
         <div>
-          <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground font-semibold mb-3">Agir agora</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Link to="/escalas" className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:bg-primary/5 transition block">
-              <p className={`text-3xl font-serif font-bold ${escalasRascunhoCount > 0 ? "text-amber-600" : "text-muted-foreground/40"}`}>{escalasRascunhoCount}</p>
-              <p className="text-xs text-muted-foreground mt-1 leading-snug">Escalas sem publicar</p>
-            </Link>
-            <Link to="/sacristia" className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:bg-primary/5 transition block">
-              <p className={`text-3xl font-serif font-bold ${presencasPendentesTotal > 0 ? "text-orange-600" : "text-muted-foreground/40"}`}>{presencasPendentesTotal}</p>
-              <p className="text-xs text-muted-foreground mt-1 leading-snug">Presenças pendentes</p>
-            </Link>
-            <Link to="/substituicoes" className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:bg-primary/5 transition block">
-              <p className={`text-3xl font-serif font-bold ${substituicoesPendentesCount > 0 ? "text-violet-600" : "text-muted-foreground/40"}`}>{substituicoesPendentesCount}</p>
-              <p className="text-xs text-muted-foreground mt-1 leading-snug">Substituições aguardando</p>
-            </Link>
-            <Link to="/membros" className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:bg-primary/5 transition block">
-              <p className={`text-3xl font-serif font-bold ${membrosNaoAtivados > 0 ? "text-slate-600" : "text-muted-foreground/40"}`}>{membrosNaoAtivados}</p>
-              <p className="text-xs text-muted-foreground mt-1 leading-snug">Membros sem ativação</p>
-            </Link>
+          <p className="section-label mb-3">Agir agora</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {[
+              {
+                to: "/escalas", count: escalasRascunhoCount,
+                label: "Escalas sem publicar", icon: Calendar,
+                activeColor: "text-amber-600", activeBg: "bg-amber-50 border-amber-200",
+                iconBg: "bg-amber-100", iconColor: "text-amber-600",
+              },
+              {
+                to: "/sacristia", count: presencasPendentesTotal,
+                label: "Presenças pendentes", icon: ClipboardList,
+                activeColor: "text-orange-600", activeBg: "bg-orange-50 border-orange-200",
+                iconBg: "bg-orange-100", iconColor: "text-orange-600",
+              },
+              {
+                to: "/substituicoes", count: substituicoesPendentesCount,
+                label: "Substituições aguardando", icon: ArrowLeftRight,
+                activeColor: "text-violet-600", activeBg: "bg-violet-50 border-violet-200",
+                iconBg: "bg-violet-100", iconColor: "text-violet-600",
+              },
+              {
+                to: "/membros", count: membrosNaoAtivados,
+                label: "Membros sem ativação", icon: Users,
+                activeColor: "text-slate-600", activeBg: "bg-slate-50 border-slate-200",
+                iconBg: "bg-slate-100", iconColor: "text-slate-600",
+              },
+            ].map(({ to, count, label, icon: Icon, activeColor, activeBg, iconBg, iconColor }) => (
+              <Link
+                key={to} to={to}
+                className={`stat-card interactive-card group ${count > 0 ? activeBg : "hover:bg-muted/20"}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${count > 0 ? iconBg : "bg-muted"}`}>
+                    <Icon className={`h-4 w-4 ${count > 0 ? iconColor : "text-muted-foreground/40"}`} />
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition mt-0.5 shrink-0" />
+                </div>
+                <div>
+                  <p className={`text-2xl font-serif font-bold leading-none ${count > 0 ? activeColor : "text-muted-foreground/30"}`}>{count}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{label}</p>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       )}
 
       {/* ── Alertas urgentes — só aparece quando há itens críticos ── */}
       {(conflitos.length > 0 || escalasIncompletas.length > 0 || alertasLiturgicos.length > 0 || escalasPresencaPendente.length > 0 || substituicoesPendentesCount > 0 || confirmacoesPendentes > 0 || membrosNaoAtivados > 0 || indispAtivasCount > 0 || escalasRascunhoCount > 0) && (
-        <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 overflow-hidden">
-          <div className="flex items-center gap-2.5 px-4 py-3 border-b border-amber-200/60 dark:border-amber-800/60">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-amber-700 dark:text-amber-500">
+        <div className="rounded-2xl border border-amber-200/70 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/20 overflow-hidden shadow-xs">
+          <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-amber-200/60 dark:border-amber-800/60 bg-amber-100/40 dark:bg-amber-900/20">
+            <div className="h-6 w-6 rounded-lg bg-amber-500 flex items-center justify-center shrink-0">
+              <AlertTriangle className="h-3.5 w-3.5 text-white" />
+            </div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-500 flex-1">
               Precisa de atenção
             </p>
-            <span className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1">
+            <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold px-1.5">
               {conflitos.length + escalasIncompletas.length + alertasLiturgicos.length + escalasPresencaPendente.length + (substituicoesPendentesCount > 0 ? 1 : 0) + (confirmacoesPendentes > 0 ? 1 : 0) + (membrosNaoAtivados > 0 ? 1 : 0) + (indispAtivasCount > 0 ? 1 : 0) + (escalasRascunhoCount > 0 ? 1 : 0)}
             </span>
           </div>
-          <div className="divide-y divide-amber-200/50 dark:divide-amber-800/40">
+          <div className="divide-y divide-amber-100/80 dark:divide-amber-800/40">
             {escalasRascunhoCount > 0 && (
               <Link
                 to="/escalas"

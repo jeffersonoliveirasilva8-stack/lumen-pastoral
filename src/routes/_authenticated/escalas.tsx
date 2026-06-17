@@ -1386,28 +1386,28 @@ ${rodapeUrl
         </div>
       </div>
 
-      {/* Indicadores de status — futurasa */}
+      {/* Indicadores de status */}
       {escalas.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {statusCounts.publicadas > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-semibold text-primary">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/70 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               {statusCounts.publicadas} publicada{statusCounts.publicadas !== 1 ? "s" : ""}
             </span>
           )}
           {statusCounts.rascunhos > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted border border-border px-3 py-1 text-xs font-semibold text-muted-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200/70 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
               {statusCounts.rascunhos} rascunho{statusCounts.rascunhos !== 1 ? "s" : ""}
             </span>
           )}
           {statusCounts.arquivadas > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/50 border border-border/50 px-3 py-1 text-xs font-medium text-muted-foreground/60">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/50 border border-border/50 px-2.5 py-1 text-[11px] font-medium text-muted-foreground/60">
               {statusCounts.arquivadas} arquivada{statusCounts.arquivadas !== 1 ? "s" : ""}
             </span>
           )}
           {statusCounts.canceladas > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-3 py-1 text-xs font-semibold text-red-700">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200/70 px-2.5 py-1 text-[11px] font-semibold text-red-700">
               <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
               {statusCounts.canceladas} cancelada{statusCounts.canceladas !== 1 ? "s" : ""}
             </span>
@@ -2798,24 +2798,26 @@ function ListaView({
       )}
 
       {/* ── Filtros rápidos ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-hide">
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
         {([
-          { id: "todos", label: "Todas" },
-          { id: "semana", label: "Esta semana" },
-          { id: "2semanas", label: "Próx. 2 sem" },
-          { id: "incompletas", label: "Incompletas" },
-          { id: "rascunho", label: "Rascunho" },
+          { id: "todos",      label: "Todas",          count: escalas.length },
+          { id: "semana",     label: "Esta semana",     count: null },
+          { id: "2semanas",   label: "Próx. 2 semanas", count: null },
+          { id: "incompletas",label: "Incompletas",     count: escalas.filter((e) => { const c = escalaCounts[e.id]; return c && c.filled < c.needed; }).length || null },
+          { id: "rascunho",   label: "Rascunho",        count: draftCount || null },
         ] as const).map((f) => (
-          <button key={f.id} onClick={() => setFiltro(f.id)}
-            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-all ${
-              filtro === f.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}>
+          <button
+            key={f.id}
+            onClick={() => { setFiltro(f.id); setPaginaEscalas(20); }}
+            className={`filter-chip shrink-0 ${filtro === f.id ? "filter-chip-active" : ""}`}
+          >
             {f.label}
+            {f.count !== null && <span className="filter-chip-count">{f.count}</span>}
           </button>
         ))}
-        <span className="ml-auto shrink-0 text-xs text-muted-foreground">{escalasVisiveis.length} de {escalas.length}</span>
+        <span className="ml-auto shrink-0 text-[11px] text-muted-foreground whitespace-nowrap pl-2">
+          {escalasVisiveis.length} de {escalas.length}
+        </span>
       </div>
 
       {/* ── Barra de ações em lote ──────────────────────────────────────────── */}
