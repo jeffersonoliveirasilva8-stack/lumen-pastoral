@@ -667,6 +667,7 @@ function EscalasPage() {
               paroquia: paroquiaNome,
               escalaTitulo: detailEscala.titulo,
               escalaData: detailEscala.data,
+              escalaHora: detailEscala.hora_inicio?.slice(0, 5) ?? "",
               ministerioNome: min?.nome ?? "",
             },
           });
@@ -717,12 +718,13 @@ function EscalasPage() {
             if (membro?.email) {
               supabase.functions.invoke("send-email", {
                 body: {
-                  template: "escala_atribuida",
+                  template: "escala_publicada",
                   to: membro.email,
                   nome: membro.nome,
                   paroquia: paroquiaNome,
                   escalaTitulo: escalaRef.titulo,
                   escalaData: escalaRef.data,
+                  escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
                   ministerioNome: min?.nome ?? "",
                 },
               });
@@ -738,13 +740,39 @@ function EscalasPage() {
       const { error } = await supabase.from("escalas").update({ status }).in("id", ids);
       if (error) throw error;
     },
-    onSuccess: (_, { ids, status }) => {
+    onSuccess: async (_, { ids, status }) => {
       qc.invalidateQueries({ queryKey: ["escalas"] });
-      // Sincroniza com portal do membro quando múltiplas escalas mudam status
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       setSelectedEscalaIds(new Set());
       toast.success(`${ids.length} escala(s) ${status === "publicada" ? "publicada(s)" : "arquivada(s)"}.`);
+
+      // Envia e-mails ao publicar múltiplas escalas em lote
+      if (status === "publicada" && ids.length > 0) {
+        const { data: atrib } = await (supabase as any)
+          .from("escala_membros")
+          .select("membro_id, ministerio_id, escala_id")
+          .in("escala_id", ids);
+        for (const a of (atrib ?? [])) {
+          const escalaRef = escalas.find((e) => e.id === a.escala_id);
+          const membro = membros.find((m: Membro) => m.id === a.membro_id);
+          const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
+          if (membro?.email && escalaRef) {
+            supabase.functions.invoke("send-email", {
+              body: {
+                template: "escala_publicada",
+                to: membro.email,
+                nome: membro.nome,
+                paroquia: paroquiaNome,
+                escalaTitulo: escalaRef.titulo,
+                escalaData: escalaRef.data,
+                escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+                ministerioNome: min?.nome ?? "",
+              },
+            });
+          }
+        }
+      }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
@@ -3093,6 +3121,7 @@ function EscalaDetail({
                 paroquia: paroquiaNome,
                 escalaTitulo: escala.titulo,
                 escalaData: escala.data,
+                escalaHora: escala.hora_inicio?.slice(0, 5) ?? "",
                 ministerioNome: min?.nome ?? "",
               },
             });
@@ -3136,19 +3165,19 @@ function EscalaDetail({
     },
     onSuccess: () => {
       toast.success("Notificações reenviadas.");
-      // Envia emails a todos os membros atribuídos
       for (const a of atribuicoes) {
         const membro = membros.find((m) => m.id === a.membro_id);
         const min = ministerios.find((m) => m.id === a.ministerio_id);
         if (membro?.email) {
           supabase.functions.invoke("send-email", {
             body: {
-              template: "escala_atribuida",
+              template: "escala_publicada",
               to: membro.email,
               nome: membro.nome,
               paroquia: paroquiaNome,
               escalaTitulo: escala.titulo,
               escalaData: escala.data,
+              escalaHora: escala.hora_inicio?.slice(0, 5) ?? "",
               ministerioNome: min?.nome ?? "",
             },
           });
