@@ -1317,6 +1317,9 @@ ${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : 
           membros={membros}
           assignmentHistory={assignmentHistory}
           paroquiaConfig={paroquiaConfig}
+          indisponibilidades={indisponibilidades}
+          membroMinisterios={membroMinisterios}
+          funcaoRestricoes={funcaoRestricoes}
           onToggleSelect={(id) => {
             const next = new Set(selectedEscalaIds);
             if (next.has(id)) next.delete(id); else next.add(id);
@@ -1855,7 +1858,9 @@ function IndisponibilidadesTab({
 // ── SwapMembroModal ───────────────────────────────────────────────────────────
 
 function SwapMembroModal({
-  membroId, membroNome, escalas, escalaCounts, radarData, membros, onSwap, onClose,
+  membroId, membroNome, escalas, escalaCounts, radarData, membros,
+  indisponibilidades, membroMinisterios, funcaoRestricoes,
+  onSwap, onClose,
 }: {
   membroId: string;
   membroNome: string;
@@ -1863,11 +1868,38 @@ function SwapMembroModal({
   escalaCounts: Record<string, EscalaPreview>;
   radarData: { id: string; nome: string; status: string; vezes7dias: number }[];
   membros: Membro[];
+  indisponibilidades: IndispRow[];
+  membroMinisterios: Record<string, string[]>;
+  funcaoRestricoes: FuncaoRestricao[];
   onSwap: (args: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
   onClose: () => void;
 }) {
   const [selectedEscala, setSelectedEscala] = useState<string>("");
   const [selectedAtrib, setSelectedAtrib] = useState<string>("");
+
+  // Membro a incluir — verificar suas funções vinculadas
+  const funcoesDoMembro = Object.entries(membroMinisterios)
+    .filter(([, ids]) => ids.includes(membroId))
+    .map(([minId]) => minId);
+
+  // Helper: verifica se o membro está indisponível para uma data
+  function membroIndisponivel(data: string): string | null {
+    const membro = membros.find((m) => m.id === membroId);
+    if (!membro) return null;
+    const diaSemana = new Date(data + "T12:00:00").getDay();
+    if (membro.restricoes_dia_semana?.includes(diaSemana)) {
+      const dias = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+      return `Restrito às ${dias[diaSemana]}`;
+    }
+    const indisp = indisponibilidades.find((i) => {
+      if (i.membro_id !== membroId) return false;
+      if (i.cancelada) return false;
+      if (i.tipo === "intervalo" && i.data_fim) return data >= i.data && data <= i.data_fim;
+      return i.data === data;
+    });
+    if (indisp) return indisp.motivo ? `Indisponível: ${indisp.motivo}` : "Indisponível nesta data";
+    return null;
+  }
 
   // Escalas futuras onde este membro ainda não está
   const hojeStr = new Date().toISOString().slice(0, 10);
@@ -1876,18 +1908,29 @@ function SwapMembroModal({
     const counts = escalaCounts[e.id];
     if (!counts) return false;
     const jaEsta = counts.funcoes.some((f) => f.membros.some((m) => m.id === membroId));
-    return !jaEsta;
+    if (jaEsta) return false;
+    // Deve ter ao menos uma função em que o membro pode servir
+    const temFuncaoCompativel = counts.funcoes.some((f) => funcoesDoMembro.includes(f.ministerio_id));
+    return temFuncaoCompativel;
   });
 
   const escalaObj = escalasDisponiveis.find((e) => e.id === selectedEscala);
   const counts = escalaObj ? escalaCounts[escalaObj.id] : null;
 
-  // Membros já na escala, ordenados por mais frequência (sobrecargados primeiro)
+  // Disponibilidade do membro para a escala selecionada
+  const motivoIndisponivel = escalaObj ? membroIndisponivel(escalaObj.data) : null;
+
+  // Membros já na escala, filtrados a funções que o membro entrante pode exercer, ordenados por frequência
   type AtribEntry = { atribId: string; membroId: string; nome: string; vezes7dias: number; ministerioId: string; ministerioNome: string };
   const membrosNaEscala: AtribEntry[] = useMemo(() => {
     if (!counts) return [];
     const entries: AtribEntry[] = [];
     counts.funcoes.forEach((f) => {
+      // Só mostrar funções que o membro entrante pode exercer
+      if (!funcoesDoMembro.includes(f.ministerio_id)) return;
+      // Excluir funções em que o membro tem restrição "nao_pode"
+      const naoPode = funcaoRestricoes.some((r) => r.membro_id === membroId && r.ministerio_id === f.ministerio_id && r.tipo === "nao_pode");
+      if (naoPode) return;
       f.membros.forEach((m) => {
         if (m.id === membroId) return;
         const r = radarData.find((rd) => rd.id === m.id);
@@ -1895,7 +1938,7 @@ function SwapMembroModal({
       });
     });
     return entries.sort((a, b) => b.vezes7dias - a.vezes7dias);
-  }, [counts, membroId, radarData]);
+  }, [counts, membroId, radarData, funcoesDoMembro, funcaoRestricoes]);
 
   // Find atribuicao ID for selected member
   // We don't have the real DB IDs here, so we'll pass the membro_id + escala context to the parent
@@ -1937,10 +1980,20 @@ function SwapMembroModal({
             )}
           </div>
 
+          {selectedEscala && motivoIndisponivel && (
+            <div className="flex items-start gap-2 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-3 py-2.5">
+              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Atenção: possível indisponibilidade</p>
+                <p className="text-xs text-amber-600 dark:text-amber-500">{motivoIndisponivel}</p>
+              </div>
+            </div>
+          )}
+
           {selectedEscala && membrosNaEscala.length > 0 && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                Substituir quem? <span className="normal-case font-normal">(mais frequentes primeiro)</span>
+                Substituir quem? <span className="normal-case font-normal">(mais frequentes primeiro — apenas funções compatíveis)</span>
               </p>
               <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                 {membrosNaEscala.map((m, i) => (
@@ -2007,6 +2060,7 @@ function SwapMembroModal({
 
 function ListaView({
   escalas, allEscalas, selectedIds, escalaCounts, membros, assignmentHistory, paroquiaConfig,
+  indisponibilidades, membroMinisterios, funcaoRestricoes,
   onToggleSelect, onSelectAll, onOpenDetail, onEdit, onDelete, onCreate, onExportPDF, onReorganizar,
   onBulkPublish, onSwapMembro, isBulkPublishing,
 }: {
@@ -2017,6 +2071,9 @@ function ListaView({
   membros: Membro[];
   assignmentHistory: AssignmentHistoryEntry[];
   paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
+  indisponibilidades: IndispRow[];
+  membroMinisterios: Record<string, string[]>;
+  funcaoRestricoes: FuncaoRestricao[];
   onToggleSelect: (id: string) => void;
   onSelectAll: (ids: string[]) => void;
   onOpenDetail: (e: Escala) => void;
@@ -2457,6 +2514,9 @@ function ListaView({
           escalaCounts={escalaCounts}
           radarData={radarData}
           membros={membros}
+          indisponibilidades={indisponibilidades}
+          membroMinisterios={membroMinisterios}
+          funcaoRestricoes={funcaoRestricoes}
           onSwap={onSwapMembro}
           onClose={() => setSwapTarget(null)}
         />
@@ -3041,10 +3101,51 @@ function EscalaDetail({
   const funcaoMinsIds = funcoes.map((f) => f.ministerio_id);
   const ministeriosDisponiveis = ministerios.filter((m) => !funcaoMinsIds.includes(m.id));
 
+  // Classifica membros para um ministério com motivo de disponibilidade
+  function membrosClassificadosParaMinisterio(ministerioId: string): {
+    disponiveis: (Membro & { motivo?: string })[];
+    indisponiveis: (Membro & { motivo: string })[];
+  } {
+    const atribuidos = new Set(atribuicoes.filter((a) => a.ministerio_id === ministerioId).map((a) => a.membro_id));
+    const desteMinisterio = new Set(membroMinisterios[ministerioId] ?? []);
+    const diaSemana = new Date(escala.data + "T12:00:00").getDay();
+
+    const disponiveis: (Membro & { motivo?: string })[] = [];
+    const indisponiveis: (Membro & { motivo: string })[] = [];
+
+    membros.forEach((m) => {
+      if (!desteMinisterio.has(m.id)) return; // sem vínculo — não aparece
+      if (atribuidos.has(m.id)) return; // já atribuído
+
+      const naoPodevExercer = funcaoRestricoes.some((r) => r.membro_id === m.id && r.ministerio_id === ministerioId && r.tipo === "nao_pode");
+      if (naoPodevExercer) {
+        indisponiveis.push({ ...m, motivo: "Não pode exercer esta função" });
+        return;
+      }
+      if (m.restricoes_dia_semana?.includes(diaSemana)) {
+        const dias = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+        indisponiveis.push({ ...m, motivo: `Restrito às ${dias[diaSemana]}` });
+        return;
+      }
+      const indisp = indisponibilidades.find((i) => {
+        if (i.membro_id !== m.id) return false;
+        if (i.cancelada) return false;
+        if (i.tipo === "intervalo" && i.data_fim) return escala.data >= i.data && escala.data <= i.data_fim;
+        return i.data === escala.data;
+      });
+      if (indisp) {
+        indisponiveis.push({ ...m, motivo: indisp.motivo ? `Indisponível: ${indisp.motivo}` : "Indisponível nesta data" });
+        return;
+      }
+      disponiveis.push(m);
+    });
+
+    return { disponiveis, indisponiveis };
+  }
+
+  // Compat com uso antigo (só disponíveis, sem classificação)
   function membrosParaMinisterio(ministerioId: string) {
-    const atribuidos = atribuicoes.filter((a) => a.ministerio_id === ministerioId).map((a) => a.membro_id);
-    const desteMinisterio = membroMinisterios[ministerioId] ?? [];
-    return membros.filter((m) => desteMinisterio.includes(m.id) && !atribuidos.includes(m.id));
+    return membrosClassificadosParaMinisterio(ministerioId).disponiveis;
   }
 
   function handleGenerateSuggestions() {
@@ -3523,41 +3624,82 @@ function EscalaDetail({
                       })}
 
                       {/* Atribuir membro */}
-                      {atrib.length < f.quantidade && disponiveis.length > 0 && (
-                        <div className="flex gap-2 pl-5">
-                          <Select
-                            value={selectedMembro}
-                            onValueChange={(v) => setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: v }))}
-                          >
-                            <SelectTrigger className="h-7 text-xs flex-1">
-                              <SelectValue placeholder="Selecionar membro..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {disponiveis.map((m) => (
-                                <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            size="sm"
-                            className="h-7 text-xs"
-                            disabled={!selectedMembro}
-                            onClick={() => {
-                              if (selectedMembro) {
-                                onAtribuir(selectedMembro, f.ministerio_id);
-                                setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
-                              }
-                            }}
-                          >
-                            <UserPlus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                      {atrib.length < f.quantidade && disponiveis.length === 0 && (
-                        <p className="pl-5 text-xs text-muted-foreground">
-                          Nenhum membro disponível neste ministério.
-                        </p>
-                      )}
+                      {atrib.length < f.quantidade && (() => {
+                        const { disponiveis: disp, indisponiveis: indisp } = membrosClassificadosParaMinisterio(f.ministerio_id);
+                        return (
+                          <>
+                            {disp.length > 0 ? (
+                              <div className="flex gap-2 pl-5">
+                                <Select
+                                  value={selectedMembro}
+                                  onValueChange={(v) => setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: v }))}
+                                >
+                                  <SelectTrigger className="h-7 text-xs flex-1">
+                                    <SelectValue placeholder="Selecionar membro..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <div className="px-2 pt-1.5 pb-1">
+                                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Disponíveis ({disp.length})
+                                      </p>
+                                    </div>
+                                    {disp.map((m) => (
+                                      <SelectItem key={m.id} value={m.id}>
+                                        {nomeExibicao(m.nome)}
+                                      </SelectItem>
+                                    ))}
+                                    {indisp.length > 0 && (
+                                      <>
+                                        <div className="px-2 pt-2 pb-1 border-t border-border/50 mt-1">
+                                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Indisponíveis ({indisp.length})
+                                          </p>
+                                        </div>
+                                        {indisp.map((m) => (
+                                          <SelectItem key={m.id} value={m.id} className="opacity-50">
+                                            <span>{nomeExibicao(m.nome)}</span>
+                                            <span className="ml-1.5 text-[10px] text-muted-foreground">· {m.motivo}</span>
+                                          </SelectItem>
+                                        ))}
+                                      </>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  disabled={!selectedMembro}
+                                  onClick={() => {
+                                    if (selectedMembro) {
+                                      onAtribuir(selectedMembro, f.ministerio_id);
+                                      setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
+                                    }
+                                  }}
+                                >
+                                  <UserPlus className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : indisp.length > 0 ? (
+                              <div className="pl-5 space-y-1">
+                                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                  Todos os membros vinculados estão indisponíveis:
+                                </p>
+                                {indisp.map((m) => (
+                                  <div key={m.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <Ban className="h-3 w-3 text-amber-500 shrink-0" />
+                                    <span className="font-medium">{nomeExibicao(m.nome)}</span>
+                                    <span>· {m.motivo}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="pl-5 text-xs text-muted-foreground">
+                                Nenhum membro vinculado a esta função.
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
                       </div>
                     </div>
                   );
