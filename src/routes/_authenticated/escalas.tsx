@@ -703,34 +703,74 @@ function EscalasPage() {
       setDetailEscala((prev) => prev ? { ...prev, status: vars.status } : prev);
       toast.success("Status da escala atualizado.");
 
+      const escalaRef = escalas.find((e) => e.id === vars.id) ?? detailEscala;
+
       // Ao publicar, envia e-mails a todos os membros já atribuídos
       // (in-app notifications são feitas pelo trigger _trigger_escala_publicada_membros)
-      if (vars.status === "publicada") {
-        const escalaRef = escalas.find((e) => e.id === vars.id) ?? detailEscala;
-        if (escalaRef) {
-          const { data: atrib } = await (supabase as any)
-            .from("escala_membros")
-            .select("membro_id, ministerio_id")
-            .eq("escala_id", vars.id);
-          for (let i = 0; i < (atrib ?? []).length; i++) {
-            const a = (atrib ?? [])[i];
-            const membro = membros.find((m: Membro) => m.id === a.membro_id);
-            const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
-            if (!membro?.email) continue;
-            if (i > 0) await new Promise((r) => setTimeout(r, 400));
-            supabase.functions.invoke("send-email", {
-              body: {
-                template: "escala_publicada",
-                to: membro.email,
-                nome: membro.nome,
-                paroquia: paroquiaNome,
-                escalaTitulo: escalaRef.titulo,
-                escalaData: escalaRef.data,
-                escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
-                ministerioNome: min?.nome ?? "",
-              },
-            });
-          }
+      if (vars.status === "publicada" && escalaRef) {
+        const { data: atrib } = await (supabase as any)
+          .from("escala_membros")
+          .select("membro_id, ministerio_id")
+          .eq("escala_id", vars.id);
+        for (let i = 0; i < (atrib ?? []).length; i++) {
+          const a = (atrib ?? [])[i];
+          const membro = membros.find((m: Membro) => m.id === a.membro_id);
+          const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
+          if (!membro?.email) continue;
+          if (i > 0) await new Promise((r) => setTimeout(r, 400));
+          supabase.functions.invoke("send-email", {
+            body: {
+              template: "escala_publicada",
+              to: membro.email,
+              nome: membro.nome,
+              paroquia: paroquiaNome,
+              escalaTitulo: escalaRef.titulo,
+              escalaData: escalaRef.data,
+              escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+              ministerioNome: min?.nome ?? "",
+            },
+          });
+        }
+      }
+
+      // Ao cancelar, notifica in-app + e-mail todos os membros atribuídos
+      if (vars.status === "cancelada" && escalaRef) {
+        const { data: atrib } = await (supabase as any)
+          .from("escala_membros")
+          .select("membro_id, ministerio_id")
+          .eq("escala_id", vars.id);
+        const atribList = atrib ?? [];
+        // Notificações in-app
+        const notifs = atribList.map((a: { membro_id: string }) => ({
+          paroquia_id: profile?.paroquia_id,
+          membro_id: a.membro_id,
+          titulo: `Escala cancelada: ${escalaRef.titulo}`,
+          mensagem: `A escala "${escalaRef.titulo}" do dia ${escalaRef.data} foi cancelada pela coordenação.`,
+          tipo: "aviso",
+          lida: false,
+          apenas_admin: false,
+          link_referencia: "/portal-membro/escalas",
+        }));
+        if (notifs.length > 0) await (supabase as any).from("notificacoes").insert(notifs);
+        // E-mails
+        for (let i = 0; i < atribList.length; i++) {
+          const a = atribList[i];
+          const membro = membros.find((m: Membro) => m.id === a.membro_id);
+          const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
+          if (!membro?.email) continue;
+          if (i > 0) await new Promise((r) => setTimeout(r, 400));
+          supabase.functions.invoke("send-email", {
+            body: {
+              template: "escala_cancelada",
+              to: membro.email,
+              nome: membro.nome,
+              paroquia: paroquiaNome,
+              escalaTitulo: escalaRef.titulo,
+              escalaData: escalaRef.data,
+              escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+              ministerioNome: min?.nome ?? "",
+            },
+          });
         }
       }
     },
@@ -748,13 +788,33 @@ function EscalasPage() {
       setSelectedEscalaIds(new Set());
       toast.success(`${ids.length} escala(s) ${status === "publicada" ? "publicada(s)" : "arquivada(s)"}.`);
 
-      // Envia e-mails ao publicar múltiplas escalas em lote
-      if (status === "publicada" && ids.length > 0) {
+      // Envia e-mails ao publicar ou cancelar múltiplas escalas em lote
+      if ((status === "publicada" || status === "cancelada") && ids.length > 0) {
         const { data: atrib } = await (supabase as any)
           .from("escala_membros")
           .select("membro_id, ministerio_id, escala_id")
           .in("escala_id", ids);
         const allAtrib = atrib ?? [];
+
+        // Notificações in-app ao cancelar em lote
+        if (status === "cancelada") {
+          const notifs = allAtrib.map((a: { membro_id: string; escala_id: string }) => {
+            const escalaRef = escalas.find((e) => e.id === a.escala_id);
+            return {
+              paroquia_id: profile?.paroquia_id,
+              membro_id: a.membro_id,
+              titulo: `Escala cancelada: ${escalaRef?.titulo ?? ""}`,
+              mensagem: `A escala "${escalaRef?.titulo ?? ""}" do dia ${escalaRef?.data ?? ""} foi cancelada pela coordenação.`,
+              tipo: "aviso",
+              lida: false,
+              apenas_admin: false,
+              link_referencia: "/portal-membro/escalas",
+            };
+          });
+          if (notifs.length > 0) await (supabase as any).from("notificacoes").insert(notifs);
+        }
+
+        const template = status === "publicada" ? "escala_publicada" : "escala_cancelada";
         for (let i = 0; i < allAtrib.length; i++) {
           const a = allAtrib[i];
           const escalaRef = escalas.find((e) => e.id === a.escala_id);
@@ -764,7 +824,7 @@ function EscalasPage() {
           if (i > 0) await new Promise((r) => setTimeout(r, 400));
           supabase.functions.invoke("send-email", {
             body: {
-              template: "escala_publicada",
+              template,
               to: membro.email,
               nome: membro.nome,
               paroquia: paroquiaNome,
