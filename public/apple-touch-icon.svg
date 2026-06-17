@@ -1,28 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
-  <!-- Apple touch icon — sem arredondamento (iOS aplica automaticamente rx=40) -->
   <rect width="180" height="180" fill="#0f172a"/>
-
-  <!-- Chama exterior -->
-  <path d="M90 26 C75 44 59 56 54 77 C49 98 57 116 74 130 C69 122 66 112 68 102 C70 92 79 84 90 79 C101 84 110 92 112 102 C114 112 111 122 106 130 C123 116 131 98 126 77 C121 56 105 44 90 26Z"
-    fill="#f59e0b" opacity="0.3"/>
-
-  <!-- Chama principal -->
-  <path d="M90 33 C78 50 68 64 65 82 C62 100 70 117 90 131 C110 117 118 100 115 82 C112 64 102 50 90 33Z"
-    fill="#f59e0b"/>
-
-  <!-- Brilho interno -->
-  <path d="M90 49 C84 61 79 72 79 84 C79 98 84 108 90 113 C96 108 101 98 101 84 C101 72 96 61 90 49Z"
-    fill="#fde68a" opacity="0.55"/>
-
-  <!-- Cruz -->
-  <rect x="85.5" y="53" width="9" height="67" rx="4.5" fill="#0f172a"/>
-  <rect x="64"   y="81" width="52" height="9"  rx="4.5" fill="#0f172a"/>
-
-  <!-- Âncora: barra -->
-  <rect x="71" y="138" width="38" height="7" rx="3.5" fill="#f59e0b"/>
-  <!-- Âncora: haste -->
-  <line x1="90" y1="131" x2="90" y2="163" stroke="#f59e0b" stroke-width="6.5" stroke-linecap="round"/>
-  <!-- Âncora: ganchos -->
-  <path d="M71 142 Q62 148 62 157 Q63 164 71 165" fill="none" stroke="#f59e0b" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M109 142 Q118 148 118 157 Q117 164 109 165" fill="none" stroke="#f59e0b" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M90 22C75 48 56 60 56 82a34 34 0 0 0 68 0c0-22-19-34-34-60zm0 82a19 19 0 0 1-19-19c0-11 9-20 19-34 10 14 19 23 19 34a19 19 0 0 1-19 19z" fill="#f59e0b"/>
 </svg>
