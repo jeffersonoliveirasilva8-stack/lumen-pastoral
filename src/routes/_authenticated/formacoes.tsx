@@ -77,6 +77,7 @@ type EventoForm = {
   data_fim: string;
   local: string;
   obrigatorio: boolean;
+  pontuacao: number;
   observacoes: string;
   responsaveis_nomes: string;
   comunidade: string;
@@ -101,7 +102,7 @@ const TIPOS: { value: string; label: string; cor: string }[] = [
 const EMPTY_FORM: EventoForm = {
   titulo: "", descricao: "", tipo: "formacao",
   data_inicio: "", data_fim: "", local: "",
-  obrigatorio: false,
+  obrigatorio: false, pontuacao: 0,
   observacoes: "", responsaveis_nomes: "", comunidade: "", publico_alvo: "todos",
 };
 
@@ -148,15 +149,19 @@ function AgendaPastoralPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (form: EventoForm & { id?: string }) => {
+      // datetime-local value is local time without timezone — convert to UTC ISO string
+      // so Supabase (timestamptz) stores it correctly and displays right across timezones
+      const toUtcIso = (local: string) => local ? new Date(local).toISOString() : null;
       const payload: Record<string, unknown> = {
         paroquia_id: pid,
         titulo: form.titulo,
         descricao: form.descricao || null,
         tipo: form.tipo,
-        data_inicio: form.data_inicio,
-        data_fim: form.data_fim || null,
+        data_inicio: toUtcIso(form.data_inicio),
+        data_fim: toUtcIso(form.data_fim),
         local: form.local || null,
         obrigatorio: form.obrigatorio,
+        pontuacao: form.pontuacao ?? 0,
         observacoes: form.observacoes || null,
         responsaveis_nomes: form.responsaveis_nomes || null,
         comunidade: form.comunidade || null,
@@ -621,14 +626,21 @@ function EventoFormSheet({
   useEffect(() => {
     if (!open) return;
     if (initial) {
+      // Convert UTC ISO from DB back to local datetime string for datetime-local input
+      const toLocalInput = (iso: string | null) => {
+        if (!iso) return "";
+        const d = new Date(iso);
+        return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      };
       setForm({
         titulo: initial.titulo,
         descricao: initial.descricao ?? "",
         tipo: initial.tipo,
-        data_inicio: initial.data_inicio.slice(0, 16),
-        data_fim: initial.data_fim ? initial.data_fim.slice(0, 16) : "",
+        data_inicio: toLocalInput(initial.data_inicio),
+        data_fim: toLocalInput(initial.data_fim ?? null),
         local: initial.local ?? "",
         obrigatorio: initial.obrigatorio,
+        pontuacao: initial.pontuacao ?? 0,
         observacoes: initial.observacoes ?? "",
         responsaveis_nomes: initial.responsaveis_nomes ?? "",
         comunidade: initial.comunidade ?? "",
@@ -745,6 +757,23 @@ function EventoFormSheet({
                   value={form.data_fim}
                   onChange={(e) => f("data_fim", e.target.value)}
                 />
+              </div>
+            </div>
+
+            {/* Pontuação */}
+            <div className="space-y-1.5">
+              <Label>Pontuação por presença</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  className="w-32"
+                  value={form.pontuacao}
+                  onChange={(e) => f("pontuacao", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  placeholder="0"
+                />
+                <span className="text-sm text-muted-foreground">pontos</span>
               </div>
             </div>
 
