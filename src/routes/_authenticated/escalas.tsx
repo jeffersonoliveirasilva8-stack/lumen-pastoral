@@ -2998,6 +2998,7 @@ function EscalaDetail({
 }) {
   const [editMode, setEditMode] = useState(initialEditMode);
   const [escalaForm, setEscalaForm] = useState<EscalaForm>(EMPTY_FORM);
+  const [equilibrioOpen, setEquilibrioOpen] = useState(false);
 
   useEffect(() => {
     setEditMode(initialEditMode);
@@ -4171,10 +4172,8 @@ function EscalaDetail({
 
       {/* Equilíbrio de participação dos membros escalados */}
       {atribuicoes.length > 0 && (() => {
-        const [equilibrioOpen, setEquilibrioOpen] = useState(false);
         const mesesLabel = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
         const hoje = new Date();
-        // Últimos 6 meses como strings YYYY-MM
         const meses = Array.from({ length: 6 }, (_, i) => {
           const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
           return { key: d.toISOString().slice(0, 7), label: mesesLabel[d.getMonth()] };
