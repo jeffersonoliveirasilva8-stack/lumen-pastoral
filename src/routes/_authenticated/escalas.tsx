@@ -6,7 +6,7 @@ import {
   MapPin, Clock, Trash2, Pencil, UserPlus, X, Check, Sparkles,
   MoreVertical, FileText, AlertTriangle, Users, ClipboardCheck,
   CheckCircle2, XCircle, Church, Ban, RefreshCw, Activity,
-  TrendingUp, TrendingDown, Minus, ChevronUp,
+  TrendingUp, TrendingDown, Minus, ChevronUp, BarChart2, Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths, addDays } from "date-fns";
@@ -2974,6 +2974,10 @@ function EscalaDetail({
   const [showInsights, setShowInsights] = useState(false);
   const [showDebugMotor, setShowDebugMotor] = useState(false);
   const [debugInsights, setDebugInsights] = useState<import("@/lib/escala-engine").InsightFuncao[]>([]);
+  // Candidatos sugeridos por função (para o botão "Sugerir" por slot)
+  type CandidatoSlot = import("@/lib/escala-engine").InsightCandidato & { motivo_indisp?: string };
+  const [slotCandidatos, setSlotCandidatos] = useState<Record<string, CandidatoSlot[]>>({});
+  const [slotLoading, setSlotLoading] = useState<Record<string, boolean>>({});
 
   // ── Presença pós-missa ──────────────────────────────────────────────────────
   const hoje = format(new Date(), "yyyy-MM-dd");
@@ -3248,6 +3252,53 @@ function EscalaDetail({
     setGenerateNotice(null);
     setEngineInsights([]);
     setShowInsights(false);
+  }
+
+  function handleSugerirParaFuncao(funcao: EscalaFuncao) {
+    const minId = funcao.ministerio_id;
+    // Toggle: se já aberto, fecha
+    if (slotCandidatos[minId]) {
+      setSlotCandidatos((prev) => { const n = { ...prev }; delete n[minId]; return n; });
+      return;
+    }
+    setSlotLoading((prev) => ({ ...prev, [minId]: true }));
+
+    const regras = paroquiaConfig?.regras_escala ?? {};
+    const config = {
+      usa_tochas: paroquiaConfig?.usa_tochas ?? false,
+      limite_semanal: regras.limite_semanal ?? undefined,
+      limite_mensal: regras.limite_mensal ?? undefined,
+      impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? false,
+      prioridade_score: regras.prioridade_score ?? false,
+      distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
+      intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
+      variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
+    };
+
+    const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+    const resultado = generateEscalaWithAlertas(
+      { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
+      [{ ministerio_id: minId, quantidade: funcao.quantidade - atribuicoes.filter((a) => a.ministerio_id === minId).length, ministerio: { id: minId, nome: funcao.ministerio.nome, cor: funcao.ministerio.cor } }],
+      membrosComAtuacoes,
+      membroMinisterios,
+      {
+        history: assignmentHistory,
+        existingAssignments: atribuicoes.map((a) => ({ membro_id: a.membro_id, ministerio_id: a.ministerio_id })),
+        indisponibilidades,
+        restricoes: funcaoRestricoes,
+        config,
+        solene: escala.solene,
+        tem_adoracao: escala.tem_adoracao,
+        tem_bispo: escala.tem_bispo,
+      }
+    );
+
+    const insight = resultado.insights.find((i) => i.ministerio_id === minId);
+    // Pega os top candidatos avaliados (escolhidos + não escolhidos), até 7
+    const todos = insight ? [...insight.escolhidos, ...insight.top_candidatos.filter((c) => !c.escolhido)].slice(0, 7) : [];
+
+    setSlotCandidatos((prev) => ({ ...prev, [minId]: todos }));
+    setSlotLoading((prev) => ({ ...prev, [minId]: false }));
   }
 
   function handleDebugMotor() {
@@ -3585,12 +3636,30 @@ function EscalaDetail({
                             <Check className="h-3.5 w-3.5 text-green-600 shrink-0" />
                           )}
                         </div>
-                        <button
-                          className="shrink-0 text-muted-foreground hover:text-destructive transition"
-                          onClick={() => onRemoveFuncao(f.id)}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {atrib.length < f.quantidade && (
+                            <button
+                              type="button"
+                              className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition font-medium ${
+                                slotCandidatos[f.ministerio_id]
+                                  ? "border-primary/40 bg-primary/10 text-primary"
+                                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5"
+                              }`}
+                              onClick={() => handleSugerirParaFuncao(f)}
+                            >
+                              {slotLoading[f.ministerio_id]
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <Sparkles className="h-3 w-3" />}
+                              {slotCandidatos[f.ministerio_id] ? "Fechar" : "Sugerir"}
+                            </button>
+                          )}
+                          <button
+                            className="text-muted-foreground hover:text-destructive transition p-0.5"
+                            onClick={() => onRemoveFuncao(f.id)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="px-3 py-2 space-y-1.5">
 
@@ -3701,6 +3770,79 @@ function EscalaDetail({
                         );
                       })()}
                       </div>
+
+                      {/* ── Painel de candidatos sugeridos para esta função ── */}
+                      {slotCandidatos[f.ministerio_id] && (
+                        <div className="border-t border-border/50 bg-muted/10">
+                          <div className="px-3 py-2 space-y-1.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              Candidatos recomendados pelo motor
+                            </p>
+                            {slotCandidatos[f.ministerio_id].length === 0 ? (
+                              <p className="text-xs text-muted-foreground py-1">Nenhum candidato disponível para esta função.</p>
+                            ) : (
+                              slotCandidatos[f.ministerio_id].map((c) => {
+                                const jaAtrib = atribuicoes.some((a) => a.membro_id === c.membro_id && a.ministerio_id === f.ministerio_id);
+                                return (
+                                  <div
+                                    key={c.membro_id}
+                                    className={`flex items-center gap-2 rounded-lg px-2.5 py-2 transition-colors ${
+                                      c.escolhido
+                                        ? "bg-primary/8 border border-primary/20"
+                                        : "bg-background border border-border/60"
+                                    }`}
+                                  >
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        {c.escolhido && <Star className="h-3 w-3 text-primary shrink-0" />}
+                                        <span className="text-xs font-semibold truncate">{nomeExibicao(c.nome)}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {c.dias_sem_servir >= 365 ? "Nunca serviu" : `${c.dias_sem_servir}d sem servir`}
+                                        </span>
+                                        {c.participacoes_30d > 0 && (
+                                          <span className="text-[10px] text-muted-foreground">
+                                            · {c.participacoes_30d}× no mês
+                                          </span>
+                                        )}
+                                        {c.motivo_exclusao && (
+                                          <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                            · {c.motivo_exclusao}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {/* Mini score bar */}
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full ${c.score_final >= 70 ? "bg-green-500" : c.score_final >= 40 ? "bg-amber-400" : "bg-red-400"}`}
+                                          style={{ width: `${c.score_final}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-[10px] text-muted-foreground tabular-nums w-6 text-right">{Math.round(c.score_final)}</span>
+                                      {!jaAtrib && (
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-6 px-2 text-[11px] text-primary hover:bg-primary/10"
+                                          onClick={() => {
+                                            onAtribuir(c.membro_id, f.ministerio_id);
+                                            setSlotCandidatos((prev) => { const n = { ...prev }; delete n[f.ministerio_id]; return n; });
+                                          }}
+                                        >
+                                          <UserPlus className="h-3 w-3 mr-0.5" /> Add
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -3906,6 +4048,71 @@ function EscalaDetail({
           </div>
         ) : null}
       </div>
+
+      {/* Equilíbrio de participação dos membros escalados */}
+      {atribuicoes.length > 0 && (() => {
+        const [equilibrioOpen, setEquilibrioOpen] = useState(false);
+        const mesesLabel = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+        const hoje = new Date();
+        // Últimos 6 meses como strings YYYY-MM
+        const meses = Array.from({ length: 6 }, (_, i) => {
+          const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
+          return { key: d.toISOString().slice(0, 7), label: mesesLabel[d.getMonth()] };
+        });
+        const membrosEscalados = atribuicoes.map((a) => {
+          const contagens = meses.map((m) => ({
+            ...m,
+            count: assignmentHistory.filter((h) => h.memberId === a.membro_id && (h.date ?? "").startsWith(m.key)).length,
+          }));
+          const max = Math.max(...contagens.map((c) => c.count), 1);
+          return { id: a.membro_id, nome: a.membro.nome, contagens, max, total: contagens.reduce((s, c) => s + c.count, 0) };
+        }).sort((a, b) => b.total - a.total);
+
+        return (
+          <div className="rounded-xl border border-border overflow-hidden">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition text-left"
+              onClick={() => setEquilibrioOpen((v) => !v)}
+            >
+              <div className="flex items-center gap-2">
+                <BarChart2 className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">Equilíbrio de participação</span>
+                <span className="text-xs text-muted-foreground">(6 meses)</span>
+              </div>
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${equilibrioOpen ? "rotate-180" : ""}`} />
+            </button>
+            {equilibrioOpen && (
+              <div className="px-4 py-3 space-y-3">
+                <p className="text-xs text-muted-foreground">Número de escalações por membro nos últimos 6 meses.</p>
+                {membrosEscalados.map((m) => (
+                  <div key={m.id} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium truncate">{nomeExibicao(m.nome)}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">{m.total}× total</span>
+                    </div>
+                    <div className="flex items-end gap-0.5 h-8">
+                      {m.contagens.map((c) => (
+                        <div key={c.key} className="flex-1 flex flex-col items-center gap-0.5">
+                          <div className="w-full rounded-t-sm relative" style={{ height: `${c.count > 0 ? Math.max(4, Math.round((c.count / m.max) * 24)) : 2}px`, background: c.count > 0 ? "hsl(var(--primary))" : "hsl(var(--muted))", opacity: c.count > 0 ? 0.7 + (c.count / m.max) * 0.3 : 1 }} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-0.5">
+                      {m.contagens.map((c) => (
+                        <div key={c.key} className="flex-1 text-center text-[9px] text-muted-foreground/60">{c.label}</div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {membrosEscalados.every((m) => m.total === 0) && (
+                  <p className="text-xs text-muted-foreground">Nenhum histórico de escalações encontrado.</p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Registrar presenças — visível para escalas de hoje ou passadas */}
       {isPastOrToday && atribuicoes.length > 0 && (
