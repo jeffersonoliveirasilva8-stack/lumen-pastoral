@@ -1136,18 +1136,19 @@ function EscalasPage() {
 
       return `<div class="ec">
   <div class="eh">
-    <div>
+    <div class="eh-accent"></div>
+    <div class="eh-content">
       <div class="eh-day">${diaSemana.toUpperCase()}</div>
       <div class="eh-title">${e.titulo}</div>
       <div class="eh-date">${dataCompleta}</div>
-      ${e.hora_inicio ? `<div class="eh-time">Missa às ${e.hora_inicio.slice(0, 5)}${e.hora_fim ? ` – ${e.hora_fim.slice(0, 5)}` : ""}${e.local ? ` · ${e.local}` : ""}</div>` : ""}
+      ${e.hora_inicio ? `<div class="eh-time">⏰ ${e.hora_inicio.slice(0, 5)}${e.hora_fim ? ` – ${e.hora_fim.slice(0, 5)}` : ""}${e.local ? ` &nbsp;·&nbsp; ${e.local}` : ""}</div>` : ""}
     </div>
-    <div class="eh-badges">
-      ${e.solene ? `<span class="b-solene">Solene</span>` : ""}
-      <span class="b-status s-${e.status}">${STATUS_CONFIG[e.status]?.label ?? e.status}</span>
+    <div class="eh-badges-wrap">
+      ${e.solene ? `<span class="badge b-solene">✦ Solene</span>` : ""}
+      <span class="badge s-${e.status}">${STATUS_CONFIG[e.status]?.label ?? e.status}</span>
     </div>
   </div>
-  ${e.observacoes ? `<div class="obs">${e.observacoes}</div>` : ""}
+  ${e.observacoes ? `<div class="obs"><span class="obs-icon">ℹ</span>${e.observacoes}</div>` : ""}
   ${funcoesHtml}
 </div>`;
     }).join("\n");
@@ -1158,57 +1159,112 @@ function EscalasPage() {
 <meta charset="UTF-8">
 <title>Escalas — ${nomeParoquia}</title>
 <style>
-@page{margin:1.8cm 1.5cm}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@page{margin:2cm 1.8cm}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#fff;color:#111827;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.doc-cabecalho{width:100%;display:block}
-.doc-header-text{background:#1a1a2e;color:#fff;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.doc-header-text .nome{font-size:16px;font-weight:800;letter-spacing:.02em}
-.doc-header-text .diocese{font-size:10px;color:rgba(255,255,255,.55);margin-top:3px}
-.periodo-bar{background:#111827;color:#f59e0b;text-align:center;padding:10px 24px;font-size:13px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;border-top:2px solid rgba(245,158,11,.4)}
-.doc-emit{text-align:right;padding:6px 28px 0;font-size:10px;color:#9ca3af}
-.content{padding:16px 0 24px}
-.ec{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;page-break-inside:avoid;margin-bottom:16px}
-.eh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:#1a1a2e;color:#fff;padding:12px 18px}
-.eh-day{font-size:9px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:#f59e0b;margin-bottom:3px}
-.eh-title{font-size:14px;font-weight:700;line-height:1.3;margin-bottom:2px}
-.eh-date{font-size:10px;color:rgba(255,255,255,.5);text-transform:capitalize}
-.eh-time{margin-top:6px;display:inline-block;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#fbbf24;border-radius:4px;padding:2px 9px;font-size:9.5px;font-weight:700;letter-spacing:.04em}
-.eh-badges{display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;padding-top:2px}
-.b-status{padding:2px 9px;border-radius:99px;font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#fff;color:#1e293b;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact;line-height:1.5}
+
+/* ── Cabeçalho ── */
+.doc-cabecalho{width:100%;display:block;margin-bottom:0}
+.doc-header-text{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);color:#fff;padding:22px 32px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.doc-header-left{display:flex;align-items:center;gap:16px}
+.doc-header-icon{width:42px;height:42px;background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.35);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;line-height:1}
+.doc-header-text .nome{font-size:18px;font-weight:800;letter-spacing:-.01em;line-height:1.2}
+.doc-header-text .subtitle{font-size:10px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:.06em;text-transform:uppercase;font-weight:500}
+.doc-header-right{text-align:right;flex-shrink:0}
+.doc-header-right .periodo-label{font-size:9px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px}
+.doc-header-right .periodo-val{font-size:14px;font-weight:800;color:#f59e0b;letter-spacing:.05em}
+
+/* ── Barra de metadados ── */
+.meta-bar{background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:6px 32px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.meta-bar .count{font-size:10px;color:#64748b;font-weight:600}
+.meta-bar .emit{font-size:10px;color:#94a3b8}
+.meta-sep{width:1px;height:12px;background:#e2e8f0}
+
+/* ── Área de conteúdo ── */
+.content{padding:20px 0 32px}
+
+/* ── Card de escala ── */
+.ec{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;page-break-inside:avoid;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+
+/* ── Cabeçalho do card ── */
+.eh{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:14px 20px;position:relative;overflow:hidden}
+.eh::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,#0f172a 0%,#1a3050 60%,#1e3a5f 100%)}
+.eh-accent{position:absolute;top:0;left:0;bottom:0;width:4px;background:linear-gradient(180deg,#f59e0b,#d97706)}
+.eh-content{position:relative;z-index:1;flex:1;min-width:0}
+.eh-badges-wrap{position:relative;z-index:1;display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;padding-top:1px}
+.eh-day{font-size:8.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#f59e0b;margin-bottom:4px}
+.eh-title{font-size:15px;font-weight:700;line-height:1.25;color:#fff;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eh-date{font-size:10px;color:rgba(255,255,255,.45);text-transform:capitalize;letter-spacing:.01em}
+.eh-time{margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:#fbbf24;border-radius:5px;padding:3px 10px;font-size:9px;font-weight:700;letter-spacing:.05em}
+
+/* ── Badges ── */
+.badge{padding:3px 10px;border-radius:99px;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;line-height:1.4}
 .s-publicada{background:#d1fae5;color:#065f46}
-.s-rascunho{background:rgba(255,255,255,.15);color:rgba(255,255,255,.75)}
-.s-arquivada{background:rgba(255,255,255,.08);color:rgba(255,255,255,.4)}
-.b-solene{background:#fef3c7;color:#92400e;border-radius:99px;padding:2px 9px;font-size:8.5px;font-weight:700}
-.obs{padding:7px 18px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:10.5px;color:#78350f;font-style:italic;line-height:1.5}
-.cat-label{padding:5px 18px;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:#94a3b8}
+.s-rascunho{background:rgba(255,255,255,.12);color:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.15)}
+.s-arquivada{background:rgba(255,255,255,.07);color:rgba(255,255,255,.35);border:1px solid rgba(255,255,255,.1)}
+.b-solene{background:rgba(245,158,11,.18);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+
+/* ── Observação ── */
+.obs{display:flex;align-items:flex-start;gap:8px;padding:9px 20px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:10.5px;color:#78350f;line-height:1.55}
+.obs-icon{flex-shrink:0;margin-top:1px;opacity:.6;font-size:11px}
+
+/* ── Categoria ── */
+.cat-label{padding:6px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;font-size:7.5px;font-weight:800;text-transform:uppercase;letter-spacing:.22em;color:#94a3b8;display:flex;align-items:center;gap:6px}
+.cat-label::before{content:'';display:inline-block;width:12px;height:1.5px;background:#cbd5e1;flex-shrink:0}
+
+/* ── Tabela de funções ── */
 .ft{width:100%;border-collapse:collapse}
-.ft tr+tr td{border-top:1px solid #f1f5f9}
-.ft td{padding:7px 14px;font-size:11.5px;vertical-align:middle}
-.td-f{color:#64748b;font-weight:600;background:#f8fafc;width:26%;border-right:1px solid #e2e8f0;white-space:nowrap}
-.td-f2{border-left:2px solid #e2e8f0}
-.td-m{color:#111827;font-weight:700}
-.td-m.vaga{color:#cbd5e1;font-weight:400;font-style:italic}
-.sem-funcoes{padding:12px 18px;font-size:11px;color:#9ca3af;font-style:italic}
+.ft tr:not(:last-child) td{border-bottom:1px solid #f1f5f9}
+.ft tr:nth-child(even) td{background:#fafbfc}
+.ft td{padding:7px 16px;font-size:11px;vertical-align:middle}
+.td-f{color:#475569;font-weight:600;width:24%;border-right:1px solid #e8edf2;white-space:nowrap;font-size:10.5px;letter-spacing:.01em}
+.td-f2{border-left:2px solid #e8edf2;border-right:1px solid #e8edf2}
+.td-m{color:#0f172a;font-weight:600;font-size:11.5px}
+.td-m.vaga{color:#c1ccd8;font-weight:400;font-style:italic;font-size:10.5px}
+.sem-funcoes{padding:14px 20px;font-size:11px;color:#94a3b8;font-style:italic;text-align:center}
+
+/* ── Rodapé ── */
 .doc-rodape{display:none}
+.doc-footer-default{margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:9px;color:#cbd5e1}
+
 @media print{
-  @page{margin:1.5cm 1.2cm}
-  .doc-rodape{display:block;width:100%;page-break-inside:avoid;margin-top:24px}
+  @page{margin:1.6cm 1.5cm}
+  body{font-size:11.5px}
+  .doc-footer-default{display:none}
+  .doc-rodape{display:block;width:100%;page-break-inside:avoid;margin-top:28px}
   .doc-rodape img{width:100%;display:block}
-  .ec{margin-bottom:12px}
+  .ec{margin-bottom:14px}
 }
 </style>
 </head>
 <body>
 ${cabecalhoUrl
   ? `<img class="doc-cabecalho" src="${cabecalhoUrl}" alt="">`
-  : `<div class="doc-header-text"><div><div class="nome">${nomeParoquia}</div><div class="diocese">Pastoral Litúrgica</div></div></div>`}
-<div class="periodo-bar">ESCALA ${periodoTitle}</div>
-<div class="doc-emit">${selected.length} escala${selected.length !== 1 ? "s" : ""} · Emitido em ${hoje}</div>
+  : `<div class="doc-header-text">
+      <div class="doc-header-left">
+        <div class="doc-header-icon">✦</div>
+        <div>
+          <div class="nome">${nomeParoquia}</div>
+          <div class="subtitle">Pastoral Litúrgica · Escalas de Serviço</div>
+        </div>
+      </div>
+      <div class="doc-header-right">
+        <div class="periodo-label">Período</div>
+        <div class="periodo-val">ESCALA ${periodoTitle}</div>
+      </div>
+    </div>`}
+<div class="meta-bar">
+  <span class="count">${selected.length} escala${selected.length !== 1 ? "s" : ""} selecionada${selected.length !== 1 ? "s" : ""}</span>
+  <div class="meta-sep"></div>
+  <span class="emit">Emitido em ${hoje}</span>
+</div>
 <div class="content">
 ${escalasSections}
 </div>
-${rodapeUrl ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>` : ""}
+${rodapeUrl
+  ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>`
+  : `<div class="doc-footer-default"><span>${nomeParoquia} · Pastoral Litúrgica</span><span>Emitido em ${hoje}</span></div>`}
 </body></html>`;
 
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
