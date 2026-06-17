@@ -289,6 +289,21 @@ function PortalMembroHome() {
     },
   });
 
+  const { data: confirmacaoAtiva = false } = useQuery<boolean>({
+    queryKey: ["pm-config-confirmacao", membro?.paroquia_id],
+    enabled: !!membro?.paroquia_id,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("paroquias")
+        .select("regras_escala")
+        .eq("id", membro!.paroquia_id)
+        .single();
+      const regras = (data?.regras_escala as Record<string, unknown>) ?? {};
+      return (regras.confirmacao_escala_ativa as boolean) ?? false;
+    },
+  });
+
   const confirmarMutation = useMutation({
     mutationFn: async (escala_membro_id: string) => {
       const { error } = await anyDb
@@ -431,6 +446,7 @@ function PortalMembroHome() {
             esc={nextEscala}
             onConfirmar={(id) => confirmarMutation.mutate(id)}
             confirming={confirmarMutation.isPending}
+            confirmacaoAtiva={confirmacaoAtiva}
           />
         )}
       </section>
@@ -742,10 +758,11 @@ function PortalMembroHome() {
 
 // ── NextEscalaHero ────────────────────────────────────────────────────
 
-function NextEscalaHero({ esc, onConfirmar, confirming }: {
+function NextEscalaHero({ esc, onConfirmar, confirming, confirmacaoAtiva }: {
   esc: EscalaItem;
   onConfirmar: (id: string) => void;
   confirming: boolean;
+  confirmacaoAtiva: boolean;
 }) {
   const date = new Date(esc.data + "T12:00:00");
   // Diferença em dias calendário (midnight vs midnight — evita imprecisão por horário)
@@ -836,8 +853,8 @@ function NextEscalaHero({ esc, onConfirmar, confirming }: {
           )}
         </div>
 
-        {/* ── Ações de resposta (só aparece quando pendente) ── */}
-        {isPendente && (
+        {/* ── Ações de resposta (só aparece quando pendente E confirmação ativa) ── */}
+        {isPendente && confirmacaoAtiva && (
           <div className="mt-4 pt-3 border-t flex gap-2" style={{ borderColor: esc.ministerio_cor + "30" }}>
             <button
               type="button"
