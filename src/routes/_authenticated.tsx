@@ -40,7 +40,8 @@ const LITURGICAL_SEASON_LABEL: Record<string, string> = {
 // Mapeia qualquer rota para o módulo principal correspondente
 function getActiveModule(pathname: string): string {
   if (pathname.startsWith("/escalas") || pathname.startsWith("/substituicoes") || pathname.startsWith("/sacristia") || pathname.startsWith("/relatorios")) return "/escalas";
-  if (pathname.startsWith("/membros") || pathname.startsWith("/ranking")) return "/membros";
+  if (pathname.startsWith("/membros")) return "/membros";
+  if (pathname.startsWith("/ranking")) return "/ranking";
   if (pathname.startsWith("/ocorrencias")) return "/formacoes";
   if (pathname.startsWith("/espiritualidade")) return "/espiritualidade";
   if (pathname.startsWith("/formacoes")) return "/formacoes";

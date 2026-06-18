@@ -153,16 +153,17 @@ function PortalMembroSubstituicoes() {
         `)
         .eq("membro_id", membro!.id)
         .eq("escalas.status", "publicada")
-        .gte("escalas.data", new Date().toISOString().slice(0, 10))
-        .order("escalas.data", { ascending: true });
+        .gte("escalas.data", new Date().toISOString().slice(0, 10));
       if (error) throw error;
-      return (data ?? []).map((row: any) => ({
-        escala_membro_id: row.id,
-        escala_titulo: row.escalas?.titulo ?? "—",
-        escala_data: row.escalas?.data ?? "",
-        ministerio_nome: row.ministerios?.nome ?? "—",
-        ministerio_cor: row.ministerios?.cor ?? "#6B7280",
-      }));
+      return ((data ?? []) as any[])
+        .map((row: any) => ({
+          escala_membro_id: row.id,
+          escala_titulo: row.escalas?.titulo ?? "—",
+          escala_data: row.escalas?.data ?? "",
+          ministerio_nome: row.ministerios?.nome ?? "—",
+          ministerio_cor: row.ministerios?.cor ?? "#6B7280",
+        }))
+        .sort((a, b) => a.escala_data.localeCompare(b.escala_data));
     },
   });
 
