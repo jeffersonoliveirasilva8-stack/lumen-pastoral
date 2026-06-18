@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+﻿import { createFileRoute } from "@tanstack/react-router";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -7,6 +7,8 @@ import {
   Plus, Pencil, Trash2, Loader2, CalendarRange, MapPin,
   Users, CheckCircle2, XCircle, ChevronDown, ChevronUp, Clock,
   UserCheck, Search, Mail, X as XIcon,
+  BookOpen, Link2, FileText, Video, ClipboardList, Eye, EyeOff,
+  GripVertical, PlusCircle,
 } from "lucide-react";
 import { format, parseISO, isPast } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -36,10 +38,10 @@ const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/formacoes")({
   component: AgendaPastoralPage,
-  head: () => ({ meta: [{ title: "Agenda Pastoral — Lumen Pastoral" }] }),
+  head: () => ({ meta: [{ title: "Agenda Pastoral â€” Lumen Pastoral" }] }),
 });
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Evento = {
   id: string;
@@ -85,17 +87,17 @@ type EventoForm = {
   publico_alvo: string;
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const TIPOS: { value: string; label: string; cor: string }[] = [
-  { value: "formacao",    label: "Formação",             cor: "bg-blue-500/10 text-blue-700 border-blue-200" },
-  { value: "reuniao",     label: "Reunião",              cor: "bg-slate-500/10 text-slate-700 border-slate-200" },
+  { value: "formacao",    label: "FormaÃ§Ã£o",             cor: "bg-blue-500/10 text-blue-700 border-blue-200" },
+  { value: "reuniao",     label: "ReuniÃ£o",              cor: "bg-slate-500/10 text-slate-700 border-slate-200" },
   { value: "retiro",      label: "Retiro",               cor: "bg-purple-500/10 text-purple-700 border-purple-200" },
   { value: "ensaio",      label: "Ensaio",               cor: "bg-green-500/10 text-green-700 border-green-200" },
   { value: "evento",      label: "Evento",               cor: "bg-amber-500/10 text-amber-700 border-amber-200" },
   { value: "encontro",    label: "Encontro",             cor: "bg-cyan-500/10 text-cyan-700 border-cyan-200" },
   { value: "compromisso", label: "Compromisso Pastoral", cor: "bg-rose-500/10 text-rose-700 border-rose-200" },
-  { value: "adoracao",    label: "Adoração",             cor: "bg-yellow-500/10 text-yellow-700 border-yellow-200" },
+  { value: "adoracao",    label: "AdoraÃ§Ã£o",             cor: "bg-yellow-500/10 text-yellow-700 border-yellow-200" },
   { value: "outro",       label: "Outro",                cor: "bg-gray-500/10 text-gray-700 border-gray-200" },
 ];
 
@@ -107,7 +109,7 @@ const EMPTY_FORM: EventoForm = {
   observacoes: "", responsaveis_nomes: "", comunidade: "", publico_alvo: "todos",
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function tipoBadge(tipo: string) {
   const t = TIPOS.find((x) => x.value === tipo);
@@ -118,7 +120,520 @@ function tipoBadge(tipo: string) {
   );
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+// â”€â”€ FormaÃ§Ãµes: tipos e constantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+type Material = {
+  id: string;
+  titulo: string;
+  tipo: "pauta" | "documento" | "video" | "artigo" | "link";
+  descricao: string | null;
+  url: string | null;
+  conteudo: string | null;
+  itens: { texto: string; concluido: boolean }[] | null;
+  data_reuniao: string | null;
+  publicado: boolean;
+  ordem: number;
+  created_at: string;
+};
+
+type MaterialForm = {
+  titulo: string;
+  tipo: Material["tipo"];
+  descricao: string;
+  url: string;
+  conteudo: string;
+  itens: { texto: string; concluido: boolean }[];
+  data_reuniao: string;
+  publicado: boolean;
+};
+
+const MATERIAL_TIPOS: { value: Material["tipo"]; label: string; icon: React.ReactNode; cor: string }[] = [
+  { value: "pauta",     label: "Pauta de ReuniÃ£o", icon: <ClipboardList className="h-4 w-4" />, cor: "bg-slate-500/10 text-slate-700 border-slate-200 dark:text-slate-300 dark:border-slate-700" },
+  { value: "documento", label: "Documento / PDF",  icon: <FileText      className="h-4 w-4" />, cor: "bg-red-500/10 text-red-700 border-red-200 dark:text-red-400 dark:border-red-800"           },
+  { value: "video",     label: "VÃ­deo",            icon: <Video         className="h-4 w-4" />, cor: "bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-400 dark:border-blue-800"       },
+  { value: "artigo",    label: "Artigo / Texto",   icon: <BookOpen      className="h-4 w-4" />, cor: "bg-green-500/10 text-green-700 border-green-200 dark:text-green-400 dark:border-green-800"  },
+  { value: "link",      label: "Link Externo",     icon: <Link2         className="h-4 w-4" />, cor: "bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-400 dark:border-purple-800" },
+];
+
+const MATERIAL_EMPTY: MaterialForm = {
+  titulo: "", tipo: "pauta", descricao: "", url: "", conteudo: "",
+  itens: [{ texto: "", concluido: false }], data_reuniao: "", publicado: false,
+};
+
+function tipoInfo(tipo: Material["tipo"]) {
+  return MATERIAL_TIPOS.find((t) => t.value === tipo) ?? MATERIAL_TIPOS[0];
+}
+
+function MateriaisSection({ paroquiaId }: { paroquiaId: string }) {
+  const qc = useQueryClient();
+  const [sheetOpen, setSheetOpen]       = useState(false);
+  const [editTarget, setEditTarget]     = useState<Material | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
+  const [filtroTipo, setFiltroTipo]     = useState<string>("todos");
+
+  const { data: materiais = [], isLoading } = useQuery<Material[]>({
+    queryKey: ["formacoes_materiais", paroquiaId],
+    enabled: !!paroquiaId,
+    queryFn: async () => {
+      const { data, error } = await anyDb
+        .from("formacoes_materiais")
+        .select("*")
+        .eq("paroquia_id", paroquiaId)
+        .order("data_reuniao", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Material[];
+    },
+  });
+
+  const saveMut = useMutation({
+    mutationFn: async (form: MaterialForm & { id?: string }) => {
+      const payload = {
+        paroquia_id: paroquiaId,
+        titulo: form.titulo.trim(),
+        tipo: form.tipo,
+        descricao: form.descricao.trim() || null,
+        url: form.url.trim() || null,
+        conteudo: form.conteudo.trim() || null,
+        itens: form.tipo === "pauta" ? form.itens.filter((i) => i.texto.trim()) : null,
+        data_reuniao: form.tipo === "pauta" && form.data_reuniao ? form.data_reuniao : null,
+        publicado: form.publicado,
+      };
+      if (form.id) {
+        const { error } = await anyDb.from("formacoes_materiais").update(payload).eq("id", form.id);
+        if (error) throw error;
+      } else {
+        const { error } = await anyDb.from("formacoes_materiais").insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["formacoes_materiais", paroquiaId] });
+      toast.success(editTarget ? "Material atualizado." : "Material adicionado.");
+      setSheetOpen(false); setEditTarget(null);
+    },
+    onError: (e: unknown) => toast.error((e as Error).message),
+  });
+
+  const togglePublicado = useMutation({
+    mutationFn: async ({ id, publicado }: { id: string; publicado: boolean }) => {
+      const { error } = await anyDb.from("formacoes_materiais").update({ publicado }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["formacoes_materiais", paroquiaId] }),
+    onError: (e: unknown) => toast.error((e as Error).message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await anyDb.from("formacoes_materiais").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["formacoes_materiais", paroquiaId] });
+      toast.success("Removido."); setDeleteTarget(null);
+    },
+    onError: (e: unknown) => toast.error((e as Error).message),
+  });
+
+  const filtered = filtroTipo === "todos" ? materiais : materiais.filter((m) => m.tipo === filtroTipo);
+
+  function openNew() { setEditTarget(null); setSheetOpen(true); }
+  function openEdit(m: Material) { setEditTarget(m); setSheetOpen(true); }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="font-serif text-2xl sm:text-3xl">FormaÃ§Ãµes e Pautas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Pautas de reuniÃ£o, materiais formativos e conteÃºdo para os membros.
+          </p>
+        </div>
+        <Button size="sm" className="rounded-xl shrink-0" onClick={openNew}>
+          <Plus className="h-3.5 w-3.5" /> Adicionar
+        </Button>
+      </div>
+
+      <div className="flex gap-1.5 flex-wrap">
+        {[{ value: "todos", label: "Todos" }, ...MATERIAL_TIPOS.map((t) => ({ value: t.value, label: t.label }))].map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => setFiltroTipo(f.value)}
+            className={`text-xs px-3 py-1.5 rounded-xl border font-medium transition-all ${
+              filtroTipo === f.value
+                ? "bg-foreground text-background border-foreground"
+                : "bg-transparent text-muted-foreground border-border/50 hover:border-border hover:text-foreground"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border p-14 text-center">
+          <BookOpen className="h-9 w-9 mx-auto text-muted-foreground/30 mb-3" />
+          <p className="font-medium text-foreground/70">Nenhum material ainda</p>
+          <p className="text-sm text-muted-foreground mt-1 mb-4">
+            Adicione pautas de reuniÃ£o, documentos ou vÃ­deos formativos.
+          </p>
+          <Button size="sm" variant="outline" className="rounded-xl" onClick={openNew}>
+            <Plus className="h-3.5 w-3.5" /> Adicionar primeiro material
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {filtered.map((m) => (
+            <MaterialCard
+              key={m.id}
+              material={m}
+              onEdit={() => openEdit(m)}
+              onDelete={() => setDeleteTarget(m)}
+              onTogglePublicado={(pub) => togglePublicado.mutate({ id: m.id, publicado: pub })}
+            />
+          ))}
+        </div>
+      )}
+
+      <MaterialSheet
+        open={sheetOpen}
+        initial={editTarget}
+        saving={saveMut.isPending}
+        onClose={() => { setSheetOpen(false); setEditTarget(null); }}
+        onSave={(form) => saveMut.mutate(editTarget ? { ...form, id: editTarget.id } : form)}
+      />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover material?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deleteTarget?.titulo}" serÃ¡ excluÃ­do permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+            >
+              {deleteMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remover"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function MaterialCard({
+  material: m, onEdit, onDelete, onTogglePublicado,
+}: {
+  material: Material;
+  onEdit: () => void;
+  onDelete: () => void;
+  onTogglePublicado: (pub: boolean) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const info = tipoInfo(m.tipo);
+
+  return (
+    <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 border ${info.cor}`}>
+          {info.icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold leading-tight truncate">{m.titulo}</p>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-semibold shrink-0 ${info.cor}`}>
+              {info.label}
+            </span>
+          </div>
+          {m.tipo === "pauta" && m.data_reuniao && (
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {format(new Date(m.data_reuniao + "T12:00:00"), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+            </p>
+          )}
+          {m.tipo !== "pauta" && m.descricao && (
+            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{m.descricao}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            title={m.publicado ? "Publicado â€” clique para ocultar" : "Rascunho â€” clique para publicar"}
+            onClick={() => onTogglePublicado(!m.publicado)}
+            className={`h-7 w-7 rounded-lg flex items-center justify-center transition-colors ${
+              m.publicado ? "text-green-600 hover:bg-green-50" : "text-muted-foreground/40 hover:bg-muted"
+            }`}
+          >
+            {m.publicado ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          </button>
+          {m.url && (
+            <a
+              href={m.url} target="_blank" rel="noopener noreferrer"
+              className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+              title="Abrir link"
+            >
+              <Link2 className="h-3.5 w-3.5" />
+            </a>
+          )}
+          {(m.tipo === "pauta" || m.conteudo || (m.itens && m.itens.length > 0)) && (
+            <button
+              type="button"
+              onClick={() => setExpanded((p) => !p)}
+              className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+            >
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          <button
+            type="button" onClick={onEdit}
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button" onClick={onDelete}
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted/80 hover:text-destructive transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="border-t border-border/50 px-4 py-4 bg-muted/20">
+          {m.tipo === "pauta" && m.itens && m.itens.length > 0 && (
+            <ul className="space-y-1.5">
+              {m.itens.map((item, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <span className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                    item.concluido ? "bg-green-500 border-green-500 text-white" : "border-border"
+                  }`}>
+                    {item.concluido ? "âœ“" : ""}
+                  </span>
+                  <span className={item.concluido ? "line-through text-muted-foreground" : ""}>{item.texto}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {m.tipo === "artigo" && m.conteudo && (
+            <p className="text-sm text-foreground/80 whitespace-pre-line leading-relaxed">{m.conteudo}</p>
+          )}
+          {m.tipo !== "pauta" && m.tipo !== "artigo" && m.descricao && (
+            <p className="text-sm text-foreground/80 leading-relaxed">{m.descricao}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MaterialSheet({
+  open, initial, saving, onClose, onSave,
+}: {
+  open: boolean;
+  initial: Material | null;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (form: MaterialForm) => void;
+}) {
+  const [form, setForm] = useState<MaterialForm>(MATERIAL_EMPTY);
+
+  useEffect(() => {
+    if (open) {
+      setForm(initial
+        ? {
+            titulo:       initial.titulo,
+            tipo:         initial.tipo,
+            descricao:    initial.descricao ?? "",
+            url:          initial.url ?? "",
+            conteudo:     initial.conteudo ?? "",
+            itens:        initial.itens ?? [{ texto: "", concluido: false }],
+            data_reuniao: initial.data_reuniao ?? "",
+            publicado:    initial.publicado,
+          }
+        : MATERIAL_EMPTY
+      );
+    }
+  }, [open, initial]);
+
+  function set<K extends keyof MaterialForm>(k: K, v: MaterialForm[K]) {
+    setForm((p) => ({ ...p, [k]: v }));
+  }
+
+  function addItem() { set("itens", [...form.itens, { texto: "", concluido: false }]); }
+  function removeItem(i: number) { set("itens", form.itens.filter((_, j) => j !== i)); }
+  function updateItem(i: number, texto: string) {
+    set("itens", form.itens.map((it, j) => j === i ? { ...it, texto } : it));
+  }
+  function toggleItem(i: number) {
+    set("itens", form.itens.map((it, j) => j === i ? { ...it, concluido: !it.concluido } : it));
+  }
+
+  function handleSave() {
+    if (!form.titulo.trim()) { toast.error("TÃ­tulo obrigatÃ³rio."); return; }
+    if (form.tipo === "pauta" && !form.data_reuniao) { toast.error("Informe a data da reuniÃ£o."); return; }
+    onSave(form);
+  }
+
+  const info = tipoInfo(form.tipo);
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="pb-5 border-b border-border/60">
+          <SheetTitle className="font-serif text-xl">
+            {initial ? "Editar material" : "Novo material"}
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="space-y-5 pt-5 pb-24">
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Tipo</Label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {MATERIAL_TIPOS.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => set("tipo", t.value)}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
+                    form.tipo === t.value
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground"
+                  }`}
+                >
+                  {t.icon} {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">TÃ­tulo</Label>
+            <Input
+              value={form.titulo}
+              onChange={(e) => set("titulo", e.target.value)}
+              placeholder={form.tipo === "pauta" ? "Ex: ReuniÃ£o mensal de coordenaÃ§Ã£o" : "TÃ­tulo do material"}
+            />
+          </div>
+
+          {form.tipo === "pauta" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Data da reuniÃ£o</Label>
+              <Input type="date" value={form.data_reuniao} onChange={(e) => set("data_reuniao", e.target.value)} />
+            </div>
+          )}
+
+          {["documento", "video", "link"].includes(form.tipo) && (
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                {form.tipo === "video" ? "Link do vÃ­deo (YouTube, Driveâ€¦)" : "URL do arquivo ou pÃ¡gina"}
+              </Label>
+              <Input type="url" value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://â€¦" />
+            </div>
+          )}
+
+          {["documento", "video", "link"].includes(form.tipo) && (
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">DescriÃ§Ã£o (opcional)</Label>
+              <Textarea rows={3} value={form.descricao} onChange={(e) => set("descricao", e.target.value)} placeholder="Breve descriÃ§Ã£o do conteÃºdoâ€¦" />
+            </div>
+          )}
+
+          {form.tipo === "artigo" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">ConteÃºdo</Label>
+              <Textarea
+                rows={8}
+                value={form.conteudo}
+                onChange={(e) => set("conteudo", e.target.value)}
+                placeholder="Escreva o conteÃºdo formativo aquiâ€¦"
+                className="font-mono text-sm leading-relaxed"
+              />
+            </div>
+          )}
+
+          {form.tipo === "pauta" && (
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Itens da pauta</Label>
+              <div className="space-y-1.5">
+                {form.itens.map((item, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                    <button
+                      type="button"
+                      onClick={() => toggleItem(i)}
+                      className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                        item.concluido ? "bg-green-500 border-green-500 text-white" : "border-border hover:border-foreground"
+                      }`}
+                    >
+                      {item.concluido && <CheckCircle2 className="h-3 w-3" />}
+                    </button>
+                    <Input
+                      value={item.texto}
+                      onChange={(e) => updateItem(i, e.target.value)}
+                      placeholder={`Item ${i + 1}`}
+                      className={`flex-1 h-8 text-sm ${item.concluido ? "line-through text-muted-foreground" : ""}`}
+                    />
+                    <button
+                      type="button" onClick={() => removeItem(i)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-muted transition-colors shrink-0"
+                    >
+                      <XIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
+                >
+                  <PlusCircle className="h-3.5 w-3.5" /> Adicionar item
+                </button>
+              </div>
+              <div className="space-y-1.5 mt-3">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">AnotaÃ§Ãµes / ata (opcional)</Label>
+                <Textarea
+                  rows={4}
+                  value={form.conteudo}
+                  onChange={(e) => set("conteudo", e.target.value)}
+                  placeholder="DecisÃµes tomadas, encaminhamentos, observaÃ§Ãµesâ€¦"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Publicar para membros</p>
+              <p className="text-xs text-muted-foreground">
+                {form.publicado ? "VisÃ­vel no portal do membro." : "Apenas visÃ­vel para coordenaÃ§Ã£o."}
+              </p>
+            </div>
+            <Switch checked={form.publicado} onCheckedChange={(v) => set("publicado", v)} />
+          </div>
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 border-t border-border/60 bg-background px-6 py-4 flex gap-2">
+          <Button className="flex-1 rounded-xl" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (initial ? "Salvar alteraÃ§Ãµes" : "Adicionar")}
+          </Button>
+          <Button variant="outline" className="rounded-xl" onClick={onClose} disabled={saving}>
+            Cancelar
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AgendaPastoralPage() {
   const { profile } = useAuth();
@@ -150,7 +665,7 @@ function AgendaPastoralPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (form: EventoForm & { id?: string }) => {
-      // datetime-local value is local time without timezone — convert to UTC ISO string
+      // datetime-local value is local time without timezone â€” convert to UTC ISO string
       // so Supabase (timestamptz) stores it correctly and displays right across timezones
       const toUtcIso = (local: string) => local ? new Date(local).toISOString() : null;
       const payload: Record<string, unknown> = {
@@ -244,6 +759,12 @@ function AgendaPastoralPage() {
   const proximos = filtered.filter((e) => !isPast(parseISO(e.data_inicio)));
   const passados = filtered.filter((e) => isPast(parseISO(e.data_inicio)));
 
+  useSetPageTabs([
+    { label: "Eventos",     onClick: () => setView("eventos"),   isActive: view === "eventos",   badge: eventos.length > 0 ? eventos.length : undefined },
+    { label: "FormaÃ§Ãµes",   onClick: () => setView("formacoes"), isActive: view === "formacoes" },
+    { label: "OcorrÃªncias", to: "/ocorrencias",                  isActive: false },
+  ]);
+
   if (isLoading) {
     return (
       <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-24 lg:pb-10">
@@ -254,21 +775,15 @@ function AgendaPastoralPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-6 pb-24 lg:pb-10">
-      {/* Abas do módulo Pastoral — nível único */}
-      <ModuleTabBar tabs={[
-        { label: "Eventos",     onClick: () => setView("eventos"),   isActive: view === "eventos",   badge: eventos.length > 0 ? eventos.length : undefined },
-        { label: "Formações",   onClick: () => setView("formacoes"), isActive: view === "formacoes" },
-        { label: "Ocorrências", to: "/ocorrencias",                  isActive: false },
-      ]} />
 
-      {/* ── Eventos ── */}
+      {/* â”€â”€ Eventos â”€â”€ */}
       {view === "eventos" && (<>
         {/* Header */}
         <div className="page-header">
           <div>
             <h1 className="page-header-title">Agenda Pastoral</h1>
             <p className="page-header-sub">
-              Reuniões, retiros, ensaios, encontros e compromissos.
+              ReuniÃµes, retiros, ensaios, encontros e compromissos.
             </p>
           </div>
           <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="shrink-0 h-9 rounded-xl">
@@ -299,7 +814,7 @@ function AgendaPastoralPage() {
             </div>
             <p className="empty-state-title">Nenhum evento cadastrado</p>
             <p className="empty-state-desc">
-              Registre reuniões, formações, retiros, ensaios e compromissos pastorais.
+              Registre reuniÃµes, formaÃ§Ãµes, retiros, ensaios e compromissos pastorais.
             </p>
             <Button className="mt-2 rounded-xl" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
               <Plus className="h-4 w-4 mr-1" /> Criar primeiro evento
@@ -318,7 +833,7 @@ function AgendaPastoralPage() {
           <div className="space-y-8">
             {proximos.length > 0 && (
               <EventoSection
-                titulo="Próximos"
+                titulo="PrÃ³ximos"
                 eventos={proximos}
                 onEdit={(e) => { setEditTarget(e); setFormOpen(true); }}
                 onDelete={setDeleteTarget}
@@ -338,55 +853,9 @@ function AgendaPastoralPage() {
         )}
       </>)}
 
-      {/* ── Formações (prévia visual) ── */}
+      {/* â”€â”€ FormaÃ§Ãµes â”€â”€ */}
       {view === "formacoes" && (
-        <div className="space-y-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="font-serif text-2xl sm:text-3xl">Formações</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Trilhas de formação, materiais e acompanhamento de progresso.
-              </p>
-            </div>
-            <span className="mt-2 text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium shrink-0">Em breve</span>
-          </div>
-
-          <div className="rounded-2xl border border-dashed border-border bg-muted/10 p-4 text-center text-xs text-muted-foreground">
-            Prévia do módulo — sem dados reais ainda
-          </div>
-
-          {/* Trilhas de formação (simulado) */}
-          <div className="space-y-2">
-            <p className="text-[10px] uppercase tracking-[0.28em] text-muted-foreground font-semibold px-1">Trilhas</p>
-            {[
-              { tipo: "PDF",    cor: "bg-red-500/10 text-red-700 border-red-200",    titulo: "Manual do Ministério da Eucaristia", desc: "18 páginas · Atualizado em 2025", icon: "📄" },
-              { tipo: "Vídeo", cor: "bg-blue-500/10 text-blue-700 border-blue-200",  titulo: "Formação de Coroinhas — Módulo 1",   desc: "32 min · Pe. Carlos Mendes",       icon: "▶️" },
-              { tipo: "Vídeo", cor: "bg-blue-500/10 text-blue-700 border-blue-200",  titulo: "Liturgia das Horas — Introdução",    desc: "45 min · Série Oração",            icon: "▶️" },
-              { tipo: "Artigo", cor: "bg-green-500/10 text-green-700 border-green-200", titulo: "A Missão do Leitor na Missa",     desc: "Leitura estimada: 8 min",          icon: "📝" },
-              { tipo: "PDF",    cor: "bg-red-500/10 text-red-700 border-red-200",    titulo: "Guia de Canto Gregoriano",           desc: "6 páginas · Coro Paroquial",       icon: "📄" },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-4 rounded-2xl border border-border bg-card px-4 py-3.5 opacity-70 cursor-not-allowed select-none">
-                <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0 text-lg">
-                  {item.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{item.titulo}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
-                </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${item.cor}`}>
-                  {item.tipo}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card p-5 text-center space-y-2">
-            <p className="font-semibold text-sm">Este módulo está em desenvolvimento</p>
-            <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-              Trilhas de formação com materiais em PDF, vídeo e artigo, com acompanhamento individual de progresso dos ministros.
-            </p>
-          </div>
-        </div>
+        <MateriaisSection paroquiaId={pid ?? ""} />
       )}
 
       {/* Form Sheet */}
@@ -408,7 +877,7 @@ function AgendaPastoralPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover evento?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.titulo}</strong> será removido da agenda. As presenças registradas serão mantidas.
+              <strong>{deleteTarget?.titulo}</strong> serÃ¡ removido da agenda. As presenÃ§as registradas serÃ£o mantidas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -424,7 +893,7 @@ function AgendaPastoralPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Presença Sheet */}
+      {/* PresenÃ§a Sheet */}
       {presencaEvento && pid && (
         <PresencaSheet
           evento={presencaEvento}
@@ -436,7 +905,7 @@ function AgendaPastoralPage() {
   );
 }
 
-// ── EventoSection ─────────────────────────────────────────────────────────────
+// â”€â”€ EventoSection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EventoSection({
   titulo, eventos, onEdit, onDelete, onPresenca,
@@ -469,7 +938,7 @@ function EventoSection({
                 <div className="flex items-center gap-2 flex-wrap">
                   {tipoBadge(e.tipo)}
                   {e.obrigatorio && (
-                    <Badge variant="destructive" className="text-xs">Obrigatório</Badge>
+                    <Badge variant="destructive" className="text-xs">ObrigatÃ³rio</Badge>
                   )}
                   {e.publico_alvo && e.publico_alvo !== "todos" && (
                     <span className="text-xs text-muted-foreground/70 border border-border rounded-full px-2 py-0.5">
@@ -484,7 +953,7 @@ function EventoSection({
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
                     {format(parseISO(e.data_inicio), "HH:mm")}
-                    {e.data_fim && ` – ${format(parseISO(e.data_fim), "HH:mm")}`}
+                    {e.data_fim && ` â€“ ${format(parseISO(e.data_fim), "HH:mm")}`}
                   </span>
                   {e.local && (
                     <span className="flex items-center gap-1">
@@ -518,7 +987,7 @@ function EventoSection({
                 className="text-xs h-8"
               >
                 <UserCheck className="h-3.5 w-3.5 mr-1" />
-                <span className="hidden sm:inline">Registro de </span>Presença
+                <span className="hidden sm:inline">Registro de </span>PresenÃ§a
               </Button>
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(e)} title="Editar">
                 <Pencil className="h-3.5 w-3.5" />
@@ -534,7 +1003,7 @@ function EventoSection({
   );
 }
 
-// ── EventoFormSheet ───────────────────────────────────────────────────────────
+// â”€â”€ EventoFormSheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Comunidade = { id: string; nome: string; endereco: string | null };
 type AtuacaoPastoral = { id: string; nome: string; cor: string | null };
@@ -707,21 +1176,21 @@ function EventoFormSheet({
               </Select>
             </div>
 
-            {/* Título */}
+            {/* TÃ­tulo */}
             <div className="space-y-1.5">
-              <Label>Título *</Label>
+              <Label>TÃ­tulo *</Label>
               <Input
                 required
                 value={form.titulo}
                 onChange={(e) => f("titulo", e.target.value)}
-                placeholder="Ex: Formação de Ministros da Eucaristia"
+                placeholder="Ex: FormaÃ§Ã£o de Ministros da Eucaristia"
               />
             </div>
 
             {/* Datas */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Data e hora de início *</Label>
+                <Label>Data e hora de inÃ­cio *</Label>
                 <Input
                   required type="datetime-local"
                   value={form.data_inicio}
@@ -729,7 +1198,7 @@ function EventoFormSheet({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Data e hora de término</Label>
+                <Label>Data e hora de tÃ©rmino</Label>
                 <Input
                   type="datetime-local"
                   value={form.data_fim}
@@ -738,9 +1207,9 @@ function EventoFormSheet({
               </div>
             </div>
 
-            {/* Pontuação */}
+            {/* PontuaÃ§Ã£o */}
             <div className="space-y-1.5">
-              <Label>Pontuação por presença</Label>
+              <Label>PontuaÃ§Ã£o por presenÃ§a</Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
@@ -760,7 +1229,7 @@ function EventoFormSheet({
               <Label>Local / Comunidade</Label>
               <Select value={comunidadeId} onValueChange={handleComunidadeChange}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione a comunidade…" />
+                  <SelectValue placeholder="Selecione a comunidadeâ€¦" />
                 </SelectTrigger>
                 <SelectContent>
                   {comunidades.map((c) => (
@@ -774,24 +1243,24 @@ function EventoFormSheet({
                   className="mt-2"
                   value={localCustom}
                   onChange={(e) => setLocalCustom(e.target.value)}
-                  placeholder="Descreva o local…"
+                  placeholder="Descreva o localâ€¦"
                 />
               )}
             </div>
 
-            {/* Responsáveis */}
+            {/* ResponsÃ¡veis */}
             <div className="space-y-1.5">
-              <Label>Responsáveis</Label>
+              <Label>ResponsÃ¡veis</Label>
               <Input
                 value={form.responsaveis_nomes}
                 onChange={(e) => f("responsaveis_nomes", e.target.value)}
-                placeholder="Ex: Pe. João Silva, Maria Oliveira"
+                placeholder="Ex: Pe. JoÃ£o Silva, Maria Oliveira"
               />
             </div>
 
-            {/* Público-alvo: atuações + membros manuais */}
+            {/* PÃºblico-alvo: atuaÃ§Ãµes + membros manuais */}
             <div className="space-y-2">
-              <Label>Público-alvo</Label>
+              <Label>PÃºblico-alvo</Label>
               {atuacoes.length > 0 ? (
                 <div className="rounded-xl border border-border divide-y divide-border">
                   {atuacoes.map((a) => (
@@ -817,19 +1286,19 @@ function EventoFormSheet({
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Nenhuma atuação pastoral cadastrada.
+                  Nenhuma atuaÃ§Ã£o pastoral cadastrada.
                 </p>
               )}
-              {/* Seleção de membros específicos (P1.7) */}
+              {/* SeleÃ§Ã£o de membros especÃ­ficos (P1.7) */}
               {todosMembros.length > 0 && (
                 <div className="space-y-1.5 pt-1">
-                  <p className="text-xs text-muted-foreground">Membros específicos</p>
+                  <p className="text-xs text-muted-foreground">Membros especÃ­ficos</p>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                     <input
                       type="text"
                       className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-input bg-card text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring/20"
-                      placeholder="Buscar membro…"
+                      placeholder="Buscar membroâ€¦"
                       value={membroSearch}
                       onChange={(e) => setMembroSearch(e.target.value)}
                     />
@@ -867,36 +1336,36 @@ function EventoFormSheet({
               )}
             </div>
 
-            {/* Descrição */}
+            {/* DescriÃ§Ã£o */}
             <div className="space-y-1.5">
-              <Label>Descrição</Label>
+              <Label>DescriÃ§Ã£o</Label>
               <Textarea
                 rows={3}
                 value={form.descricao}
                 onChange={(e) => f("descricao", e.target.value)}
-                placeholder="Pauta, objetivos, detalhes do evento…"
+                placeholder="Pauta, objetivos, detalhes do eventoâ€¦"
               />
             </div>
 
-            {/* Observações */}
+            {/* ObservaÃ§Ãµes */}
             <div className="space-y-1.5">
-              <Label>Observações internas</Label>
+              <Label>ObservaÃ§Ãµes internas</Label>
               <Textarea
                 rows={2}
                 value={form.observacoes}
                 onChange={(e) => f("observacoes", e.target.value)}
-                placeholder="Instruções, lembretes, informações adicionais…"
+                placeholder="InstruÃ§Ãµes, lembretes, informaÃ§Ãµes adicionaisâ€¦"
               />
             </div>
 
-            {/* Obrigatório */}
+            {/* ObrigatÃ³rio */}
             <div className="flex items-center gap-3 pt-1">
               <Switch
                 id="obrig-switch"
                 checked={form.obrigatorio}
                 onCheckedChange={(v) => f("obrigatorio", v)}
               />
-              <Label htmlFor="obrig-switch">Evento obrigatório</Label>
+              <Label htmlFor="obrig-switch">Evento obrigatÃ³rio</Label>
             </div>
           </div>
 
@@ -931,7 +1400,7 @@ function EventoFormSheet({
   );
 }
 
-// ── PresencaSheet ─────────────────────────────────────────────────────────────
+// â”€â”€ PresencaSheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PresencaSheet({
   evento, paroquiaId, onClose,
@@ -970,7 +1439,7 @@ function PresencaSheet({
         justificativa: r.justificativa,
         pontuacao_recebida: r.pontuacao_recebida,
         observacoes: r.observacoes,
-        membro_nome: r.membros?.nome ?? "—",
+        membro_nome: r.membros?.nome ?? "â€”",
       }));
     },
   });
@@ -979,7 +1448,7 @@ function PresencaSheet({
 
   const marcarMutation = useMutation({
     mutationFn: async ({ membroId, presente }: { membroId: string; presente: boolean | null }) => {
-      // RPC atômica: atualiza presencas_eventos + historico_participacoes
+      // RPC atÃ´mica: atualiza presencas_eventos + historico_participacoes
       // O trigger on_historico_score_recalc cuida de membros.score automaticamente.
       const { error } = await supabase.rpc("marcar_presenca_evento" as never, {
         p_paroquia_id: paroquiaId,
@@ -1009,7 +1478,7 @@ function PresencaSheet({
     <Sheet open onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Registro de Presença</SheetTitle>
+          <SheetTitle>Registro de PresenÃ§a</SheetTitle>
         </SheetHeader>
 
         <div className="mt-4 space-y-4">
@@ -1078,7 +1547,7 @@ function PresencaSheet({
                           type="button"
                           onClick={() => setExpanded(isOpen ? null : m.id)}
                           className="h-8 w-8 rounded-full grid place-items-center text-muted-foreground hover:bg-muted transition"
-                          title="Justificativa / observações"
+                          title="Justificativa / observaÃ§Ãµes"
                         >
                           {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                         </button>
@@ -1106,7 +1575,7 @@ function PresencaSheet({
   );
 }
 
-// ── JustificativaRow ──────────────────────────────────────────────────────────
+// â”€â”€ JustificativaRow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function JustificativaRow({
   presenca, membroId, eventoId, onSaved,
@@ -1143,14 +1612,14 @@ function JustificativaRow({
     <div className="px-4 pb-3 bg-muted/20 space-y-2 border-t border-border">
       <Input
         className="h-8 text-sm mt-2"
-        placeholder="Justificativa de ausência…"
+        placeholder="Justificativa de ausÃªnciaâ€¦"
         value={just}
         onChange={(e) => setJust(e.target.value)}
       />
       <div className="flex gap-2">
         <Input
           className="h-8 text-sm flex-1"
-          placeholder="Observações internas…"
+          placeholder="ObservaÃ§Ãµes internasâ€¦"
           value={obs}
           onChange={(e) => setObs(e.target.value)}
         />
@@ -1161,3 +1630,4 @@ function JustificativaRow({
     </div>
   );
 }
+

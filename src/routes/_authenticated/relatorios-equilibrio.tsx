@@ -10,7 +10,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const anyDb = supabase as any;
@@ -188,14 +188,16 @@ function RelatoriosEquilibrioPage() {
 
   const periodoLabel = PERIODOS.find((p) => p.dias === periodoDias)?.label ?? `${periodoDias} dias`;
 
+  useSetPageTabs([
+    { label: "Planejamento",       to: "/escalas",                         isActive: false },
+    { label: "Presença",           to: "/sacristia",                       isActive: false },
+    { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
+    { label: "Substituições",      to: "/substituicoes",                   isActive: false },
+    { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: true  },
+  ]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-24">
-      <ModuleTabBar tabs={[
-        { label: "Planejamento",       to: "/escalas",                         isActive: false },
-        { label: "Presença",           to: "/sacristia",                       isActive: false },
-        { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
-        { label: "Substituições",      to: "/substituicoes",                   isActive: false },
-      ]} />
 
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>

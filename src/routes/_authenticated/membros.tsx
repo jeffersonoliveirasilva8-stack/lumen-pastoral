@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -1750,6 +1750,340 @@ const EMPTY_BULK_EDIT: BulkEditForm = {
   restricao_ids: [],
 };
 
+// ── MembrosVisaoGeral ─────────────────────────────────────────────────────────
+
+type VisaoGeralProps = {
+  membros: Membro[];
+  atuacoes: Atuacao[];
+  comunidades: Comunidade[];
+};
+
+
+function KpiCard({ label, value, sub, icon: Icon, color = "text-primary" }: {
+  label: string; value: string | number; sub?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  icon: any; color?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-4 flex items-start gap-3">
+      <div className={`mt-0.5 rounded-xl p-2 bg-muted/60 shrink-0 ${color}`}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-2xl font-bold leading-none tracking-tight">{value}</p>
+        <p className="text-xs font-medium text-foreground/80 mt-0.5">{label}</p>
+        {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function DistributionRow({ label, count, max, pct, color = "bg-primary/70" }: {
+  label: string; count: number; max: number; pct?: number; color?: string;
+}) {
+  const bar = pct !== undefined ? pct : (max > 0 ? Math.round((count / max) * 100) : 0);
+  return (
+    <div className="grid grid-cols-[1fr_3fr_2rem] gap-3 items-center">
+      <span className="text-xs text-muted-foreground truncate">{label}</span>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${bar}%` }} />
+      </div>
+      <span className="text-xs font-semibold tabular-nums text-right">{count}</span>
+    </div>
+  );
+}
+
+function MembrosVisaoGeral({ membros, atuacoes, comunidades }: VisaoGeralProps) {
+  const total = membros.length;
+  const ativos = membros.filter((m) => m.ativo).length;
+  const comAcesso = membros.filter((m) => m.conta_ativada).length;
+
+  const hoje = new Date();
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const novosMes = membros.filter((m) => m.data_ingresso && new Date(m.data_ingresso) >= inicioMes).length;
+
+  // ── Faixa etária ──
+  const now = new Date();
+  const faixas = [
+    { label: "< 18", count: 0 },
+    { label: "18 – 25", count: 0 },
+    { label: "26 – 35", count: 0 },
+    { label: "36 – 50", count: 0 },
+    { label: "51+", count: 0 },
+    { label: "Não inf.", count: 0 },
+  ];
+  membros.forEach((m) => {
+    if (!m.data_nascimento) { faixas[5].count++; return; }
+    const dn = new Date(m.data_nascimento);
+    const age = now.getFullYear() - dn.getFullYear() - (now < new Date(now.getFullYear(), dn.getMonth(), dn.getDate()) ? 1 : 0);
+    if (age < 18)       faixas[0].count++;
+    else if (age <= 25) faixas[1].count++;
+    else if (age <= 35) faixas[2].count++;
+    else if (age <= 50) faixas[3].count++;
+    else                faixas[4].count++;
+  });
+  const maxFaixa = Math.max(...faixas.map((f) => f.count), 1);
+
+  // ── Sexo ──
+  const masc = membros.filter((m) => m.sexo === "M").length;
+  const fem  = membros.filter((m) => m.sexo === "F").length;
+  const semSexo = total - masc - fem;
+
+  // ── Tempo de casa ──
+  const tempos = [
+    { label: "< 1 ano",   count: 0, color: "bg-sky-400" },
+    { label: "1 – 3 anos", count: 0, color: "bg-indigo-400" },
+    { label: "3 – 5 anos", count: 0, color: "bg-violet-400" },
+    { label: "5 – 10 anos", count: 0, color: "bg-purple-400" },
+    { label: "> 10 anos",  count: 0, color: "bg-rose-400" },
+    { label: "Não inf.",   count: 0, color: "bg-muted-foreground/30" },
+  ];
+  membros.forEach((m) => {
+    if (!m.data_ingresso) { tempos[5].count++; return; }
+    const anos = (now.getTime() - new Date(m.data_ingresso).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    if (anos < 1)        tempos[0].count++;
+    else if (anos < 3)   tempos[1].count++;
+    else if (anos < 5)   tempos[2].count++;
+    else if (anos < 10)  tempos[3].count++;
+    else                 tempos[4].count++;
+  });
+  const maxTempo = Math.max(...tempos.map((t) => t.count), 1);
+
+  // ── Ministérios ──
+  const ministerioCount = new Map<string, { nome: string; count: number }>();
+  membros.forEach((m) => {
+    m.ministerios.forEach((min) => {
+      const prev = ministerioCount.get(min.id) ?? { nome: min.nome, count: 0 };
+      ministerioCount.set(min.id, { ...prev, count: prev.count + 1 });
+    });
+  });
+  const ministeriosSorted = Array.from(ministerioCount.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+  const maxMin = Math.max(...ministeriosSorted.map((m) => m.count), 1);
+
+  // ── Atuações ──
+  const atuacaoCount = new Map<string, { nome: string; count: number }>();
+  atuacoes.forEach((a) => atuacaoCount.set(a.id, { nome: a.nome, count: 0 }));
+  membros.forEach((m) => {
+    m.atuacao_ids.forEach((aid) => {
+      const prev = atuacaoCount.get(aid);
+      if (prev) atuacaoCount.set(aid, { ...prev, count: prev.count + 1 });
+    });
+  });
+  const atuacoesSorted = Array.from(atuacaoCount.values())
+    .filter((a) => a.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+  const maxAtu = Math.max(...atuacoesSorted.map((a) => a.count), 1);
+
+  // ── Disponibilidade ──
+  const semRestricao = membros.filter((m) => !m.restricoes_dia_semana || m.restricoes_dia_semana.length === 0).length;
+  const comRestricao = total - semRestricao;
+  const diasBloqueados = [0, 1, 2, 3, 4, 5, 6].map((d) => ({
+    dia: DIAS_SEMANA[d],
+    count: membros.filter((m) => m.restricoes_dia_semana?.includes(d)).length,
+  }));
+  const maxDia = Math.max(...diasBloqueados.map((d) => d.count), 1);
+
+  // ── Score ──
+  const scoreZero  = membros.filter((m) => m.score === 0).length;
+  const score1_20  = membros.filter((m) => m.score > 0 && m.score <= 20).length;
+  const score21_50 = membros.filter((m) => m.score > 20 && m.score <= 50).length;
+  const score51    = membros.filter((m) => m.score > 50).length;
+  const maxScore = Math.max(scoreZero, score1_20, score21_50, score51, 1);
+
+  // ── Comunidades ──
+  const comComunidade = membros.filter((m) => m.comunidade_id).length;
+  const comunidadeCounts = comunidades.map((c) => ({
+    nome: c.nome,
+    count: membros.filter((m) => m.comunidade_id === c.id).length,
+  })).filter((c) => c.count > 0).sort((a, b) => b.count - a.count);
+  const maxCom = Math.max(...comunidadeCounts.map((c) => c.count), 1);
+
+  if (total === 0) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">
+        Nenhum membro cadastrado para gerar estatísticas.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-6 pb-10">
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiCard label="Total de membros" value={total} icon={Users} color="text-primary" />
+        <KpiCard
+          label="Membros ativos"
+          value={ativos}
+          sub={`${Math.round((ativos / total) * 100)}% do total`}
+          icon={UserCheck}
+          color="text-emerald-600"
+        />
+        <KpiCard
+          label="Com acesso digital"
+          value={comAcesso}
+          sub={`${Math.round((comAcesso / total) * 100)}% ativaram`}
+          icon={CheckCircle2}
+          color="text-sky-600"
+        />
+        <KpiCard
+          label="Ingressos este mês"
+          value={novosMes}
+          sub="novos membros"
+          icon={CalendarDays}
+          color="text-amber-600"
+        />
+      </div>
+
+      {/* Faixa etária + Sexo + Tempo de casa */}
+      <div className="grid sm:grid-cols-3 gap-4">
+
+        {/* Faixa etária */}
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3 sm:col-span-1">
+          <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground">Faixa etária</p>
+          <div className="space-y-2.5">
+            {faixas.map((f, i) => (
+              <DistributionRow
+                key={i}
+                label={f.label}
+                count={f.count}
+                max={maxFaixa}
+                color={i === 5 ? "bg-muted-foreground/30" : "bg-primary/70"}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Sexo + Score */}
+        <div className="space-y-4">
+
+          {/* Sexo */}
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground mb-3">Gênero</p>
+            <div className="space-y-2.5">
+              <DistributionRow label="Masculino" count={masc} max={total} color="bg-sky-500" />
+              <DistributionRow label="Feminino" count={fem} max={total} color="bg-rose-400" />
+              <DistributionRow label="Não inf." count={semSexo} max={total} color="bg-muted-foreground/30" />
+            </div>
+          </div>
+
+          {/* Situação */}
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground mb-3">Situação</p>
+            <div className="space-y-2.5">
+              <DistributionRow label="Ativos" count={ativos} max={total} color="bg-emerald-500" />
+              <DistributionRow label="Inativos" count={total - ativos} max={total} color="bg-rose-400" />
+              <DistributionRow label="Com acesso" count={comAcesso} max={total} color="bg-sky-500" />
+              <DistributionRow label="Sem acesso" count={total - comAcesso} max={total} color="bg-amber-400" />
+            </div>
+          </div>
+        </div>
+
+        {/* Tempo de casa */}
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground">Tempo de casa</p>
+          <div className="space-y-2.5">
+            {tempos.map((t, i) => (
+              <DistributionRow key={i} label={t.label} count={t.count} max={maxTempo} color={t.color} />
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Ministérios + Atuações */}
+      <div className="grid sm:grid-cols-2 gap-4">
+
+        {/* Ministérios */}
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground">Funções (ministérios)</p>
+          {ministeriosSorted.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhum ministério atribuído.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {ministeriosSorted.map((m) => (
+                <DistributionRow key={m.nome} label={m.nome} count={m.count} max={maxMin} color="bg-violet-500" />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Atuações */}
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground">Atuações pastorais</p>
+          {atuacoesSorted.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma atuação atribuída.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {atuacoesSorted.map((a) => (
+                <DistributionRow key={a.nome} label={a.nome} count={a.count} max={maxAtu} color="bg-indigo-500" />
+              ))}
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* Disponibilidade + Score + Comunidades */}
+      <div className="grid sm:grid-cols-3 gap-4">
+
+        {/* Restrições por dia */}
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground">Restrições de escala</p>
+            <span className="shrink-0 text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground font-medium">
+              {comRestricao} com restr.
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {diasBloqueados.map((d) => (
+              <DistributionRow key={d.dia} label={d.dia} count={d.count} max={maxDia} color="bg-orange-400" />
+            ))}
+          </div>
+        </div>
+
+        {/* Score */}
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground">Pontuação (score)</p>
+          <div className="space-y-2.5">
+            <DistributionRow label="Zero" count={scoreZero} max={maxScore} color="bg-muted-foreground/30" />
+            <DistributionRow label="1 – 20" count={score1_20} max={maxScore} color="bg-amber-400" />
+            <DistributionRow label="21 – 50" count={score21_50} max={maxScore} color="bg-orange-500" />
+            <DistributionRow label="> 50" count={score51} max={maxScore} color="bg-rose-500" />
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Score alto indica maior carga de escalas. Use Relatório de Equilíbrio para ajustes.
+          </p>
+        </div>
+
+        {/* Comunidades */}
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground">Comunidades</p>
+            <span className="shrink-0 text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground font-medium">
+              {total - comComunidade} sem comunidade
+            </span>
+          </div>
+          {comunidadeCounts.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma comunidade atribuída.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {comunidadeCounts.map((c) => (
+                <DistributionRow key={c.nome} label={c.nome} count={c.count} max={maxCom} color="bg-teal-500" />
+              ))}
+            </div>
+          )}
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
+
 // ── MembrosPage ───────────────────────────────────────────────────────────────
 
 function MembrosPage() {
@@ -2539,13 +2873,13 @@ function MembrosPage() {
     );
   }
 
+  useSetPageTabs([
+    { label: "Membros", to: "/membros", isActive: true  },
+    { label: "Ranking", to: "/ranking", isActive: false },
+  ]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
-      {/* Abas do módulo Membros */}
-      <ModuleTabBar tabs={[
-        { label: "Membros", to: "/membros", isActive: true  },
-        { label: "Ranking", to: "/ranking", isActive: false },
-      ]} />
 
       {/* Header */}
       <div className="page-header">
@@ -2612,6 +2946,10 @@ function MembrosPage() {
           <TabsTrigger value="auditoria" className="rounded-lg text-xs px-3 py-1.5 gap-1.5 data-[state=active]:shadow-sm">
             <AlertCircle className="h-3 w-3" />
             Auditoria
+          </TabsTrigger>
+          <TabsTrigger value="visao-geral" className="rounded-lg text-xs px-3 py-1.5 gap-1.5 data-[state=active]:shadow-sm">
+            <Star className="h-3 w-3" />
+            Visão Geral
           </TabsTrigger>
         </TabsList>
 
@@ -3093,6 +3431,11 @@ function MembrosPage() {
         {/* ── Tab: Auditoria de ativação ── */}
         <TabsContent value="auditoria">
           <AuditoriaAtivacao paroquia={paroquia} />
+        </TabsContent>
+
+        {/* ── Tab: Visão Geral / Dashboard ── */}
+        <TabsContent value="visao-geral">
+          <MembrosVisaoGeral membros={membros} atuacoes={atuacoes} comunidades={comunidades} />
         </TabsContent>
 
       </Tabs>{/* fim tabs */}

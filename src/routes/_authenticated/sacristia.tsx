@@ -18,7 +18,7 @@ import { supabaseErrorMessage } from "@/lib/supabase-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 
 export const Route = createFileRoute("/_authenticated/sacristia")({
   component: SacristiaPage,
@@ -287,16 +287,16 @@ function SacristiaPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, em_andamento.length, pendentes.length]);
 
+  useSetPageTabs([
+    { label: "Planejamento",       to: "/escalas",                         isActive: false },
+    { label: "Presença",           to: "/sacristia",                       isActive: true  },
+    { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
+    { label: "Substituições",      to: "/substituicoes",                   isActive: false },
+    { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: false },
+  ]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-2xl mx-auto pb-24">
-      {/* Abas do módulo Escalas */}
-      <ModuleTabBar tabs={[
-        { label: "Planejamento",       to: "/escalas",                         isActive: false },
-        { label: "Presença",           onClick: () => {},                      isActive: true  },
-        { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
-        { label: "Substituições",      to: "/substituicoes",                   isActive: false },
-        { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: false },
-      ]} />
 
       {/* Sub-abas da Sacristia */}
       <div className="flex gap-1 border-b border-border/60 pb-0 mb-4 -mt-2">

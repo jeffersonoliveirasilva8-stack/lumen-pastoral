@@ -10,6 +10,8 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTransition } from "@/components/ui/page-transition";
+import { PageTabsProvider, usePageTabs } from "@/contexts/page-tabs";
+import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const anyDb = supabase as any;
@@ -200,6 +202,7 @@ function AuthLayout() {
   }
 
   return (
+    <PageTabsProvider>
     <div className="h-screen flex overflow-hidden bg-background">
       {/* Desktop sidebar */}
       <aside className={`hidden lg:flex flex-col bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border/70 shrink-0 shadow-altar overflow-hidden transition-all duration-[260ms] ease-[cubic-bezier(0.34,1.56,0.64,1)] ${sidebarCollapsed ? "w-16" : "w-56"}`}>
@@ -391,8 +394,10 @@ function AuthLayout() {
           </div>
         </header>
 
+        <LayoutTabBar />
+
         <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full">
-          <div className="mx-auto max-w-7xl px-4 pt-6 pb-32 sm:px-6 lg:px-8 lg:pb-10 min-w-0 w-full overflow-hidden">
+          <div className="mx-auto max-w-7xl px-4 pt-6 pb-32 sm:px-6 lg:px-8 lg:pb-10 min-w-0 w-full">
             <PageTransition>
               <Outlet />
             </PageTransition>
@@ -506,6 +511,19 @@ function AuthLayout() {
             </button>
           </div>
         </nav>
+      </div>
+    </div>
+    </PageTabsProvider>
+  );
+}
+
+function LayoutTabBar() {
+  const tabs = usePageTabs();
+  if (tabs.length === 0) return null;
+  return (
+    <div className="shrink-0 border-b border-border/40 bg-background/95 backdrop-blur-sm z-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <ModuleTabBar tabs={tabs} />
       </div>
     </div>
   );

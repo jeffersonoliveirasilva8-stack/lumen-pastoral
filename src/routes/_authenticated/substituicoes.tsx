@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -187,14 +187,16 @@ function AdminSubstituicoes() {
   const rejeitadas = substituicoes.filter((s) => s.status === "rejeitada").length;
   const canceladas = substituicoes.filter((s) => s.status === "cancelada").length;
 
+  useSetPageTabs([
+    { label: "Planejamento",       to: "/escalas",                         isActive: false },
+    { label: "Presença",           to: "/sacristia",                       isActive: false },
+    { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
+    { label: "Substituições",      to: "/substituicoes",                   isActive: true  },
+    { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: false },
+  ]);
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 lg:px-6 space-y-6 pb-10">
-      <ModuleTabBar tabs={[
-        { label: "Planejamento",       to: "/escalas",                         isActive: false },
-        { label: "Presença",           to: "/sacristia",                       isActive: false },
-        { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
-        { label: "Substituições",      to: "/substituicoes",                   isActive: true  },
-      ]} />
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">

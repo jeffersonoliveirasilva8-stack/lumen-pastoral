@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const anyDb = supabase as any;
@@ -232,14 +232,15 @@ function AtividadePage() {
 
   const diasOrdenados = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
 
+  useSetPageTabs([
+    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
+    { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
+    { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
+    { label: "Auditoria",   to: "/auditoria",                     isActive: true  },
+  ]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto pb-24">
-      <ModuleTabBar tabs={[
-        { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
-        { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
-        { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
-        { label: "Auditoria",   to: "/auditoria",                     isActive: true  },
-      ]} />
 
       <div className="mb-6">
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>

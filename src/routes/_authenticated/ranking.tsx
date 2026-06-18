@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
@@ -76,12 +76,13 @@ function AdminRanking() {
     return () => { supabase.removeChannel(channel); };
   }, [profile?.paroquia_id, qc]);
 
+  useSetPageTabs([
+    { label: "Membros", to: "/membros", isActive: false },
+    { label: "Ranking", to: "/ranking", isActive: true  },
+  ]);
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <ModuleTabBar tabs={[
-        { label: "Membros", to: "/membros", isActive: false },
-        { label: "Ranking", to: "/ranking", isActive: true  },
-      ]} />
       <div className="page-header">
         <div>
           <h1 className="page-header-title">Ranking de Servidores</h1>

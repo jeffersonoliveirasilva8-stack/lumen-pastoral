@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { supabaseErrorMessage } from "@/lib/supabase-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -267,14 +267,15 @@ function AdministradoresPage() {
     );
   }
 
+  useSetPageTabs([
+    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
+    { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
+    { label: "Coordenação", to: "/configuracoes/administradores", isActive: true  },
+    { label: "Auditoria",   to: "/auditoria",                     isActive: false },
+  ]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto pb-24">
-      <ModuleTabBar tabs={[
-        { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
-        { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
-        { label: "Coordenação", to: "/configuracoes/administradores", isActive: true  },
-        { label: "Auditoria",   to: "/auditoria",                     isActive: false },
-      ]} />
 
       {/* Header */}
       <div className="mb-6">

@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useAuth } from "@/hooks/use-auth";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { supabaseErrorMessage } from "@/lib/supabase-error";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -429,14 +429,15 @@ function PersonalizacaoPage() {
     </>
   );
 
+  useSetPageTabs([
+    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: true  },
+    { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
+    { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
+    { label: "Auditoria",   to: "/auditoria",                     isActive: false },
+  ]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto pb-24">
-      <ModuleTabBar tabs={[
-        { label: "Geral",            to: "/configuracoes/paroquia",        isActive: true  },
-        { label: "Motor",            to: "/configuracoes-escalas",         isActive: false },
-        { label: "Coordenação",      to: "/configuracoes/administradores", isActive: false },
-        { label: "Auditoria",        to: "/auditoria",                     isActive: false },
-      ]} />
 
       {/* ── Mobile: tela de conteúdo com back button ── */}
       {mobileView === "content" && (

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Loader2, Save, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -246,14 +246,15 @@ function ConfiguracaoEscalas() {
     );
   }
 
+  useSetPageTabs([
+    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
+    { label: "Motor",       to: "/configuracoes-escalas",         isActive: true  },
+    { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
+    { label: "Auditoria",   to: "/auditoria",                     isActive: false },
+  ]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto pb-24 space-y-6">
-      <ModuleTabBar tabs={[
-        { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
-        { label: "Motor",       to: "/configuracoes-escalas",         isActive: true  },
-        { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
-        { label: "Auditoria",   to: "/auditoria",                     isActive: false },
-      ]} />
 
       <div>
         <h1 className="font-serif text-2xl sm:text-3xl">Motor de Escalas</h1>

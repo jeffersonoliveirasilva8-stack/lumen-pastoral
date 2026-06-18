@@ -28,7 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ModuleTabBar } from "@/components/ui/module-tab-bar";
+import { useSetPageTabs } from "@/contexts/page-tabs";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -1350,15 +1350,16 @@ ${rodapeUrl
     if (formOpen) setEscalaForm(EMPTY_FORM);
   }, [formOpen]);
 
+  useSetPageTabs([
+    { label: "Planejamento",       onClick: () => setView("lista"),              isActive: view === "lista" },
+    { label: "Presença",           to: "/sacristia",                             isActive: false },
+    { label: "Indisponibilidades", onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
+    { label: "Substituições",      to: "/substituicoes",                         isActive: false },
+    { label: "Relatório",          to: "/relatorios-equilibrio",                 isActive: false },
+  ]);
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
-      {/* Abas do módulo Escalas */}
-      <ModuleTabBar tabs={[
-        { label: "Planejamento",      onClick: () => setView("lista"),              isActive: view === "lista" },
-        { label: "Presença",          to: "/sacristia",                             isActive: false },
-        { label: "Indisponibilidades", onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
-        { label: "Substituições",     to: "/substituicoes",                         isActive: false },
-      ]} />
 
       {/* Header */}
       <div className="page-header mt-4">
