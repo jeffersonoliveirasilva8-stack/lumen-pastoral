@@ -107,7 +107,8 @@ function OcorrenciasPage() {
     <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto space-y-6 pb-24 lg:pb-10">
       {/* Abas do módulo Pastoral */}
       <ModuleTabBar tabs={[
-        { label: "Agenda",      to: "/formacoes",   isActive: false },
+        { label: "Eventos",     to: "/formacoes",   isActive: false },
+        { label: "Formações",   to: "/formacoes",   isActive: false },
         { label: "Ocorrências", to: "/ocorrencias", isActive: true  },
       ]} />
 

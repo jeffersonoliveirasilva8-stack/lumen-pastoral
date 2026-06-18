@@ -125,7 +125,7 @@ function AgendaPastoralPage() {
   const pid = profile?.paroquia_id;
   const qc = useQueryClient();
 
-  const [view, setView]                 = useState<"agenda" | "formacoes">("agenda");
+  const [view, setView]                 = useState<"eventos" | "formacoes">("eventos");
   const [formOpen, setFormOpen]         = useState(false);
   const [editTarget, setEditTarget]     = useState<Evento | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Evento | null>(null);
@@ -254,42 +254,15 @@ function AgendaPastoralPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto space-y-6 pb-24 lg:pb-10">
-      {/* Abas do módulo Pastoral */}
+      {/* Abas do módulo Pastoral — nível único */}
       <ModuleTabBar tabs={[
-        { label: "Agenda",      onClick: () => setView("agenda"),    isActive: view === "agenda" || view === "formacoes" },
+        { label: "Eventos",     onClick: () => setView("eventos"),   isActive: view === "eventos",   badge: eventos.length > 0 ? eventos.length : undefined },
+        { label: "Formações",   onClick: () => setView("formacoes"), isActive: view === "formacoes" },
         { label: "Ocorrências", to: "/ocorrencias",                  isActive: false },
       ]} />
-      {/* Sub-abas dentro de Agenda */}
-      {(view === "agenda" || view === "formacoes") && (
-        <div className="flex gap-0.5 border-b border-border -mt-4 mb-4 overflow-x-auto no-scrollbar">
-          {[
-            { id: "agenda",    label: "Eventos",    count: eventos.length },
-            { id: "formacoes", label: "Formações",  count: null },
-          ].map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setView(t.id as "agenda" | "formacoes")}
-              className={`relative flex-shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm transition-all duration-150 rounded-lg whitespace-nowrap ${
-                view === t.id
-                  ? "text-primary font-semibold bg-primary/8"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/70 font-medium"
-              }`}
-            >
-              {t.label}
-              {t.count !== null && t.count > 0 && (
-                <span className={`text-[9px] font-bold min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center ${
-                  view === t.id ? "bg-primary text-primary-foreground" : "bg-muted-foreground/20 text-muted-foreground"
-                }`}>{t.count}</span>
-              )}
-              {view === t.id && <span className="absolute bottom-0 inset-x-3 h-0.5 rounded-t-full bg-primary" />}
-            </button>
-          ))}
-        </div>
-      )}
 
-      {/* ── Agenda Pastoral ── */}
-      {view === "agenda" && (<>
+      {/* ── Eventos ── */}
+      {view === "eventos" && (<>
         {/* Header */}
         <div className="page-header">
           <div>

@@ -53,10 +53,12 @@ function TabItem({ tab }: { tab: ModuleTab }) {
 
 export function ModuleTabBar({ tabs }: { tabs: ModuleTab[] }) {
   return (
-    <div className="flex flex-wrap gap-1.5 mb-6">
-      {tabs.map((tab) => (
-        <TabItem key={tab.label} tab={tab} />
-      ))}
+    <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 bg-background/95 backdrop-blur-sm border-b border-border/40 mb-6">
+      <div className="flex flex-wrap gap-1.5 py-3">
+        {tabs.map((tab) => (
+          <TabItem key={tab.label} tab={tab} />
+        ))}
+      </div>
     </div>
   );
 }
