@@ -199,6 +199,8 @@ function PortalMembroSubstituicoes() {
         ? "Já existe uma solicitação ativa para esta escala."
         : e.message === "escala_passada"
         ? "Não é possível solicitar substituição para escalas passadas."
+        : e.message === "motivo_obrigatorio"
+        ? "Informe o motivo da solicitação."
         : e.message;
       toast.error(msg);
     },
@@ -315,19 +317,20 @@ function PortalMembroSubstituicoes() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Motivo <span className="text-muted-foreground/50">(opcional)</span></label>
+                <label className="text-xs text-muted-foreground">Motivo <span className="text-destructive">*</span></label>
                 <textarea
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
-                  placeholder="Ex: compromisso familiar, viagem…"
-                  rows={2}
+                  placeholder="Ex: compromisso familiar, viagem, problema de saúde…"
+                  rows={3}
                   className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring resize-none"
                 />
+                <p className="text-[11px] text-muted-foreground">Informe o motivo para que a coordenação possa avaliar.</p>
               </div>
 
               <Button
                 className="w-full rounded-xl"
-                disabled={!selectedEscala || solicitarMutation.isPending}
+                disabled={!selectedEscala || !motivo.trim() || solicitarMutation.isPending}
                 onClick={() => solicitarMutation.mutate()}
               >
                 {solicitarMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ArrowLeftRight className="h-4 w-4 mr-2" />}

@@ -239,16 +239,16 @@ function HistoricoSheet({
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("historico_participacoes")
-        .select("id, pontos, tipo_evento, descricao, data, escalas(titulo, data)")
+        .select("id, pontos, presenca, data, escalas(titulo, data)")
         .eq("membro_id", membro!.id)
-        .order("created_at", { ascending: false })
+        .order("data", { ascending: false })
         .limit(50);
       if (error) throw error;
       return (data ?? []).map((r: any) => ({
         id: r.id,
         pontos: r.pontos ?? 0,
-        tipo_evento: r.tipo_evento ?? "escala",
-        escala_titulo: r.escalas?.titulo ?? r.descricao ?? "—",
+        tipo_evento: r.presenca ?? "escala",
+        escala_titulo: r.escalas?.titulo ?? "—",
         escala_data: r.escalas?.data ?? r.data ?? "",
       }));
     },
@@ -259,22 +259,14 @@ function HistoricoSheet({
   return (
     <Sheet open={!!membro} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-        <SheetHeader className="flex flex-row items-start justify-between gap-4 mb-4">
-          <div className="min-w-0">
-            <SheetTitle className="truncate">
-              {membro?.nome.split(" ").slice(0, 3).join(" ")}
-            </SheetTitle>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Star className="h-3.5 w-3.5 text-amber-500" />
-              <span className="text-sm font-semibold">{membro?.score ?? 0} pts totais</span>
-            </div>
+        <SheetHeader className="mb-4">
+          <SheetTitle className="truncate">
+            {membro?.nome.split(" ").slice(0, 3).join(" ")}
+          </SheetTitle>
+          <div className="flex items-center gap-1.5 mt-1">
+            <Star className="h-3.5 w-3.5 text-amber-500" />
+            <span className="text-sm font-semibold">{membro?.score ?? 0} pts totais</span>
           </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </SheetHeader>
 
         <div className="space-y-4">

@@ -415,6 +415,10 @@ function PortalMembroEscalas() {
     onError: (e: Error) => {
       const msg = e.message === "confirmacao_desativada"
         ? "A coordenação desativou o sistema de confirmação."
+        : e.message === "motivo_obrigatorio"
+        ? "Informe o motivo da recusa antes de confirmar."
+        : e.message === "prazo_expirado"
+        ? "O prazo para informar a recusa expirou."
         : e.message;
       toast.error(msg);
     },
