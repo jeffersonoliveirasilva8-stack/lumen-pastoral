@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import {
   Plus, Loader2, Calendar, List, ChevronLeft, ChevronRight, ChevronDown,
-  MapPin, Clock, Trash2, Pencil, UserPlus, X, Check, Sparkles,
+  MapPin, Clock, Trash2, Pencil, UserPlus, X, Check, Sparkles, Send,
   MoreVertical, FileText, AlertTriangle, Users, ClipboardCheck,
   CheckCircle2, XCircle, Church, Ban, RefreshCw, Activity,
   TrendingUp, TrendingDown, Minus, ChevronUp, BarChart2, Star,
@@ -713,21 +713,23 @@ function EscalasPage() {
       // Ao publicar, envia e-mails a todos os membros já atribuídos
       // (in-app notifications são feitas pelo trigger _trigger_escala_publicada_membros)
       if (vars.status === "publicada" && escalaRef) {
+        // Busca email direto do join para não depender do estado local (que pode ter email=null)
         const { data: atrib } = await (supabase as any)
           .from("escala_membros")
-          .select("membro_id, ministerio_id")
+          .select("membro_id, ministerio_id, membros(id, nome, email)")
           .eq("escala_id", vars.id);
         for (let i = 0; i < (atrib ?? []).length; i++) {
           const a = (atrib ?? [])[i];
-          const membro = membros.find((m: Membro) => m.id === a.membro_id);
+          const emailTo   = a.membros?.email ?? membros.find((m: Membro) => m.id === a.membro_id)?.email;
+          const nomeMemb  = a.membros?.nome  ?? membros.find((m: Membro) => m.id === a.membro_id)?.nome ?? "";
           const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
-          if (!membro?.email) continue;
+          if (!emailTo) continue;
           if (i > 0) await new Promise((r) => setTimeout(r, 400));
           supabase.functions.invoke("send-email", {
             body: {
               template: "escala_publicada",
-              to: membro.email,
-              nome: membro.nome,
+              to: emailTo,
+              nome: nomeMemb,
               paroquia: paroquiaNome,
               escalaTitulo: escalaRef.titulo,
               escalaData: escalaRef.data,
@@ -2357,7 +2359,7 @@ function ListaView({
   isBulkPublishing: boolean;
 }) {
   const [radarOpen, setRadarOpen] = useState(false);
-  const [filtro, setFiltro] = useState<"todos" | "semana" | "2semanas" | "incompletas" | "rascunho">("todos");
+  const [filtro, setFiltro] = useState<"todos" | "semana" | "2semanas" | "incompletas" | "rascunho" | "publicadas">("todos");
   const [paginaEscalas, setPaginaEscalas] = useState(20);
   const [swapTarget, setSwapTarget] = useState<{ membroId: string; nome: string } | null>(null);
   const allSelected = escalas.length > 0 && escalas.every((e) => selectedIds.has(e.id));
@@ -2452,7 +2454,8 @@ function ListaView({
       if (filtro === "semana") return e.data >= hojeStr && e.data <= em7Str;
       if (filtro === "2semanas") return e.data >= hojeStr && e.data <= em14Str;
       if (filtro === "incompletas") { const c = escalaCounts[e.id]; return c ? c.filled < c.needed : false; }
-      if (filtro === "rascunho") return e.status === "rascunho";
+      if (filtro === "rascunho")    return e.status === "rascunho";
+      if (filtro === "publicadas")  return e.status === "publicada";
       return true;
     });
   }, [escalas, filtro, escalaCounts]);
@@ -2804,8 +2807,9 @@ function ListaView({
           { id: "todos",      label: "Todas",          count: escalas.length },
           { id: "semana",     label: "Esta semana",     count: null },
           { id: "2semanas",   label: "Próx. 2 semanas", count: null },
-          { id: "incompletas",label: "Incompletas",     count: escalas.filter((e) => { const c = escalaCounts[e.id]; return c && c.filled < c.needed; }).length || null },
-          { id: "rascunho",   label: "Rascunho",        count: draftCount || null },
+          { id: "publicadas",  label: "Publicadas",      count: publishedCount || null },
+          { id: "incompletas", label: "Incompletas",     count: escalas.filter((e) => { const c = escalaCounts[e.id]; return c && c.filled < c.needed; }).length || null },
+          { id: "rascunho",    label: "Rascunho",        count: draftCount || null },
         ] as const).map((f) => (
           <button
             key={f.id}
@@ -2823,13 +2827,19 @@ function ListaView({
 
       {/* ── Barra de ações em lote ──────────────────────────────────────────── */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 rounded-2xl bg-primary/5 border border-primary/20 px-4 py-2.5">
-          <span className="text-sm font-semibold text-primary flex-1">{selectedIds.size} selecionada(s)</span>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onBulkPublish(Array.from(selectedIds))} disabled={isBulkPublishing}>
-            {isBulkPublishing ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Check className="h-3 w-3 mr-1" />}
-            Publicar todas
+        <div className="flex items-center gap-2 rounded-2xl bg-primary/5 border border-primary/20 px-3 py-2.5">
+          <span className="text-sm font-semibold text-primary shrink-0">{selectedIds.size} selecionada(s)</span>
+          <div className="flex-1" />
+          <Button
+            size="sm"
+            className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white shrink-0"
+            onClick={() => onBulkPublish(Array.from(selectedIds))}
+            disabled={isBulkPublishing}
+          >
+            {isBulkPublishing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+            Publicar
           </Button>
-          <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => onSelectAll([])}>
+          <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground shrink-0" onClick={() => onSelectAll([])}>
             <X className="h-3 w-3" />
           </Button>
         </div>
@@ -2955,13 +2965,19 @@ function ListaView({
                           <MoreVertical className="h-3.5 w-3.5" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuItem onClick={() => onOpenDetail(e)}>
                           <ChevronDown className="h-3.5 w-3.5 mr-2 rotate-[-90deg]" />Ver detalhes
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={(ev) => onEdit(e, ev)}>
                           <Pencil className="h-3.5 w-3.5 mr-2" />Editar
                         </DropdownMenuItem>
+                        {e.status === "rascunho" && (
+                          <DropdownMenuItem onClick={() => onBulkPublish([e.id])}>
+                            <Send className="h-3.5 w-3.5 mr-2 text-green-600" />
+                            <span className="text-green-700 dark:text-green-400 font-medium">Publicar</span>
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => onExportPDF(e.id)}>
                           <FileText className="h-3.5 w-3.5 mr-2" />Exportar PDF
                         </DropdownMenuItem>
@@ -3824,12 +3840,22 @@ function EscalaDetail({
                 <span>{escala.local}</span>
               </div>
             )}
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
               <Badge variant={cfg.variant}>{cfg.label}</Badge>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {escala.status === "rascunho" && (
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => onStatusChange("publicada")}
+                  >
+                    <Send className="h-3 w-3" />
+                    Publicar e notificar
+                  </Button>
+                )}
                 {escala.status === "publicada" && (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
                     disabled={reenviarMutation.isPending}
@@ -3837,7 +3863,7 @@ function EscalaDetail({
                     title="Reenviar notificações e e-mails a todos os membros escalados"
                   >
                     <RefreshCw className={`h-3 w-3 ${reenviarMutation.isPending ? "animate-spin" : ""}`} />
-                    <span className="hidden sm:inline">Reenviar</span>
+                    <span className="hidden sm:inline">Reenviar notificações</span>
                   </Button>
                 )}
                 <Select value={escala.status} onValueChange={(v) => {
@@ -3849,7 +3875,7 @@ function EscalaDetail({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="rascunho">Rascunho</SelectItem>
-                    <SelectItem value="publicada">Publicar</SelectItem>
+                    <SelectItem value="publicada">Publicada</SelectItem>
                     <SelectItem value="arquivada">Arquivar</SelectItem>
                     <SelectItem value="cancelada">Cancelar escala</SelectItem>
                   </SelectContent>
@@ -3949,9 +3975,10 @@ function EscalaDetail({
             type="button"
             onClick={handleDebugMotor}
             className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded border border-dashed border-border hover:bg-muted/50 transition"
+            title="Diagnóstico completo do motor de distribuição automática"
           >
             <AlertTriangle className="h-3 w-3" />
-            Debug do Motor
+            Diagnóstico do motor
           </button>
         </div>
 
