@@ -37,6 +37,13 @@ type AdminUser = {
   perfil: { nome: string; email: string | null } | null;
 };
 
+// tipo_acesso do membro → role da página
+function tipoAcessoToRole(tipo: string): "admin" | "coordenador" | "auxiliar" | null {
+  if (tipo === "coordenador") return "admin"; // Coordenador = papel mais alto
+  if (tipo === "auxiliar") return "auxiliar";
+  return null;
+}
+
 // Mapa visual e de permissões por cargo
 const ROLE_CONFIG: Record<string, {
   label: string;
@@ -201,23 +208,32 @@ function AdministradoresPage() {
     enabled: !!profile?.paroquia_id,
     queryFn: async () => {
       const { data, error } = await anyDb
-        .from("user_roles")
-        .select("id, user_id, role, created_at, profiles!user_roles_user_id_fkey(nome, email)")
+        .from("membros")
+        .select("id, auth_user_id, tipo_acesso, created_at, nome, email")
         .eq("paroquia_id", profile!.paroquia_id!)
-        .order("role")
-        .order("created_at");
+        .in("tipo_acesso", ["coordenador", "auxiliar"])
+        .eq("ativo", true)
+        .order("tipo_acesso")
+        .order("nome");
       if (error) throw error;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return ((data ?? []) as any[]).map((r) => ({
-        ...r,
-        perfil: r.profiles ?? null,
+        id: r.id,
+        user_id: r.auth_user_id ?? r.id,
+        role: tipoAcessoToRole(r.tipo_acesso) ?? "auxiliar",
+        created_at: r.created_at,
+        perfil: { nome: r.nome, email: r.email },
       })) as AdminUser[];
     },
   });
 
   const removeMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await anyDb.from("user_roles").delete().eq("id", id);
+      // id aqui é o membros.id — redefine tipo_acesso para membro
+      const { error } = await anyDb
+        .from("membros")
+        .update({ tipo_acesso: "membro" })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {

@@ -328,22 +328,40 @@ function tLembretePresencaAdmin(paroquia: string, escalaTitulo: string, escalaDa
 
 function tEscalaPublicada(nome: string, paroquia: string, escalaTitulo: string, escalaData: string, escalaHora: string, ministerioNome: string, siteUrl: string): string {
   const sn = htmlSafe(nome); const sp = htmlSafe(paroquia); const st = htmlSafe(escalaTitulo); const sm = htmlSafe(ministerioNome);
-  let dataFmt = escalaData;
-  try { const [y,mo,d] = escalaData.split("-").map(Number); const M=["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]; dataFmt=`${d} de ${M[mo-1]} de ${y}`; } catch{/**/}
-  const horaFmt = escalaHora ? ` &agrave;s ${htmlSafe(escalaHora)}` : "";
-  const portalUrl = `${siteUrl}/portal-membro/home`;
+  const MESES = ["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  let dataFmt = escalaData; let diaSemana = "";
+  try {
+    const [y,mo,d] = escalaData.split("-").map(Number);
+    const dt = new Date(y, mo-1, d);
+    const DIAS = ["domingo","segunda-feira","ter&ccedil;a-feira","quarta-feira","quinta-feira","sexta-feira","s&aacute;bado"];
+    diaSemana = DIAS[dt.getDay()];
+    dataFmt = `${d} de ${MESES[mo-1]} de ${y}`;
+  } catch{/**/}
+  const horaFmt = escalaHora ? `, &agrave;s <strong>${htmlSafe(escalaHora)}</strong>` : "";
+  const portalUrl = `${siteUrl}/portal-membro/escalas`;
   const body = `
-    <h1>Sua escala foi publicada! &#128197;</h1>
-    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
-    <p>A coordena&ccedil;&atilde;o da <span class="hi">${sp}</span> publicou uma escala que inclui voc&ecirc;.</p>
-    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-      <tr><td style="padding:6px 0;color:#888;font-size:13px;width:100px;">Escala</td><td style="padding:6px 0;font-weight:600;color:#111;">${st}</td></tr>
-      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Data</td><td style="padding:6px 0;font-weight:600;color:#111;">${dataFmt}${horaFmt}</td></tr>
-      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Fun&ccedil;&atilde;o</td><td style="padding:6px 0;font-weight:600;color:#111;">${sm}</td></tr>
-    </table>
-    <p>Acesse o portal para confirmar sua presen&ccedil;a:</p>
-    <div class="bw"><a href="${portalUrl}" class="btn">Confirmar presen&ccedil;a &rarr;</a></div>
-    <p class="note">Em caso de impossibilidade, registre uma indisponibilidade o quanto antes.</p>`;
+    <h1>Voc&ecirc; foi escalado(a)! &#127775;</h1>
+    <p>Ol&aacute;, <strong>${sn}</strong>! A coordena&ccedil;&atilde;o da <span class="hi">${sp}</span> acabou de publicar uma escala com a sua participa&ccedil;&atilde;o.</p>
+    <div style="background:#f7f6f2;border-radius:10px;padding:20px 24px;margin:20px 0;">
+      <p style="margin:0 0 14px;font-size:13px;color:#888;text-transform:uppercase;letter-spacing:.08em;font-weight:600;">Detalhes da escala</p>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#888;font-size:13px;width:90px;">Celebra&ccedil;&atilde;o</td>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;font-weight:700;color:#111;font-size:15px;">${st}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#888;font-size:13px;">Data</td>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#333;font-size:14px;">${diaSemana ? diaSemana + ", " : ""}${dataFmt}${horaFmt}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;color:#888;font-size:13px;">Sua fun&ccedil;&atilde;o</td>
+          <td style="padding:7px 0;font-weight:700;color:#1a1a2e;font-size:15px;">${sm}</td>
+        </tr>
+      </table>
+    </div>
+    <p>Por favor, <strong>confirme sua presen&ccedil;a</strong> o quanto antes para que a coordena&ccedil;&atilde;o possa planejar a celebra&ccedil;&atilde;o:</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">&#10003;&nbsp; Confirmar presen&ccedil;a</a></div>
+    <p class="note">Se n&atilde;o puder comparecer, registre uma solicita&ccedil;&atilde;o de substitui&ccedil;&atilde;o com anteced&ecirc;ncia pelo portal. D&uacute;vidas? Entre em contato com a coordena&ccedil;&atilde;o da <span style="font-weight:600">${sp}</span>.</p>`;
   return baseLayout(paroquia, body, siteUrl);
 }
 
