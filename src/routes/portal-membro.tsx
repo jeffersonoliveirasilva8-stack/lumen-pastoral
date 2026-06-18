@@ -44,17 +44,17 @@ const NAV_SIDEBAR = [
   { to: "/portal-membro/perfil",         label: "Perfil",        icon: User },
 ] as const;
 
-// Bottom nav mobile: Home | Escalas | [FAB] | Notificações | Perfil
+// Bottom nav mobile: Início | Escalas | [FAB] | Substituições | Perfil
 const NAV_BOTTOM = [
-  { to: "/portal-membro/home",         label: "Início",        icon: Home },
-  { to: "/portal-membro/escalas",      label: "Escalas",       icon: Calendar },
-  { to: "/portal-membro/notificacoes", label: "Avisos",        icon: Bell },
-  { to: "/portal-membro/perfil",       label: "Perfil",        icon: User },
+  { to: "/portal-membro/home",          label: "Início",        icon: Home },
+  { to: "/portal-membro/escalas",       label: "Escalas",       icon: Calendar },
+  { to: "/portal-membro/substituicoes", label: "Substituir",    icon: ArrowLeftRight },
+  { to: "/portal-membro/perfil",        label: "Perfil",        icon: User },
 ] as const;
 
 // Drawer "Mais" — itens secundários
 const DRAWER_ITEMS = [
-  { to: "/portal-membro/substituicoes", label: "Substituições", icon: ArrowLeftRight, color: "bg-blue-600" },
+  { to: "/portal-membro/notificacoes",  label: "Avisos",        icon: Bell,           color: "bg-rose-500" },
   { to: "/portal-membro/eventos",       label: "Agenda",        icon: CalendarDays,   color: "bg-blue-500" },
   { to: "/portal-membro/ranking",       label: "Ranking",       icon: Trophy,         color: "bg-amber-500" },
   { to: "/portal-membro/liturgia",      label: "Liturgia",      icon: BookOpen,       color: "bg-purple-500" },

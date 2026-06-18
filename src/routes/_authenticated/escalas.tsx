@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { ModuleTabBar } from "@/components/ui/module-tab-bar";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -2542,7 +2543,11 @@ function ListaView({
     return (
       <div className="mt-8 rounded-2xl border border-dashed border-border bg-card p-12 text-center">
         <Calendar className="h-8 w-8 mx-auto text-muted-foreground" />
-        <p className="mt-4 text-sm text-muted-foreground">Nenhuma escala futura. Veja o calendário ou crie uma nova.</p>
+        <p className="mt-4 text-sm font-medium text-foreground">Nenhuma escala futura</p>
+        <p className="mt-1 text-sm text-muted-foreground">Crie uma nova escala para começar a organizar os servidores.</p>
+        <Button className="mt-4" onClick={onCreate}>
+          <Plus className="h-4 w-4" /> Nova escala
+        </Button>
       </div>
     );
   }
@@ -2911,15 +2916,7 @@ function ListaView({
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border ${
-                          e.status === "publicada"
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : e.status === "arquivada"
-                            ? "bg-slate-100 text-slate-500 border-slate-200"
-                            : "bg-slate-50 text-slate-600 border-slate-200"
-                        }`}>
-                          {cfg.label}
-                        </span>
+                        <StatusBadge status={e.status} />
                         {e.solene && (
                           <span className="hidden sm:inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 border border-amber-200">
                             Solene
@@ -3841,7 +3838,7 @@ function EscalaDetail({
               </div>
             )}
             <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
-              <Badge variant={cfg.variant}>{cfg.label}</Badge>
+              <StatusBadge status={escala.status} size="md" />
               <div className="flex items-center gap-2 flex-wrap">
                 {escala.status === "rascunho" && (
                   <Button

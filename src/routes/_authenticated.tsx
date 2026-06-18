@@ -179,7 +179,6 @@ function AuthLayout() {
     { to: "/painel",               label: "Painel",         icon: LayoutDashboard, color: "bg-slate-600" },
     { to: "/escalas",              label: "Escalas",         icon: Calendar,        color: "bg-blue-600" },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
-    { to: "/ranking",              label: "Ranking",         icon: Trophy,          color: "bg-amber-600" },
     { to: "/espiritualidade",      label: "Liturgia",        icon: BookOpen,        color: "bg-violet-600" },
     { to: "/formacoes",            label: "Pastoral",        icon: Leaf,            color: "bg-teal-600" },
     { to: "/configuracoes/paroquia", label: "Config.",       icon: Settings,        color: "bg-indigo-600" },
@@ -188,6 +187,7 @@ function AuthLayout() {
   // Itens secundários para o drawer "Mais" (inclui itens extra do nav + secundários)
   const drawerItems: NavItem[] = [
     ...mainNav.slice(5), // itens que não cabem no bottom nav
+    { to: "/ranking",        label: "Ranking",         icon: Trophy,          color: "bg-amber-600" },
     { to: "/notificacoes",   label: "Notificações",    icon: Bell,            color: "bg-rose-500" },
     { to: "/minha-conta",    label: "Minha Conta",     icon: UserCircle,      color: "bg-slate-500" },
     ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),

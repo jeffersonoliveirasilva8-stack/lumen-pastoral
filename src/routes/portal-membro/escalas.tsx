@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -755,17 +756,7 @@ function EscalaPortalCard({
               </div>
 
               {myMembro && (
-                <Badge
-                  variant={
-                    myMembro.status === "confirmado" ? "default"
-                    : myMembro.status === "recusado" ? "destructive"
-                    : myMembro.status === "ausente"  ? "outline"
-                    : "secondary"
-                  }
-                  className="text-xs whitespace-nowrap shrink-0"
-                >
-                  {STATUS_LABEL[myMembro.status] ?? myMembro.status}
-                </Badge>
+                <StatusBadge status={myMembro.status} showDot />
               )}
             </div>
 
@@ -990,7 +981,7 @@ function EscalaPortalCard({
                     {m.ministerio_nome}
                   </p>
                 </div>
-                <span className="text-[11px] text-muted-foreground shrink-0">{STATUS_LABEL[m.status] ?? m.status}</span>
+                <StatusBadge status={m.status} />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {PRESENCE_STATUSES.map(({ value, label, active, idle }) => (
@@ -1166,7 +1157,7 @@ function EscalaCoordCard({
                     <span className="ml-2 text-[10px] text-muted-foreground font-normal">(você)</span>
                   )}
                 </p>
-                <p className="text-[11px] text-muted-foreground capitalize">{STATUS_LABEL[m.status] ?? m.status}</p>
+                <StatusBadge status={m.status} />
               </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

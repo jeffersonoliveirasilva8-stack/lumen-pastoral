@@ -439,9 +439,10 @@ function PortalMembroHome() {
         {loadingEscalas ? (
           <SkeletonEscalaCard />
         ) : !nextEscala ? (
-          <div className="rounded-2xl border border-dashed border-border bg-background p-6 text-center">
-            <Calendar className="h-6 w-6 mx-auto text-muted-foreground/40 mb-2" />
-            <p className="text-sm text-muted-foreground">Nenhuma escala futura publicada.</p>
+          <div className="rounded-2xl border border-dashed border-border bg-background p-8 text-center">
+            <Calendar className="h-7 w-7 mx-auto text-muted-foreground/30 mb-3" />
+            <p className="text-sm font-medium text-foreground">Nenhuma escala publicada</p>
+            <p className="text-xs text-muted-foreground mt-1">A coordenação ainda não publicou escalas futuras. Você será notificado quando isso acontecer.</p>
           </div>
         ) : (
           <NextEscalaHero
