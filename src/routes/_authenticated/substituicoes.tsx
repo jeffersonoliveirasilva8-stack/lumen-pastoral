@@ -132,9 +132,12 @@ function AdminSubstituicoes() {
       if (!data?.success) throw new Error(data?.error ?? "Erro ao aprovar");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, substId) => {
       qc.invalidateQueries({ queryKey: ["admin-substituicoes"] });
       toast.success("Substituição aprovada. Escala atualizada.");
+      anyDb.functions
+        .invoke("notificar-substituicao", { body: { substituicao_id: substId, acao: "aprovada" } })
+        .catch(() => {});
     },
     onError: (e: Error) => {
       const msg = e.message === "substituicao_sem_voluntario"
@@ -156,9 +159,12 @@ function AdminSubstituicoes() {
       if (!data?.success) throw new Error(data?.error ?? "Erro ao rejeitar");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, { substId }) => {
       qc.invalidateQueries({ queryKey: ["admin-substituicoes"] });
       toast.success("Substituição rejeitada. Membro notificado.");
+      anyDb.functions
+        .invoke("notificar-substituicao", { body: { substituicao_id: substId, acao: "rejeitada" } })
+        .catch(() => {});
       setRejectId(null);
       setRejectMotivo("");
     },

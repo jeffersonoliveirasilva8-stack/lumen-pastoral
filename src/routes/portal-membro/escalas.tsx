@@ -390,6 +390,12 @@ function PortalMembroEscalas() {
         });
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error ?? "Erro ao registrar recusa");
+        // Dispara notificação de e-mail em background (não bloqueia nem exibe erro para o membro)
+        if (data?.substituicao_id) {
+          anyDb.functions
+            .invoke("notificar-substituicao", { body: { substituicao_id: data.substituicao_id } })
+            .catch(() => {});
+        }
       } else {
         // Confirmação e volta para pendente: direct update
         const { error } = await anyDb

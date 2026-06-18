@@ -176,12 +176,18 @@ function PortalMembroSubstituicoes() {
       if (!data?.success) throw new Error(data?.error ?? "Erro ao solicitar substituição");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["pm-substituicoes", membro!.id] });
       toast.success("Solicitação enviada para aprovação.");
       setShowForm(false);
       setSelectedEscala("");
       setMotivo("");
+      // Dispara e-mails para membros elegíveis em background
+      if (data?.substituicao_id) {
+        anyDb.functions
+          .invoke("notificar-substituicao", { body: { substituicao_id: data.substituicao_id } })
+          .catch(() => {});
+      }
     },
     onError: (e: Error) => {
       const msg = e.message === "confirmacao_desativada"
