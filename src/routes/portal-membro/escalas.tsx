@@ -204,7 +204,8 @@ function PortalMembroEscalas() {
         `)
         .eq("paroquia_id", membro!.paroquia_id)
         .eq("status", "publicada")
-        .order("data", { ascending: true });
+        .order("data", { ascending: true })
+        .order("hora_inicio", { ascending: true, nullsFirst: true });
       if (error) throw error;
       return (data ?? []).map((row: any): EscalaPublicada => ({
         id: row.id,
@@ -624,25 +625,59 @@ function PortalMembroEscalas() {
               );
             }
 
+            // Ordena client-side por data + hora_inicio numérico (evita bug de zero-padding)
+            const toMin = (h: string | null) => {
+              if (!h) return 0;
+              const [hh, mm] = h.split(":").map(Number);
+              return (hh || 0) * 60 + (mm || 0);
+            };
+            const sorted = [...escalasVisiveis].sort((a, b) =>
+              a.data !== b.data
+                ? a.data.localeCompare(b.data)
+                : toMin(a.hora_inicio) - toMin(b.hora_inicio)
+            );
+
+            // Agrupa por data para separadores de dia da semana
+            const DIAS = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+            const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+            let lastDate = "";
+
             return (
-              <div className="space-y-3">
-                {escalasVisiveis.map((esc) => (
-                  <EscalaPortalCard
-                    key={esc.id}
-                    escala={esc}
-                    confirmacaoAtiva={confirmacaoAtiva}
-                    membroId={membro!.id}
-                    isAdministrador={isCoordinator}
-                    onResponder={(escala_membro_id, status, justificativa) =>
-                      responderMutation.mutate({ escala_membro_id, status, justificativa })
-                    }
-                    onUpdateMemberStatus={(id, status) =>
-                      updateMembroStatusMutation.mutate({ escala_membro_id: id, status })
-                    }
-                    saving={responderMutation.isPending}
-                    savingStatus={updateMembroStatusMutation.isPending}
-                  />
-                ))}
+              <div className="space-y-1">
+                {sorted.map((esc) => {
+                  const isNewDate = esc.data !== lastDate;
+                  if (isNewDate) lastDate = esc.data;
+                  const [y, mo, d] = esc.data.split("-").map(Number);
+                  const dow = new Date(y, mo - 1, d).getDay();
+                  return (
+                    <div key={esc.id}>
+                      {isNewDate && (
+                        <div className="flex items-center gap-3 pt-4 pb-1 first:pt-0">
+                          <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60 whitespace-nowrap">
+                            {DIAS[dow]} · {d} {MESES[mo - 1]}
+                          </span>
+                          <div className="flex-1 h-px bg-border/60" />
+                        </div>
+                      )}
+                      <div className="mb-2">
+                        <EscalaPortalCard
+                          escala={esc}
+                          confirmacaoAtiva={confirmacaoAtiva}
+                          membroId={membro!.id}
+                          isAdministrador={isCoordinator}
+                          onResponder={(escala_membro_id, status, justificativa) =>
+                            responderMutation.mutate({ escala_membro_id, status, justificativa })
+                          }
+                          onUpdateMemberStatus={(id, status) =>
+                            updateMembroStatusMutation.mutate({ escala_membro_id: id, status })
+                          }
+                          saving={responderMutation.isPending}
+                          savingStatus={updateMembroStatusMutation.isPending}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             );
           })()}
