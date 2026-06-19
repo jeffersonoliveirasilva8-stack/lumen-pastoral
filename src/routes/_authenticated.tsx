@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
   Flame, BookOpen, Bell, UserCircle, Church, Leaf,
-  PanelLeftClose, PanelLeftOpen, Menu, Trophy,
+  PanelLeftClose, PanelLeftOpen, Menu, Trophy, HelpCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -192,6 +192,7 @@ function AuthLayout() {
     { to: "/ranking",        label: "Ranking",         icon: Trophy,          color: "bg-amber-600" },
     { to: "/notificacoes",   label: "Notificações",    icon: Bell,            color: "bg-rose-500" },
     { to: "/minha-conta",    label: "Minha Conta",     icon: UserCircle,      color: "bg-slate-500" },
+    { to: "/ajuda",          label: "Ajuda",           icon: HelpCircle,      color: "bg-sky-600" },
     ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),
   ];
 
@@ -292,6 +293,14 @@ function AuthLayout() {
               <UserCircle className="h-4 w-4 text-sidebar-foreground/50" />
             </Link>
           )}
+          <Link
+            to="/ajuda"
+            title="Ajuda"
+            className={`flex items-center rounded-xl text-xs text-sidebar-foreground/50 transition hover:bg-sidebar-accent/40 hover:text-sidebar-foreground/80 ${sidebarCollapsed ? "justify-center p-2" : "gap-1.5 px-2.5 py-1.5"}`}
+          >
+            <HelpCircle className="h-3.5 w-3.5 shrink-0" />
+            {!sidebarCollapsed && <span className="animate-fade-in">Ajuda</span>}
+          </Link>
           <div className={`flex ${sidebarCollapsed ? "flex-col" : "flex-row"} gap-1`}>
             <button
               onClick={logout}

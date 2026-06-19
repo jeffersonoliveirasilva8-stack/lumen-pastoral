@@ -6,9 +6,10 @@ import { format } from "date-fns";
 import {
   Loader2, Home, Calendar, Trophy, User, LogOut, Flame,
   CalendarDays, MessageSquare, Bell, BookOpen, X,
-  CalendarRange, Zap, AlertCircle, ArrowLeftRight,
+  CalendarRange, Zap, AlertCircle, ArrowLeftRight, HelpCircle,
 } from "lucide-react";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
+import { WelcomeGuide } from "@/components/portal/WelcomeGuide";
 import { supabase } from "@/integrations/supabase/client";
 import { getLiturgicalDays } from "@/lib/liturgical-calendar";
 import { checkProfileCompleteness } from "@/lib/profile-completeness";
@@ -42,6 +43,7 @@ const NAV_SIDEBAR = [
   { to: "/portal-membro/ocorrencias",    label: "Ocorrências",   icon: MessageSquare },
   { to: "/portal-membro/notificacoes",   label: "Notificações",  icon: Bell },
   { to: "/portal-membro/perfil",         label: "Perfil",        icon: User },
+  { to: "/portal-membro/ajuda",          label: "Ajuda",         icon: HelpCircle },
 ] as const;
 
 // Bottom nav mobile: Início | Escalas | [FAB] | Substituições | Perfil
@@ -60,6 +62,7 @@ const DRAWER_ITEMS = [
   { to: "/portal-membro/liturgia",      label: "Liturgia",      icon: BookOpen,       color: "bg-purple-500" },
   { to: "/portal-membro/ocorrencias",   label: "Ocorrências",   icon: MessageSquare,  color: "bg-orange-500" },
   { to: "/portal-membro/calendario",    label: "Calendário",    icon: CalendarRange,  color: "bg-teal-500" },
+  { to: "/portal-membro/ajuda",         label: "Ajuda",         icon: HelpCircle,     color: "bg-slate-500" },
 ] as const;
 
 function PortalMembroLayout() {
@@ -471,6 +474,8 @@ function PortalMembroLayout() {
           </PageTransition>
         </main>
       </div>
+
+      <WelcomeGuide />
 
       {/* ── Drawer "Mais" ── */}
       <Drawer open={menuOpen} onOpenChange={setMenuOpen}>
