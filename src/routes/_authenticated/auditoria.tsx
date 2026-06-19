@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Loader2, Activity, Search } from "lucide-react";
@@ -243,7 +243,7 @@ function AtividadePage() {
 
       <div className="mb-6">
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Configurações</p>
-        <h1 className="mt-2 font-serif text-2xl sm:text-4xl">Atividade do Sistema</h1>
+        <h1 className="page-header-title">Atividade do Sistema</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Registro de ações realizadas na paróquia.
         </p>

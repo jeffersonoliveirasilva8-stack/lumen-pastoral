@@ -1,7 +1,45 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(cd \"c:\\\\Users\\\\Marketing\\\\OneDrive\\\\Desktop\\\\Portal do Acolitado\"; Get-ChildItem -Name -Force | Where-Object { $_ -notmatch \"node_modules\" })"
+      "PowerShell(cd \"c:\\\\Users\\\\Marketing\\\\OneDrive\\\\Desktop\\\\Portal do Acolitado\"; Get-ChildItem -Name -Force | Where-Object { $_ -notmatch \"node_modules\" })",
+      "Bash(Get-ChildItem -Path \"C:\\\\Projetos\\\\lumen-pastoral\" -Force)",
+      "Bash(Select-Object Name, Mode)",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget",
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npm run *)",
+      "Bash(npx vercel *)",
+      "Bash(git commit -m 'feat\\(portal-membro\\): confirmação de presença direta na home *)",
+      "Bash(git push *)",
+      "Bash(git commit -m 'fix\\(auth\\): corrigir spinner infinito no login em todas as entradas *)",
+      "Bash(git commit -m 'fix\\(portal-membro\\): remover useNavigate de NextEscalaHero - React error 310 *)",
+      "Bash(git commit -m 'fix\\(motor+sacristia\\): 4 bugs P0 corrigidos *)",
+      "Bash(npx @tanstack/router-cli generate)",
+      "Bash(git commit *)",
+      "Bash(npx supabase *)",
+      "Bash(curl -s -X POST https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/send-email -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"template\":\"escala_publicada\",\"to\":\"jeff.osilva8@gmail.com\",\"nome\":\"Jefferson\",\"paroquia\":\"Teste\",\"escalaTitulo\":\"Missa Dominical\",\"escalaData\":\"2026-06-22\",\"escalaHora\":\"10:00\",\"ministerioNome\":\"Acólito\"}')",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(awk 'NR>=4260 && NR<=4290' src/routes/_authenticated/escalas.tsx)",
+      "Bash(awk 'NR>=4295 && NR<=4330' src/routes/_authenticated/escalas.tsx)",
+      "Bash(awk 'NR>=4380 && NR<=4420' src/routes/_authenticated/escalas.tsx)",
+      "Bash(grep -v \"//\\\\|profile\\\\.\")",
+      "Bash(grep -v \"//\\\\|mutation\\\\|query\\\\|filter\\\\|\\\\.status\\\\b\\\\|status:\\\\|vars\\\\.\")",
+      "Bash(awk 'NR>=3040 && NR<=3080' src/routes/_authenticated/escalas.tsx)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Projetos\\\\lumen-pastoral\\\\src\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(xargs grep -l \"createFileRoute\")",
+      "Bash(xargs grep -l \"tab\\\\|Tab\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "PowerShell(Stop-Process -Id 30816 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(\"done\")",
+      "Bash(powershell -command \"\\(Get-Content 'C:\\\\Projetos\\\\lumen-pastoral\\\\src\\\\routes\\\\_authenticated\\\\formacoes.tsx'\\).Count\")",
+      "Bash(supabase db *)",
+      "Bash(node -e ' *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(curl -s https://cusuoggmlhtvrclrzvfr.supabase.co/rest/v1/rpc/coord_get_substituicoes -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1c3VvZ2dtbGh0dnJjbHJ6dmZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNzk1OTUsImV4cCI6MjA5NDg1NTU5NX0.14p2eZ2SLHYLlJ5mWsOyxAR_cGNbxHSZ9E9kmEbuI5I' -H 'Content-Type: application/json' -d '{}')"
     ]
   }
 }

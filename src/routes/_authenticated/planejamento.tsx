@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import {
@@ -152,7 +152,7 @@ function PlanejamentoPastoralPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Gestão Pastoral</p>
-          <h1 className="mt-2 font-serif text-2xl sm:text-3xl">Planejamento Pastoral</h1>
+          <h1 className="page-header-title">Planejamento Pastoral</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Visão consolidada de missas, formações, retiros e eventos.
           </p>

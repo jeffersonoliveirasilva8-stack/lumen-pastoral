@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   HelpCircle, Calendar, ArrowLeftRight, User, Bell,
@@ -260,7 +260,7 @@ function AjudaMembroPage() {
           <HelpCircle className="h-6 w-6" />
         </div>
         <div>
-          <h1 className="font-serif text-2xl">Central de Ajuda</h1>
+          <h1 className="page-header-title">Central de Ajuda</h1>
           <p className="text-sm text-muted-foreground">Como usar o Portal do Servidor</p>
         </div>
       </div>

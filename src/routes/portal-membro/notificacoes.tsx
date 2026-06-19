@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+﻿import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import {
@@ -403,7 +403,7 @@ function PortalMembroNotificacoes() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground mb-1">
             Portal do Servidor
           </p>
-          <h1 className="font-serif text-2xl flex items-center gap-2">
+          <h1 className="page-header-title">
             Notificações
             {naoLidasTotal > 0 && (
               <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-bold px-1.5">

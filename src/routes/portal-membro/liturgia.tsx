@@ -1,4 +1,4 @@
-/**
+﻿/**
  * LiturgiaDiariaPage — Lectionary digital
  * Design: contemplativo, mobile-first, tipografia litúrgica
  */
@@ -492,7 +492,7 @@ function LiturgiaDiariaPage() {
           </p>
 
           {/* Celebração */}
-          <h1 className="font-serif text-[1.65rem] sm:text-3xl font-semibold leading-tight text-foreground mb-1">
+          <h1 className="page-header-title">
             {lit.titulo}
           </h1>
           {lit.santo && <p className="text-sm text-muted-foreground italic mt-0.5">{lit.santo}</p>}

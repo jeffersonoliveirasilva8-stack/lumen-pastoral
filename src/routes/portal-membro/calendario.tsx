@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -62,7 +62,7 @@ function PortalMembroCalendario() {
     <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6 pb-24">
       <div>
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Portal</p>
-        <h1 className="mt-1.5 font-serif text-3xl">Calendário Litúrgico</h1>
+        <h1 className="page-header-title">Calendário Litúrgico</h1>
         <p className="mt-1 text-sm text-muted-foreground">Celebrações e tempo litúrgico do ano.</p>
       </div>
 

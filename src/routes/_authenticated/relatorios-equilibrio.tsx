@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { format, subDays } from "date-fns";
@@ -203,7 +203,7 @@ function RelatoriosEquilibrioPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <BarChart3 className="h-5 w-5 text-primary" />
-            <h1 className="font-serif text-2xl sm:text-3xl">Equilíbrio de participação</h1>
+            <h1 className="page-header-title">Equilíbrio de participação</h1>
           </div>
           <p className="text-sm text-muted-foreground">
             Distribuição de escalas por membro — {desde} a {ate}

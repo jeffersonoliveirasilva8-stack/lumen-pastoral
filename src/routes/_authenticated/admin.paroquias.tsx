@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -111,7 +111,7 @@ function AdminParoquiasPage() {
 
       <div>
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Administração</p>
-        <h1 className="mt-2 font-serif text-2xl sm:text-3xl">Solicitações de Paróquias</h1>
+        <h1 className="page-header-title">Solicitações de Paróquias</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Analise e aprove solicitações de cadastro de novas paróquias.
         </p>

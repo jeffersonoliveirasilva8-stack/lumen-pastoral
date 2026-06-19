@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -174,7 +174,7 @@ function EspiritualidadePage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Liturgia</p>
-          <h1 className="mt-2 font-serif text-2xl sm:text-4xl text-foreground">Liturgia do Dia</h1>
+          <h1 className="page-header-title">Liturgia do Dia</h1>
           <p className="mt-1 text-sm text-muted-foreground capitalize">
             {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
           </p>

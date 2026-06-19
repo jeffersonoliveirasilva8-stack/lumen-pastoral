@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Loader2, Save, RotateCcw } from "lucide-react";
@@ -257,7 +257,7 @@ function ConfiguracaoEscalas() {
     <div className="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto pb-24 space-y-6">
 
       <div>
-        <h1 className="font-serif text-2xl sm:text-3xl">Motor de Escalas</h1>
+        <h1 className="page-header-title">Motor de Escalas</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Política de confirmação, motor de alocação, substituições, indisponibilidades e pontuação.
         </p>

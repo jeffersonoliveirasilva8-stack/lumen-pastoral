@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
@@ -352,7 +352,7 @@ function SolicitacoesPage() {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5">
         <div>
           <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Membros</p>
-          <h1 className="font-serif text-3xl mt-1">Solicitações de Cadastro</h1>
+          <h1 className="page-header-title">Solicitações de Cadastro</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Analise e aprove pedidos de ingresso na pastoral.
           </p>

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, subDays } from "date-fns";
@@ -203,7 +203,7 @@ function AdminLiturgiaPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Admin</p>
-          <h1 className="mt-1 font-serif text-2xl sm:text-3xl">Administração Litúrgica</h1>
+          <h1 className="page-header-title">Administração Litúrgica</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Personalize o calendário litúrgico da paróquia
           </p>

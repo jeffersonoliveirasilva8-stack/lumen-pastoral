@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -282,7 +282,7 @@ function AdministradoresPage() {
         <p className="text-xs font-bold tracking-[0.2em] uppercase text-gold">Configurações</p>
         <div className="flex items-start justify-between gap-4 mt-2">
           <div>
-            <h1 className="font-serif text-2xl sm:text-3xl">Equipe de coordenação</h1>
+            <h1 className="page-header-title">Equipe de coordenação</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {admins.length === 0 ? "Nenhum membro na equipe ainda." : `${admins.length} pessoa${admins.length !== 1 ? "s" : ""} com acesso ao painel`}
             </p>

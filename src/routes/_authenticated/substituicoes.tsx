@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useSetPageTabs } from "@/contexts/page-tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -201,7 +201,7 @@ function AdminSubstituicoes() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-serif">Substituições</h1>
+          <h1 className="page-header-title">Substituições</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Gerencie solicitações de troca de escala da paróquia.
           </p>

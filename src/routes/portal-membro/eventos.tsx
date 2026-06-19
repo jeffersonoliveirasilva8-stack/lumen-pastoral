@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -157,7 +157,7 @@ function PortalMembroEventos() {
     <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-6 pb-24">
       <div>
         <p className="text-xs font-medium tracking-[0.2em] uppercase text-gold">Portal</p>
-        <h1 className="mt-1.5 font-serif text-3xl">Eventos e Formações</h1>
+        <h1 className="page-header-title">Eventos e Formações</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Confirme sua presença ou registre ausência com justificativa.
         </p>

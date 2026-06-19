@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
@@ -156,7 +156,7 @@ export function RelatoriosContent({ showHeader = false }: { showHeader?: boolean
       {showHeader && (
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-serif">Relatórios — Substituições</h1>
+            <h1 className="page-header-title">Relatórios — Substituições</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Análise e histórico completo de substituições da paróquia.
             </p>

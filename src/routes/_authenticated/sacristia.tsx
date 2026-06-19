@@ -320,7 +320,7 @@ function SacristiaPage() {
       </div>
 
       <div className="mb-6">
-        <h1 className="font-serif text-2xl sm:text-3xl">Presença</h1>
+        <h1 className="page-header-title">Presença</h1>
         <p className="mt-1 text-sm text-muted-foreground capitalize">
           {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
         </p>

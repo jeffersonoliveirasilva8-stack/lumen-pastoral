@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { useSetPageTabs } from "@/contexts/page-tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -114,7 +114,7 @@ function OcorrenciasPage() {
 
       {/* Header */}
       <div>
-        <h1 className="font-serif text-2xl sm:text-3xl">Ocorrências</h1>
+        <h1 className="page-header-title">Ocorrências</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Comunicações enviadas pelos servidores à coordenação.
         </p>
