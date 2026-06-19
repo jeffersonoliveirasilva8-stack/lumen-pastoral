@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -62,13 +62,6 @@ const STATUS_FILTER = [
   { value: "cancelada", label: "Canceladas" },
 ];
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  solicitada:    { label: "Aguardando voluntário", color: "text-amber-600", bg: "bg-amber-500/15 border-amber-500/30" },
-  com_voluntario:{ label: "Com voluntário",        color: "text-blue-600",  bg: "bg-blue-500/15 border-blue-500/30" },
-  aprovada:      { label: "Aprovada",              color: "text-green-600", bg: "bg-green-500/15 border-green-500/30" },
-  rejeitada:     { label: "Não aprovada",          color: "text-red-600",   bg: "bg-red-500/15 border-red-500/30" },
-  cancelada:     { label: "Cancelada",             color: "text-muted-foreground", bg: "bg-muted/60 border-border" },
-};
 
 function AdminSubstituicoes() {
   const { profile, isAdmin, isCoordenador } = useAuth();
@@ -458,7 +451,6 @@ function SubstAdminCard({
   saving: boolean;
 }) {
   const [expanded, setExpanded] = useState(subst.status === "com_voluntario");
-  const cfg = STATUS_CONFIG[subst.status] ?? STATUS_CONFIG.cancelada;
   const dateObj = new Date(subst.escala_data + "T12:00:00");
   const isUrgent = subst.status === "com_voluntario";
   const canAct = ["solicitada", "com_voluntario"].includes(subst.status);
@@ -478,11 +470,7 @@ function SubstAdminCard({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span
-                  className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}
-                >
-                  {cfg.label}
-                </span>
+                <StatusBadge status={subst.status} type="substituicao" showDot />
                 {isUrgent && (
                   <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 animate-pulse">
                     ⚡ Aguarda aprovação

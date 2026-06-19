@@ -3,7 +3,8 @@ import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Star, Lock, History, TrendingUp } from "lucide-react";
+import { Loader2, Star, Lock, History, TrendingUp, Calendar } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { format, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
@@ -117,6 +118,13 @@ function PortalMembroRanking() {
           <p className="text-sm text-muted-foreground max-w-xs mx-auto">
             Confirme presença nas escalas para começar a acumular pontos e aparecer no ranking.
           </p>
+          <Link
+            to="/portal-membro/escalas"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline mt-1"
+          >
+            <Calendar className="h-4 w-4" />
+            Ver minhas escalas
+          </Link>
         </div>
       )}
 

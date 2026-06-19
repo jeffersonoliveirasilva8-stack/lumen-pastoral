@@ -227,18 +227,36 @@ Deno.serve(async (req) => {
 
     if (!resendKey) return json({ ok: false, error: "RESEND_API_KEY not configured" }, 503);
     if (!siteUrl)   return json({ ok: false, error: "SITE_URL not configured" }, 503);
-    if (!req.headers.get("Authorization"))
-      return json({ ok: false, error: "Unauthorized" }, 401);
+
+    // Service role — necessário para validar o token antes de qualquer outra coisa
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    // Valida que o chamador é interno (banco via pg_net com token de uso único).
+    // O token é gerado pela RPC SECURITY DEFINER, inserido em notificacao_tokens
+    // (expira em 5 min) e consumido aqui via DELETE — não pode ser reutilizado.
+    // A anon key pública é rejeitada porque não existe na tabela de tokens.
+    const bearerToken = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    if (!bearerToken) return json({ ok: false, error: "Unauthorized" }, 401);
 
     const body = await req.json() as { substituicao_id: string; acao?: string };
     const { substituicao_id, acao = "vaga_disponivel" } = body;
     if (!substituicao_id) return json({ ok: false, error: "Missing field: substituicao_id" }, 400);
 
-    // Service role — acesso total
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    // Consome o token (DELETE atômico): se não existir, expirou ou não casa com
+    // o substituicao_id do body, retorna 0 linhas e rejeitamos com 401.
+    const { data: tokenRows } = await (admin as any)
+      .from("notificacao_tokens")
+      .delete()
+      .eq("token", bearerToken)
+      .eq("substituicao_id", substituicao_id)
+      .gt("expires_at", new Date().toISOString())
+      .select("token");
+
+    if (!tokenRows || tokenRows.length === 0)
+      return json({ ok: false, error: "Unauthorized" }, 401);
 
     // ── Carrega substituição completa ─────────────────────────────────────────
     const { data: subst, error: se } = await (admin as any)

@@ -4,10 +4,10 @@ import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Loader2, BarChart3, Download, Filter,
-  CheckCircle2, XCircle, Clock, ArrowLeftRight,
-  TrendingUp, TrendingDown,
+  Loader2, BarChart3, Download, Filter, ArrowLeftRight,
+  CheckCircle2, XCircle, Clock, TrendingUp, TrendingDown,
 } from "lucide-react";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -295,10 +295,7 @@ export function RelatoriosContent({ showHeader = false }: { showHeader?: boolean
                 {filtered.map((s) => (
                   <div key={s.id} className="px-4 py-3 flex items-center gap-3">
                     <div className="shrink-0">
-                      {s.status === "aprovada"  && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-                      {s.status === "rejeitada" && <XCircle className="h-4 w-4 text-red-400" />}
-                      {s.status === "cancelada" && <XCircle className="h-4 w-4 text-muted-foreground" />}
-                      {["solicitada","com_voluntario"].includes(s.status) && <Clock className="h-4 w-4 text-amber-500" />}
+                      <StatusBadge status={s.status} type="substituicao" showDot />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">

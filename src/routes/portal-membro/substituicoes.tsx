@@ -4,15 +4,15 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Loader2, ArrowLeftRight, Calendar, CheckCircle2, XCircle,
-  Clock, AlertTriangle, Plus, X, ChevronDown, ChevronUp,
+  Loader2, ArrowLeftRight, Calendar, CheckCircle2,
+  AlertTriangle, Plus, X, ChevronDown, ChevronUp,
   HandHelping,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -62,38 +62,6 @@ type SubstAberta = {
   solicitante_nome: string;
 };
 
-const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; variant: "default" | "secondary" | "destructive" | "outline"; color: string }> = {
-  solicitada: {
-    label: "Aguardando voluntário",
-    icon: <Clock className="h-3 w-3" />,
-    variant: "secondary",
-    color: "text-amber-600",
-  },
-  com_voluntario: {
-    label: "Com voluntário",
-    icon: <AlertTriangle className="h-3 w-3" />,
-    variant: "default",
-    color: "text-blue-600",
-  },
-  aprovada: {
-    label: "Aprovada",
-    icon: <CheckCircle2 className="h-3 w-3" />,
-    variant: "default",
-    color: "text-green-600",
-  },
-  rejeitada: {
-    label: "Não aprovada",
-    icon: <XCircle className="h-3 w-3" />,
-    variant: "destructive",
-    color: "text-red-600",
-  },
-  cancelada: {
-    label: "Cancelada",
-    icon: <X className="h-3 w-3" />,
-    variant: "outline",
-    color: "text-muted-foreground",
-  },
-};
 
 function PortalMembroSubstituicoes() {
   const { membro } = useMembroAuth();
@@ -182,12 +150,6 @@ function PortalMembroSubstituicoes() {
       setShowForm(false);
       setSelectedEscala("");
       setMotivo("");
-      // Dispara e-mails para membros elegíveis em background
-      if (data?.substituicao_id) {
-        anyDb.functions
-          .invoke("notificar-substituicao", { body: { substituicao_id: data.substituicao_id } })
-          .catch(() => {});
-      }
     },
     onError: (e: Error) => {
       const msg = e.message === "confirmacao_desativada"
@@ -506,7 +468,6 @@ function SubstCard({
   savingVoluntariar: boolean;
   readonly?: boolean;
 }) {
-  const cfg = STATUS_CONFIG[subst.status] ?? STATUS_CONFIG.solicitada;
   const dateObj = new Date(subst.escala_data + "T12:00:00");
   const isSolicitante = subst.tipo === "solicitante";
   const canCancel = isSolicitante && ["solicitada", "com_voluntario"].includes(subst.status) && !readonly;
@@ -543,17 +504,7 @@ function SubstCard({
               {format(dateObj, "EEEE, d 'de' MMMM", { locale: ptBR })}
             </p>
           </div>
-          <Badge
-            variant={cfg.variant}
-            className={`text-[11px] whitespace-nowrap shrink-0 ${
-              subst.status === "aprovada" ? "bg-green-500/15 text-green-700 border-green-500/30 dark:text-green-400" :
-              subst.status === "com_voluntario" ? "bg-blue-500/15 text-blue-700 border-blue-500/30 dark:text-blue-400" :
-              subst.status === "solicitada" ? "bg-amber-500/15 text-amber-700 border-amber-500/30 dark:text-amber-400" :
-              ""
-            }`}
-          >
-            {cfg.label}
-          </Badge>
+          <StatusBadge status={subst.status} type="substituicao" showDot />
         </div>
 
         {/* Detalhes */}
