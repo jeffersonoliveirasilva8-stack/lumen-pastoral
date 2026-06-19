@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useMemo, useEffect, useState } from "react";
-import { format, isToday, isTomorrow, differenceInDays, parseISO, subMonths, startOfMonth, endOfMonth, startOfDay } from "date-fns";
+import { format, isToday, isTomorrow, differenceInDays, parseISO, subMonths, startOfMonth, endOfMonth, startOfDay, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Calendar, Clock, MapPin,
@@ -195,11 +195,20 @@ function PortalMembroHome() {
         .eq("ativo", true)
         .gte("data_inicio", new Date().toISOString())
         .order("data_inicio", { ascending: true })
-        .limit(3);
+        .limit(10);
       if (error) throw error;
       return data ?? [];
     },
   });
+
+  // Eventos desta semana (destacados no topo)
+  const eventosEstaSemana = proximosEventos.filter((ev) =>
+    isThisWeek(parseISO(ev.data_inicio), { weekStartsOn: 0 }) ||
+    differenceInDays(parseISO(ev.data_inicio), today) <= 6
+  );
+  const eventosFuturos = proximosEventos.filter((ev) =>
+    !eventosEstaSemana.find((e) => e.id === ev.id)
+  ).slice(0, 3);
 
   const { data: minhasPresencasHome = [] } = useQuery<{ evento_id: string; presente: boolean | null }[]>({
     queryKey: ["portal-home-presencas", membro?.id],
@@ -454,6 +463,63 @@ function PortalMembroHome() {
         )}
       </section>
 
+      {/* ── Eventos desta semana — destaque antecipado ── */}
+      {eventosEstaSemana.length > 0 && (
+        <section className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
+              <p className="text-[10px] uppercase tracking-[0.28em] font-semibold text-muted-foreground">
+                Esta semana
+              </p>
+            </div>
+            <Link to="/portal-membro/eventos" className="text-xs text-primary hover:underline">Ver todos</Link>
+          </div>
+          <div className="rounded-2xl overflow-hidden border border-violet-200 dark:border-violet-900 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-950/20 dark:to-indigo-950/20 divide-y divide-violet-100 dark:divide-violet-900/50">
+            {eventosEstaSemana.map((ev) => {
+              const evDate = parseISO(ev.data_inicio);
+              const diasFaltam = differenceInDays(startOfDay(evDate), startOfDay(today));
+              const p = minhasPresencasHome.find((pr) => pr.evento_id === ev.id);
+              const confirmado = p !== undefined && p.presente === null;
+              const TIPO_ICON: Record<string, string> = {
+                missa: "⛪", reuniao: "👥", retiro: "🕊️", formacao: "📖", adoracao: "🙏", outro: "📅",
+              };
+              return (
+                <div key={ev.id} className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="shrink-0 h-10 w-10 rounded-xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center text-lg">
+                    {TIPO_ICON[ev.tipo] ?? "📅"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{ev.titulo}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 text-xs text-violet-600 dark:text-violet-400">
+                      <span className="font-medium">
+                        {isToday(evDate) ? "Hoje" : isTomorrow(evDate) ? "Amanhã" : diasFaltam === 0 ? "Hoje" : `em ${diasFaltam} dias`}
+                      </span>
+                      <span>·</span>
+                      <span>{format(evDate, "HH:mm")}</span>
+                      <span>·</span>
+                      <span>+{ev.pontuacao} pts</span>
+                    </div>
+                  </div>
+                  {confirmado ? (
+                    <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-400/30 font-medium">
+                      Confirmado
+                    </span>
+                  ) : (
+                    <Link
+                      to="/portal-membro/eventos"
+                      className="shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-violet-500 text-white font-semibold hover:bg-violet-600 active:scale-95 transition-transform"
+                    >
+                      Ver
+                    </Link>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* ── Liturgia e Homilia do dia ── */}
       <section className="space-y-2.5">
         {/* Label da seção */}
@@ -627,8 +693,8 @@ function PortalMembroHome() {
         </section>
       )}
 
-      {/* ── Próximos eventos ── */}
-      {proximosEventos.length > 0 && (
+      {/* ── Próximos eventos (fora desta semana) ── */}
+      {eventosFuturos.length > 0 && (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -638,7 +704,7 @@ function PortalMembroHome() {
             <Link to="/portal-membro/eventos" className="text-sm text-primary hover:underline">Ver todos</Link>
           </div>
           <div className="rounded-3xl border border-border bg-card overflow-hidden divide-y divide-border">
-            {proximosEventos.map((ev) => {
+            {eventosFuturos.map((ev) => {
               const p = minhasPresencasHome.find((pr) => pr.evento_id === ev.id);
               const confirmado = p !== undefined && p.presente === null;
               const ausente = p?.presente === false;

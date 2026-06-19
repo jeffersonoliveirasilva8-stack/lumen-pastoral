@@ -145,9 +145,11 @@ function NotifCard({
       {/* Card principal */}
       <div
         className={[
-          "relative flex items-start gap-3 px-4 py-3.5 rounded-2xl",
-          "border-l-4 bg-card",
-          !isLida ? cfg.accent + " shadow-sm" : "border-l-transparent opacity-60",
+          "relative flex items-start gap-3 px-4 py-3.5 rounded-2xl border-l-4",
+          "transition-all duration-300",
+          !isLida
+            ? cfg.accent + " bg-card shadow-sm"
+            : "border-l-transparent bg-muted/30",
         ].join(" ")}
         style={{
           transform: `translateX(${swipeX}px)`,
@@ -159,9 +161,14 @@ function NotifCard({
       >
         {/* Ícone redondo estilo iOS */}
         <div
-          className={`shrink-0 h-10 w-10 rounded-2xl flex items-center justify-center mt-0.5 ${cfg.iconBg} ${cfg.iconColor}`}
+          className={[
+            "shrink-0 h-10 w-10 rounded-2xl flex items-center justify-center mt-0.5 transition-all duration-300",
+            isLida ? "bg-muted text-muted-foreground/40" : `${cfg.iconBg} ${cfg.iconColor}`,
+          ].join(" ")}
         >
-          <Icon className="h-[18px] w-[18px]" />
+          {isLida
+            ? <CheckCheck className="h-[18px] w-[18px]" />
+            : <Icon className="h-[18px] w-[18px]" />}
         </div>
 
         {/* Conteúdo */}
@@ -171,12 +178,19 @@ function NotifCard({
           onClick={onTap}
           disabled={isPendingLida}
         >
-          {/* Linha superior: categoria + tempo */}
+          {/* Linha superior: categoria + tempo + badge lida */}
           <div className="flex items-center justify-between mb-0.5">
-            <span className={`text-[11px] font-semibold uppercase tracking-wide ${isLida ? "text-muted-foreground/60" : "text-muted-foreground"}`}>
-              {cfg.label}
-            </span>
-            <span className="text-[11px] text-muted-foreground/60 shrink-0 ml-2">
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[11px] font-semibold uppercase tracking-wide ${isLida ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
+                {cfg.label}
+              </span>
+              {isLida && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/50 leading-none">
+                  Lida
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] text-muted-foreground/50 shrink-0 ml-2">
               {tempoRelativo(n.created_at)}
             </span>
           </div>
@@ -184,16 +198,16 @@ function NotifCard({
           {/* Título */}
           <div className="flex items-start gap-1.5">
             {!isLida && (
-              <span className="mt-1 shrink-0 h-2 w-2 rounded-full bg-blue-500" />
+              <span className="mt-[5px] shrink-0 h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
             )}
-            <p className={`text-sm font-semibold leading-snug ${isLida ? "text-foreground/60" : "text-foreground"}`}>
+            <p className={`text-sm font-semibold leading-snug transition-colors duration-300 ${isLida ? "text-foreground/50 font-normal" : "text-foreground"}`}>
               {n.titulo}
             </p>
           </div>
 
           {/* Mensagem */}
           {n.mensagem && (
-            <p className={`text-xs mt-0.5 leading-relaxed line-clamp-2 ${isLida ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
+            <p className={`text-xs mt-0.5 leading-relaxed line-clamp-2 ${isLida ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
               {n.mensagem}
             </p>
           )}
