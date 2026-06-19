@@ -214,31 +214,34 @@ function AdminSubstituicoes() {
         )}
       </div>
 
-      {/* Estado desabilitado */}
-      {!substituicaoAtiva && (
+      {/* Banner: feature desabilitada — aviso informacional para coord, bloqueante para membros */}
+      {!substituicaoAtiva && !isCoord && (
         <div className="rounded-2xl border border-border bg-muted/30 p-6 text-center space-y-3">
           <ArrowLeftRight className="h-8 w-8 mx-auto text-muted-foreground/40" />
           <div>
             <p className="text-sm font-semibold text-foreground">Substituições desabilitadas</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {isCoord
-                ? <>Para ativar, acesse <span className="font-medium">Configurações → Escalas</span> e habilite o módulo de substituições.</>
-                : "As substituições estão desabilitadas para esta paróquia no momento."}
+              As substituições estão desabilitadas para esta paróquia no momento.
             </p>
           </div>
-          {isCoord && (
-            <a
-              href="/configuracoes-escalas"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition"
-            >
-              Ir para Configurações de Escalas
-            </a>
-          )}
         </div>
       )}
 
-      {/* Indicadores de status — só quando ativo e com dados */}
-      {substituicaoAtiva && substituicoes.length > 0 && (
+      {/* Aviso informacional para coordenador quando feature está desabilitada */}
+      {!substituicaoAtiva && isCoord && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>
+            Substituições desabilitadas para membros.{" "}
+            <a href="/configuracoes-escalas" className="font-semibold underline underline-offset-2">
+              Ativar em Configurações → Escalas
+            </a>
+          </span>
+        </div>
+      )}
+
+      {/* Indicadores de status — com dados */}
+      {substituicoes.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2.5 text-center">
             <p className="text-xl font-serif font-bold text-amber-600">{pendentes}</p>
@@ -259,8 +262,8 @@ function AdminSubstituicoes() {
         </div>
       )}
 
-      {/* Abas: Gestão | Relatórios — só quando ativo */}
-      {substituicaoAtiva && <div className="flex gap-1 border-b border-border">
+      {/* Abas: Gestão | Relatórios */}
+      <div className="flex gap-1 border-b border-border">
         <button
           type="button"
           onClick={() => setActiveTab("gestao")}
@@ -285,9 +288,9 @@ function AdminSubstituicoes() {
           <BarChart3 className="h-3.5 w-3.5 inline mr-1.5" />
           Relatórios
         </button>
-      </div>}
+      </div>
 
-      {substituicaoAtiva && <>
+      <>
       {/* Aba Relatórios */}
       {activeTab === "relatorios" && <RelatoriosContent />}
 
@@ -438,7 +441,7 @@ function AdminSubstituicoes() {
       </Dialog>
 
       </> /* fim aba gestao */}
-      </> /* fim substituicaoAtiva */}
+      </> /* fim conteúdo */
     </div>
   );
 }
