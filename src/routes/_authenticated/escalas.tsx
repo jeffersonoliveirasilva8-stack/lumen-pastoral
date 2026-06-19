@@ -4134,7 +4134,7 @@ function EscalaDetail({
                                     atribId: a.id,
                                     membroNome: a.membro.nome,
                                     ministerioId: f.ministerio_id,
-                                    ministerioNome: f.nome,
+                                    ministerioNome: f.ministerio.nome,
                                   });
                                 }}
                               >

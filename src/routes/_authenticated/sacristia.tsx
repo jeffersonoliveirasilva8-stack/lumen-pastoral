@@ -211,10 +211,10 @@ function SacristiaPage() {
 
   // Inicializa presencaMap com status já gravados ao carregar membrosEscala
   useEffect(() => {
-    const initial: Record<string, string> = {};
+    const initial: Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente"> = {};
     membrosEscala.forEach((m) => {
       if (STATUS_FINAIS.includes(m.status)) {
-        initial[m.id] = m.status;
+        initial[m.id] = m.status as "presente" | "faltou" | "atrasado" | "justificou" | "pendente";
       }
     });
     if (Object.keys(initial).length > 0) {

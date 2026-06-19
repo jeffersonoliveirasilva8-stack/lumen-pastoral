@@ -168,7 +168,7 @@ function AuthLayout() {
     supabase
       .rpc("check_admin_mfa_session", { p_session_token: mfaToken })
       .then(({ data }) => {
-        if (!data?.valid) {
+        if (!(data as any)?.valid) {
           sessionStorage.removeItem("admin_mfa_token");
           navigate({ to: "/auth/admin-mfa" });
         }
