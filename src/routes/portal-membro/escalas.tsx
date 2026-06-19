@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -448,6 +448,28 @@ function PortalMembroEscalas() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const addIndispRangeMutation = useMutation({
+    mutationFn: async (args: { datas: string[]; motivo: string }) => {
+      const rows = args.datas.map((data) => ({
+        paroquia_id: membro!.paroquia_id,
+        membro_id: membro!.id,
+        data,
+        motivo: args.motivo || null,
+        tipo: "dia",
+        hora_inicio: null,
+        hora_fim: null,
+      }));
+      const { error } = await anyDb.from("indisponibilidades").insert(rows);
+      if (error) throw error;
+    },
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["pm-indisps", membro!.id] });
+      qc.invalidateQueries({ queryKey: ["indisponibilidades", membro!.paroquia_id] });
+      toast.success(`${args.datas.length} dia(s) bloqueados com sucesso.`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const removeIndispMutation = useMutation({
     mutationFn: async (indispId: string) => {
       const { error } = await anyDb
@@ -635,8 +657,11 @@ function PortalMembroEscalas() {
             onAdd={(data, motivo, tipo, hora_inicio, hora_fim) =>
               addIndispMutation.mutate({ data, motivo, tipo, hora_inicio, hora_fim })
             }
+            onAddRange={(datas, motivo) =>
+              addIndispRangeMutation.mutate({ datas, motivo })
+            }
             onRemove={(id) => removeIndispMutation.mutate(id)}
-            saving={addIndispMutation.isPending}
+            saving={addIndispMutation.isPending || addIndispRangeMutation.isPending}
           />
         </TabsContent>
 
@@ -1259,27 +1284,47 @@ function EscalaCoordCard({
 // ── IndisponibilidadeTab ──────────────────────────────────────────────
 
 function IndisponibilidadeTab({
-  indisps, loading, diasAntecedencia, onAdd, onRemove, saving,
+  indisps, loading, diasAntecedencia, onAdd, onAddRange, onRemove, saving,
 }: {
   indisps: IndispItem[];
   loading: boolean;
   diasAntecedencia: number;
   onAdd: (data: string, motivo: string, tipo: string, hora_inicio: string | null, hora_fim: string | null) => void;
+  onAddRange: (datas: string[], motivo: string) => void;
   onRemove: (id: string) => void;
   saving: boolean;
 }) {
+  const [modo, setModo] = useState<"unica" | "periodo">("unica");
   const [newData, setNewData] = useState("");
   const [newMotivo, setNewMotivo] = useState("");
-  const [newTipo, setNewTipo] = useState<"dia" | "periodo">("dia");
+  const [newTipo, setNewTipo] = useState<"dia" | "horario">("dia");
   const [newHoraInicio, setNewHoraInicio] = useState("");
   const [newHoraFim, setNewHoraFim] = useState("");
+  // Período (férias/atestado)
+  const [rangeInicio, setRangeInicio] = useState("");
+  const [rangeFim, setRangeFim] = useState("");
+  const [rangeMotivo, setRangeMotivo] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const minDate = diasAntecedencia > 0
     ? (() => { const d = new Date(); d.setDate(d.getDate() + diasAntecedencia); return d.toISOString().slice(0, 10); })()
     : new Date().toISOString().slice(0, 10);
 
+  // Calcula datas no intervalo (inclusive)
+  const datasNoRange = useMemo(() => {
+    if (!rangeInicio || !rangeFim || rangeFim < rangeInicio) return [];
+    const datas: string[] = [];
+    const cur = new Date(rangeInicio + "T12:00:00");
+    const fim = new Date(rangeFim + "T12:00:00");
+    while (cur <= fim) {
+      datas.push(cur.toISOString().slice(0, 10));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return datas;
+  }, [rangeInicio, rangeFim]);
+
   const canAdd = !!newData && !!newMotivo.trim() && (newTipo === "dia" || !!newHoraInicio);
+  const canAddRange = !!rangeInicio && !!rangeFim && rangeFim >= rangeInicio && !!rangeMotivo.trim() && datasNoRange.length > 0;
 
   function handleAdd() {
     if (!canAdd) return;
@@ -1290,15 +1335,22 @@ function IndisponibilidadeTab({
     onAdd(
       newData,
       newMotivo.trim(),
-      newTipo,
-      newTipo === "periodo" ? (newHoraInicio || null) : null,
-      newTipo === "periodo" ? (newHoraFim || null) : null,
+      newTipo === "horario" ? "periodo" : "dia",
+      newTipo === "horario" ? (newHoraInicio || null) : null,
+      newTipo === "horario" ? (newHoraFim || null) : null,
     );
-    setNewData("");
-    setNewMotivo("");
-    setNewHoraInicio("");
-    setNewHoraFim("");
-    setNewTipo("dia");
+    setNewData(""); setNewMotivo(""); setNewHoraInicio(""); setNewHoraFim(""); setNewTipo("dia");
+  }
+
+  function handleAddRange() {
+    if (!canAddRange) return;
+    const datasNovos = datasNoRange.filter((d) => !indisps.some((i) => i.data === d));
+    if (datasNovos.length === 0) {
+      toast.error("Todas as datas desse período já estão bloqueadas.");
+      return;
+    }
+    onAddRange(datasNovos, rangeMotivo.trim());
+    setRangeInicio(""); setRangeFim(""); setRangeMotivo("");
   }
 
   // Agrupa por mês (key = "2026-06")
@@ -1339,90 +1391,180 @@ function IndisponibilidadeTab({
       )}
 
       {/* Formulário */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nova indisponibilidade</p>
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Nova indisponibilidade</p>
 
-        {/* Data + Tipo */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground/70">Data <span className="text-destructive">*</span></label>
-            <input
-              type="date"
-              value={newData}
-              min={minDate}
-              onChange={(e) => setNewData(e.target.value)}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground/70">Tipo</label>
-            <div className="flex gap-1.5">
-              {(["dia", "periodo"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setNewTipo(t)}
-                  className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
-                    newTipo === t
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background text-muted-foreground border-input hover:border-ring"
-                  }`}
-                >
-                  {t === "dia" ? "Dia inteiro" : "Horário"}
-                </button>
-              ))}
-            </div>
+          {/* Seletor de modo */}
+          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-muted">
+            {(["unica", "periodo"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModo(m)}
+                className={`py-2 rounded-lg text-sm font-medium transition-all ${
+                  modo === m
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {m === "unica" ? "📅 Data única" : "🗓️ Período"}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Horário (só para tipo periodo) */}
-        {newTipo === "periodo" && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground/70">De <span className="text-destructive">*</span></label>
-              <input
-                type="time"
-                value={newHoraInicio}
-                onChange={(e) => setNewHoraInicio(e.target.value)}
-                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
-              />
+        {modo === "unica" ? (
+          <>
+            {/* Data + Tipo */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground/70">Data <span className="text-destructive">*</span></label>
+                <input
+                  type="date"
+                  value={newData}
+                  min={minDate}
+                  onChange={(e) => setNewData(e.target.value)}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground/70">Tipo</label>
+                <div className="flex gap-1.5">
+                  {(["dia", "horario"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setNewTipo(t)}
+                      className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                        newTipo === t
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-muted-foreground border-input hover:border-ring"
+                      }`}
+                    >
+                      {t === "dia" ? "Dia inteiro" : "Horário"}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground/70">Até <span className="text-muted-foreground/40">(opcional)</span></label>
-              <input
-                type="time"
-                value={newHoraFim}
-                onChange={(e) => setNewHoraFim(e.target.value)}
-                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
-              />
+
+            {/* Horário (só para horario) */}
+            {newTipo === "horario" && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground/70">De <span className="text-destructive">*</span></label>
+                  <input
+                    type="time"
+                    value={newHoraInicio}
+                    onChange={(e) => setNewHoraInicio(e.target.value)}
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground/70">Até <span className="text-muted-foreground/40">(opcional)</span></label>
+                  <input
+                    type="time"
+                    value={newHoraFim}
+                    onChange={(e) => setNewHoraFim(e.target.value)}
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Motivo + Botão */}
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 space-y-1">
+                <label className="text-xs text-muted-foreground/70">
+                  Motivo <span className="text-destructive">*</span>
+                </label>
+                <input
+                  placeholder="Ex: viagem, compromisso familiar, trabalho…"
+                  value={newMotivo}
+                  onChange={(e) => setNewMotivo(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+                />
+              </div>
+              <Button
+                size="sm"
+                disabled={!canAdd || saving}
+                onClick={handleAdd}
+                className="h-[42px] px-4 shrink-0"
+              >
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                <span className="ml-1">Registrar</span>
+              </Button>
             </div>
-          </div>
+          </>
+        ) : (
+          <>
+            {/* Modo período: início + fim */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground/70">De <span className="text-destructive">*</span></label>
+                <input
+                  type="date"
+                  value={rangeInicio}
+                  min={minDate}
+                  onChange={(e) => { setRangeInicio(e.target.value); if (e.target.value > rangeFim) setRangeFim(""); }}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground/70">Até <span className="text-destructive">*</span></label>
+                <input
+                  type="date"
+                  value={rangeFim}
+                  min={rangeInicio || minDate}
+                  onChange={(e) => setRangeFim(e.target.value)}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+                />
+              </div>
+            </div>
+
+            {/* Preview do range */}
+            {datasNoRange.length > 0 && (
+              <div className="flex items-center gap-2 rounded-xl bg-primary/5 border border-primary/20 px-3.5 py-2.5">
+                <CalendarOff className="h-4 w-4 text-primary shrink-0" />
+                <p className="text-sm text-primary font-medium">
+                  {datasNoRange.length} dia{datasNoRange.length !== 1 ? "s" : ""} bloqueado{datasNoRange.length !== 1 ? "s" : ""}
+                  {datasNoRange.length <= 14 && (
+                    <span className="text-xs text-primary/60 ml-1.5 font-normal">
+                      ({format(new Date(rangeInicio + "T12:00:00"), "d/MM", { locale: ptBR })} → {format(new Date(rangeFim + "T12:00:00"), "d/MM/yy", { locale: ptBR })})
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {/* Motivo + Botão */}
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 space-y-1">
+                <label className="text-xs text-muted-foreground/70">
+                  Motivo <span className="text-destructive">*</span>
+                </label>
+                <input
+                  placeholder="Ex: férias, atestado médico, viagem…"
+                  value={rangeMotivo}
+                  onChange={(e) => setRangeMotivo(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddRange()}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+                />
+              </div>
+              <Button
+                size="sm"
+                disabled={!canAddRange || saving}
+                onClick={handleAddRange}
+                className="h-[42px] px-4 shrink-0"
+              >
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                <span className="ml-1">Bloquear</span>
+              </Button>
+            </div>
+          </>
         )}
-
-        {/* Motivo + Botão */}
-        <div className="flex gap-2 items-end">
-          <div className="flex-1 space-y-1">
-            <label className="text-xs text-muted-foreground/70">
-              Motivo <span className="text-destructive">*</span>
-            </label>
-            <input
-              placeholder="Ex: viagem, compromisso familiar, trabalho…"
-              value={newMotivo}
-              onChange={(e) => setNewMotivo(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
-            />
-          </div>
-          <Button
-            size="sm"
-            disabled={!canAdd || saving}
-            onClick={handleAdd}
-            className="h-[42px] px-4 shrink-0"
-          >
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-            <span className="ml-1">Registrar</span>
-          </Button>
-        </div>
       </div>
 
       {/* Lista */}

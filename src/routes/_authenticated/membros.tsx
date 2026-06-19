@@ -285,6 +285,13 @@ function MemberForm({
 }) {
   const [uploading, setUploading] = useState(false);
   const photoRef = useRef<HTMLInputElement>(null);
+  const [activeSection, setActiveSection] = useState<"pessoal" | "servico" | "acesso">("pessoal");
+
+  const SECTIONS = [
+    { key: "pessoal",  label: "Pessoal",      dot: form.nome.trim() ? "✓" : "!" },
+    { key: "servico",  label: "Serviço",       dot: form.ministerio_ids.length > 0 ? "✓" : null },
+    { key: "acesso",   label: "Acesso",        dot: null },
+  ] as const;
 
   function toggleList(key: keyof Pick<FormData, "ministerio_ids" | "atuacao_ids" | "funcoes_nao_pode_ids">, id: string) {
     const cur = form[key] as string[];
@@ -305,46 +312,87 @@ function MemberForm({
   }
 
   return (
-    <div className="space-y-6 pt-2">
+    <div className="space-y-5 pt-2">
 
-      {/* ── Dados pessoais ──────────────────────────────────────────────────── */}
-      <div className="space-y-4">
-
-        {/* Foto */}
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => photoRef.current?.click()}
-            className="relative h-16 w-16 shrink-0 rounded-full bg-muted border border-border overflow-hidden flex items-center justify-center hover:opacity-80 transition"
-            title="Clique para alterar a foto"
-          >
-            {form.foto_url ? (
-              <img src={form.foto_url} alt="Foto" className="h-full w-full object-cover" />
-            ) : (
-              <User className="h-7 w-7 text-muted-foreground" />
-            )}
-            {uploading && (
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                <Loader2 className="h-5 w-5 animate-spin text-white" />
-              </div>
-            )}
-          </button>
-          <div className="text-xs text-muted-foreground">
-            <p className="font-medium">Foto do membro</p>
-            <p>JPG, PNG ou WebP · máx. 5 MB</p>
+      {/* ── Header fixo: foto + nome ──────────────────────────────────────────── */}
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => photoRef.current?.click()}
+          className="relative h-16 w-16 shrink-0 rounded-2xl bg-muted border-2 border-border overflow-hidden flex items-center justify-center hover:opacity-80 transition"
+          title="Clique para alterar a foto"
+        >
+          {form.foto_url ? (
+            <img src={form.foto_url} alt="Foto" className="h-full w-full object-cover" />
+          ) : (
+            <User className="h-7 w-7 text-muted-foreground" />
+          )}
+          {uploading && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-white" />
+            </div>
+          )}
+          <div className="absolute bottom-0 right-0 h-5 w-5 rounded-full bg-primary flex items-center justify-center shadow">
+            <svg className="h-2.5 w-2.5 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
           </div>
-          <input ref={photoRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="nome">Nome completo *</Label>
-          <Input
-            id="nome"
+        </button>
+        <div className="flex-1 min-w-0">
+          <input
             value={form.nome}
             onChange={(e) => setForm({ ...form, nome: e.target.value })}
-            placeholder="Nome do servidor"
+            placeholder="Nome completo *"
+            className="w-full text-lg font-semibold bg-transparent border-b border-input pb-1 outline-none focus:border-primary transition text-foreground placeholder:text-muted-foreground/40"
           />
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className={`h-2 w-2 rounded-full ${form.ativo ? "bg-emerald-500" : "bg-muted-foreground/30"}`} />
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, ativo: !form.ativo })}
+              className="text-xs text-muted-foreground hover:text-foreground transition"
+            >
+              {form.ativo ? "Ativo" : "Inativo"}
+            </button>
+            {form.tipo_acesso !== "membro" && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium capitalize">
+                {form.tipo_acesso === "auxiliar" ? "Secretário" : "Coordenação"}
+              </span>
+            )}
+          </div>
         </div>
+        <input ref={photoRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
+      </div>
+
+      {/* ── Navegação de seções ───────────────────────────────────────────────── */}
+      <div className="flex gap-1 p-1 rounded-xl bg-muted">
+        {SECTIONS.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setActiveSection(s.key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-sm font-medium transition-all ${
+              activeSection === s.key
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {s.label}
+            {s.dot && (
+              <span className={`text-[10px] font-bold leading-none ${s.dot === "✓" ? "text-emerald-500" : "text-amber-500"}`}>
+                {s.dot}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Seção: Pessoal ───────────────────────────────────────────────────── */}
+      {activeSection === "pessoal" && (<>
+      <div className="space-y-4">
+
+        {/* Foto — oculta no header acima, só mantém os campos abaixo */}
+        <div className="sr-only" aria-hidden="true" />
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
@@ -462,17 +510,9 @@ function MemberForm({
           />
         </div>
 
-        <div className="flex items-center gap-3">
-          <Switch
-            id="ativo-m"
-            checked={form.ativo}
-            onCheckedChange={(v) => setForm({ ...form, ativo: v })}
-          />
-          <Label htmlFor="ativo-m">Membro ativo</Label>
-        </div>
       </div>
 
-      {/* ── Família ──────────────────────────────────────────────────────────── */}
+      {/* Família — dentro da seção Pessoal */}
       <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Família</p>
         <div className="space-y-3">
@@ -496,6 +536,10 @@ function MemberForm({
           </div>
         </div>
       </div>
+      </>) } {/* fim seção pessoal */}
+
+      {/* ── Seção: Serviço ───────────────────────────────────────────────────── */}
+      {activeSection === "servico" && (<>
 
       {/* ── Disponibilidade ───────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
@@ -706,6 +750,11 @@ function MemberForm({
         </div>
       )}
 
+      </>) } {/* fim seção serviço */}
+
+      {/* ── Seção: Acesso ────────────────────────────────────────────────────── */}
+      {activeSection === "acesso" && (<>
+
       {/* ── Nível de acesso ─────────────────────────────────────────────────── */}
       <div className="space-y-2 rounded-lg border border-border bg-muted/20 px-3 py-3">
         <div className="flex items-center gap-2">
@@ -843,19 +892,45 @@ function MemberForm({
         )}
       </div>
 
+      </>) } {/* fim seção acesso */}
+
       {/* ── Ações ────────────────────────────────────────────────────────────── */}
-      <div className="flex gap-3 pt-2">
-        <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
-          Cancelar
-        </Button>
-        <Button
-          className="flex-1"
-          disabled={saving || !form.nome.trim()}
-          onClick={onSave}
-        >
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-          Salvar
-        </Button>
+      <div className="flex gap-3 pt-2 border-t border-border">
+        {activeSection !== "pessoal" && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={() => setActiveSection(activeSection === "acesso" ? "servico" : "pessoal")}
+          >
+            ← Voltar
+          </Button>
+        )}
+        <div className="flex-1" />
+        {activeSection !== "acesso" ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setActiveSection(activeSection === "pessoal" ? "servico" : "acesso")}
+            disabled={!form.nome.trim()}
+          >
+            Próximo →
+          </Button>
+        ) : (
+          <>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={saving || !form.nome.trim()}
+              onClick={onSave}
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Salvar
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
