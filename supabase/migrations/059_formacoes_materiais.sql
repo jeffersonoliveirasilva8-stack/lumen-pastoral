@@ -45,7 +45,7 @@ CREATE POLICY "formacoes_materiais_admin_read" ON formacoes_materiais
     AND EXISTS (
       SELECT 1 FROM user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('admin','super_admin','coordenador')
+        AND role IN ('admin_paroquial','super_admin','coordenador')
     )
   );
 
@@ -58,7 +58,7 @@ CREATE POLICY "formacoes_materiais_admin_write" ON formacoes_materiais
     AND EXISTS (
       SELECT 1 FROM user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('admin','super_admin','coordenador')
+        AND role IN ('admin_paroquial','super_admin','coordenador')
     )
   );
 

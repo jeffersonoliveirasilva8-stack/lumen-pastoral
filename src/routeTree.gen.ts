@@ -30,6 +30,7 @@ import { Route as PortalMembroEventosRouteImport } from './routes/portal-membro/
 import { Route as PortalMembroEscalasRouteImport } from './routes/portal-membro/escalas'
 import { Route as PortalMembroCompletarCadastroRouteImport } from './routes/portal-membro/completar-cadastro'
 import { Route as PortalMembroCalendarioRouteImport } from './routes/portal-membro/calendario'
+import { Route as PortalMembroAjudaRouteImport } from './routes/portal-membro/ajuda'
 import { Route as ParoquiaSlugRouteImport } from './routes/paroquia.$slug'
 import { Route as MembroPrimeiroAcessoRouteImport } from './routes/membro/primeiro-acesso'
 import { Route as MembroLoginRouteImport } from './routes/membro/login'
@@ -60,6 +61,7 @@ import { Route as AuthenticatedConfiguracoesEscalasRouteImport } from './routes/
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
+import { Route as AuthenticatedAjudaRouteImport } from './routes/_authenticated/ajuda'
 import { Route as AuthenticatedConfiguracoesParoquiaRouteImport } from './routes/_authenticated/configuracoes.paroquia'
 import { Route as AuthenticatedConfiguracoesAdministradoresRouteImport } from './routes/_authenticated/configuracoes.administradores'
 import { Route as AuthenticatedAdminParoquiasRouteImport } from './routes/_authenticated/admin.paroquias'
@@ -170,6 +172,11 @@ const PortalMembroCompletarCadastroRoute =
 const PortalMembroCalendarioRoute = PortalMembroCalendarioRouteImport.update({
   id: '/calendario',
   path: '/calendario',
+  getParentRoute: () => PortalMembroRoute,
+} as any)
+const PortalMembroAjudaRoute = PortalMembroAjudaRouteImport.update({
+  id: '/ajuda',
+  path: '/ajuda',
   getParentRoute: () => PortalMembroRoute,
 } as any)
 const ParoquiaSlugRoute = ParoquiaSlugRouteImport.update({
@@ -333,6 +340,11 @@ const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
   path: '/auditoria',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAjudaRoute = AuthenticatedAjudaRouteImport.update({
+  id: '/ajuda',
+  path: '/ajuda',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedConfiguracoesParoquiaRoute =
   AuthenticatedConfiguracoesParoquiaRouteImport.update({
     id: '/paroquia',
@@ -367,6 +379,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/portal-membro': typeof PortalMembroRouteWithChildren
   '/reset-senha': typeof ResetSenhaRoute
+  '/ajuda': typeof AuthenticatedAjudaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -397,6 +410,7 @@ export interface FileRoutesByFullPath {
   '/membro/login': typeof MembroLoginRoute
   '/membro/primeiro-acesso': typeof MembroPrimeiroAcessoRoute
   '/paroquia/$slug': typeof ParoquiaSlugRoute
+  '/portal-membro/ajuda': typeof PortalMembroAjudaRoute
   '/portal-membro/calendario': typeof PortalMembroCalendarioRoute
   '/portal-membro/completar-cadastro': typeof PortalMembroCompletarCadastroRoute
   '/portal-membro/escalas': typeof PortalMembroEscalasRoute
@@ -423,6 +437,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/portal-membro': typeof PortalMembroRouteWithChildren
   '/reset-senha': typeof ResetSenhaRoute
+  '/ajuda': typeof AuthenticatedAjudaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -453,6 +468,7 @@ export interface FileRoutesByTo {
   '/membro/login': typeof MembroLoginRoute
   '/membro/primeiro-acesso': typeof MembroPrimeiroAcessoRoute
   '/paroquia/$slug': typeof ParoquiaSlugRoute
+  '/portal-membro/ajuda': typeof PortalMembroAjudaRoute
   '/portal-membro/calendario': typeof PortalMembroCalendarioRoute
   '/portal-membro/completar-cadastro': typeof PortalMembroCompletarCadastroRoute
   '/portal-membro/escalas': typeof PortalMembroEscalasRoute
@@ -481,6 +497,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/portal-membro': typeof PortalMembroRouteWithChildren
   '/reset-senha': typeof ResetSenhaRoute
+  '/_authenticated/ajuda': typeof AuthenticatedAjudaRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/calendario': typeof AuthenticatedCalendarioRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -511,6 +528,7 @@ export interface FileRoutesById {
   '/membro/login': typeof MembroLoginRoute
   '/membro/primeiro-acesso': typeof MembroPrimeiroAcessoRoute
   '/paroquia/$slug': typeof ParoquiaSlugRoute
+  '/portal-membro/ajuda': typeof PortalMembroAjudaRoute
   '/portal-membro/calendario': typeof PortalMembroCalendarioRoute
   '/portal-membro/completar-cadastro': typeof PortalMembroCompletarCadastroRoute
   '/portal-membro/escalas': typeof PortalMembroEscalasRoute
@@ -539,6 +557,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/portal-membro'
     | '/reset-senha'
+    | '/ajuda'
     | '/auditoria'
     | '/calendario'
     | '/configuracoes'
@@ -569,6 +588,7 @@ export interface FileRouteTypes {
     | '/membro/login'
     | '/membro/primeiro-acesso'
     | '/paroquia/$slug'
+    | '/portal-membro/ajuda'
     | '/portal-membro/calendario'
     | '/portal-membro/completar-cadastro'
     | '/portal-membro/escalas'
@@ -595,6 +615,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/portal-membro'
     | '/reset-senha'
+    | '/ajuda'
     | '/auditoria'
     | '/calendario'
     | '/configuracoes'
@@ -625,6 +646,7 @@ export interface FileRouteTypes {
     | '/membro/login'
     | '/membro/primeiro-acesso'
     | '/paroquia/$slug'
+    | '/portal-membro/ajuda'
     | '/portal-membro/calendario'
     | '/portal-membro/completar-cadastro'
     | '/portal-membro/escalas'
@@ -652,6 +674,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/portal-membro'
     | '/reset-senha'
+    | '/_authenticated/ajuda'
     | '/_authenticated/auditoria'
     | '/_authenticated/calendario'
     | '/_authenticated/configuracoes'
@@ -682,6 +705,7 @@ export interface FileRouteTypes {
     | '/membro/login'
     | '/membro/primeiro-acesso'
     | '/paroquia/$slug'
+    | '/portal-membro/ajuda'
     | '/portal-membro/calendario'
     | '/portal-membro/completar-cadastro'
     | '/portal-membro/escalas'
@@ -870,6 +894,13 @@ declare module '@tanstack/react-router' {
       path: '/calendario'
       fullPath: '/portal-membro/calendario'
       preLoaderRoute: typeof PortalMembroCalendarioRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/ajuda': {
+      id: '/portal-membro/ajuda'
+      path: '/ajuda'
+      fullPath: '/portal-membro/ajuda'
+      preLoaderRoute: typeof PortalMembroAjudaRouteImport
       parentRoute: typeof PortalMembroRoute
     }
     '/paroquia/$slug': {
@@ -1082,6 +1113,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAuditoriaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/ajuda': {
+      id: '/_authenticated/ajuda'
+      path: '/ajuda'
+      fullPath: '/ajuda'
+      preLoaderRoute: typeof AuthenticatedAjudaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/configuracoes/paroquia': {
       id: '/_authenticated/configuracoes/paroquia'
       path: '/paroquia'
@@ -1132,6 +1170,7 @@ const AuthenticatedConfiguracoesRouteWithChildren =
   )
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedAjudaRoute: typeof AuthenticatedAjudaRoute
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCalendarioRoute: typeof AuthenticatedCalendarioRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -1157,6 +1196,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAjudaRoute: AuthenticatedAjudaRoute,
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedCalendarioRoute: AuthenticatedCalendarioRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRouteWithChildren,
@@ -1189,6 +1229,7 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 )
 
 interface PortalMembroRouteChildren {
+  PortalMembroAjudaRoute: typeof PortalMembroAjudaRoute
   PortalMembroCalendarioRoute: typeof PortalMembroCalendarioRoute
   PortalMembroCompletarCadastroRoute: typeof PortalMembroCompletarCadastroRoute
   PortalMembroEscalasRoute: typeof PortalMembroEscalasRoute
@@ -1203,6 +1244,7 @@ interface PortalMembroRouteChildren {
 }
 
 const PortalMembroRouteChildren: PortalMembroRouteChildren = {
+  PortalMembroAjudaRoute: PortalMembroAjudaRoute,
   PortalMembroCalendarioRoute: PortalMembroCalendarioRoute,
   PortalMembroCompletarCadastroRoute: PortalMembroCompletarCadastroRoute,
   PortalMembroEscalasRoute: PortalMembroEscalasRoute,

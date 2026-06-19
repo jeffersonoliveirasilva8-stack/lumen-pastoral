@@ -5,6 +5,9 @@
 -- Fix: as três RPCs de ação do portal verificam regras_escala->>'confirmacao_escala_ativa'
 -- antes de prosseguir e retornam 'confirmacao_desativada' se a regra estiver false.
 
+-- DROP garante que defaults de versões anteriores não bloqueiem CREATE OR REPLACE
+DROP FUNCTION IF EXISTS public.portal_recusar_escala(UUID, TEXT);
+
 -- ── 1. portal_recusar_escala ─────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.portal_recusar_escala(
   p_escala_membro_id UUID,
@@ -90,6 +93,8 @@ GRANT EXECUTE ON FUNCTION public.portal_recusar_escala(UUID, TEXT) TO authentica
 
 
 -- ── 2. portal_solicitar_substituicao ────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.portal_solicitar_substituicao(UUID, TEXT);
+
 CREATE OR REPLACE FUNCTION public.portal_solicitar_substituicao(
   p_escala_membro_id UUID,
   p_motivo           TEXT DEFAULT NULL
@@ -161,6 +166,8 @@ GRANT EXECUTE ON FUNCTION public.portal_solicitar_substituicao(UUID, TEXT) TO au
 
 
 -- ── 3. portal_voluntariar_substituicao ──────────────────────────────────────
+DROP FUNCTION IF EXISTS public.portal_voluntariar_substituicao(UUID);
+
 CREATE OR REPLACE FUNCTION public.portal_voluntariar_substituicao(
   p_substituicao_id UUID
 )

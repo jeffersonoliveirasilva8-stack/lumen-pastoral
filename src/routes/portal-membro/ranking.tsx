@@ -21,8 +21,9 @@ export const Route = createFileRoute("/portal-membro/ranking")({
 type HistoricoItem = {
   id: string;
   pontos: number;
-  escala_titulo: string;
-  escala_data: string;
+  titulo: string;
+  data: string;
+  tipo_evento: string;
 };
 
 function PortalMembroRanking() {
@@ -37,16 +38,18 @@ function PortalMembroRanking() {
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("historico_participacoes")
-        .select("id, pontos, escalas(titulo, data)")
+        .select("id, pontos, tipo_evento, descricao, data, escalas(titulo, data)")
         .eq("membro_id", membro!.id)
+        .order("data", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(30);
       if (error) throw error;
       return (data ?? []).map((r: any) => ({
         id: r.id,
         pontos: r.pontos ?? 0,
-        escala_titulo: r.escalas?.titulo ?? "—",
-        escala_data: r.escalas?.data ?? "",
+        tipo_evento: r.tipo_evento ?? "escala",
+        titulo: r.escalas?.titulo ?? r.descricao ?? "Participação",
+        data: r.escalas?.data ?? r.data ?? "",
       }));
     },
   });
@@ -85,7 +88,7 @@ function PortalMembroRanking() {
   // Pontos ganhos no mês atual
   const inicioMes = format(startOfMonth(new Date()), "yyyy-MM-dd");
   const pontosEsteMes = historico
-    .filter((h) => h.escala_data >= inicioMes)
+    .filter((h) => h.data >= inicioMes)
     .reduce((acc, h) => acc + h.pontos, 0);
 
   // Só exibe pódio e posição se houver membros com score > 0
@@ -196,15 +199,20 @@ function PortalMembroRanking() {
               const ganhou = h.pontos > 0;
               const perdeu = h.pontos < 0;
               const neutro = h.pontos === 0;
+              const tipoLabel: Record<string, string> = {
+                escala: "Missa", solene: "Missa solene", bispo: "Missa c/ Bispo",
+                formacao: "Formação", reuniao: "Reunião", retiro: "Retiro",
+                adoracao: "Adoração", ensaio: "Ensaio", encontro: "Encontro",
+                compromisso: "Compromisso", evento: "Evento",
+              };
               return (
                 <div key={h.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{h.escala_titulo}</p>
-                    {h.escala_data && (
-                      <p className="text-xs text-muted-foreground mt-0.5 capitalize">
-                        {format(new Date(h.escala_data + "T12:00:00"), "d 'de' MMMM", { locale: ptBR })}
-                      </p>
-                    )}
+                    <p className="text-sm font-medium truncate">{h.titulo}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {tipoLabel[h.tipo_evento] ?? h.tipo_evento}
+                      {h.data ? ` · ${format(new Date(h.data + "T12:00:00"), "d 'de' MMMM", { locale: ptBR })}` : ""}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {/* Tag de resultado */}

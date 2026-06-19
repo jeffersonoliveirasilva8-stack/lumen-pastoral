@@ -71,6 +71,11 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'status_invalido');
   END IF;
 
+  -- Motivo obrigatório
+  IF p_motivo IS NULL OR trim(p_motivo) = '' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'motivo_obrigatorio');
+  END IF;
+
   -- Atualiza status para recusado (SEM updated_at — coluna não existe)
   UPDATE public.escala_membros
   SET status = 'recusado', justificativa = p_motivo
@@ -261,27 +266,7 @@ CREATE TRIGGER sync_tipo_acesso_user_roles
   FOR EACH ROW EXECUTE FUNCTION public._sync_tipo_acesso_to_user_roles();
 
 -- ─────────────────────────────────────────────────────────────────
--- 4. Sincronização retroativa: membros já com tipo_acesso definido
+-- 4. Sincronização retroativa — feita corretamente na migration 054
+-- (esta seção foi esvaziada para evitar erro de enum app_role)
 -- ─────────────────────────────────────────────────────────────────
--- Remove roles elevados para quem vai ser re-sincronizado
-DELETE FROM public.user_roles ur
-WHERE ur.role IN ('admin', 'coordenador', 'auxiliar')
-  AND EXISTS (
-    SELECT 1 FROM public.membros m
-    WHERE m.auth_user_id = ur.user_id
-      AND m.paroquia_id = ur.paroquia_id
-      AND m.tipo_acesso IN ('admin', 'coordenador', 'auxiliar')
-  );
-
--- Insere os roles corretos
-INSERT INTO public.user_roles (user_id, paroquia_id, role)
-SELECT m.auth_user_id, m.paroquia_id,
-  CASE m.tipo_acesso
-    WHEN 'admin'       THEN 'admin'::app_role
-    WHEN 'coordenador' THEN 'coordenador'::app_role
-    WHEN 'auxiliar'    THEN 'auxiliar'::app_role
-  END
-FROM public.membros m
-WHERE m.tipo_acesso IN ('admin', 'coordenador', 'auxiliar')
-  AND m.auth_user_id IS NOT NULL
-ON CONFLICT (user_id, role, paroquia_id) DO NOTHING;
+SELECT 1;

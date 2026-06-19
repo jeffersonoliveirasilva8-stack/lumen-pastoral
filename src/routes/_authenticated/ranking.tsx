@@ -240,7 +240,7 @@ function HistoricoSheet({
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("historico_participacoes")
-        .select("id, pontos, presenca, data, escalas(titulo, data)")
+        .select("id, pontos, tipo_evento, presenca, descricao, data, escalas(titulo, data)")
         .eq("membro_id", membro!.id)
         .order("data", { ascending: false })
         .limit(50);
@@ -248,8 +248,8 @@ function HistoricoSheet({
       return (data ?? []).map((r: any) => ({
         id: r.id,
         pontos: r.pontos ?? 0,
-        tipo_evento: r.presenca ?? "escala",
-        escala_titulo: r.escalas?.titulo ?? "—",
+        tipo_evento: r.tipo_evento ?? "escala",
+        escala_titulo: r.escalas?.titulo ?? r.descricao ?? "Participação",
         escala_data: r.escalas?.data ?? r.data ?? "",
       }));
     },
