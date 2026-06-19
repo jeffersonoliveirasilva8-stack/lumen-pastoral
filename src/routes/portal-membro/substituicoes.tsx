@@ -106,17 +106,16 @@ function PortalMembroSubstituicoes() {
   const [showHistorico, setShowHistorico] = useState(false);
 
   const { data: confirmacaoAtiva } = useQuery<boolean>({
-    queryKey: ["pm-config-confirmacao", membro?.paroquia_id],
+    queryKey: ["pm-config-substituicao", membro?.paroquia_id],
     enabled: !!membro?.paroquia_id,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data } = await anyDb
-        .from("paroquias")
-        .select("regras_escala")
-        .eq("id", membro!.paroquia_id)
+        .from("paroquia_config_escalas")
+        .select("substituicao_ativa")
+        .eq("paroquia_id", membro!.paroquia_id)
         .single();
-      const regras = (data?.regras_escala as Record<string, unknown>) ?? {};
-      return (regras.confirmacao_escala_ativa as boolean) ?? false;
+      return (data?.substituicao_ativa as boolean) ?? false;
     },
   });
 
