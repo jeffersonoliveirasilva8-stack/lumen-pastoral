@@ -1104,6 +1104,28 @@ function DashboardPage() {
         </div>
       </div>
 
+      {/* ── Ações rápidas (admin) ── */}
+      {hasAdminAccess && (
+        <div className="flex flex-wrap gap-2">
+          {[
+            { to: "/escalas",      label: "+ Nova escala",   icon: Calendar,       color: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-500/20" },
+            { to: "/membros",      label: "+ Novo membro",   icon: UserCheck,      color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-500/20" },
+            { to: "/substituicoes",label: "Substituições",   icon: ArrowLeftRight, color: "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-200 dark:border-violet-800 hover:bg-violet-500/20" },
+            { to: "/ocorrencias",  label: "Ocorrências",     icon: AlertTriangle,  color: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-500/20" },
+            { to: "/liturgia",     label: "Liturgia",        icon: BookOpen,       color: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-500/20" },
+          ].map(({ to, label, icon: Icon, color }) => (
+            <Link
+              key={to}
+              to={to}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-150 active:scale-95 ${color}`}
+            >
+              <Icon className="h-3 w-3 shrink-0" />
+              {label}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {/* ── Portal do membro: Missas precisando de servidores ── */}
       {!hasAdminAccess && missasParaMembro.length > 0 && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 overflow-hidden">
