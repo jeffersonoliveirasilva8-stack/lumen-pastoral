@@ -325,6 +325,13 @@ function PersonalizacaoPage() {
   const [activeSection, setActiveSection] = useState("dados");
   const [mobileView, setMobileView] = useState<"list" | "content">("list");
 
+  useSetPageTabs([
+    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: true  },
+    { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
+    { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
+    { label: "Auditoria",   to: "/auditoria",                     isActive: false },
+  ]);
+
   if (authLoading || isPending) {
     return (
       <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto space-y-4">
@@ -428,13 +435,6 @@ function PersonalizacaoPage() {
       {activeSection === "pdf"         && <PDFImagesTab paroquia={paroquia} onSaved={invalidate} />}
     </>
   );
-
-  useSetPageTabs([
-    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: true  },
-    { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
-    { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
-    { label: "Auditoria",   to: "/auditoria",                     isActive: false },
-  ]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-6xl mx-auto pb-24">

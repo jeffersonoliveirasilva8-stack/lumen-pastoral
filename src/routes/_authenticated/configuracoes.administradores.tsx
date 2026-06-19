@@ -259,6 +259,13 @@ function AdministradoresPage() {
     items: filtered.filter((a) => a.role === role),
   })).filter((g) => g.items.length > 0);
 
+  useSetPageTabs([
+    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
+    { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
+    { label: "Coordenação", to: "/configuracoes/administradores", isActive: true  },
+    { label: "Auditoria",   to: "/auditoria",                     isActive: false },
+  ]);
+
   if (!isAdmin) {
     return (
       <div className="p-10 text-center text-sm text-muted-foreground">
@@ -266,13 +273,6 @@ function AdministradoresPage() {
       </div>
     );
   }
-
-  useSetPageTabs([
-    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
-    { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
-    { label: "Coordenação", to: "/configuracoes/administradores", isActive: true  },
-    { label: "Auditoria",   to: "/auditoria",                     isActive: false },
-  ]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto pb-24">
