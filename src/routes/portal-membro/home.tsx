@@ -793,18 +793,18 @@ function PortalMembroHome() {
       </section>
 
       {/* ── Minha pontuação ── */}
-      {myScore > 0 && (
-        <section className="space-y-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Sua pontuação</p>
-            <h2 className="mt-2 text-xl font-serif text-foreground flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-amber-500" /> Ranking de Servidores
-            </h2>
-          </div>
-          <Link
-            to="/portal-membro/ranking"
-            className="block rounded-3xl border border-border bg-card p-5 hover:border-primary/40 transition active:scale-[0.99]"
-          >
+      <section className="space-y-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Sua pontuação</p>
+          <h2 className="mt-2 text-xl font-serif text-foreground flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-amber-500" /> Ranking de Servidores
+          </h2>
+        </div>
+        <Link
+          to="/portal-membro/ranking"
+          className="block rounded-3xl border border-border bg-card p-5 hover:border-primary/40 transition active:scale-[0.99]"
+        >
+          {myScore > 0 ? (
             <div className="flex items-center gap-5">
               <div className="h-14 w-14 rounded-2xl bg-amber-500/10 flex items-center justify-center shrink-0">
                 <span className="text-2xl">
@@ -818,9 +818,20 @@ function PortalMembroHome() {
               </div>
               <span className="ml-auto text-xs text-primary font-medium">Ver ranking →</span>
             </div>
-          </Link>
-        </section>
-      )}
+          ) : (
+            <div className="flex items-center gap-5">
+              <div className="h-14 w-14 rounded-2xl bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
+                <span className="text-2xl">🌱</span>
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-foreground">Comece a pontuar!</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Participe das escalas para acumular pontos e subir no ranking.</p>
+              </div>
+              <span className="ml-auto text-xs text-primary font-medium shrink-0">Ver ranking →</span>
+            </div>
+          )}
+        </Link>
+      </section>
     </div>
   );
 }
