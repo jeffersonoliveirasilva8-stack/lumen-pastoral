@@ -961,10 +961,13 @@ function EscalaPortalCard({
                                       : "bg-muted/60 text-foreground/70"
                                   }`}
                                 >
-                                  <span
-                                    className="h-1.5 w-1.5 rounded-full shrink-0"
-                                    style={{ backgroundColor: STATUS_DOT[m.status] ?? "#9ca3af" }}
-                                  />
+                                  {/* Dot de status: visível apenas para o próprio membro */}
+                                  {isMe && (
+                                    <span
+                                      className="h-1.5 w-1.5 rounded-full shrink-0"
+                                      style={{ backgroundColor: STATUS_DOT[m.status] ?? "#9ca3af" }}
+                                    />
+                                  )}
                                   {isMe ? "Você" : nomeExibicao(m.nome)}
                                 </span>
                               );

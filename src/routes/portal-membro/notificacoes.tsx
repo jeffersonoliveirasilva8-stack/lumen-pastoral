@@ -132,11 +132,11 @@ function NotifCard({
 
   return (
     <div className="relative overflow-hidden rounded-2xl">
-      {/* Reveal: botão vermelho atrás */}
-      {podeExcluir && (
+      {/* Reveal: botão vermelho atrás — só visível durante swipe */}
+      {podeExcluir && swipeX < 0 && (
         <div
           className="absolute inset-y-0 right-0 flex items-center justify-center bg-red-500 rounded-r-2xl"
-          style={{ width: Math.abs(swipeX) || 72 }}
+          style={{ width: Math.abs(swipeX) }}
         >
           <Trash2 className="h-5 w-5 text-white" />
         </div>

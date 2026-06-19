@@ -672,6 +672,31 @@ function DashboardPage() {
     },
   });
 
+  // ── Confirmações expiradas (membros sem resposta além do prazo configurado) ─────
+  type ConfirmacaoExpirada = { escala_membro_id: string; membro_nome: string; membro_id: string; ministerio_nome: string; escala_titulo: string; escala_data: string; horas_sem_resposta: number };
+  const { data: confirmacoesExpiradas = [], refetch: refetchExpiradas } = useQuery<ConfirmacaoExpirada[]>({
+    queryKey: ["confirmacoes-expiradas", pid],
+    enabled: !!pid && isCoord,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await anyDb.rpc("check_confirmacoes_expiradas", { p_paroquia_id: pid });
+      return (data ?? []) as ConfirmacaoExpirada[];
+    },
+  });
+
+  const enviarAlertaMutation = useMutation({
+    mutationFn: async (escalaMembroId: string) => {
+      const { data } = await anyDb.rpc("enviar_alerta_confirmacao", { p_escala_membro_id: escalaMembroId });
+      if (!data?.success) throw new Error(data?.error ?? "Erro ao enviar alerta");
+      return data;
+    },
+    onSuccess: (data) => {
+      refetchExpiradas();
+      toast.success(`Lembrete enviado para ${data.membro_email ?? "o membro"}.`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   // ── Escalas futuras em rascunho ───────────────────────────────────────────────
   const { data: escalasRascunhoCount = 0 } = useQuery<number>({
     queryKey: ["stats-rascunhos-futuros", pid],
@@ -1368,6 +1393,45 @@ function DashboardPage() {
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition shrink-0" />
               </Link>
+            )}
+            {/* ── Confirmações além do prazo — requer ação imediata ── */}
+            {confirmacoesExpiradas.length > 0 && (
+              <div className="border-t border-amber-200/60 dark:border-amber-800/60">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50/80 dark:bg-red-950/20">
+                  <Zap className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-red-700 dark:text-red-400 flex-1">
+                    Prazo de confirmação expirado
+                  </p>
+                  <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5">
+                    {confirmacoesExpiradas.length}
+                  </span>
+                </div>
+                <div className="divide-y divide-red-100/60 dark:divide-red-900/30">
+                  {confirmacoesExpiradas.slice(0, 4).map((c) => (
+                    <div key={c.escala_membro_id} className="flex items-center gap-3 px-4 py-3 bg-red-50/40 dark:bg-red-950/10">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground leading-snug line-clamp-1">
+                          <span className="font-semibold text-red-600">{c.membro_nome.split(" ")[0]}</span>
+                          {" · "}{c.ministerio_nome}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {c.escala_titulo} · {format(new Date(c.escala_data + "T00:00:00"), "d/MM", { locale: ptBR })}
+                          {" · "}<span className="text-red-500 font-medium">{c.horas_sem_resposta}h sem resposta</span>
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => enviarAlertaMutation.mutate(c.escala_membro_id)}
+                        disabled={enviarAlertaMutation.isPending}
+                        className="shrink-0 text-[11px] font-semibold text-red-600 hover:text-red-700 border border-red-300 dark:border-red-700 rounded-lg px-2.5 py-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 transition"
+                      >
+                        {enviarAlertaMutation.isPending && enviarAlertaMutation.variables === c.escala_membro_id
+                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : "Lembrar"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
             {isCoord && membrosNaoAtivados > 0 && (
               <Link

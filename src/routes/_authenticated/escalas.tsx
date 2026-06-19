@@ -152,9 +152,12 @@ type FuncaoPreview = {
   cor: string;
   categoria?: string | null;
   quantidade: number;
-  membros: { id: string; nome: string }[];
+  membros: { id: string; nome: string; status: string }[];
 };
-type EscalaPreview = { needed: number; filled: number; funcoes: FuncaoPreview[] };
+type EscalaPreview = {
+  needed: number; filled: number; funcoes: FuncaoPreview[];
+  confirmados: number; pendentes: number; recusados: number;
+};
 
 type IndispRow = {
   id: string; membro_id: string; data: string;
@@ -1108,12 +1111,12 @@ function EscalasPage() {
           .in("escala_id", escalaIds),
         (supabase as any)
           .from("escala_membros")
-          .select("escala_id, ministerio_id, membros(id, nome)")
+          .select("escala_id, ministerio_id, status, membros(id, nome)")
           .in("escala_id", escalaIds),
       ]);
       const counts: Record<string, EscalaPreview> = {};
       ((funcRes.data ?? []) as any[]).forEach((f) => {
-        if (!counts[f.escala_id]) counts[f.escala_id] = { needed: 0, filled: 0, funcoes: [] };
+        if (!counts[f.escala_id]) counts[f.escala_id] = { needed: 0, filled: 0, funcoes: [], confirmados: 0, pendentes: 0, recusados: 0 };
         counts[f.escala_id].needed += f.quantidade;
         counts[f.escala_id].funcoes.push({
           ministerio_id: f.ministerio_id,
@@ -1125,10 +1128,14 @@ function EscalasPage() {
         });
       });
       ((membRes.data ?? []) as any[]).forEach((m) => {
-        if (!counts[m.escala_id]) counts[m.escala_id] = { needed: 0, filled: 0, funcoes: [] };
+        if (!counts[m.escala_id]) counts[m.escala_id] = { needed: 0, filled: 0, funcoes: [], confirmados: 0, pendentes: 0, recusados: 0 };
         counts[m.escala_id].filled += 1;
+        const st: string = m.status ?? "pendente";
+        if (st === "confirmado" || st === "presente") counts[m.escala_id].confirmados++;
+        else if (st === "recusado") counts[m.escala_id].recusados++;
+        else counts[m.escala_id].pendentes++;
         const funcao = counts[m.escala_id].funcoes.find((f) => f.ministerio_id === m.ministerio_id);
-        if (funcao && m.membros) funcao.membros.push({ id: m.membros.id, nome: m.membros.nome });
+        if (funcao && m.membros) funcao.membros.push({ id: m.membros.id, nome: m.membros.nome, status: st });
       });
       return counts;
     },
@@ -2927,19 +2934,44 @@ function ListaView({
                     </div>
 
                     {pct !== null && (
-                      <div className="mt-3 flex items-center gap-2">
-                        {pct < 1 && (
-                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Escala incompleta" />
-                        )}
-                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${pct >= 1 ? "bg-green-500" : pct >= 0.5 ? "bg-amber-400" : "bg-red-400"}`}
-                            style={{ width: `${Math.round(pct * 100)}%` }}
-                          />
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          {pct < 1 && (
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Escala incompleta" />
+                          )}
+                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${pct >= 1 ? "bg-green-500" : pct >= 0.5 ? "bg-amber-400" : "bg-red-400"}`}
+                              style={{ width: `${Math.round(pct * 100)}%` }}
+                            />
+                          </div>
+                          <span className={`text-[11px] shrink-0 tabular-nums font-medium ${pct >= 1 ? "text-green-600" : pct >= 0.5 ? "text-amber-600" : "text-red-500"}`}>
+                            {counts!.filled}/{counts!.needed}
+                          </span>
                         </div>
-                        <span className={`text-[11px] shrink-0 tabular-nums font-medium ${pct >= 1 ? "text-green-600" : pct >= 0.5 ? "text-amber-600" : "text-red-500"}`}>
-                          {counts!.filled}/{counts!.needed}
-                        </span>
+                        {/* ── Status chips de confirmação ── */}
+                        {(counts!.confirmados > 0 || counts!.pendentes > 0 || counts!.recusados > 0) && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {counts!.confirmados > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                {counts!.confirmados} confirmado{counts!.confirmados !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                            {counts!.pendentes > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                                {counts!.pendentes} pendente{counts!.pendentes !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                            {counts!.recusados > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                                {counts!.recusados} recusou{counts!.recusados !== 1 ? "ram" : ""}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -3034,11 +3066,15 @@ function ListaView({
                                         ? Array.from({ length: Math.min(f.quantidade, 2) }).map((_, i) => (
                                             <span key={i} className="text-[10px] text-muted-foreground/40 italic">Vaga</span>
                                           ))
-                                        : f.membros.slice(0, 3).map((m) => (
-                                            <span key={m.id} className="inline-flex rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-foreground/70">
-                                              {nomeExibicao(m.nome)}
-                                            </span>
-                                          ))
+                                        : f.membros.slice(0, 3).map((m) => {
+                                            const dotColor = m.status === "confirmado" || m.status === "presente" ? "bg-emerald-500" : m.status === "recusado" ? "bg-red-500" : "bg-amber-400";
+                                            return (
+                                              <span key={m.id} className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-foreground/70">
+                                                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`} />
+                                                {nomeExibicao(m.nome)}
+                                              </span>
+                                            );
+                                          })
                                       }
                                       {filled > 3 && (
                                         <span className="text-[10px] text-muted-foreground/60">+{filled - 3}</span>
