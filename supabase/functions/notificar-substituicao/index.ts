@@ -335,6 +335,16 @@ Deno.serve(async (req) => {
       .eq("escala_id", escalaId).eq("ministerio_id", ministerioId);
     const jaEscaladosSet = new Set<string>((jaEscalados ?? []).map((r: { membro_id: string }) => r.membro_id));
 
+    // Membros servindo em QUALQUER escala nesta data (mesmo horário ou outro)
+    // — buscamos todos escala_membros com status ativo para escalas nesta data na paróquia
+    const { data: servinhoNoDia } = await (admin as any)
+      .from("escala_membros")
+      .select("membro_id, escalas!inner(data, paroquia_id)")
+      .eq("escalas.data", escalaData)
+      .eq("escalas.paroquia_id", paroquiaId)
+      .in("status", ["pendente", "confirmado", "presente"]);
+    const servinhoNoDiaSet = new Set<string>((servinhoNoDia ?? []).map((r: { membro_id: string }) => r.membro_id));
+
     // Indisponibilidades nesta data
     const { data: indisps } = await (admin as any)
       .from("indisponibilidades").select("membro_id")
@@ -355,6 +365,7 @@ Deno.serve(async (req) => {
         if (!m.email)                                      return false;
         if (m.id === solicitanteId)                        return false;
         if (jaEscaladosSet.has(m.id))                      return false;
+        if (servinhoNoDiaSet.has(m.id))                    return false; // já serve neste dia em qualquer escala
         if (indispsSet.has(m.id))                          return false;
         if (m.restricoes_dia_semana?.includes(diaSemana))  return false;
         return true;

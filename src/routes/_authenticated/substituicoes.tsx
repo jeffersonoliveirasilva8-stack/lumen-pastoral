@@ -440,8 +440,8 @@ function AdminSubstituicoes() {
         </DialogContent>
       </Dialog>
 
-      </> /* fim aba gestao */}
-      </> /* fim conteúdo */
+      </>}
+      </>
     </div>
   );
 }
