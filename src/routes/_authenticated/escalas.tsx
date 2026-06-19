@@ -1352,7 +1352,7 @@ ${rodapeUrl
 
   useSetPageTabs([
     { label: "Planejamento",       onClick: () => setView("lista"),              isActive: view === "lista" },
-    { label: "Presença",           to: "/sacristia",                             isActive: false },
+    { label: "Sacristia",          to: "/sacristia",                             isActive: false },
     { label: "Indisponibilidades", onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
     { label: "Substituições",      to: "/substituicoes",                         isActive: false },
     { label: "Relatório",          to: "/relatorios-equilibrio",                 isActive: false },

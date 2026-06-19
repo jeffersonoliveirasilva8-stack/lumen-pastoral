@@ -729,10 +729,10 @@ function MemberForm({
             },
             {
               value: "auxiliar",
-              label: "Administrador",
-              badge: "Portal + Presença",
+              label: "Secretário",
+              badge: "Portal + Sacristia",
               badgeColor: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-              desc: "Portal do servidor com capacidade de gestão de presença.",
+              desc: "Portal do servidor com acesso à sacristia para registrar presenças.",
               bullets: [
                 "Tudo que o Membro pode fazer",
                 "Confirma presença dos membros escalados",
@@ -2092,6 +2092,7 @@ function MembrosPage() {
   const qc = useQueryClient();
   const { abrir: abrirMembroId } = Route.useSearch();
 
+  const [activeTab, setActiveTab] = useState<"membros" | "solicitacoes" | "auditoria" | "visao-geral">("membros");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Membro | null>(null);
@@ -2866,8 +2867,10 @@ function MembrosPage() {
   }
 
   useSetPageTabs([
-    { label: "Membros", to: "/membros", isActive: true  },
-    { label: "Ranking", to: "/ranking", isActive: false },
+    { label: "Visão Geral",  onClick: () => setActiveTab("visao-geral"),    isActive: activeTab === "visao-geral"    },
+    { label: "Membros",      onClick: () => setActiveTab("membros"),         isActive: activeTab === "membros",        badge: membros.length },
+    { label: "Solicitações", onClick: () => setActiveTab("solicitacoes"),    isActive: activeTab === "solicitacoes",   badge: solPendentes.length || undefined },
+    { label: "Auditoria",    onClick: () => setActiveTab("auditoria"),       isActive: activeTab === "auditoria"      },
   ]);
 
   if (isLimitedCoord) {
@@ -2925,33 +2928,8 @@ function MembrosPage() {
         </div>
       </div>
 
-      {/* ── Tabs: Membros | Solicitações | Auditoria ── */}
-      <Tabs defaultValue="membros" className="mt-5">
-        <TabsList className="h-auto p-1 gap-0.5 bg-muted/60 rounded-xl w-full sm:w-auto">
-          <TabsTrigger value="membros" className="rounded-lg text-xs px-3 py-1.5 data-[state=active]:shadow-sm">
-            Membros
-            <span className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-muted-foreground/20 text-[9px] font-bold px-1">
-              {membros.length}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="solicitacoes" className="rounded-lg text-xs px-3 py-1.5 gap-1.5 data-[state=active]:shadow-sm">
-            <ClipboardList className="h-3 w-3" />
-            Solicitações
-            {solPendentes.length > 0 && (
-              <span className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold px-1">
-                {solPendentes.length}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="auditoria" className="rounded-lg text-xs px-3 py-1.5 gap-1.5 data-[state=active]:shadow-sm">
-            <AlertCircle className="h-3 w-3" />
-            Auditoria
-          </TabsTrigger>
-          <TabsTrigger value="visao-geral" className="rounded-lg text-xs px-3 py-1.5 gap-1.5 data-[state=active]:shadow-sm">
-            <Star className="h-3 w-3" />
-            Visão Geral
-          </TabsTrigger>
-        </TabsList>
+      {/* ── Conteúdo por tab (controlado pelo ModuleTabBar via useSetPageTabs) ── */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="mt-2">
 
         <TabsContent value="membros">
         {/* Busca + Filtros */}
@@ -3681,9 +3659,9 @@ function MembrosPage() {
               {bulkEditForm.changeTipoAcesso && (
                 <div className="pl-6 flex flex-col gap-1.5">
                   {[
-                    { value: "membro", label: "Membro — portal padrão" },
-                    { value: "auxiliar", label: "Administrador — gestão de escalas" },
-                    { value: "coordenador", label: "Coordenação — acesso operacional" },
+                    { value: "membro", label: "Membro — portal do servidor" },
+                    { value: "auxiliar", label: "Secretário — portal + sacristia" },
+                    { value: "coordenador", label: "Coordenação — acesso completo ao painel" },
                   ].map((op) => (
                     <label key={op.value} className="flex items-center gap-2 cursor-pointer text-sm">
                       <input type="radio" checked={bulkEditForm.tipo_acesso === op.value} onChange={() => setBulkEditForm((f) => ({ ...f, tipo_acesso: op.value }))} />

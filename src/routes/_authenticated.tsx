@@ -6,6 +6,7 @@ import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
   Flame, BookOpen, Bell, UserCircle, Church, Leaf,
   PanelLeftClose, PanelLeftOpen, Menu, Trophy, HelpCircle,
+  ArrowLeftRight, AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,13 +42,14 @@ const LITURGICAL_SEASON_LABEL: Record<string, string> = {
 
 // Mapeia qualquer rota para o módulo principal correspondente
 function getActiveModule(pathname: string): string {
-  if (pathname.startsWith("/escalas") || pathname.startsWith("/substituicoes") || pathname.startsWith("/sacristia") || pathname.startsWith("/relatorios")) return "/escalas";
-  if (pathname.startsWith("/membros")) return "/membros";
+  if (pathname.startsWith("/escalas") || pathname.startsWith("/sacristia") || pathname.startsWith("/relatorios")) return "/escalas";
+  if (pathname.startsWith("/substituicoes")) return "/substituicoes";
+  if (pathname.startsWith("/membros") || pathname.startsWith("/auditoria") || pathname.startsWith("/solicitacoes")) return "/membros";
   if (pathname.startsWith("/ranking")) return "/ranking";
-  if (pathname.startsWith("/ocorrencias")) return "/formacoes";
   if (pathname.startsWith("/espiritualidade")) return "/espiritualidade";
   if (pathname.startsWith("/formacoes")) return "/formacoes";
-  if (pathname.startsWith("/configuracoes") || pathname.startsWith("/auditoria")) return "/configuracoes/paroquia";
+  if (pathname.startsWith("/ocorrencias")) return "/ocorrencias";
+  if (pathname.startsWith("/configuracoes")) return "/configuracoes/paroquia";
   if (pathname.startsWith("/painel")) return "/painel";
   return pathname;
 }
@@ -97,6 +99,22 @@ function AuthLayout() {
         .select("id", { count: "exact", head: true })
         .eq("paroquia_id", profile!.paroquia_id)
         .eq("status", "pendente");
+      return count ?? 0;
+    },
+  });
+
+  // Badge de notificações não lidas (header Bell)
+  const { data: notifsNaoLidas = 0 } = useQuery<number>({
+    queryKey: ["admin-notif-unread", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { count } = await anyDb
+        .from("notificacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("paroquia_id", profile!.paroquia_id)
+        .eq("lida", false);
       return count ?? 0;
     },
   });
@@ -176,23 +194,24 @@ function AuthLayout() {
   const isSuperAdmin = roles.includes("super_admin");
   const activeModule = getActiveModule(pathname);
 
-  // 6 módulos principais
+  // Navegação principal
   const mainNav: NavItem[] = [
-    { to: "/painel",               label: "Painel",         icon: LayoutDashboard, color: "bg-slate-600" },
-    { to: "/escalas",              label: "Escalas",         icon: Calendar,        color: "bg-blue-600" },
+    { to: "/painel",                 label: "Painel",        icon: LayoutDashboard,  color: "bg-slate-600" },
+    { to: "/escalas",                label: "Escalas",        icon: Calendar,         color: "bg-blue-600" },
+    { to: "/substituicoes",          label: "Substituições",  icon: ArrowLeftRight,   color: "bg-orange-500" },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
-    { to: "/espiritualidade",      label: "Liturgia",        icon: BookOpen,        color: "bg-violet-600" },
-    { to: "/formacoes",            label: "Pastoral",        icon: Leaf,            color: "bg-teal-600" },
-    { to: "/configuracoes/paroquia", label: "Config.",       icon: Settings,        color: "bg-indigo-600" },
+    { to: "/ranking",                label: "Ranking",        icon: Trophy,           color: "bg-amber-600" },
+    { to: "/espiritualidade",        label: "Liturgia",       icon: BookOpen,         color: "bg-violet-600" },
+    { to: "/formacoes",              label: "Pastoral",       icon: Leaf,             color: "bg-teal-600" },
+    { to: "/ocorrencias",            label: "Ocorrências",    icon: AlertCircle,      color: "bg-red-500" },
+    { to: "/configuracoes/paroquia", label: "Configuração",   icon: Settings,         color: "bg-indigo-600" },
   ];
 
-  // Itens secundários para o drawer "Mais" (inclui itens extra do nav + secundários)
+  // Itens secundários para o drawer (extra e utilitários)
   const drawerItems: NavItem[] = [
-    ...mainNav.slice(5), // itens que não cabem no bottom nav
-    { to: "/ranking",        label: "Ranking",         icon: Trophy,          color: "bg-amber-600" },
-    { to: "/notificacoes",   label: "Notificações",    icon: Bell,            color: "bg-rose-500" },
-    { to: "/minha-conta",    label: "Minha Conta",     icon: UserCircle,      color: "bg-slate-500" },
-    { to: "/ajuda",          label: "Ajuda",           icon: HelpCircle,      color: "bg-sky-600" },
+    { to: "/notificacoes",   label: "Notificações",  icon: Bell,       color: "bg-rose-500",  badge: notifsNaoLidas },
+    { to: "/minha-conta",    label: "Minha Conta",   icon: UserCircle, color: "bg-slate-500" },
+    { to: "/ajuda",          label: "Ajuda",         icon: HelpCircle, color: "bg-sky-600" },
     ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),
   ];
 
@@ -372,11 +391,14 @@ function AuthLayout() {
             <div className="flex items-center gap-1.5">
               <Link
                 to="/notificacoes"
-                className="btn-icon"
+                className="btn-icon relative"
                 title="Notificações"
                 aria-label="Notificações"
               >
                 <Bell className="h-4 w-4" />
+                {notifsNaoLidas > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-background" />
+                )}
               </Link>
               <Link
                 to="/minha-conta"

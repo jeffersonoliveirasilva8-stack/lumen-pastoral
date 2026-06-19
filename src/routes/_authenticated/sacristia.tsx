@@ -289,7 +289,7 @@ function SacristiaPage() {
 
   useSetPageTabs([
     { label: "Planejamento",       to: "/escalas",                         isActive: false },
-    { label: "Presença",           to: "/sacristia",                       isActive: true  },
+    { label: "Sacristia",          to: "/sacristia",                       isActive: true  },
     { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
     { label: "Substituições",      to: "/substituicoes",                   isActive: false },
     { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: false },

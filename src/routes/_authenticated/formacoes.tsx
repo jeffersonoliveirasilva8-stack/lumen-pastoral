@@ -90,14 +90,14 @@ type EventoForm = {
 // â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const TIPOS: { value: string; label: string; cor: string }[] = [
-  { value: "formacao",    label: "FormaÃ§Ã£o",             cor: "bg-blue-500/10 text-blue-700 border-blue-200" },
-  { value: "reuniao",     label: "ReuniÃ£o",              cor: "bg-slate-500/10 text-slate-700 border-slate-200" },
+  { value: "formacao",    label: "Formação",              cor: "bg-blue-500/10 text-blue-700 border-blue-200" },
+  { value: "reuniao",     label: "Reunião",               cor: "bg-slate-500/10 text-slate-700 border-slate-200" },
   { value: "retiro",      label: "Retiro",               cor: "bg-purple-500/10 text-purple-700 border-purple-200" },
   { value: "ensaio",      label: "Ensaio",               cor: "bg-green-500/10 text-green-700 border-green-200" },
   { value: "evento",      label: "Evento",               cor: "bg-amber-500/10 text-amber-700 border-amber-200" },
   { value: "encontro",    label: "Encontro",             cor: "bg-cyan-500/10 text-cyan-700 border-cyan-200" },
   { value: "compromisso", label: "Compromisso Pastoral", cor: "bg-rose-500/10 text-rose-700 border-rose-200" },
-  { value: "adoracao",    label: "AdoraÃ§Ã£o",             cor: "bg-yellow-500/10 text-yellow-700 border-yellow-200" },
+  { value: "adoracao",    label: "Adoração",             cor: "bg-yellow-500/10 text-yellow-700 border-yellow-200" },
   { value: "outro",       label: "Outro",                cor: "bg-gray-500/10 text-gray-700 border-gray-200" },
 ];
 
@@ -120,7 +120,7 @@ function tipoBadge(tipo: string) {
   );
 }
 
-// â”€â”€ FormaÃ§Ãµes: tipos e constantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Formações: tipos e constantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Material = {
   id: string;
@@ -148,9 +148,9 @@ type MaterialForm = {
 };
 
 const MATERIAL_TIPOS: { value: Material["tipo"]; label: string; icon: React.ReactNode; cor: string }[] = [
-  { value: "pauta",     label: "Pauta de ReuniÃ£o", icon: <ClipboardList className="h-4 w-4" />, cor: "bg-slate-500/10 text-slate-700 border-slate-200 dark:text-slate-300 dark:border-slate-700" },
+  { value: "pauta",     label: "Pauta de Reunião", icon: <ClipboardList className="h-4 w-4" />, cor: "bg-slate-500/10 text-slate-700 border-slate-200 dark:text-slate-300 dark:border-slate-700" },
   { value: "documento", label: "Documento / PDF",  icon: <FileText      className="h-4 w-4" />, cor: "bg-red-500/10 text-red-700 border-red-200 dark:text-red-400 dark:border-red-800"           },
-  { value: "video",     label: "VÃ­deo",            icon: <Video         className="h-4 w-4" />, cor: "bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-400 dark:border-blue-800"       },
+  { value: "video",     label: "Vídeo",            icon: <Video         className="h-4 w-4" />, cor: "bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-400 dark:border-blue-800"       },
   { value: "artigo",    label: "Artigo / Texto",   icon: <BookOpen      className="h-4 w-4" />, cor: "bg-green-500/10 text-green-700 border-green-200 dark:text-green-400 dark:border-green-800"  },
   { value: "link",      label: "Link Externo",     icon: <Link2         className="h-4 w-4" />, cor: "bg-purple-500/10 text-purple-700 border-purple-200 dark:text-purple-400 dark:border-purple-800" },
 ];
@@ -245,9 +245,9 @@ function MateriaisSection({ paroquiaId }: { paroquiaId: string }) {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="font-serif text-2xl sm:text-3xl">FormaÃ§Ãµes e Pautas</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl">Formações e Pautas</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Pautas de reuniÃ£o, materiais formativos e conteÃºdo para os membros.
+            Pautas de reunião, materiais formativos e conteúdo para os membros.
           </p>
         </div>
         <Button size="sm" className="rounded-xl shrink-0" onClick={openNew}>
@@ -279,7 +279,7 @@ function MateriaisSection({ paroquiaId }: { paroquiaId: string }) {
           <BookOpen className="h-9 w-9 mx-auto text-muted-foreground/30 mb-3" />
           <p className="font-medium text-foreground/70">Nenhum material ainda</p>
           <p className="text-sm text-muted-foreground mt-1 mb-4">
-            Adicione pautas de reuniÃ£o, documentos ou vÃ­deos formativos.
+            Adicione pautas de reunião, documentos ou Vídeos formativos.
           </p>
           <Button size="sm" variant="outline" className="rounded-xl" onClick={openNew}>
             <Plus className="h-3.5 w-3.5" /> Adicionar primeiro material
@@ -312,7 +312,7 @@ function MateriaisSection({ paroquiaId }: { paroquiaId: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover material?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{deleteTarget?.titulo}" serÃ¡ excluÃ­do permanentemente.
+              "{deleteTarget?.titulo}" será excluído permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -477,8 +477,8 @@ function MaterialSheet({
   }
 
   function handleSave() {
-    if (!form.titulo.trim()) { toast.error("TÃ­tulo obrigatÃ³rio."); return; }
-    if (form.tipo === "pauta" && !form.data_reuniao) { toast.error("Informe a data da reuniÃ£o."); return; }
+    if (!form.titulo.trim()) { toast.error("Título obrigatório."); return; }
+    if (form.tipo === "pauta" && !form.data_reuniao) { toast.error("Informe a data da reunião."); return; }
     onSave(form);
   }
 
@@ -515,17 +515,17 @@ function MaterialSheet({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">TÃ­tulo</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Título</Label>
             <Input
               value={form.titulo}
               onChange={(e) => set("titulo", e.target.value)}
-              placeholder={form.tipo === "pauta" ? "Ex: ReuniÃ£o mensal de coordenaÃ§Ã£o" : "TÃ­tulo do material"}
+              placeholder={form.tipo === "pauta" ? "Ex: Reunião mensal de coordenação" : "Título do material"}
             />
           </div>
 
           {form.tipo === "pauta" && (
             <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Data da reuniÃ£o</Label>
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Data da reunião</Label>
               <Input type="date" value={form.data_reuniao} onChange={(e) => set("data_reuniao", e.target.value)} />
             </div>
           )}
@@ -533,7 +533,7 @@ function MaterialSheet({
           {["documento", "video", "link"].includes(form.tipo) && (
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                {form.tipo === "video" ? "Link do vÃ­deo (YouTube, Driveâ€¦)" : "URL do arquivo ou pÃ¡gina"}
+                {form.tipo === "video" ? "Link do Vídeo (YouTube, Driveâ€¦)" : "URL do arquivo ou pÃ¡gina"}
               </Label>
               <Input type="url" value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://â€¦" />
             </div>
@@ -542,18 +542,18 @@ function MaterialSheet({
           {["documento", "video", "link"].includes(form.tipo) && (
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">DescriÃ§Ã£o (opcional)</Label>
-              <Textarea rows={3} value={form.descricao} onChange={(e) => set("descricao", e.target.value)} placeholder="Breve descriÃ§Ã£o do conteÃºdoâ€¦" />
+              <Textarea rows={3} value={form.descricao} onChange={(e) => set("descricao", e.target.value)} placeholder="Breve descriÃ§Ã£o do conteúdoâ€¦" />
             </div>
           )}
 
           {form.tipo === "artigo" && (
             <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">ConteÃºdo</Label>
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">conteúdo</Label>
               <Textarea
                 rows={8}
                 value={form.conteudo}
                 onChange={(e) => set("conteudo", e.target.value)}
-                placeholder="Escreva o conteÃºdo formativo aquiâ€¦"
+                placeholder="Escreva o conteúdo formativo aquiâ€¦"
                 className="font-mono text-sm leading-relaxed"
               />
             </div>
@@ -613,7 +613,7 @@ function MaterialSheet({
             <div>
               <p className="text-sm font-medium">Publicar para membros</p>
               <p className="text-xs text-muted-foreground">
-                {form.publicado ? "VisÃ­vel no portal do membro." : "Apenas visÃ­vel para coordenaÃ§Ã£o."}
+                {form.publicado ? "VisÃ­vel no portal do membro." : "Apenas visÃ­vel para coordenação."}
               </p>
             </div>
             <Switch checked={form.publicado} onCheckedChange={(v) => set("publicado", v)} />
@@ -761,7 +761,7 @@ function AgendaPastoralPage() {
 
   useSetPageTabs([
     { label: "Eventos",     onClick: () => setView("eventos"),   isActive: view === "eventos",   badge: eventos.length > 0 ? eventos.length : undefined },
-    { label: "FormaÃ§Ãµes",   onClick: () => setView("formacoes"), isActive: view === "formacoes" },
+    { label: "Formações",   onClick: () => setView("formacoes"), isActive: view === "formacoes" },
     { label: "OcorrÃªncias", to: "/ocorrencias",                  isActive: false },
   ]);
 
@@ -783,7 +783,7 @@ function AgendaPastoralPage() {
           <div>
             <h1 className="page-header-title">Agenda Pastoral</h1>
             <p className="page-header-sub">
-              ReuniÃµes, retiros, ensaios, encontros e compromissos.
+              Reuniões, retiros, ensaios, encontros e compromissos.
             </p>
           </div>
           <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="shrink-0 h-9 rounded-xl">
@@ -814,7 +814,7 @@ function AgendaPastoralPage() {
             </div>
             <p className="empty-state-title">Nenhum evento cadastrado</p>
             <p className="empty-state-desc">
-              Registre reuniÃµes, formaÃ§Ãµes, retiros, ensaios e compromissos pastorais.
+              Registre reuniões, formações, retiros, ensaios e compromissos pastorais.
             </p>
             <Button className="mt-2 rounded-xl" onClick={() => { setEditTarget(null); setFormOpen(true); }}>
               <Plus className="h-4 w-4 mr-1" /> Criar primeiro evento
@@ -853,7 +853,7 @@ function AgendaPastoralPage() {
         )}
       </>)}
 
-      {/* â”€â”€ FormaÃ§Ãµes â”€â”€ */}
+      {/* â”€â”€ Formações â”€â”€ */}
       {view === "formacoes" && (
         <MateriaisSection paroquiaId={pid ?? ""} />
       )}
@@ -877,7 +877,7 @@ function AgendaPastoralPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover evento?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.titulo}</strong> serÃ¡ removido da agenda. As presenÃ§as registradas serÃ£o mantidas.
+              <strong>{deleteTarget?.titulo}</strong> será removido da agenda. As presenÃ§as registradas serÃ£o mantidas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -938,7 +938,7 @@ function EventoSection({
                 <div className="flex items-center gap-2 flex-wrap">
                   {tipoBadge(e.tipo)}
                   {e.obrigatorio && (
-                    <Badge variant="destructive" className="text-xs">ObrigatÃ³rio</Badge>
+                    <Badge variant="destructive" className="text-xs">obrigatório</Badge>
                   )}
                   {e.publico_alvo && e.publico_alvo !== "todos" && (
                     <span className="text-xs text-muted-foreground/70 border border-border rounded-full px-2 py-0.5">
@@ -1176,14 +1176,14 @@ function EventoFormSheet({
               </Select>
             </div>
 
-            {/* TÃ­tulo */}
+            {/* Título */}
             <div className="space-y-1.5">
-              <Label>TÃ­tulo *</Label>
+              <Label>Título *</Label>
               <Input
                 required
                 value={form.titulo}
                 onChange={(e) => f("titulo", e.target.value)}
-                placeholder="Ex: FormaÃ§Ã£o de Ministros da Eucaristia"
+                placeholder="Ex: Formação de Ministros da Eucaristia"
               />
             </div>
 
@@ -1354,18 +1354,18 @@ function EventoFormSheet({
                 rows={2}
                 value={form.observacoes}
                 onChange={(e) => f("observacoes", e.target.value)}
-                placeholder="InstruÃ§Ãµes, lembretes, informaÃ§Ãµes adicionaisâ€¦"
+                placeholder="Instruções, lembretes, informações adicionaisâ€¦"
               />
             </div>
 
-            {/* ObrigatÃ³rio */}
+            {/* obrigatório */}
             <div className="flex items-center gap-3 pt-1">
               <Switch
                 id="obrig-switch"
                 checked={form.obrigatorio}
                 onCheckedChange={(v) => f("obrigatorio", v)}
               />
-              <Label htmlFor="obrig-switch">Evento obrigatÃ³rio</Label>
+              <Label htmlFor="obrig-switch">Evento obrigatório</Label>
             </div>
           </div>
 

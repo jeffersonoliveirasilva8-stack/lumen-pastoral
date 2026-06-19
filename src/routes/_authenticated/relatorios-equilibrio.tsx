@@ -190,7 +190,7 @@ function RelatoriosEquilibrioPage() {
 
   useSetPageTabs([
     { label: "Planejamento",       to: "/escalas",                         isActive: false },
-    { label: "Presença",           to: "/sacristia",                       isActive: false },
+    { label: "Sacristia",          to: "/sacristia",                       isActive: false },
     { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
     { label: "Substituições",      to: "/substituicoes",                   isActive: false },
     { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: true  },
