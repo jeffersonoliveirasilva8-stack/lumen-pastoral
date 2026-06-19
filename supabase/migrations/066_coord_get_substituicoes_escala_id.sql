@@ -3,8 +3,13 @@
 -- Problema: a RPC não retornava escala_id nem ministerio_id, então o botão
 -- "Buscar substitutos" chamava admin_buscar_substitutos com undefined nos dois
 -- parâmetros obrigatórios — nenhum substituto era encontrado.
+--
+-- PostgreSQL não permite CREATE OR REPLACE quando o tipo de retorno muda.
+-- Necessário DROP + CREATE.
 
-CREATE OR REPLACE FUNCTION public.coord_get_substituicoes(
+DROP FUNCTION IF EXISTS public.coord_get_substituicoes(TEXT);
+
+CREATE FUNCTION public.coord_get_substituicoes(
   p_status TEXT DEFAULT NULL
 )
 RETURNS TABLE(
