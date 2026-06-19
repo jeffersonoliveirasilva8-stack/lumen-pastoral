@@ -103,6 +103,21 @@ function AuthLayout() {
     },
   });
 
+  // Badge de ocorrências abertas
+  const { data: ocorrenciasAbertas = 0 } = useQuery<number>({
+    queryKey: ["ocorrencias-abertas-count", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id && !isLimitedCoord,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data } = await anyDb.rpc("get_ocorrencias_paroquia", {
+        p_paroquia_id: profile!.paroquia_id,
+        p_status: "aberta",
+      });
+      return (data ?? []).length as number;
+    },
+  });
+
   // Badge de notificações não lidas (header Bell)
   const { data: notifsNaoLidas = 0 } = useQuery<number>({
     queryKey: ["admin-notif-unread", profile?.paroquia_id],
@@ -203,7 +218,7 @@ function AuthLayout() {
     { to: "/ranking",                label: "Ranking",        icon: Trophy,           color: "bg-amber-600" },
     { to: "/espiritualidade",        label: "Liturgia",       icon: BookOpen,         color: "bg-violet-600" },
     { to: "/formacoes",              label: "Pastoral",       icon: Leaf,             color: "bg-teal-600" },
-    { to: "/ocorrencias",            label: "Ocorrências",    icon: AlertCircle,      color: "bg-red-500" },
+    { to: "/ocorrencias",            label: "Ocorrências",    icon: AlertCircle,      color: "bg-red-500",   badge: ocorrenciasAbertas },
     { to: "/configuracoes/paroquia", label: "Configuração",   icon: Settings,         color: "bg-indigo-600" },
   ];
 
