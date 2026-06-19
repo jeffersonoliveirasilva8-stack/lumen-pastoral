@@ -238,6 +238,13 @@ function ConfiguracaoEscalas() {
     }
   }
 
+  useSetPageTabs([
+    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
+    { label: "Motor",       to: "/configuracoes-escalas",         isActive: true  },
+    { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
+    { label: "Auditoria",   to: "/auditoria",                     isActive: false },
+  ]);
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-20">
@@ -245,13 +252,6 @@ function ConfiguracaoEscalas() {
       </div>
     );
   }
-
-  useSetPageTabs([
-    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
-    { label: "Motor",       to: "/configuracoes-escalas",         isActive: true  },
-    { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
-    { label: "Auditoria",   to: "/auditoria",                     isActive: false },
-  ]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto pb-24 space-y-6">

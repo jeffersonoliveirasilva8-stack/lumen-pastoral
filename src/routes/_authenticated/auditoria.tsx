@@ -214,6 +214,13 @@ function AtividadePage() {
     return true;
   });
 
+  useSetPageTabs([
+    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
+    { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
+    { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
+    { label: "Auditoria",   to: "/auditoria",                     isActive: true  },
+  ]);
+
   if (!isAdmin && !isCoordenador) {
     return (
       <div className="flex items-center justify-center min-h-[40vh] text-sm text-muted-foreground">
@@ -222,7 +229,6 @@ function AtividadePage() {
     );
   }
 
-  // Agrupa por data para exibição em linha do tempo
   const grupos = filtered.reduce<Record<string, AuditLog[]>>((acc, log) => {
     const dia = format(new Date(log.created_at), "yyyy-MM-dd");
     if (!acc[dia]) acc[dia] = [];
@@ -231,13 +237,6 @@ function AtividadePage() {
   }, {});
 
   const diasOrdenados = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
-
-  useSetPageTabs([
-    { label: "Geral",       to: "/configuracoes/paroquia",        isActive: false },
-    { label: "Motor",       to: "/configuracoes-escalas",         isActive: false },
-    { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
-    { label: "Auditoria",   to: "/auditoria",                     isActive: true  },
-  ]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto pb-24">

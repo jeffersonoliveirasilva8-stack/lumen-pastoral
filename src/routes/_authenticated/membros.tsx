@@ -2865,6 +2865,11 @@ function MembrosPage() {
     setForm(EMPTY_FORM);
   }
 
+  useSetPageTabs([
+    { label: "Membros", to: "/membros", isActive: true  },
+    { label: "Ranking", to: "/ranking", isActive: false },
+  ]);
+
   if (isLimitedCoord) {
     return (
       <div className="p-10 text-center text-muted-foreground">
@@ -2872,11 +2877,6 @@ function MembrosPage() {
       </div>
     );
   }
-
-  useSetPageTabs([
-    { label: "Membros", to: "/membros", isActive: true  },
-    { label: "Ranking", to: "/ranking", isActive: false },
-  ]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-5xl mx-auto pb-28">
