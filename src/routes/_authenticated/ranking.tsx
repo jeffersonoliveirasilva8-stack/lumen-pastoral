@@ -76,10 +76,7 @@ function AdminRanking() {
     return () => { supabase.removeChannel(channel); };
   }, [profile?.paroquia_id, qc]);
 
-  useSetPageTabs([
-    { label: "Membros", to: "/membros", isActive: false },
-    { label: "Ranking", to: "/ranking", isActive: true  },
-  ]);
+  useSetPageTabs([]);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">

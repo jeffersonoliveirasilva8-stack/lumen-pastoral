@@ -760,9 +760,8 @@ function AgendaPastoralPage() {
   const passados = filtered.filter((e) => isPast(parseISO(e.data_inicio)));
 
   useSetPageTabs([
-    { label: "Eventos",     onClick: () => setView("eventos"),   isActive: view === "eventos",   badge: eventos.length > 0 ? eventos.length : undefined },
-    { label: "Formações",   onClick: () => setView("formacoes"), isActive: view === "formacoes" },
-    { label: "OcorrÃªncias", to: "/ocorrencias",                  isActive: false },
+    { label: "Eventos",   onClick: () => setView("eventos"),   isActive: view === "eventos",   badge: eventos.length > 0 ? eventos.length : undefined },
+    { label: "Formações", onClick: () => setView("formacoes"), isActive: view === "formacoes" },
   ]);
 
   if (isLoading) {
