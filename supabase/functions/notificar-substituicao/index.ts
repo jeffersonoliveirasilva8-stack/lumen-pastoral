@@ -237,8 +237,9 @@ Deno.serve(async (req) => {
     // Valida que o chamador é interno (banco via pg_net com token de uso único).
     // O token é gerado pela RPC SECURITY DEFINER, inserido em notificacao_tokens
     // (expira em 5 min) e consumido aqui via DELETE — não pode ser reutilizado.
-    // A anon key pública é rejeitada porque não existe na tabela de tokens.
-    const bearerToken = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+    // Usamos X-One-Time-Token em vez de Authorization para evitar que o gateway
+    // do Supabase rejeite o UUID como JWT inválido (verify_jwt = false no config.toml).
+    const bearerToken = req.headers.get("X-One-Time-Token") ?? "";
     if (!bearerToken) return json({ ok: false, error: "Unauthorized" }, 401);
 
     const body = await req.json() as { substituicao_id: string; acao?: string };

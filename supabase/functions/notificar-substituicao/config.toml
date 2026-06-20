@@ -1,0 +1,2 @@
+[functions.notificar-substituicao]
+verify_jwt = false
