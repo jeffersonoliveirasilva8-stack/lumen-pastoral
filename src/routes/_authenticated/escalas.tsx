@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -2965,10 +2965,15 @@ function ListaView({
                               </span>
                             )}
                             {counts!.recusados > 0 && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400">
-                                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                                {counts!.recusados} recusou{counts!.recusados !== 1 ? "ram" : ""}
-                              </span>
+                              <Link
+                                to="/substituicoes"
+                                onClick={(ev) => ev.stopPropagation()}
+                                className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                                title="Ver substituições abertas"
+                              >
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                {counts!.recusados} recusou{counts!.recusados !== 1 ? "ram" : ""} · substituição aberta
+                              </Link>
                             )}
                           </div>
                         )}

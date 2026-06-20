@@ -757,6 +757,7 @@ function DashboardPage() {
       const { count } = await anyDb
         .from("substituicoes")
         .select("*", { count: "exact", head: true })
+        .eq("paroquia_id", pid!)
         .in("status", ["solicitada", "com_voluntario"]);
       return count ?? 0;
     },

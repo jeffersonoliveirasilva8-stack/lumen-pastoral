@@ -5,9 +5,9 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Loader2, ArrowLeftRight, CheckCircle2, XCircle, Clock,
-  AlertTriangle, Filter, HandHelping, ChevronDown, ChevronUp,
-  Users, Search, BarChart3,
+  Loader2, ArrowLeftRight, CheckCircle2, XCircle,
+  AlertTriangle, HandHelping, ChevronDown, ChevronUp,
+  Users, Search, BarChart3, RefreshCw,
 } from "lucide-react";
 import { RelatoriosContent } from "@/routes/_authenticated/relatorios-substituicoes";
 import { toast } from "sonner";
@@ -35,10 +35,10 @@ type Substituicao = {
   motivo_rejeicao: string | null;
   aprovado_em: string | null;
   created_at: string;
-  escala_id: string;
+  escala_id: string;        // retornado pela migration 070
   escala_titulo: string;
   escala_data: string;
-  ministerio_id: string;
+  ministerio_id: string;    // retornado pela migration 070
   ministerio_nome: string;
   ministerio_cor: string;
   solicitante_nome: string;
@@ -138,6 +138,25 @@ function AdminSubstituicoes() {
         : e.message === "sem_permissao"
         ? "Você não tem permissão para aprovar substituições."
         : e.message;
+      toast.error(msg);
+    },
+  });
+
+  const reenviarMutation = useMutation({
+    mutationFn: async (substId: string) => {
+      const { data, error } = await anyDb.rpc("coord_reenviar_notificacao_substituicao", {
+        p_substituicao_id: substId,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error ?? "Erro ao reenviar");
+      return data;
+    },
+    onSuccess: () => toast.success("Notificações reenviadas aos membros elegíveis."),
+    onError: (e: Error) => {
+      const msg = e.message === "sem_permissao" ? "Sem permissão."
+        : e.message === "status_invalido"       ? "Só é possível reenviar para substituições abertas."
+        : e.message === "nao_encontrada"        ? "Substituição não encontrada."
+        : "Erro ao reenviar notificações.";
       toast.error(msg);
     },
   });
@@ -339,10 +358,12 @@ function AdminSubstituicoes() {
               subst={s}
               onAprovar={() => aprovarMutation.mutate(s.id)}
               onRejeitar={() => setRejectId(s.id)}
+              onReenviar={() => reenviarMutation.mutate(s.id)}
               onBuscarSubstitutos={(escalaId, ministerioId) =>
                 setSubstitutosModal({ substId: s.id, escalaId, ministerioId })
               }
               saving={aprovarMutation.isPending || rejeitarMutation.isPending}
+              reenviando={reenviarMutation.isPending}
             />
           ))}
         </div>
@@ -442,13 +463,15 @@ function AdminSubstituicoes() {
 // ── SubstAdminCard ────────────────────────────────────────────
 
 function SubstAdminCard({
-  subst, onAprovar, onRejeitar, onBuscarSubstitutos, saving,
+  subst, onAprovar, onRejeitar, onReenviar, onBuscarSubstitutos, saving, reenviando,
 }: {
   subst: Substituicao;
   onAprovar: () => void;
   onRejeitar: () => void;
+  onReenviar: () => void;
   onBuscarSubstitutos: (escalaId: string, ministerioId: string) => void;
   saving: boolean;
+  reenviando: boolean;
 }) {
   const [expanded, setExpanded] = useState(subst.status === "com_voluntario");
   const dateObj = new Date(subst.escala_data + "T12:00:00");
@@ -532,6 +555,21 @@ function SubstAdminCard({
             </p>
           )}
 
+          {/* Voluntário aguardando aprovação */}
+          {subst.status === "com_voluntario" && subst.substituto_nome && (
+            <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 px-3 py-2">
+              <HandHelping className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                  {subst.substituto_nome} quer substituir
+                </p>
+                <p className="text-[11px] text-blue-600/70 dark:text-blue-400/70">
+                  Aguarda aprovação da coordenação
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Ações */}
           {canAct && (
             <div className="flex flex-wrap gap-2 pt-1">
@@ -556,6 +594,21 @@ function SubstAdminCard({
                 >
                   <Users className="h-3.5 w-3.5" />
                   Buscar substituto
+                </Button>
+              )}
+              {subst.status === "solicitada" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl"
+                  disabled={reenviando}
+                  onClick={onReenviar}
+                  title="Reenviar e-mail de vaga disponível para membros elegíveis do ministério"
+                >
+                  {reenviando
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <RefreshCw className="h-3.5 w-3.5" />}
+                  Reenviar
                 </Button>
               )}
               <Button
