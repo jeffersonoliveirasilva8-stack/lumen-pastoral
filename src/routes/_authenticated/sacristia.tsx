@@ -105,7 +105,7 @@ function SacristiaPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("escala_membros")
-        .select("id, membro_id, ministerio_id, escala_id, status, membros(id, nome, telefone), ministerios(id, nome, cor)")
+        .select("id, membro_id, ministerio_id, escala_id, status, membros!membro_id(id, nome, telefone), ministerios(id, nome, cor)")
         .in("escala_id", escalaIds);
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
