@@ -284,6 +284,7 @@ function NotificacoesPage() {
         .from("notificacoes")
         .select("id,titulo,mensagem,tipo,lida,destinatario_id,created_at,link_referencia")
         .eq("paroquia_id", pid)
+        .or("apenas_admin.eq.true,apenas_coordenacao.eq.true")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Notificacao[];
@@ -301,7 +302,12 @@ function NotificacoesPage() {
 
   const marcarTodasMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await anyDb.from("notificacoes").update({ lida: true }).eq("paroquia_id", pid).eq("lida", false);
+      const { error } = await anyDb
+        .from("notificacoes")
+        .update({ lida: true })
+        .eq("paroquia_id", pid)
+        .eq("lida", false)
+        .or("apenas_admin.eq.true,apenas_coordenacao.eq.true");
       if (error) throw error;
     },
     onSuccess: () => {
