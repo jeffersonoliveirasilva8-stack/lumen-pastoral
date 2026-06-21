@@ -163,7 +163,9 @@ export function useEscalaPreview(params: {
       setSuggestedAssignments(stored.suggestedAssignments);
       setPreviewHash(stored.previewHash);
       setLastGeneratedAt(new Date(stored.savedAt));
-      setDirtyPreview(false); // restaurado = ainda não há trabalho novo não salvo
+      // Restaurado do localStorage = dados NÃO estão no banco ainda.
+      // dirtyPreview = true garante que "Publicar" vai salvar antes de mudar status.
+      setDirtyPreview(true);
     }
     setRestored(true);
   }, [userId, escalaId, restored]);

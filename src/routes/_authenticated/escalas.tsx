@@ -5076,17 +5076,24 @@ function EscalaDetail({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {preview.dirtyPreview && preview.suggestedAssignments.length > 0
+              {preview.suggestedAssignments.length > 0
                 ? "Salvar e publicar escala?"
                 : "Publicar escala?"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>{vagasAbertasInfo}</p>
-                {preview.dirtyPreview && preview.suggestedAssignments.length > 0 && (
+                {/* Preview com membros não persistidos → avisa e salva antes de publicar */}
+                {preview.suggestedAssignments.length > 0 && (
                   <p className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-amber-700 dark:text-amber-400">
-                    O preview tem alterações não salvas. Elas serão <strong>salvas automaticamente</strong> antes da
+                    O preview tem membros não salvos no banco. Eles serão <strong>salvos automaticamente</strong> antes da
                     publicação para garantir que o que você vê é o que será publicado.
+                  </p>
+                )}
+                {/* Escala com funções definidas mas sem membros atribuídos */}
+                {funcoes.length > 0 && atribuicoes.length === 0 && preview.suggestedAssignments.length === 0 && (
+                  <p className="rounded-md border border-red-300 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-red-700 dark:text-red-400 font-medium">
+                    ⚠️ Esta escala não tem nenhum membro atribuído. Gere sugestões com o motor ou atribua membros manualmente antes de publicar.
                   </p>
                 )}
                 <p>
@@ -5101,8 +5108,9 @@ function EscalaDetail({
             <AlertDialogAction
               className="bg-green-600 hover:bg-green-700 text-white"
               onClick={async () => {
-                // Se há preview não salvo, persiste primeiro para manter consistência tela↔banco.
-                if (preview.dirtyPreview && preview.suggestedAssignments.length > 0) {
+                // Salva preview sempre que houver assignments em memória (independente de dirtyPreview).
+                // Garante invariante: o que o coordenador vê é o que é publicado.
+                if (preview.suggestedAssignments.length > 0) {
                   try {
                     await salvarRascunhoMutation.mutateAsync(preview.suggestedAssignments);
                   } catch {
@@ -5114,7 +5122,7 @@ function EscalaDetail({
               }}
             >
               <Send className="h-3 w-3 mr-2" />
-              {preview.dirtyPreview && preview.suggestedAssignments.length > 0
+              {preview.suggestedAssignments.length > 0
                 ? "Salvar e publicar"
                 : "Publicar e notificar"}
             </AlertDialogAction>
