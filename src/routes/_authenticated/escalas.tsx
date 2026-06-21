@@ -303,7 +303,7 @@ function EscalasPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("escala_membros")
-        .select("id, membro_id, ministerio_id, status, membros(id, nome, telefone)")
+        .select("id, membro_id, ministerio_id, status, membros!membro_id(id, nome, telefone)")
         .eq("escala_id", detailEscala!.id);
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
@@ -677,7 +677,7 @@ function EscalasPage() {
         // Busca email direto do join para não depender do estado local (que pode ter email=null)
         const { data: atrib } = await (supabase as any)
           .from("escala_membros")
-          .select("membro_id, ministerio_id, membros(id, nome, email)")
+          .select("membro_id, ministerio_id, membros!membro_id(id, nome, email)")
           .eq("escala_id", vars.id);
         for (let i = 0; i < (atrib ?? []).length; i++) {
           const a = (atrib ?? [])[i];
@@ -1071,7 +1071,7 @@ function EscalasPage() {
           .in("escala_id", escalaIds),
         (supabase as any)
           .from("escala_membros")
-          .select("escala_id, ministerio_id, status, membros(id, nome)")
+          .select("escala_id, ministerio_id, status, membros!membro_id(id, nome)")
           .in("escala_id", escalaIds),
       ]);
       const counts: Record<string, EscalaPreview> = {};
@@ -5184,7 +5184,7 @@ function SacristiaTab({ paroquiaId }: { paroquiaId: string }) {
     queryFn: async () => {
       const { data } = await supabase
         .from("escala_membros")
-        .select("id, membro_id, ministerio_id, escala_id, status, membros(id, nome, telefone), ministerios(id, nome, cor)")
+        .select("id, membro_id, ministerio_id, escala_id, status, membros!membro_id(id, nome, telefone), ministerios(id, nome, cor)")
         .in("escala_id", escalaIds);
       return ((data ?? []) as any[]).map((r) => ({
         ...r,

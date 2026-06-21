@@ -64,7 +64,7 @@ function PortalPublicoPage() {
       // Atribuições
       const { data: membrosData } = await supabase
         .from("escala_membros")
-        .select("ministerio_id, membros(id, nome)")
+        .select("ministerio_id, membros!membro_id(id, nome)")
         .eq("escala_id", escala!.id);
 
       const mMap: Record<string, { id: string; nome: string }[]> = {};

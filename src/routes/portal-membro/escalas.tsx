@@ -351,7 +351,7 @@ function PortalMembroEscalas() {
       // Passo 3 — todos os membros dessas escalas
       const { data: allRows, error: e3 } = await anyDb
         .from("escala_membros")
-        .select("id, status, membro_id, escala_id, membros(id, nome)")
+        .select("id, status, membro_id, escala_id, membros!membro_id(id, nome)")
         .in("escala_id", escalaIdsPublicadas);
       if (e3) throw e3;
 
