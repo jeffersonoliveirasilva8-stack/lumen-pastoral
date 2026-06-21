@@ -40,6 +40,13 @@ function TotpMfaSection() {
   async function handleEnroll() {
     setSubmitting(true);
     try {
+      // Remove fatores TOTP pendentes (não verificados) para evitar conflito de nome duplicado
+      const { data: existing } = await supabase.auth.mfa.listFactors();
+      const pending = (existing?.totp ?? []).filter((f) => f.status !== "verified");
+      for (const factor of pending) {
+        await supabase.auth.mfa.unenroll({ factorId: factor.id });
+      }
+
       const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
       if (error) throw error;
       setEnrollData({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
