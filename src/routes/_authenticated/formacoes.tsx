@@ -8,7 +8,7 @@ import {
   Users, CheckCircle2, XCircle, ChevronDown, ChevronUp, Clock,
   UserCheck, Search, Mail, X as XIcon,
   BookOpen, Link2, FileText, Video, ClipboardList, Eye, EyeOff,
-  GripVertical, PlusCircle,
+  GripVertical, PlusCircle, Download, FileSpreadsheet, NotebookPen,
 } from "lucide-react";
 import { format, parseISO, isPast } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -133,6 +133,7 @@ type Material = {
   data_reuniao: string | null;
   publicado: boolean;
   ordem: number;
+  evento_id: string | null;
   created_at: string;
 };
 
@@ -179,6 +180,7 @@ function MateriaisSection({ paroquiaId }: { paroquiaId: string }) {
         .from("formacoes_materiais")
         .select("*")
         .eq("paroquia_id", paroquiaId)
+        .is("evento_id", null)
         .order("data_reuniao", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -645,6 +647,7 @@ function AgendaPastoralPage() {
   const [editTarget, setEditTarget]     = useState<Evento | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Evento | null>(null);
   const [presencaEvento, setPresencaEvento] = useState<Evento | null>(null);
+  const [conteudoEvento, setConteudoEvento] = useState<Evento | null>(null);
   const [tipoFilter, setTipoFilter]     = useState<string>("todos");
   const [pendingEmailOpts, setPendingEmailOpts] = useState<SaveOpts & { titulo: string; data_inicio: string } | null>(null);
 
@@ -832,11 +835,12 @@ function AgendaPastoralPage() {
           <div className="space-y-8">
             {proximos.length > 0 && (
               <EventoSection
-                titulo="PrÃ³ximos"
+                titulo="Próximos"
                 eventos={proximos}
                 onEdit={(e) => { setEditTarget(e); setFormOpen(true); }}
                 onDelete={setDeleteTarget}
                 onPresenca={setPresencaEvento}
+                onConteudo={setConteudoEvento}
               />
             )}
             {passados.length > 0 && (
@@ -846,6 +850,7 @@ function AgendaPastoralPage() {
                 onEdit={(e) => { setEditTarget(e); setFormOpen(true); }}
                 onDelete={setDeleteTarget}
                 onPresenca={setPresencaEvento}
+                onConteudo={setConteudoEvento}
               />
             )}
           </div>
@@ -892,12 +897,21 @@ function AgendaPastoralPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* PresenÃ§a Sheet */}
+      {/* Presença Sheet */}
       {presencaEvento && pid && (
         <PresencaSheet
           evento={presencaEvento}
           paroquiaId={pid}
           onClose={() => setPresencaEvento(null)}
+        />
+      )}
+
+      {/* Ata & Conteúdo Sheet */}
+      {conteudoEvento && pid && (
+        <EventoConteudoSheet
+          evento={conteudoEvento}
+          paroquiaId={pid}
+          onClose={() => setConteudoEvento(null)}
         />
       )}
     </div>
@@ -907,13 +921,14 @@ function AgendaPastoralPage() {
 // â”€â”€ EventoSection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EventoSection({
-  titulo, eventos, onEdit, onDelete, onPresenca,
+  titulo, eventos, onEdit, onDelete, onPresenca, onConteudo,
 }: {
   titulo: string;
   eventos: Evento[];
   onEdit: (e: Evento) => void;
   onDelete: (e: Evento) => void;
   onPresenca: (e: Evento) => void;
+  onConteudo: (e: Evento) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -982,11 +997,20 @@ function EventoSection({
               <Button
                 size="sm"
                 variant="outline"
+                onClick={() => onConteudo(e)}
+                className="text-xs h-8"
+              >
+                <NotebookPen className="h-3.5 w-3.5 mr-1" />
+                <span className="hidden sm:inline">Ata & </span>Conteúdo
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={() => onPresenca(e)}
                 className="text-xs h-8"
               >
                 <UserCheck className="h-3.5 w-3.5 mr-1" />
-                <span className="hidden sm:inline">Registro de </span>PresenÃ§a
+                <span className="hidden sm:inline">Registro de </span>Presença
               </Button>
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onEdit(e)} title="Editar">
                 <Pencil className="h-3.5 w-3.5" />
@@ -1473,11 +1497,51 @@ function PresencaSheet({
   const ausentes = presencas.filter((p) => p.presente === false).length;
   const confirmados = presencas.filter((p) => p.presente === null).length;
 
+  function exportCSV() {
+    const dataFormatada = format(parseISO(evento.data_inicio), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
+    const pct = total > 0 ? Math.round((presentes / total) * 100) : 0;
+
+    const rows: string[][] = [
+      ["Relatório de Presença — " + evento.titulo],
+      ["Data", dataFormatada],
+      ["Tipo", TIPOS.find((t) => t.value === evento.tipo)?.label ?? evento.tipo],
+      ["Total de membros", String(total)],
+      ["Presentes", String(presentes)],
+      ["Ausentes", String(ausentes)],
+      ["Sem registro", String(total - presencas.length)],
+      ["Taxa de presença", pct + "%"],
+      [],
+      ["Nome", "Status", "Justificativa", "Observações"],
+    ];
+
+    for (const m of membros) {
+      const p = presencaMap.get(m.id);
+      const status = p?.presente === true ? "Presente"
+        : p?.presente === false ? "Ausente"
+        : p ? "Confirmado (portal)"
+        : "Sem registro";
+      rows.push([m.nome, status, p?.justificativa ?? "", p?.observacoes ?? ""]);
+    }
+
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `presenca_${evento.titulo.replace(/\s+/g, "_")}_${evento.data_inicio.slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Registro de PresenÃ§a</SheetTitle>
+        <SheetHeader className="flex-row items-center justify-between pr-8">
+          <SheetTitle>Registro de Presença</SheetTitle>
+          <Button size="sm" variant="outline" onClick={exportCSV} className="h-8 text-xs gap-1.5 shrink-0">
+            <Download className="h-3.5 w-3.5" />
+            Exportar
+          </Button>
         </SheetHeader>
 
         <div className="mt-4 space-y-4">
@@ -1495,6 +1559,20 @@ function PresencaSheet({
               )}
               <span className="text-muted-foreground">{total - presencas.length} sem registro</span>
             </div>
+            {total > 0 && (
+              <div className="mt-3">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-muted-foreground">Taxa de presença</span>
+                  <span className="font-semibold">{Math.round((presentes / total) * 100)}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${Math.round((presentes / total) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {isLoading ? (
@@ -1627,6 +1705,243 @@ function JustificativaRow({
         </Button>
       </div>
     </div>
+  );
+}
+
+// ── EventoConteudoSheet ────────────────────────────────────────────────────────
+
+function EventoConteudoSheet({
+  evento, paroquiaId, onClose,
+}: {
+  evento: Evento;
+  paroquiaId: string;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Material | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Material | null>(null);
+
+  const qKey = ["formacoes_materiais_evento", evento.id];
+
+  const { data: materiais = [], isLoading } = useQuery<Material[]>({
+    queryKey: qKey,
+    queryFn: async () => {
+      const { data, error } = await anyDb
+        .from("formacoes_materiais")
+        .select("*")
+        .eq("paroquia_id", paroquiaId)
+        .eq("evento_id", evento.id)
+        .order("ordem")
+        .order("created_at");
+      if (error) throw error;
+      return (data ?? []) as Material[];
+    },
+  });
+
+  const saveMut = useMutation({
+    mutationFn: async (form: MaterialForm & { id?: string }) => {
+      const payload = {
+        paroquia_id: paroquiaId,
+        evento_id: evento.id,
+        titulo: form.titulo.trim(),
+        tipo: form.tipo,
+        descricao: form.descricao.trim() || null,
+        url: form.url.trim() || null,
+        conteudo: form.conteudo.trim() || null,
+        itens: form.tipo === "pauta" ? form.itens.filter((i) => i.texto.trim()) : null,
+        data_reuniao: form.tipo === "pauta" && form.data_reuniao ? form.data_reuniao : evento.data_inicio.slice(0, 10),
+        publicado: form.publicado,
+      };
+      if (form.id) {
+        const { error } = await anyDb.from("formacoes_materiais").update(payload).eq("id", form.id);
+        if (error) throw error;
+      } else {
+        const { error } = await anyDb.from("formacoes_materiais").insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qKey });
+      toast.success(editTarget ? "Material atualizado." : "Conteúdo adicionado.");
+      setSheetOpen(false);
+      setEditTarget(null);
+    },
+    onError: (e: unknown) => toast.error((e as Error).message),
+  });
+
+  const togglePublicado = useMutation({
+    mutationFn: async ({ id, publicado }: { id: string; publicado: boolean }) => {
+      const { error } = await anyDb.from("formacoes_materiais").update({ publicado }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qKey }),
+    onError: (e: unknown) => toast.error((e as Error).message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await anyDb.from("formacoes_materiais").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qKey });
+      toast.success("Removido.");
+      setDeleteTarget(null);
+    },
+    onError: (e: unknown) => toast.error((e as Error).message),
+  });
+
+  const pautas = materiais.filter((m) => m.tipo === "pauta");
+  const outros = materiais.filter((m) => m.tipo !== "pauta");
+
+  return (
+    <>
+      <Sheet open onOpenChange={(o) => !o && onClose()}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader className="pb-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <NotebookPen className="h-4 w-4 text-muted-foreground shrink-0" />
+              <SheetTitle className="font-serif text-lg leading-tight">Ata & Conteúdo</SheetTitle>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {evento.titulo} · {format(parseISO(evento.data_inicio), "d 'de' MMMM", { locale: ptBR })}
+            </p>
+          </SheetHeader>
+
+          <div className="mt-4 space-y-5 pb-24">
+            {/* Pauta / ata */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Pauta & Ata do encontro
+                </p>
+                {pautas.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditTarget(null); setSheetOpen(true); }}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <PlusCircle className="h-3 w-3" /> Registrar
+                  </button>
+                )}
+              </div>
+              {isLoading ? (
+                <div className="flex justify-center py-6"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+              ) : pautas.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => { setEditTarget(null); setSheetOpen(true); }}
+                  className="w-full rounded-xl border border-dashed border-border p-6 text-center hover:bg-muted/30 transition group"
+                >
+                  <ClipboardList className="h-7 w-7 mx-auto text-muted-foreground/30 mb-2 group-hover:text-muted-foreground/50 transition" />
+                  <p className="text-sm text-muted-foreground">Nenhuma pauta registrada</p>
+                  <p className="text-xs text-muted-foreground/60 mt-0.5">Clique para adicionar a pauta e a ata do encontro</p>
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  {pautas.map((m) => (
+                    <MaterialCard
+                      key={m.id}
+                      material={m}
+                      onEdit={() => { setEditTarget(m); setSheetOpen(true); }}
+                      onDelete={() => setDeleteTarget(m)}
+                      onTogglePublicado={(pub) => togglePublicado.mutate({ id: m.id, publicado: pub })}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => { setEditTarget(null); setSheetOpen(true); }}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition mt-1"
+                  >
+                    <PlusCircle className="h-3 w-3" /> Adicionar outra pauta
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Materiais de apoio */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Materiais & conteúdo
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setEditTarget(null); setSheetOpen(true); }}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  <PlusCircle className="h-3 w-3" /> Adicionar
+                </button>
+              </div>
+              {outros.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  Nenhum material vinculado — documentos, vídeos e links aparecerão aqui.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {outros.map((m) => (
+                    <MaterialCard
+                      key={m.id}
+                      material={m}
+                      onEdit={() => { setEditTarget(m); setSheetOpen(true); }}
+                      onDelete={() => setDeleteTarget(m)}
+                      onTogglePublicado={(pub) => togglePublicado.mutate({ id: m.id, publicado: pub })}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-xs text-muted-foreground flex items-start gap-2">
+              <Eye className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>Materiais com <strong>Publicado</strong> ativo ficam visíveis para os membros no portal, na aba Agenda.</span>
+            </div>
+          </div>
+
+          <div className="absolute bottom-0 left-0 right-0 border-t border-border/60 bg-background px-5 py-4">
+            <Button
+              className="w-full rounded-xl"
+              onClick={() => { setEditTarget(null); setSheetOpen(true); }}
+            >
+              <PlusCircle className="h-4 w-4 mr-1.5" />
+              Adicionar conteúdo ao encontro
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Sub-sheet para criar/editar material */}
+      <MaterialSheet
+        open={sheetOpen}
+        initial={editTarget}
+        saving={saveMut.isPending}
+        onClose={() => { setSheetOpen(false); setEditTarget(null); }}
+        onSave={(form) => saveMut.mutate(editTarget ? { ...form, id: editTarget.id } : form)}
+      />
+
+      {/* Confirm delete */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover material?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleteTarget?.titulo}</strong> será removido deste encontro.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+            >
+              {deleteMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
