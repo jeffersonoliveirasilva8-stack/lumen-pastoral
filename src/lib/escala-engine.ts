@@ -34,6 +34,9 @@ export type EscalaFuncaoPedido = {
   quantidade: number;
   ministerio: EscalaMinisterio;
   atuacoes_exigidas?: string[];
+  relevancia?: "normal" | "principal";
+  duplicidade_permitida?: boolean;
+  ordem_prioridade?: number;
 };
 
 export type EscalaAssignmentSuggestion = {
@@ -66,6 +69,7 @@ import {
   type HistoricoRecente,
   type DetalheFuncao,
   type InsightFuncao,
+  type PreferencialSolene,
 } from "../biblioteca/escala-engine";
 
 type AllocOptions = {
@@ -77,6 +81,8 @@ type AllocOptions = {
   solene?: boolean;
   tem_adoracao?: boolean;
   tem_bispo?: boolean;
+  paramentacao_obrigatoria?: boolean;
+  preferenciaisSolene?: PreferencialSolene[];
   debug?: boolean;
 };
 
@@ -173,18 +179,22 @@ function _buildAndAllocate(
     });
 
   const funcoesEngine: FuncaoNecessaria[] = funcoes.map((f) => ({
-    ministerio_id:    f.ministerio_id,
-    ministerio_nome:  f.ministerio.nome,
-    quantidade:       f.quantidade,
-    atuacoes_exigidas: f.atuacoes_exigidas,
+    ministerio_id:        f.ministerio_id,
+    ministerio_nome:      f.ministerio.nome,
+    quantidade:           f.quantidade,
+    atuacoes_exigidas:    f.atuacoes_exigidas,
+    relevancia:           f.relevancia,
+    duplicidade_permitida: f.duplicidade_permitida,
+    ordem_prioridade:     f.ordem_prioridade,
   }));
 
   const contexto: ContextoEscala = {
-    data:         evento.data,
-    tipo:         evento.tipo,
-    solene:       options?.solene       ?? false,
-    tem_adoracao: options?.tem_adoracao ?? false,
-    tem_bispo:    options?.tem_bispo    ?? false,
+    data:                     evento.data,
+    tipo:                     evento.tipo,
+    solene:                   options?.solene                   ?? false,
+    tem_adoracao:             options?.tem_adoracao             ?? false,
+    tem_bispo:                options?.tem_bispo                ?? false,
+    paramentacao_obrigatoria: options?.paramentacao_obrigatoria ?? false,
   };
 
   const config: ConfigParoquia = options?.config ?? { usa_tochas: false };
@@ -230,7 +240,10 @@ function _buildAndAllocate(
     console.groupEnd();
   }
 
-  const resultado = alocarMembros(funcoesEngine, membrosEngine, indisponibilidades, contexto, historicoRecente, config);
+  const resultado = alocarMembros(
+    funcoesEngine, membrosEngine, indisponibilidades, contexto,
+    historicoRecente, config, options?.preferenciaisSolene ?? [],
+  );
 
   if (debug) {
     logDebug(`Resultado: ${resultado.alocacoes.length} alocações | ${resultado.alertas.length} alertas`, debug);

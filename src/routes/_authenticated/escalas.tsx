@@ -14,11 +14,17 @@ import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  generateEscalaAssignments,
   generateEscalaWithAlertas,
   type AssignmentHistoryEntry,
   type FuncaoRestricao,
+  type InsightFuncao,
 } from "@/lib/escala-engine";
+import {
+  useEscalaPreview,
+  computePreviewHash,
+  type SugestaoItem,
+  type JustificativaMotorV3,
+} from "@/hooks/use-escala-preview";
 import { supabaseErrorMessage } from "@/lib/supabase-error";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -62,10 +68,11 @@ export const Route = createFileRoute("/_authenticated/escalas")({
 
 import { nomeExibicao } from "@/lib/nome";
 import { AssistenteGeracaoEscalas } from "@/components/escalas/assistente-geracao";
+import { EscalaPreviewPanel } from "@/components/escalas/escala-preview-panel";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
-type Ministerio = { id: string; nome: string; cor: string; categoria?: string | null };
+type Ministerio = { id: string; nome: string; cor: string; categoria?: string | null; relevancia?: "normal" | "principal"; duplicidade_permitida?: boolean; ordem_prioridade?: number };
 type Membro = {
   id: string;
   nome: string;
@@ -93,6 +100,10 @@ type Escala = {
   tem_adoracao: boolean;
   tem_bispo: boolean;
   token_publico: string;
+  motor_gerado_em: string | null;
+  published_at: string | null;
+  published_by: string | null;
+  updated_at: string | null;
 };
 
 type EscalaFuncao = {
@@ -196,7 +207,7 @@ function EscalasPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("escalas")
-        .select("id, titulo, data, hora_inicio, hora_fim, local, tipo, tipo_missa_id, status, observacoes, solene, tem_adoracao, tem_bispo, token_publico")
+        .select("id, titulo, data, hora_inicio, hora_fim, local, tipo, tipo_missa_id, status, observacoes, solene, tem_adoracao, tem_bispo, token_publico, motor_gerado_em, published_at, published_by, updated_at")
         .eq("paroquia_id", profile!.paroquia_id!)
         .order("data")
         .order("hora_inicio");
@@ -277,7 +288,7 @@ function EscalasPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("escala_funcoes")
-        .select("id, escala_id, ministerio_id, quantidade, ministerios(id, nome, cor, categoria)")
+        .select("id, escala_id, ministerio_id, quantidade, ministerios(id, nome, cor, categoria, relevancia, duplicidade_permitida, ordem_prioridade)")
         .eq("escala_id", detailEscala!.id);
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
@@ -318,6 +329,19 @@ function EscalasPage() {
         map[r.ministerio_id].push(r.membro_id);
       });
       return map;
+    },
+  });
+
+  const { data: preferenciaisSolene = [] } = useQuery({
+    queryKey: ["preferencias-solene", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("membro_ministerios")
+        .select("ministerio_id, membro_id")
+        .eq("preferencial_solene", true)
+        .in("membro_id", membros.map((m) => m.id));
+      return (data ?? []) as { ministerio_id: string; membro_id: string }[];
     },
   });
 
@@ -497,77 +521,7 @@ function EscalasPage() {
             }))
           );
 
-          // ── VALIDAÇÃO PREVENTIVA: Verificar se há membros com vínculos ───
-          const minIds = (tipoFuncoes as any[]).map((f) => f.ministerio_id as string);
-          const membrosComVinculo = minIds.some((mid) => (membroMinisterios[mid] ?? []).length > 0);
-          
-          if (!membrosComVinculo) {
-            return { autoSugestoes: 0 };
-          }
-
-          // Auto-distribuição: rodar o motor e inserir sugestões como "pendente"
-          // ── Enriquecer membros com dados adicionais para o motor ───────────
-          const membrosComAtuacoes = membros.map((m) => ({
-            ...m,
-            atuacao_ids: membroAtuacoes[m.id] ?? [],
-          }));
-
-          const funcoesPedido = (tipoFuncoes as { ministerio_id: string; quantidade_min: number }[])
-            .map((tf) => {
-              const min = ministerios.find((m) => m.id === tf.ministerio_id);
-              return {
-                ministerio_id: tf.ministerio_id,
-                quantidade: tf.quantidade_min,
-                ministerio: { id: tf.ministerio_id, nome: min?.nome ?? "", cor: min?.cor },
-              };
-            });
-
-          const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
-          const engineConfig = {
-            usa_tochas: paroquiaConfig?.usa_tochas ?? false,
-            limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
-            limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
-            impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-            prioridade_score: (regras.prioridade_score as boolean | undefined) ?? false,
-            distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
-            intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
-            variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
-          };
-
-          const sugestoes = generateEscalaAssignments(
-            { titulo: form.titulo, data: form.data, tipo: form.tipo || "missa", observacoes: form.observacoes || null },
-            funcoesPedido,
-            membrosComAtuacoes,
-            membroMinisterios,
-            {
-              history: assignmentHistory,
-              indisponibilidades,
-              restricoes: funcaoRestricoes,
-              config: engineConfig,
-              solene: form.solene,
-              tem_adoracao: form.tem_adoracao,
-              tem_bispo: form.tem_bispo,
-              debug: true,
-            }
-          );
-
-          if (sugestoes.length > 0) {
-            const { error: insertErr } = await anyDb.from("escala_membros").insert(
-              sugestoes.map((s) => ({
-                escala_id: nova.id,
-                membro_id: s.membro_id,
-                ministerio_id: s.ministerio_id,
-                status: "pendente",
-              }))
-            );
-            if (insertErr) {
-              console.error("[ESCALA] Erro ao inserir membros auto:", insertErr);
-            } else {
-              autoSugestoes = sugestoes.length;
-            }
-          } else {
-            // sem sugestões: membros sem vínculo — nenhuma ação necessária aqui
-          }
+          // Funções inseridas — sugestões serão geradas pelo coordenador via Preview
         }
       }
 
@@ -598,10 +552,8 @@ function EscalasPage() {
             : prev
         );
         toast.success("Escala atualizada.");
-      } else if (autoSugestoes > 0) {
-        toast.success(`Escala criada com ${autoSugestoes} membro(s) sugerido(s) automaticamente.`);
       } else {
-        toast.success("Escala criada.");
+        toast.success("Escala criada. Clique em \"Gerar Sugestão\" para o motor sugerir os membros.");
       }
       if (!editId) setFormOpen(false);
     },
@@ -701,7 +653,12 @@ function EscalasPage() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("escalas").update({ status }).eq("id", id);
+      const patch: Record<string, unknown> = { status };
+      if (status === "publicada") {
+        patch.published_at = new Date().toISOString();
+        patch.published_by = profile?.id ?? null;
+      }
+      const { error } = await (supabase as any).from("escalas").update(patch).eq("id", id);
       if (error) throw error;
     },
     onSuccess: async (_d, vars) => {
@@ -912,7 +869,7 @@ function EscalasPage() {
 
       const { data: funcoesData } = await (supabase as any)
         .from("escala_funcoes")
-        .select("ministerio_id, quantidade, ministerios(id, nome, cor)")
+        .select("ministerio_id, quantidade, ministerios(id, nome, cor, relevancia, duplicidade_permitida, ordem_prioridade)")
         .eq("escala_id", escalaId);
 
       if (!funcoesData || funcoesData.length === 0)
@@ -931,9 +888,12 @@ function EscalasPage() {
       await (supabase as any).from("escala_membros").delete().eq("escala_id", escalaId);
 
       const funcoesPedido = (funcoesData as any[]).map((f) => ({
-        ministerio_id: f.ministerio_id,
-        quantidade: f.quantidade,
-        ministerio: { id: f.ministerio_id, nome: f.ministerios?.nome ?? "", cor: f.ministerios?.cor },
+        ministerio_id:        f.ministerio_id,
+        quantidade:           f.quantidade,
+        ministerio:           { id: f.ministerio_id, nome: f.ministerios?.nome ?? "", cor: f.ministerios?.cor },
+        relevancia:           f.ministerios?.relevancia,
+        duplicidade_permitida: f.ministerios?.duplicidade_permitida,
+        ordem_prioridade:     f.ministerios?.ordem_prioridade,
       }));
 
       const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
@@ -942,7 +902,6 @@ function EscalasPage() {
         limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
         limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
         impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-        prioridade_score: (regras.prioridade_score as boolean | undefined) ?? false,
         distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
         intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
         variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
@@ -966,6 +925,7 @@ function EscalasPage() {
           solene: escala.solene,
           tem_adoracao: escala.tem_adoracao,
           tem_bispo: escala.tem_bispo,
+          preferenciaisSolene,
         }
       );
 
@@ -1620,6 +1580,7 @@ ${rodapeUrl
               missasPadrao={missasPadrao}
               membroMissaRestricoes={membroMissaRestricoes}
               paroquiaConfig={paroquiaConfig}
+              preferenciaisSolene={preferenciaisSolene}
               initialEditMode={detailEditMode}
               comunidades={comunidades}
               tiposMissa={tiposMissa}
@@ -3261,6 +3222,7 @@ function EscalaDetail({
   indisponibilidades, funcaoRestricoes, missasPadrao, membroMissaRestricoes, paroquiaConfig,
   paroquiaNome, initialEditMode, comunidades, tiposMissa, isSaving, onSave,
   onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onStatusChange, onNotificarVaga,
+  preferenciaisSolene,
 }: {
   escala: Escala;
   ministerios: Ministerio[];
@@ -3276,6 +3238,7 @@ function EscalaDetail({
   membroMissaRestricoes: Record<string, string[]>;
   paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
   paroquiaNome: string;
+  preferenciaisSolene?: { ministerio_id: string; membro_id: string }[];
   initialEditMode: boolean;
   comunidades: { id: string; nome: string }[];
   tiposMissa: { id: string; nome: string; cor: string; icone: string | null }[];
@@ -3323,12 +3286,43 @@ function EscalaDetail({
   const [addMinisterioId, setAddMinisterioId] = useState("");
   const [addQtd, setAddQtd] = useState("1");
   const [addMembroMap, setAddMembroMap] = useState<Record<string, string>>({});
-  const [suggestedAssignments, setSuggestedAssignments] = useState<{ ministerio_id: string; membro_id: string }[]>([]);
   const [generateNotice, setGenerateNotice] = useState<string | null>(null);
-  const [engineInsights, setEngineInsights] = useState<import("@/lib/escala-engine").InsightFuncao[]>([]);
   const [showInsights, setShowInsights] = useState(false);
   const [showDebugMotor, setShowDebugMotor] = useState(false);
-  const [debugInsights, setDebugInsights] = useState<import("@/lib/escala-engine").InsightFuncao[]>([]);
+  const [debugInsights, setDebugInsights] = useState<InsightFuncao[]>([]);
+  const [confirmarPublicar, setConfirmarPublicar] = useState(false);
+  const [vagasAbertasInfo, setVagasAbertasInfo] = useState<string>("");
+
+  // ── Hook de preview ───────────────────────────────────────────────────────
+  const { profile: authProfile } = useAuth();
+
+  // Hash dos dados atuais para detectar mudanças desde a última geração
+  const currentHash = useMemo(() => {
+    const vinculosList = Object.entries(membroMinisterios).flatMap(([minId, mids]) =>
+      mids.map((mid) => ({ membro_id: mid, ministerio_id: minId })),
+    );
+    return computePreviewHash({
+      membroIds: membros.map((m) => m.id),
+      vinculos: vinculosList,
+      indisponibilidades: indisponibilidades.map((i) => ({ membro_id: i.membro_id, data: i.data })),
+      escalaData: escala.data,
+    });
+  }, [membros, membroMinisterios, indisponibilidades, escala.data]);
+
+  const preview = useEscalaPreview({
+    escalaId: escala.id,
+    userId: authProfile?.id ?? "anon",
+    currentHash,
+  });
+
+  // Mantém engineInsights sincronizado com o snapshot para o painel de debug legado
+  const engineInsights = useMemo(
+    () => Object.values(preview.engineSnapshots),
+    [preview.engineSnapshots],
+  );
+
+  // Alias de compat: código legado usa suggestedAssignments como array simples
+  const suggestedAssignments = preview.suggestedAssignments;
   // Candidatos sugeridos por função (para o botão "Sugerir" por slot)
   type CandidatoSlot = import("@/lib/escala-engine").InsightCandidato & { motivo_indisp?: string };
   const [slotCandidatos, setSlotCandidatos] = useState<Record<string, CandidatoSlot[]>>({});
@@ -3353,6 +3347,72 @@ function EscalaDetail({
 
   const queryClient = useQueryClient();
 
+  // ── Salvar Rascunho (Sprint 2) ────────────────────────────────────────────
+  // DELETE + INSERT com campos de auditoria + optimistic locking via updated_at
+  const salvarRascunhoMutation = useMutation({
+    mutationFn: async (assignments: SugestaoItem[]) => {
+      if (assignments.length === 0) throw new Error("Nenhuma sugestão para salvar.");
+      const anyDb = supabase as any;
+
+      // Optimistic locking atômico: UPDATE condicional WHERE updated_at = valor original.
+      // Se 0 linhas afetadas → outro usuário salvou entre a nossa leitura e este save.
+      // Isso elimina a janela de corrida do padrão SELECT→compare→save.
+      if (escala.updated_at) {
+        const { data: locked } = await anyDb
+          .from("escalas")
+          .update({ motor_gerado_em: preview.lastGeneratedAt?.toISOString() ?? new Date().toISOString() })
+          .eq("id", escala.id)
+          .eq("updated_at", escala.updated_at)
+          .select("id");
+
+        if (!locked || (locked as unknown[]).length === 0) {
+          throw new Error(
+            "Esta escala foi modificada por outro coordenador. Atualize a página antes de salvar.",
+          );
+        }
+      }
+
+      // DELETE + INSERT (sem soft-delete nesta versão — adicionado Sprint 4+)
+      await anyDb.from("escala_membros").delete().eq("escala_id", escala.id);
+
+      const rows = assignments.map((a) => ({
+        escala_id:          escala.id,
+        membro_id:          a.membro_id,
+        ministerio_id:      a.ministerio_id,
+        status:             "pendente",
+        origem:             a.origem,
+        score_motor:        a.score_motor ?? null,
+        substituido_de:     a.substituido_de ?? null,
+        justificativa_motor: a.justificativa ?? null,
+      }));
+
+      // Caso escala.updated_at seja null (escala nova sem updated_at ainda),
+      // grava motor_gerado_em separadamente (sem lock — sem risco de conflito em escala nova)
+      if (!escala.updated_at) {
+        await anyDb.from("escalas")
+          .update({ motor_gerado_em: preview.lastGeneratedAt?.toISOString() ?? new Date().toISOString() })
+          .eq("id", escala.id);
+      }
+
+      const { error: insertErr } = await anyDb.from("escala_membros").insert(rows);
+      if (insertErr) throw insertErr;
+
+      return rows.length;
+    },
+    onSuccess: (count) => {
+      queryClient.refetchQueries({ queryKey: ["escala-membros", escala.id] });
+      queryClient.invalidateQueries({ queryKey: ["pm-escalas"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      queryClient.invalidateQueries({ queryKey: ["escala-historico"] });
+      queryClient.invalidateQueries({ queryKey: ["escalas"] });
+      preview.marcarSalvo();
+      setGenerateNotice(null);
+      setShowInsights(false);
+      toast.success(`Rascunho salvo — ${count} membro(s) alocado(s).`);
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
   const applySuggestionsMutation = useMutation({
     mutationFn: async ({ escalaId, assignments }: { escalaId: string; assignments: { membro_id: string; ministerio_id: string }[] }) => {
       if (assignments.length === 0) return 0;
@@ -3374,9 +3434,8 @@ function EscalaDetail({
       queryClient.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       queryClient.invalidateQueries({ queryKey: ["escala-historico"] });
       toast.success(`${count ?? 0} membro(s) atribuído(s) com sucesso.`);
-      setSuggestedAssignments([]);
+      preview.limparPreview();
       setGenerateNotice(null);
-      setEngineInsights([]);
       setShowInsights(false);
       // Emails só quando a escala já está publicada — rascunho não notifica membros
       if (escala.status === "publicada") {
@@ -3605,7 +3664,6 @@ function EscalaDetail({
       limite_semanal: regras.limite_semanal ?? undefined,
       limite_mensal: regras.limite_mensal ?? undefined,
       impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? false,
-      prioridade_score: regras.prioridade_score ?? false,
       distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
       intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
       variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
@@ -3629,9 +3687,15 @@ function EscalaDetail({
     }));
 
     // Usa generateEscalaWithAlertas para obter alertas do motor
+    const funcoesPedido = funcoes.map((f) => ({
+      ...f,
+      relevancia:           f.ministerio?.relevancia,
+      duplicidade_permitida: f.ministerio?.duplicidade_permitida,
+      ordem_prioridade:     f.ministerio?.ordem_prioridade,
+    }));
     const resultado = generateEscalaWithAlertas(
       { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
-      funcoes,
+      funcoesPedido,
       membrosComAtuacoes,
       membroMinisterios,
       {
@@ -3646,11 +3710,9 @@ function EscalaDetail({
         solene: escala.solene,
         tem_adoracao: escala.tem_adoracao,
         tem_bispo: escala.tem_bispo,
+        preferenciaisSolene,
       }
     );
-
-    setSuggestedAssignments(resultado.sugestoes);
-    setEngineInsights(resultado.insights ?? []);
 
     const totalSlots = funcoes.reduce((sum, f) => sum + f.quantidade, 0);
 
@@ -3664,6 +3726,47 @@ function EscalaDetail({
       resultado.alertas.forEach((a) => toast.warning(a, { duration: 6000 }));
     }
 
+    // Indexa insights por ministerio_id para lookup rápido
+    const snapshotsMap: Record<string, InsightFuncao> = {};
+    for (const insight of resultado.insights ?? []) {
+      snapshotsMap[insight.ministerio_id] = insight;
+    }
+
+    // Constrói SugestaoItem[] com nomes e score do motor
+    const membroMap = new Map(membros.map((m) => [m.id, m.nome]));
+    const funcaoNomeMap = new Map(funcoes.map((f) => [f.ministerio_id, f.ministerio?.nome ?? f.ministerio_id]));
+
+    const sugestaoItems: SugestaoItem[] = resultado.sugestoes.map((s) => {
+      const snapshot = snapshotsMap[s.ministerio_id];
+      const escolhido = snapshot?.escolhidos.find((c) => c.membro_id === s.membro_id);
+      const justificativa: JustificativaMotorV3 | null = escolhido
+        ? {
+            v:                 "3",
+            modo:              escolhido.breakdown.modo,
+            score:             escolhido.score_final,
+            participacoes_30d: escolhido.participacoes_30d,
+            dias_sem_servir:   escolhido.dias_sem_servir,
+            pool:              (1 as 1 | 2 | 3 | 4), // pool exata não está no InsightCandidato — Sprint 4
+            forcado:           false,
+          }
+        : null;
+
+      return {
+        ministerio_id:    s.ministerio_id,
+        membro_id:        s.membro_id,
+        membro_nome:      membroMap.get(s.membro_id) ?? s.membro_id,
+        ministerio_nome:  funcaoNomeMap.get(s.ministerio_id) ?? s.ministerio_id,
+        origem:           "motor" as const,
+        score_motor:      escolhido ? Math.round(escolhido.score_final) : null,
+        substituido_de:   null,
+        substituido_nome: null,
+        justificativa,
+      };
+    });
+
+    // Repassa para o hook de preview — persiste em localStorage automaticamente
+    preview.setGeracaoCompleta(snapshotsMap, sugestaoItems, currentHash ?? "");
+
     if (resultado.sugestoes.length < totalSlots) {
       setGenerateNotice(
         `${resultado.sugestoes.length} de ${totalSlots} vagas preenchidas. ` +
@@ -3675,13 +3778,12 @@ function EscalaDetail({
       return;
     }
 
-    setGenerateNotice(`${resultado.sugestoes.length} sugestões geradas pelo motor inteligente. Revise e aplique.`);
+    setGenerateNotice(`${resultado.sugestoes.length} sugestões geradas pelo motor inteligente. Revise e salve o rascunho.`);
   }
 
   function handleClearSuggestions() {
-    setSuggestedAssignments([]);
+    preview.limparPreview();
     setGenerateNotice(null);
-    setEngineInsights([]);
     setShowInsights(false);
   }
 
@@ -3700,7 +3802,6 @@ function EscalaDetail({
       limite_semanal: regras.limite_semanal ?? undefined,
       limite_mensal: regras.limite_mensal ?? undefined,
       impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? false,
-      prioridade_score: regras.prioridade_score ?? false,
       distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
       intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
       variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
@@ -3709,7 +3810,14 @@ function EscalaDetail({
     const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
     const resultado = generateEscalaWithAlertas(
       { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
-      [{ ministerio_id: minId, quantidade: funcao.quantidade - atribuicoes.filter((a) => a.ministerio_id === minId).length, ministerio: { id: minId, nome: funcao.ministerio.nome, cor: funcao.ministerio.cor } }],
+      [{
+        ministerio_id:         minId,
+        quantidade:            funcao.quantidade - atribuicoes.filter((a) => a.ministerio_id === minId).length,
+        ministerio:            { id: minId, nome: funcao.ministerio.nome, cor: funcao.ministerio.cor },
+        relevancia:            funcao.ministerio?.relevancia,
+        duplicidade_permitida: funcao.ministerio?.duplicidade_permitida,
+        ordem_prioridade:      funcao.ministerio?.ordem_prioridade,
+      }],
       membrosComAtuacoes,
       membroMinisterios,
       {
@@ -3721,6 +3829,7 @@ function EscalaDetail({
         solene: escala.solene,
         tem_adoracao: escala.tem_adoracao,
         tem_bispo: escala.tem_bispo,
+        preferenciaisSolene: preferenciaisSolene ?? [],
       }
     );
 
@@ -3776,12 +3885,24 @@ function EscalaDetail({
 
     // ── Rodar motor com debug=true ────────────────────────────────────────
     const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+    const funcoesPedidoDebug = funcoes.map((f) => ({
+      ...f,
+      relevancia:            f.ministerio?.relevancia,
+      duplicidade_permitida: f.ministerio?.duplicidade_permitida,
+      ordem_prioridade:      f.ministerio?.ordem_prioridade,
+    }));
     const resultado = generateEscalaWithAlertas(
       { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
-      funcoes,
+      funcoesPedidoDebug,
       membrosComAtuacoes,
       membroMinisterios,
-      { history: assignmentHistory, indisponibilidades, restricoes: funcaoRestricoes, debug: true },
+      {
+        history: assignmentHistory,
+        indisponibilidades,
+        restricoes: funcaoRestricoes,
+        preferenciaisSolene: preferenciaisSolene ?? [],
+        debug: true,
+      },
     );
 
     console.log("=== RESULTADO DO MOTOR ===");
@@ -3825,11 +3946,6 @@ function EscalaDetail({
 
     applySuggestionsMutation.mutate({ escalaId: escala.id, assignments: assignmentsToInsert });
   }
-
-  const suggestionsByMinisterio = funcoes.map((funcao) => ({
-    funcao,
-    assignments: suggestedAssignments.filter((suggestion) => suggestion.ministerio_id === funcao.ministerio_id),
-  }));
 
   return (
     <div className="space-y-6 pt-2">
@@ -3886,7 +4002,25 @@ function EscalaDetail({
                   <Button
                     size="sm"
                     className="h-7 text-xs gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => onStatusChange("publicada")}
+                    onClick={() => {
+                      // Calcula resumo de completude antes de abrir o modal
+                      const totalVagas = funcoes.reduce((s, f) => s + f.quantidade, 0);
+                      const preenchidas = atribuicoes.length;
+                      const emAberto = totalVagas - preenchidas;
+                      const funcaoCompleta = funcoes.filter((f) => {
+                        const qt = atribuicoes.filter((a) => a.ministerio_id === f.ministerio_id).length;
+                        return qt >= f.quantidade;
+                      }).length;
+                      if (emAberto > 0) {
+                        setVagasAbertasInfo(
+                          `${funcaoCompleta} de ${funcoes.length} função(ões) completa(s). ` +
+                          `${emAberto} vaga(s) em aberto de ${totalVagas}.`,
+                        );
+                      } else {
+                        setVagasAbertasInfo(`${funcoes.length} função(ões) completa(s). Todas as ${totalVagas} vagas preenchidas.`);
+                      }
+                      setConfirmarPublicar(true);
+                    }}
                   >
                     <Send className="h-3 w-3" />
                     Publicar e notificar
@@ -4370,9 +4504,21 @@ function EscalaDetail({
                 <p className="text-sm font-semibold">Sugestões de atribuição</p>
                 {generateNotice && <p className="text-sm text-muted-foreground">{generateNotice}</p>}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
                 <Button size="sm" variant="outline" onClick={handleGenerateSuggestions}>
                   <Sparkles className="h-4 w-4 mr-2" /> Atualizar sugestões
+                </Button>
+                {/* Salvar Rascunho — persiste no banco com campos de auditoria */}
+                <Button
+                  size="sm"
+                  variant={preview.dirtyPreview ? "default" : "outline"}
+                  disabled={suggestedAssignments.length === 0 || salvarRascunhoMutation.isPending}
+                  onClick={() => salvarRascunhoMutation.mutate(suggestedAssignments)}
+                >
+                  {salvarRascunhoMutation.isPending
+                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    : null}
+                  {preview.dirtyPreview ? "● Salvar Rascunho" : "Salvar Rascunho"}
                 </Button>
                 <Button size="sm" disabled={suggestedAssignments.length === 0 || applySuggestionsMutation.isPending} onClick={handleApplySuggestions}>
                   {applySuggestionsMutation.isPending ? (
@@ -4384,64 +4530,38 @@ function EscalaDetail({
                 <Button size="sm" variant="ghost" onClick={handleClearSuggestions}>
                   Limpar
                 </Button>
+                {preview.hashDivergiu && (
+                  <span className="text-xs text-amber-600 font-medium">
+                    ⚠ Dados alterados desde a geração
+                  </span>
+                )}
               </div>
             </div>
-            {suggestedAssignments.length > 0 ? (
-              <div className="space-y-2">
-                {suggestionsByMinisterio.map(({ funcao, assignments }) => {
-                  const insight = engineInsights.find((i) => i.ministerio_id === funcao.ministerio_id);
-                  return (
-                    <div key={funcao.ministerio_id} className="rounded-lg border border-border bg-card p-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm">{funcao.ministerio.nome}</span>
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${assignments.length >= funcao.quantidade ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                          {assignments.length}/{funcao.quantidade}
-                        </span>
-                      </div>
-                      {assignments.length > 0 ? (
-                        <ul className="mt-2 space-y-1.5">
-                          {assignments.map((s) => {
-                            const member = membros.find((m) => m.id === s.membro_id);
-                            const ic = insight?.escolhidos.find((c) => c.membro_id === s.membro_id);
-                            return (
-                              <li key={`${s.ministerio_id}-${s.membro_id}`} className="flex items-start gap-2">
-                                <div className="h-5 w-5 mt-0.5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                                  <span className="text-[9px] font-bold text-primary">{ic ? Math.round(ic.score_final) : "—"}</span>
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium">{member?.nome ?? s.membro_id}</p>
-                                  {ic && (
-                                    <p className="text-[11px] text-muted-foreground">
-                                      {ic.dias_sem_servir >= 365 ? "membro novo" : `${ic.dias_sem_servir}d sem servir`}
-                                      {" · "}{ic.participacoes_30d === 0 ? "não serviu nos últimos 30d" : `${ic.participacoes_30d}× nos últimos 30d`}
-                                    </p>
-                                  )}
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      ) : (
-                        <div className="mt-2">
-                          <p className="text-sm text-amber-700">Nenhum candidato disponível.</p>
-                          {insight?.motivo_vazio && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{insight.motivo_vazio}</p>
-                          )}
-                          {insight && (
-                            <p className="text-[11px] text-muted-foreground mt-1">
-                              {insight.candidatos_avaliados} avaliado(s) —
-                              {insight.excluidos.indisponibilidade > 0 && ` ${insight.excluidos.indisponibilidade} indisponível(eis);`}
-                              {insight.excluidos.ja_alocado > 0 && ` ${insight.excluidos.ja_alocado} já alocado(s);`}
-                              {insight.excluidos.funcao_nao_pode > 0 && ` ${insight.excluidos.funcao_nao_pode} bloqueado(s) pela função;`}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
+            {suggestedAssignments.length > 0 && (
+              <EscalaPreviewPanel
+                funcoes={funcoes.map((f) => ({
+                  ministerio_id: f.ministerio_id,
+                  ministerio_nome: f.ministerio?.nome ?? f.ministerio_id,
+                  quantidade: f.quantidade,
+                }))}
+                sugestoes={suggestedAssignments}
+                engineSnapshots={preview.engineSnapshots}
+                membrosDisponiveis={(minId) =>
+                  membrosClassificadosParaMinisterio(minId).disponiveis.map((m) => ({
+                    id: m.id,
+                    nome: m.nome,
+                  }))
+                }
+                dirtyPreview={preview.dirtyPreview}
+                hashDivergiu={preview.hashDivergiu}
+                lastGeneratedAt={preview.lastGeneratedAt}
+                isSalvando={salvarRascunhoMutation.isPending}
+                onTrocar={(minId, novo) => preview.trocarMembro(minId, novo)}
+                onRemover={(minId, memId) => preview.removerDoPreview(minId, memId)}
+                onSalvarRascunho={() => salvarRascunhoMutation.mutate(suggestedAssignments)}
+                onLimpar={handleClearSuggestions}
+              />
+            )}
 
             {/* Painel de insights detalhados */}
             {engineInsights.length > 0 && (
@@ -4947,6 +5067,60 @@ function EscalaDetail({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>}
+
+      {/* ── Confirmar publicação ──────────────────────────────────────────── */}
+      {/* Invariante: o que o coordenador vê na tela é exatamente o que é publicado.
+          Se há preview não salvo, sempre salvamos antes de publicar. Nunca existe
+          "Publicar sem salvar" — essa opção cria divergência entre tela e banco. */}
+      <AlertDialog open={confirmarPublicar} onOpenChange={setConfirmarPublicar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {preview.dirtyPreview && preview.suggestedAssignments.length > 0
+                ? "Salvar e publicar escala?"
+                : "Publicar escala?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>{vagasAbertasInfo}</p>
+                {preview.dirtyPreview && preview.suggestedAssignments.length > 0 && (
+                  <p className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-amber-700 dark:text-amber-400">
+                    O preview tem alterações não salvas. Elas serão <strong>salvas automaticamente</strong> antes da
+                    publicação para garantir que o que você vê é o que será publicado.
+                  </p>
+                )}
+                <p>
+                  Membros escalados serão notificados por e-mail e notificação no app.
+                  Esta ação pode ser revertida arquivando a escala.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={async () => {
+                // Se há preview não salvo, persiste primeiro para manter consistência tela↔banco.
+                if (preview.dirtyPreview && preview.suggestedAssignments.length > 0) {
+                  try {
+                    await salvarRascunhoMutation.mutateAsync(preview.suggestedAssignments);
+                  } catch {
+                    // salvarRascunhoMutation já exibe toast de erro — aborta publicação
+                    return;
+                  }
+                }
+                onStatusChange("publicada");
+              }}
+            >
+              <Send className="h-3 w-3 mr-2" />
+              {preview.dirtyPreview && preview.suggestedAssignments.length > 0
+                ? "Salvar e publicar"
+                : "Publicar e notificar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

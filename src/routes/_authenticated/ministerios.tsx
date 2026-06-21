@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Loader2, Layers, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Layers, Users, Star } from "lucide-react";
 import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/_authenticated/ministerios")({
   component: MinisteriosPage,
@@ -42,6 +43,9 @@ type Ministerio = {
   cor: string;
   ativo: boolean;
   ordem: number;
+  relevancia: "normal" | "principal";
+  duplicidade_permitida: boolean;
+  ordem_prioridade: number;
 };
 
 const CORES = [
@@ -72,11 +76,17 @@ function FormGrupo({
   const [nome, setNome] = useState(initial.nome ?? "");
   const [descricao, setDescricao] = useState(initial.descricao ?? "");
   const [cor, setCor] = useState(initial.cor ?? CORES[0]);
+  const [relevancia, setRelevancia] = useState<"normal" | "principal">(initial.relevancia ?? "normal");
+  const [duplicidade, setDuplicidade] = useState(initial.duplicidade_permitida ?? false);
+  const [ordemPrio, setOrdemPrio] = useState(initial.ordem_prioridade ?? 0);
 
   function submit(e: React.SyntheticEvent) {
     e.preventDefault();
     if (!nome.trim()) return;
-    onSave({ nome: nome.trim(), descricao: descricao || null, cor, ativo: true });
+    onSave({
+      nome: nome.trim(), descricao: descricao || null, cor, ativo: true,
+      relevancia, duplicidade_permitida: duplicidade, ordem_prioridade: ordemPrio,
+    });
   }
 
   return (
@@ -115,6 +125,51 @@ function FormGrupo({
           ))}
         </div>
       </div>
+
+      <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Motor de Escalas V3</p>
+
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <Label className="text-sm font-medium">Função principal</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Em solenidades usa mérito + rodízio. Normal usa equilíbrio de oportunidades.
+            </p>
+          </div>
+          <Switch
+            checked={relevancia === "principal"}
+            onCheckedChange={(v) => setRelevancia(v ? "principal" : "normal")}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <Label className="text-sm font-medium">Permitir multi-função (fallback)</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Se não houver candidatos disponíveis, permite que um membro já escalado assuma esta função.
+            </p>
+          </div>
+          <Switch
+            checked={duplicidade}
+            onCheckedChange={setDuplicidade}
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="ordem_prio" className="text-sm font-medium">Ordem de processamento</Label>
+          <p className="text-xs text-muted-foreground">Menor número = processado antes pelo motor (ex: 0 = primeira prioridade).</p>
+          <Input
+            id="ordem_prio"
+            type="number"
+            min={0}
+            max={999}
+            value={ordemPrio}
+            onChange={(e) => setOrdemPrio(Number(e.target.value))}
+            className="w-24"
+          />
+        </div>
+      </div>
+
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onClose}>
           Cancelar
@@ -141,12 +196,12 @@ function MinisteriosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ministerios")
-        .select("id, nome, descricao, cor, ativo, ordem")
+        .select("id, nome, descricao, cor, ativo, ordem, relevancia, duplicidade_permitida, ordem_prioridade")
         .eq("paroquia_id", profile!.paroquia_id!)
         .order("ordem")
         .order("nome");
       if (error) throw error;
-      return (data ?? []) as Ministerio[];
+      return (data ?? []) as unknown as Ministerio[];
     },
   });
 
@@ -173,20 +228,23 @@ function MinisteriosPage() {
       descricao: string | null;
       cor: string;
       ativo: boolean;
+      relevancia: "normal" | "principal";
+      duplicidade_permitida: boolean;
+      ordem_prioridade: number;
     }) => {
+      const campos = {
+        nome: payload.nome, descricao: payload.descricao, cor: payload.cor, ativo: payload.ativo,
+        relevancia: payload.relevancia, duplicidade_permitida: payload.duplicidade_permitida,
+        ordem_prioridade: payload.ordem_prioridade,
+      };
+      const anyDb = supabase as any;
       if (payload.id) {
-        const { error } = await supabase
-          .from("ministerios")
-          .update({ nome: payload.nome, descricao: payload.descricao, cor: payload.cor, ativo: payload.ativo })
-          .eq("id", payload.id);
+        const { error } = await anyDb.from("ministerios").update(campos).eq("id", payload.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("ministerios").insert({
+        const { error } = await anyDb.from("ministerios").insert({
           paroquia_id: profile!.paroquia_id!,
-          nome: payload.nome,
-          descricao: payload.descricao,
-          cor: payload.cor,
-          ativo: payload.ativo,
+          ...campos,
           ordem: ministerios.length,
         });
         if (error) throw error;
@@ -293,6 +351,11 @@ function MinisteriosPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="font-semibold text-sm truncate">{m.nome}</span>
+                  {m.relevancia === "principal" && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30">
+                      <Star className="h-2.5 w-2.5" /> principal
+                    </Badge>
+                  )}
                   {!m.ativo && (
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0">inativo</Badge>
                   )}

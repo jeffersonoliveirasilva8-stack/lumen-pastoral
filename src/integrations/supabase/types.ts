@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       admin_mfa_codes: {
@@ -456,27 +431,39 @@ export type Database = {
           escala_id: string
           id: string
           justificativa: string | null
+          justificativa_motor: Json | null
           membro_id: string
           ministerio_id: string
+          origem: string | null
+          score_motor: number | null
           status: string
+          substituido_de: string | null
         }
         Insert: {
           created_at?: string
           escala_id: string
           id?: string
           justificativa?: string | null
+          justificativa_motor?: Json | null
           membro_id: string
           ministerio_id: string
+          origem?: string | null
+          score_motor?: number | null
           status?: string
+          substituido_de?: string | null
         }
         Update: {
           created_at?: string
           escala_id?: string
           id?: string
           justificativa?: string | null
+          justificativa_motor?: Json | null
           membro_id?: string
           ministerio_id?: string
+          origem?: string | null
+          score_motor?: number | null
           status?: string
+          substituido_de?: string | null
         }
         Relationships: [
           {
@@ -498,6 +485,13 @@ export type Database = {
             columns: ["ministerio_id"]
             isOneToOne: false
             referencedRelation: "ministerios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escala_membros_substituido_de_fkey"
+            columns: ["substituido_de"]
+            isOneToOne: false
+            referencedRelation: "membros"
             referencedColumns: ["id"]
           },
         ]
@@ -565,9 +559,13 @@ export type Database = {
           lembrete_presenca_1d_em: string | null
           lembrete_presenca_2d_em: string | null
           local: string | null
+          motor_gerado_em: string | null
           observacoes: string | null
+          paramentacao_obrigatoria: boolean
           paroquia_id: string
           publicada_at: string | null
+          published_at: string | null
+          published_by: string | null
           solene: boolean
           status: string
           tem_adoracao: boolean
@@ -588,9 +586,13 @@ export type Database = {
           lembrete_presenca_1d_em?: string | null
           lembrete_presenca_2d_em?: string | null
           local?: string | null
+          motor_gerado_em?: string | null
           observacoes?: string | null
+          paramentacao_obrigatoria?: boolean
           paroquia_id: string
           publicada_at?: string | null
+          published_at?: string | null
+          published_by?: string | null
           solene?: boolean
           status?: string
           tem_adoracao?: boolean
@@ -611,9 +613,13 @@ export type Database = {
           lembrete_presenca_1d_em?: string | null
           lembrete_presenca_2d_em?: string | null
           local?: string | null
+          motor_gerado_em?: string | null
           observacoes?: string | null
+          paramentacao_obrigatoria?: boolean
           paroquia_id?: string
           publicada_at?: string | null
+          published_at?: string | null
+          published_by?: string | null
           solene?: boolean
           status?: string
           tem_adoracao?: boolean
@@ -1343,6 +1349,7 @@ export type Database = {
           membro_id: string
           ministerio_id: string
           nivel: string
+          preferencial_solene: boolean
         }
         Insert: {
           created_at?: string
@@ -1350,6 +1357,7 @@ export type Database = {
           membro_id: string
           ministerio_id: string
           nivel?: string
+          preferencial_solene?: boolean
         }
         Update: {
           created_at?: string
@@ -1357,6 +1365,7 @@ export type Database = {
           membro_id?: string
           ministerio_id?: string
           nivel?: string
+          preferencial_solene?: boolean
         }
         Relationships: [
           {
@@ -1619,6 +1628,7 @@ export type Database = {
           cor: string
           created_at: string
           descricao: string | null
+          duplicidade_permitida: boolean
           exclusiva_bispo: boolean
           exclusiva_solene: boolean
           exigir_experiencia: boolean
@@ -1627,9 +1637,11 @@ export type Database = {
           mostrar_no_portal: boolean
           nome: string
           ordem: number
+          ordem_prioridade: number
           paroquia_id: string
           pontuacao_minima: number
           quantidade_padrao: number
+          relevancia: string
           updated_at: string
         }
         Insert: {
@@ -1639,6 +1651,7 @@ export type Database = {
           cor?: string
           created_at?: string
           descricao?: string | null
+          duplicidade_permitida?: boolean
           exclusiva_bispo?: boolean
           exclusiva_solene?: boolean
           exigir_experiencia?: boolean
@@ -1647,9 +1660,11 @@ export type Database = {
           mostrar_no_portal?: boolean
           nome: string
           ordem?: number
+          ordem_prioridade?: number
           paroquia_id: string
           pontuacao_minima?: number
           quantidade_padrao?: number
+          relevancia?: string
           updated_at?: string
         }
         Update: {
@@ -1659,6 +1674,7 @@ export type Database = {
           cor?: string
           created_at?: string
           descricao?: string | null
+          duplicidade_permitida?: boolean
           exclusiva_bispo?: boolean
           exclusiva_solene?: boolean
           exigir_experiencia?: boolean
@@ -1667,9 +1683,11 @@ export type Database = {
           mostrar_no_portal?: boolean
           nome?: string
           ordem?: number
+          ordem_prioridade?: number
           paroquia_id?: string
           pontuacao_minima?: number
           quantidade_padrao?: number
+          relevancia?: string
           updated_at?: string
         }
         Relationships: [
@@ -1789,6 +1807,35 @@ export type Database = {
             columns: ["tipo_missa_id"]
             isOneToOne: false
             referencedRelation: "tipos_missa"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notificacao_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string
+          substituicao_id: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          substituicao_id: string
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          substituicao_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacao_tokens_substituicao_id_fkey"
+            columns: ["substituicao_id"]
+            isOneToOne: false
+            referencedRelation: "substituicoes"
             referencedColumns: ["id"]
           },
         ]
@@ -2019,6 +2066,7 @@ export type Database = {
           auto_pontuar: boolean
           confirmacao_ativa: boolean
           confirmacao_horas_antes: number
+          horas_limite_confirmacao: number | null
           paroquia_id: string
           pontuacao_adoracao: number
           pontuacao_atraso: number
@@ -2045,6 +2093,7 @@ export type Database = {
           auto_pontuar?: boolean
           confirmacao_ativa?: boolean
           confirmacao_horas_antes?: number
+          horas_limite_confirmacao?: number | null
           paroquia_id: string
           pontuacao_adoracao?: number
           pontuacao_atraso?: number
@@ -2071,6 +2120,7 @@ export type Database = {
           auto_pontuar?: boolean
           confirmacao_ativa?: boolean
           confirmacao_horas_antes?: number
+          horas_limite_confirmacao?: number | null
           paroquia_id?: string
           pontuacao_adoracao?: number
           pontuacao_atraso?: number
@@ -2982,6 +3032,19 @@ export type Database = {
         Args: { p_session_token: string }
         Returns: Json
       }
+      check_confirmacoes_expiradas: {
+        Args: { p_paroquia_id?: string }
+        Returns: {
+          escala_data: string
+          escala_membro_id: string
+          escala_titulo: string
+          escalado_em: string
+          horas_sem_resposta: number
+          membro_id: string
+          membro_nome: string
+          ministerio_nome: string
+        }[]
+      }
       check_email_rate_limit: {
         Args: {
           p_destinatario: string
@@ -3014,9 +3077,11 @@ export type Database = {
           aprovador_nome: string
           created_at: string
           escala_data: string
+          escala_id: string
           escala_titulo: string
           id: string
           ministerio_cor: string
+          ministerio_id: string
           ministerio_nome: string
           motivo_rejeicao: string
           motivo_solicitacao: string
@@ -3024,6 +3089,10 @@ export type Database = {
           status: string
           substituto_nome: string
         }[]
+      }
+      coord_reenviar_notificacao_substituicao: {
+        Args: { p_substituicao_id: string }
+        Returns: Json
       }
       coord_rejeitar_substituicao: {
         Args: { p_motivo?: string; p_substituicao_id: string }
@@ -3034,6 +3103,10 @@ export type Database = {
         Returns: number
       }
       current_paroquia_id: { Args: never; Returns: string }
+      enviar_alerta_confirmacao: {
+        Args: { p_escala_membro_id: string }
+        Returns: Json
+      }
       enviar_lembretes_presenca: { Args: never; Returns: undefined }
       get_ocorrencias_paroquia: {
         Args: { p_paroquia_id: string; p_status?: string }
@@ -3317,9 +3390,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: [

@@ -22,12 +22,8 @@ export const Route = createFileRoute("/_authenticated/configuracoes-escalas")({
 
 type RegrasEscala = {
   confirmacao_escala_ativa: boolean;
-  prioridade_score: boolean;
   impedir_repeticao_consecutiva: boolean;
-  permitir_duplicidade: boolean;
   variedade_ministerio: boolean;
-  peso_solene: number;
-  peso_normal: number;
   limite_semanal: number | null;
   limite_mensal: number | null;
   intervalo_minimo_dias: number | null;
@@ -62,12 +58,8 @@ export type ConfigEscalas = {
 
 const DEFAULT_REGRAS: RegrasEscala = {
   confirmacao_escala_ativa: false,
-  prioridade_score: true,
   impedir_repeticao_consecutiva: false,
-  permitir_duplicidade: false,
   variedade_ministerio: false,
-  peso_solene: 2,
-  peso_normal: 1,
   limite_semanal: null,
   limite_mensal: null,
   intervalo_minimo_dias: null,
@@ -308,9 +300,7 @@ function ConfiguracaoEscalas() {
 
         <div className="space-y-3">
           {([
-            { key: "prioridade_score" as const,                label: "Priorizar por score",                    desc: "Membros com menor score servem primeiro" },
             { key: "impedir_repeticao_consecutiva" as const,   label: "Impedir escalação consecutiva",          desc: "Evita escalar o mesmo membro em dois eventos seguidos" },
-            { key: "permitir_duplicidade" as const,            label: "Permitir mesmo membro em duas funções",  desc: "Permite o mesmo membro em grupos diferentes na mesma escala" },
             { key: "variedade_ministerio" as const,            label: "Variedade de ministério",                desc: "Bonus para membros que servirão em ministério diferente do último — incentiva rotação" },
           ]).map(({ key, label, desc }) => (
             <div key={key} className="flex items-start justify-between gap-4">
@@ -324,18 +314,6 @@ function ConfiguracaoEscalas() {
         </div>
 
         <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/40">
-          <div>
-            <Label className="text-xs text-muted-foreground">Peso missa normal</Label>
-            <input type="number" min={1} value={regras.peso_normal}
-              onChange={(e) => r("peso_normal", Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Peso missa solene</Label>
-            <input type="number" min={1} value={regras.peso_solene}
-              onChange={(e) => r("peso_solene", Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
-          </div>
           <div>
             <Label className="text-xs text-muted-foreground">Limite semanal</Label>
             <input type="number" min={0} placeholder="Sem limite" value={regras.limite_semanal ?? ""}

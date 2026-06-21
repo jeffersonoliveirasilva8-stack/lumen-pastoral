@@ -64,10 +64,6 @@ type RegrasEscala = {
   limite_semanal: number | null;
   limite_mensal: number | null;
   impedir_repeticao_consecutiva: boolean;
-  prioridade_score: boolean;
-  permitir_duplicidade: boolean;
-  peso_solene: number;
-  peso_normal: number;
   // Modo de confirmação
   confirmacao_escala_ativa: boolean;
   // Antecedência mínima para registrar indisponibilidade (dias)
@@ -252,8 +248,7 @@ const RECORRENCIAS: { value: Recorrencia["tipo"]; label: string }[] = [
 
 const DEFAULT_REGRAS: RegrasEscala = {
   limite_semanal: null, limite_mensal: null,
-  impedir_repeticao_consecutiva: false, prioridade_score: true,
-  permitir_duplicidade: false, peso_solene: 2, peso_normal: 1,
+  impedir_repeticao_consecutiva: false,
   confirmacao_escala_ativa: false,
   dias_antecedencia_indisp: 3,
   distribuicao_masc_pct: 50,
@@ -3089,9 +3084,7 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Comportamento do motor</p>
         <div className="space-y-3">
           {([
-            { key: "prioridade_score", label: "Priorizar por score", desc: "Membros com menor score servem primeiro" },
             { key: "impedir_repeticao_consecutiva", label: "Impedir escalação consecutiva", desc: "Evita escalar o mesmo membro em dois eventos seguidos" },
-            { key: "permitir_duplicidade", label: "Permitir mesmo membro em duas funções", desc: "Permite o mesmo membro em grupos diferentes na mesma escala" },
           ] as const).map(({ key, label, desc }) => (
             <div key={key} className="flex items-start justify-between gap-4">
               <div>
@@ -3101,24 +3094,6 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
               <Switch checked={!!regras[key]} onCheckedChange={(v) => r(key, v)} />
             </div>
           ))}
-        </div>
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Peso por tipo de missa</p>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-muted-foreground">Peso missa normal</label>
-            <input type="number" min={1} value={regras.peso_normal}
-              onChange={(e) => r("peso_normal", Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Peso missa solene</label>
-            <input type="number" min={1} value={regras.peso_solene}
-              onChange={(e) => r("peso_solene", Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
-          </div>
         </div>
       </div>
 
