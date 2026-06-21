@@ -3877,7 +3877,7 @@ function EscalaDetail({
     funcoes.forEach((f) => {
       const cnt = (membroMinisterios[f.ministerio_id] ?? []).length;
       if (cnt === 0) {
-        console.error(`  ❌ "${f.ministerio.nome}" (${f.ministerio_id}): NÃO MAPEADO — 0 membros`);
+        console.error(`  ❌ "${f.ministerio.nome}" (${f.ministerio_id}): NÍO MAPEADO — 0 membros`);
       } else {
         console.log(`  ✓ "${f.ministerio.nome}" (${f.ministerio_id}): ${cnt} membro(s)`);
       }
@@ -3909,7 +3909,7 @@ function EscalaDetail({
     console.log(`Sugestões: ${resultado.sugestoes.length} | Alertas: ${resultado.alertas.length}`);
     resultado.alertas.forEach((a) => console.warn(`  ${a}`));
     resultado.insights.forEach((ins) => {
-      console.group(`FUNÇÃO: ${ins.ministerio_nome}`);
+      console.group(`FUNÇÍO: ${ins.ministerio_nome}`);
       console.log(`Candidatos avaliados: ${ins.candidatos_avaliados}`);
       console.log(`Alocados: ${ins.alocados}/${ins.solicitados}`);
       console.log("Excluídos:", ins.excluidos);

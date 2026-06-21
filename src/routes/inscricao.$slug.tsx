@@ -708,7 +708,7 @@ function InscricaoPage() {
                   ) : (
                     <>
                       <p className="text-xs text-muted-foreground -mt-1">
-                        Selecione os horários em que <strong>NÃO</strong> consegue servir:
+                        Selecione os horários em que <strong>NÍO</strong> consegue servir:
                       </p>
                       <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
                         {Object.entries(missasPorDia)

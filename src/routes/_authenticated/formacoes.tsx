@@ -535,7 +535,7 @@ function MaterialSheet({
           {["documento", "video", "link"].includes(form.tipo) && (
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                {form.tipo === "video" ? "Link do Vídeo (YouTube, Driveâ€¦)" : "URL do arquivo ou pÃ¡gina"}
+                {form.tipo === "video" ? "Link do Vídeo (YouTube, Driveâ€¦)" : "URL do arquivo ou página"}
               </Label>
               <Input type="url" value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://â€¦" />
             </div>
@@ -543,8 +543,8 @@ function MaterialSheet({
 
           {["documento", "video", "link"].includes(form.tipo) && (
             <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">DescriÃ§Ã£o (opcional)</Label>
-              <Textarea rows={3} value={form.descricao} onChange={(e) => set("descricao", e.target.value)} placeholder="Breve descriÃ§Ã£o do conteúdoâ€¦" />
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Descrição (opcional)</Label>
+              <Textarea rows={3} value={form.descricao} onChange={(e) => set("descricao", e.target.value)} placeholder="Breve descrição do conteúdoâ€¦" />
             </div>
           )}
 
@@ -600,12 +600,12 @@ function MaterialSheet({
                 </button>
               </div>
               <div className="space-y-1.5 mt-3">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">AnotaÃ§Ãµes / ata (opcional)</Label>
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Anotações / ata (opcional)</Label>
                 <Textarea
                   rows={4}
                   value={form.conteudo}
                   onChange={(e) => set("conteudo", e.target.value)}
-                  placeholder="DecisÃµes tomadas, encaminhamentos, observaÃ§Ãµesâ€¦"
+                  placeholder="Decisões tomadas, encaminhamentos, observaçõesâ€¦"
                 />
               </div>
             </div>
@@ -615,7 +615,7 @@ function MaterialSheet({
             <div>
               <p className="text-sm font-medium">Publicar para membros</p>
               <p className="text-xs text-muted-foreground">
-                {form.publicado ? "VisÃ­vel no portal do membro." : "Apenas visÃ­vel para coordenação."}
+                {form.publicado ? "Visível no portal do membro." : "Apenas visível para coordenação."}
               </p>
             </div>
             <Switch checked={form.publicado} onCheckedChange={(v) => set("publicado", v)} />
@@ -624,7 +624,7 @@ function MaterialSheet({
 
         <div className="absolute bottom-0 left-0 right-0 border-t border-border/60 bg-background px-6 py-4 flex gap-2">
           <Button className="flex-1 rounded-xl" onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (initial ? "Salvar alteraÃ§Ãµes" : "Adicionar")}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (initial ? "Salvar alterações" : "Adicionar")}
           </Button>
           <Button variant="outline" className="rounded-xl" onClick={onClose} disabled={saving}>
             Cancelar
@@ -881,7 +881,7 @@ function AgendaPastoralPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover evento?</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.titulo}</strong> será removido da agenda. As presenÃ§as registradas serÃ£o mantidas.
+              <strong>{deleteTarget?.titulo}</strong> será removido da agenda. As presenças registradas serão mantidas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1213,7 +1213,7 @@ function EventoFormSheet({
             {/* Datas */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Data e hora de inÃ­cio *</Label>
+                <Label>Data e hora de início *</Label>
                 <Input
                   required type="datetime-local"
                   value={form.data_inicio}
@@ -1221,7 +1221,7 @@ function EventoFormSheet({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Data e hora de tÃ©rmino</Label>
+                <Label>Data e hora de término</Label>
                 <Input
                   type="datetime-local"
                   value={form.data_fim}
@@ -1230,9 +1230,9 @@ function EventoFormSheet({
               </div>
             </div>
 
-            {/* PontuaÃ§Ã£o */}
+            {/* Pontuação */}
             <div className="space-y-1.5">
-              <Label>PontuaÃ§Ã£o por presenÃ§a</Label>
+              <Label>Pontuação por presença</Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
@@ -1271,19 +1271,19 @@ function EventoFormSheet({
               )}
             </div>
 
-            {/* ResponsÃ¡veis */}
+            {/* Responsáveis */}
             <div className="space-y-1.5">
-              <Label>ResponsÃ¡veis</Label>
+              <Label>Responsáveis</Label>
               <Input
                 value={form.responsaveis_nomes}
                 onChange={(e) => f("responsaveis_nomes", e.target.value)}
-                placeholder="Ex: Pe. JoÃ£o Silva, Maria Oliveira"
+                placeholder="Ex: Pe. João Silva, Maria Oliveira"
               />
             </div>
 
-            {/* PÃºblico-alvo: atuaÃ§Ãµes + membros manuais */}
+            {/* Público-alvo: atuações + membros manuais */}
             <div className="space-y-2">
-              <Label>PÃºblico-alvo</Label>
+              <Label>Público-alvo</Label>
               {atuacoes.length > 0 ? (
                 <div className="rounded-xl border border-border divide-y divide-border">
                   {atuacoes.map((a) => (
@@ -1309,13 +1309,13 @@ function EventoFormSheet({
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Nenhuma atuaÃ§Ã£o pastoral cadastrada.
+                  Nenhuma atuação pastoral cadastrada.
                 </p>
               )}
-              {/* SeleÃ§Ã£o de membros especÃ­ficos (P1.7) */}
+              {/* Seleção de membros específicos (P1.7) */}
               {todosMembros.length > 0 && (
                 <div className="space-y-1.5 pt-1">
-                  <p className="text-xs text-muted-foreground">Membros especÃ­ficos</p>
+                  <p className="text-xs text-muted-foreground">Membros específicos</p>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                     <input
@@ -1359,9 +1359,9 @@ function EventoFormSheet({
               )}
             </div>
 
-            {/* DescriÃ§Ã£o */}
+            {/* Descrição */}
             <div className="space-y-1.5">
-              <Label>DescriÃ§Ã£o</Label>
+              <Label>Descrição</Label>
               <Textarea
                 rows={3}
                 value={form.descricao}
@@ -1370,9 +1370,9 @@ function EventoFormSheet({
               />
             </div>
 
-            {/* ObservaÃ§Ãµes */}
+            {/* Observações */}
             <div className="space-y-1.5">
-              <Label>ObservaÃ§Ãµes internas</Label>
+              <Label>Observações internas</Label>
               <Textarea
                 rows={2}
                 value={form.observacoes}
@@ -1471,7 +1471,7 @@ function PresencaSheet({
 
   const marcarMutation = useMutation({
     mutationFn: async ({ membroId, presente }: { membroId: string; presente: boolean | null }) => {
-      // RPC atÃ´mica: atualiza presencas_eventos + historico_participacoes
+      // RPC atÍ´mica: atualiza presencas_eventos + historico_participacoes
       // O trigger on_historico_score_recalc cuida de membros.score automaticamente.
       const { error } = await supabase.rpc("marcar_presenca_evento" as never, {
         p_paroquia_id: paroquiaId,
@@ -1624,7 +1624,7 @@ function PresencaSheet({
                           type="button"
                           onClick={() => setExpanded(isOpen ? null : m.id)}
                           className="h-8 w-8 rounded-full grid place-items-center text-muted-foreground hover:bg-muted transition"
-                          title="Justificativa / observaÃ§Ãµes"
+                          title="Justificativa / observações"
                         >
                           {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                         </button>
@@ -1689,14 +1689,14 @@ function JustificativaRow({
     <div className="px-4 pb-3 bg-muted/20 space-y-2 border-t border-border">
       <Input
         className="h-8 text-sm mt-2"
-        placeholder="Justificativa de ausÃªnciaâ€¦"
+        placeholder="Justificativa de ausênciaâ€¦"
         value={just}
         onChange={(e) => setJust(e.target.value)}
       />
       <div className="flex gap-2">
         <Input
           className="h-8 text-sm flex-1"
-          placeholder="ObservaÃ§Ãµes internasâ€¦"
+          placeholder="Observações internasâ€¦"
           value={obs}
           onChange={(e) => setObs(e.target.value)}
         />
