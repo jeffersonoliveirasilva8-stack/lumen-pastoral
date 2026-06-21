@@ -192,20 +192,12 @@ function PortalMembroEscalas() {
   const diasAntecedencia = paroquiaRegras?.diasAntecedencia ?? 0;
 
   // ── Todas as escalas publicadas da paróquia ───────────────────────────
+  // Usa RPC SECURITY DEFINER para contornar a cadeia de RLS frágil em escalas/escala_membros.
   const { data: todasEscalas = [], isLoading: loadingTodas } = useQuery<EscalaPublicada[]>({
     queryKey: ["pm-todas-escalas", membro?.paroquia_id],
     enabled: !!membro?.paroquia_id,
     queryFn: async () => {
-      const { data, error } = await anyDb
-        .from("escalas")
-        .select(`
-          id, titulo, data, hora_inicio, hora_fim, local, solene, tem_adoracao, observacoes,
-          escala_membros(id, status, justificativa, membro_id, ministerio_id, membros(nome), ministerios(nome, cor, categoria))
-        `)
-        .eq("paroquia_id", membro!.paroquia_id)
-        .eq("status", "publicada")
-        .order("data", { ascending: true })
-        .order("hora_inicio", { ascending: true, nullsFirst: true });
+      const { data, error } = await anyDb.rpc("portal_membro_get_escalas_publicadas");
       if (error) throw error;
       return (data ?? []).map((row: any): EscalaPublicada => ({
         id: row.id,
