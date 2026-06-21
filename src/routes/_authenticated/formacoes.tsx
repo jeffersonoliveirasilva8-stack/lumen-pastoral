@@ -1425,6 +1425,40 @@ function EventoFormSheet({
 
 // â”€â”€ PresencaSheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+// ── PDF helpers ───────────────────────────────────────────────────────────────
+
+async function urlToBase64(url: string): Promise<{ data: string; format: string } | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve({
+        data: reader.result as string,
+        format: blob.type.includes("png") ? "PNG" : "JPEG",
+      });
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+type ParoquiaPDF = {
+  nome: string;
+  padroeiro: string | null;
+  cidade: string | null;
+  diocese: string | null;
+  endereco: string | null;
+  contato_email: string | null;
+  contato_telefone: string | null;
+  pdf_cabecalho_url: string | null;
+  pdf_rodape_url: string | null;
+};
+
+
 function PresencaSheet({
   evento, paroquiaId, onClose,
 }: {
@@ -1434,6 +1468,21 @@ function PresencaSheet({
 }) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const { data: paroquia } = useQuery<ParoquiaPDF | null>({
+    queryKey: ["paroquia-pdf", paroquiaId],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("paroquias")
+        .select("nome,padroeiro,cidade,diocese,endereco,contato_email,contato_telefone,pdf_cabecalho_url,pdf_rodape_url")
+        .eq("id", paroquiaId)
+        .single();
+      return data as ParoquiaPDF | null;
+    },
+  });
+
 
   const { data: membros = [] } = useQuery<MembroBase[]>({
     queryKey: ["membros-base", paroquiaId],
@@ -1497,40 +1546,242 @@ function PresencaSheet({
   const ausentes = presencas.filter((p) => p.presente === false).length;
   const confirmados = presencas.filter((p) => p.presente === null).length;
 
-  function exportCSV() {
-    const dataFormatada = format(parseISO(evento.data_inicio), "d 'de' MMMM 'de' yyyy", { locale: ptBR });
-    const pct = total > 0 ? Math.round((presentes / total) * 100) : 0;
+  async function exportPDF() {
+    setIsExporting(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
 
-    const rows: string[][] = [
-      ["Relatório de Presença — " + evento.titulo],
-      ["Data", dataFormatada],
-      ["Tipo", TIPOS.find((t) => t.value === evento.tipo)?.label ?? evento.tipo],
-      ["Total de membros", String(total)],
-      ["Presentes", String(presentes)],
-      ["Ausentes", String(ausentes)],
-      ["Sem registro", String(total - presencas.length)],
-      ["Taxa de presença", pct + "%"],
-      [],
-      ["Nome", "Status", "Justificativa", "Observações"],
-    ];
+      const doc = new jsPDF("p", "mm", "a4");
+      const W = 210;
+      const H = 297;
+      const MARGIN = 14;
+      const CONTENT_W = W - 2 * MARGIN;
 
-    for (const m of membros) {
-      const p = presencaMap.get(m.id);
-      const status = p?.presente === true ? "Presente"
-        : p?.presente === false ? "Ausente"
-        : p ? "Confirmado (portal)"
-        : "Sem registro";
-      rows.push([m.nome, status, p?.justificativa ?? "", p?.observacoes ?? ""]);
+      // Cores
+      const NAVY: [number, number, number]     = [30,  41,  82];
+      const GOLD: [number, number, number]     = [180, 148, 60];
+      const WHITE: [number, number, number]    = [255, 255, 255];
+      const GREEN: [number, number, number]    = [22,  163, 74];
+      const RED: [number, number, number]      = [220, 38,  38];
+      const AMBER: [number, number, number]    = [202, 138, 4];
+      const BLUE: [number, number, number]     = [37,  99,  235];
+      const GRAY: [number, number, number]     = [100, 116, 139];
+      const LIGHT_GRAY: [number, number, number] = [248, 250, 252];
+      const BORDER_GRAY: [number, number, number] = [226, 232, 240];
+
+      const pct = total > 0 ? Math.round((presentes / total) * 100) : 0;
+      const dataFormatada = format(parseISO(evento.data_inicio), "d 'de' MMMM 'de' yyyy 'as' HH:mm", { locale: ptBR });
+      const tipoLabel = TIPOS.find((t) => t.value === evento.tipo)?.label ?? evento.tipo;
+      const now = format(new Date(), "d/MM/yyyy 'as' HH:mm", { locale: ptBR });
+
+      // ── CABECALHO ─────────────────────────────────────────────
+      const HEADER_H = 38;
+      let yHeader = 0;
+
+      const imgCabecalho = paroquia?.pdf_cabecalho_url
+        ? await urlToBase64(paroquia.pdf_cabecalho_url) : null;
+
+      if (imgCabecalho) {
+        doc.addImage(imgCabecalho.data, imgCabecalho.format as "PNG" | "JPEG", 0, 0, W, HEADER_H);
+        yHeader = HEADER_H + 1;
+      } else {
+        // Design proprio do sistema
+        doc.setFillColor(...NAVY);
+        doc.rect(0, 0, W, HEADER_H, "F");
+        doc.setFillColor(...GOLD);
+        doc.rect(0, HEADER_H - 2.5, W, 2.5, "F");
+
+        doc.setTextColor(...WHITE);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(15);
+        doc.text(paroquia?.nome ?? "Paroquia", W / 2, 13, { align: "center" });
+
+        const sub = [paroquia?.padroeiro, paroquia?.diocese, paroquia?.cidade]
+          .filter(Boolean).join("  |  ");
+        if (sub) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.5);
+          doc.setTextColor(220, 210, 180);
+          doc.text(sub, W / 2, 21, { align: "center" });
+        }
+
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7);
+        doc.setTextColor(...GOLD);
+        doc.text("Sistema Lumen Pastoral", W / 2, 29.5, { align: "center" });
+
+        yHeader = HEADER_H + 1;
+      }
+
+      // ── TITULO DO RELATORIO ───────────────────────────────────
+      let y = yHeader + 7;
+
+      doc.setTextColor(...NAVY);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("RELATORIO DE PRESENCA", MARGIN, y);
+
+      // Data de geracao (direita)
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(...GRAY);
+      doc.text("Gerado em " + now, W - MARGIN, y, { align: "right" });
+
+      y += 5.5;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(20, 20, 20);
+      doc.text(evento.titulo, MARGIN, y);
+
+      y += 4.5;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...GRAY);
+      const infoLine = dataFormatada + "   |   " + tipoLabel +
+        (evento.local ? "   |   " + evento.local : "");
+      doc.text(infoLine, MARGIN, y);
+
+      y += 6;
+
+      // Linha separadora
+      doc.setDrawColor(...BORDER_GRAY);
+      doc.setLineWidth(0.3);
+      doc.line(MARGIN, y, W - MARGIN, y);
+      y += 7;
+
+      // ── CARDS DE RESUMO ────────────────────────────────────────
+      const semRegistro = total - presencas.length;
+      const cardW = (CONTENT_W - 9) / 4;
+      const cardH = 22;
+      const cards: { label: string; value: string; color: [number,number,number]; bg: [number,number,number] }[] = [
+        { label: "Total de membros", value: String(total),       color: BLUE,  bg: [239, 246, 255] },
+        { label: "Presentes",        value: String(presentes),   color: GREEN, bg: [240, 253, 244] },
+        { label: "Ausentes",         value: String(ausentes),    color: RED,   bg: [254, 242, 242] },
+        { label: "Sem registro",     value: String(semRegistro), color: AMBER, bg: [255, 251, 235] },
+      ];
+
+      for (let i = 0; i < cards.length; i++) {
+        const cx = MARGIN + i * (cardW + 3);
+        const card = cards[i];
+        doc.setFillColor(...card.bg);
+        doc.roundedRect(cx, y, cardW, cardH, 2, 2, "F");
+        doc.setFillColor(...card.color);
+        doc.rect(cx, y, 2.5, cardH, "F");
+        doc.setTextColor(...card.color);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(20);
+        doc.text(card.value, cx + cardW / 2, y + 13, { align: "center" });
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(...GRAY);
+        doc.text(card.label, cx + cardW / 2, y + 19.5, { align: "center" });
+      }
+
+      y += cardH + 6;
+
+      // ── BARRA DE PROGRESSO ─────────────────────────────────────
+      if (total > 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(...GRAY);
+        doc.text("Taxa de presenca", MARGIN, y + 3);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...NAVY);
+        doc.text(pct + "%", W - MARGIN, y + 3, { align: "right" });
+        y += 5.5;
+        doc.setFillColor(...BORDER_GRAY);
+        doc.roundedRect(MARGIN, y, CONTENT_W, 4, 2, 2, "F");
+        if (pct > 0) {
+          doc.setFillColor(...GREEN);
+          doc.roundedRect(MARGIN, y, CONTENT_W * (pct / 100), 4, 2, 2, "F");
+        }
+        y += 10;
+      }
+
+      // ── TABELA DE PRESENCAS ────────────────────────────────────
+      const tableRows = membros.map((m, idx) => {
+        const p = presencaMap.get(m.id);
+        const statusText = p?.presente === true ? "Presente"
+          : p?.presente === false ? "Ausente"
+          : p ? "Confirmado"
+          : "Sem registro";
+        const statusColor: [number, number, number] =
+          p?.presente === true ? GREEN
+          : p?.presente === false ? RED
+          : p ? BLUE
+          : AMBER;
+        return [
+          { content: String(idx + 1), styles: { halign: "center" as const, textColor: GRAY } },
+          { content: m.nome, styles: {} },
+          { content: statusText, styles: { textColor: statusColor, fontStyle: "bold" as const, halign: "center" as const } },
+          { content: p?.justificativa ?? "", styles: { textColor: GRAY } },
+          { content: p?.observacoes ?? "", styles: { textColor: GRAY } },
+        ];
+      });
+
+      // Prefooter height reservation
+      const FOOTER_H = paroquia?.pdf_rodape_url ? 22 : 10;
+
+      autoTable(doc, {
+        startY: y,
+        head: [["#", "Nome", "Status", "Justificativa", "Observacoes"]],
+        body: tableRows as any,
+        margin: { left: MARGIN, right: MARGIN, bottom: FOOTER_H + 4 },
+        headStyles: {
+          fillColor: NAVY,
+          textColor: WHITE,
+          fontSize: 8,
+          fontStyle: "bold",
+          cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+        },
+        bodyStyles: {
+          fontSize: 8,
+          cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
+          textColor: [20, 20, 20],
+        },
+        alternateRowStyles: { fillColor: LIGHT_GRAY },
+        columnStyles: {
+          0: { cellWidth: 9 },
+          1: { cellWidth: 52 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 45 },
+          4: { cellWidth: 45 },
+        },
+        didDrawPage: (data: any) => {
+          // Footer em cada pagina
+          if (!paroquia?.pdf_rodape_url) {
+            doc.setFillColor(...NAVY);
+            doc.rect(0, H - 10, W, 10, "F");
+            doc.setFillColor(...GOLD);
+            doc.rect(0, H - 10, W, 0.8, "F");
+            doc.setTextColor(...WHITE);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(6.5);
+            doc.text(paroquia?.nome ?? "Lumen Pastoral", MARGIN, H - 4.5);
+            doc.text("Pagina " + data.pageNumber, W - MARGIN, H - 4.5, { align: "right" });
+          }
+        },
+      });
+
+      // ── RODAPE COM IMAGEM (todas as paginas) ──────────────────
+      if (paroquia?.pdf_rodape_url) {
+        const imgRodape = await urlToBase64(paroquia.pdf_rodape_url);
+        if (imgRodape) {
+          const pageCount = (doc as any).internal.getNumberOfPages();
+          for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.addImage(imgRodape.data, imgRodape.format as "PNG" | "JPEG", 0, H - 22, W, 22);
+          }
+        }
+      }
+
+      // ── DOWNLOAD ──────────────────────────────────────────────
+      const nomeArq = `presenca_${evento.titulo.replace(/[^a-zA-Z0-9]/g, "_")}_${evento.data_inicio.slice(0, 10)}.pdf`;
+      doc.save(nomeArq);
+    } finally {
+      setIsExporting(false);
     }
-
-    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `presenca_${evento.titulo.replace(/\s+/g, "_")}_${evento.data_inicio.slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   return (
@@ -1538,9 +1789,9 @@ function PresencaSheet({
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader className="flex-row items-center justify-between pr-8">
           <SheetTitle>Registro de Presença</SheetTitle>
-          <Button size="sm" variant="outline" onClick={exportCSV} className="h-8 text-xs gap-1.5 shrink-0">
-            <Download className="h-3.5 w-3.5" />
-            Exportar
+          <Button size="sm" variant="outline" onClick={exportPDF} disabled={isExporting} className="h-8 text-xs gap-1.5 shrink-0">
+            {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            {isExporting ? "Gerando..." : "Exportar PDF"}
           </Button>
         </SheetHeader>
 
