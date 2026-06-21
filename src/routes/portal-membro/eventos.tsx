@@ -4,7 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Loader2, Calendar, MapPin, Star, CheckCircle2, XCircle, Clock,
-  GraduationCap, ChevronDown, ChevronUp,
+  GraduationCap, ChevronDown, ChevronUp, BookOpen, Link2, FileText, Video,
+  ClipboardList, ExternalLink,
 } from "lucide-react";
 import { format, parseISO, isPast } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -42,6 +43,17 @@ type MinhaPresenca = {
   presente: boolean | null;
   justificativa: string | null;
   pontuacao_recebida: number | null;
+};
+
+type MaterialEvento = {
+  id: string;
+  evento_id: string;
+  titulo: string;
+  tipo: "pauta" | "documento" | "video" | "artigo" | "link";
+  descricao: string | null;
+  url: string | null;
+  conteudo: string | null;
+  itens: { texto: string; concluido: boolean }[] | null;
 };
 
 const TIPOS: Record<string, { label: string; cor: string }> = {
@@ -92,6 +104,28 @@ function PortalMembroEventos() {
   });
 
   const presencaMap = new Map(minhasPresencas.map((p) => [p.evento_id, p]));
+
+  const { data: materiaisEventos = [] } = useQuery<MaterialEvento[]>({
+    queryKey: ["portal-materiais-eventos", membro?.paroquia_id],
+    enabled: !!membro?.paroquia_id,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("formacoes_materiais")
+        .select("id,evento_id,titulo,tipo,descricao,url,conteudo,itens")
+        .eq("paroquia_id", membro!.paroquia_id)
+        .eq("publicado", true)
+        .not("evento_id", "is", null);
+      return (data ?? []) as MaterialEvento[];
+    },
+  });
+
+  const materiaisPorEvento = new Map<string, MaterialEvento[]>();
+  for (const m of materiaisEventos) {
+    if (!m.evento_id) continue;
+    if (!materiaisPorEvento.has(m.evento_id)) materiaisPorEvento.set(m.evento_id, []);
+    materiaisPorEvento.get(m.evento_id)!.push(m);
+  }
 
   const confirmarMutation = useMutation({
     mutationFn: async (eventoId: string) => {
@@ -186,6 +220,7 @@ function PortalMembroEventos() {
                     key={evento.id}
                     evento={evento}
                     presenca={presencaMap.get(evento.id)}
+                    materiais={materiaisPorEvento.get(evento.id) ?? []}
                     expandedJust={expandedJust}
                     onExpandJust={setExpandedJust}
                     onConfirmar={() => confirmarMutation.mutate(evento.id)}
@@ -209,6 +244,7 @@ function PortalMembroEventos() {
                     key={evento.id}
                     evento={evento}
                     presenca={presencaMap.get(evento.id)}
+                    materiais={materiaisPorEvento.get(evento.id) ?? []}
                     expandedJust={expandedJust}
                     onExpandJust={setExpandedJust}
                     onConfirmar={() => confirmarMutation.mutate(evento.id)}
@@ -228,9 +264,14 @@ function PortalMembroEventos() {
 
 // ── EventoCard ─────────────────────────────────────────────────────────────────
 
+const MATERIAL_ICON: Record<string, React.ElementType> = {
+  pauta: ClipboardList, documento: FileText, video: Video, artigo: BookOpen, link: Link2,
+};
+
 function EventoCard({
   evento,
   presenca,
+  materiais,
   expandedJust,
   onExpandJust,
   onConfirmar,
@@ -240,6 +281,7 @@ function EventoCard({
 }: {
   evento: Evento;
   presenca: MinhaPresenca | undefined;
+  materiais: MaterialEvento[];
   expandedJust: string | null;
   onExpandJust: (id: string | null) => void;
   onConfirmar: () => void;
@@ -248,6 +290,7 @@ function EventoCard({
   mutationPending: boolean;
 }) {
   const [just, setJust] = useState("");
+  const [showMateriais, setShowMateriais] = useState(false);
   const tipo = TIPOS[evento.tipo] ?? TIPOS.outro;
 
   const dataFormatada = format(parseISO(evento.data_inicio), "d 'de' MMMM, HH:mm", { locale: ptBR });
@@ -399,6 +442,69 @@ function EventoCard({
                   <ChevronDown className="h-3 w-3 ml-1" />
                 )}
               </Button>
+            </div>
+          )}
+
+          {/* Materiais publicados do evento */}
+          {materiais.length > 0 && (
+            <div className="mt-3 pt-2 border-t border-border/30">
+              <button
+                type="button"
+                onClick={() => setShowMateriais(!showMateriais)}
+                className="flex items-center gap-1.5 text-xs text-primary font-medium w-full"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                {materiais.length} material{materiais.length !== 1 ? "is" : ""} disponível{materiais.length !== 1 ? "s" : ""}
+                {showMateriais ? <ChevronUp className="h-3 w-3 ml-auto" /> : <ChevronDown className="h-3 w-3 ml-auto" />}
+              </button>
+              {showMateriais && (
+                <div className="mt-2 space-y-1.5">
+                  {materiais.map((mat) => {
+                    const Icon = MATERIAL_ICON[mat.tipo] ?? BookOpen;
+                    const hasLink = mat.url && ["documento", "video", "link"].includes(mat.tipo);
+                    return (
+                      <div key={mat.id} className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+                        <div className="flex items-start gap-2">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium leading-snug">{mat.titulo}</p>
+                            {mat.descricao && (
+                              <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{mat.descricao}</p>
+                            )}
+                            {mat.tipo === "pauta" && mat.itens && mat.itens.length > 0 && (
+                              <ul className="mt-1.5 space-y-1">
+                                {mat.itens.map((item, i) => (
+                                  <li key={i} className="flex items-start gap-1.5 text-[10px]">
+                                    <span className={`mt-0.5 h-3 w-3 rounded border flex items-center justify-center shrink-0 text-[8px] font-bold ${
+                                      item.concluido ? "bg-emerald-500 border-emerald-500 text-white" : "border-border"
+                                    }`}>
+                                      {item.concluido ? "✓" : ""}
+                                    </span>
+                                    <span className={item.concluido ? "line-through text-muted-foreground" : ""}>{item.texto}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {mat.tipo === "artigo" && mat.conteudo && (
+                              <p className="text-[10px] text-muted-foreground mt-1 line-clamp-4 whitespace-pre-line">{mat.conteudo}</p>
+                            )}
+                          </div>
+                          {hasLink && (
+                            <a
+                              href={mat.url!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
