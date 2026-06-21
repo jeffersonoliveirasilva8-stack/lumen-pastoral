@@ -123,7 +123,7 @@ export function useMembroAuth(): UseMembroAuth {
       .maybeSingle();
 
     if (byEmail) {
-      // ── CORREÇÃO CRÍTICA: link SÍNCRONO via RPC, setMembro APÓS o link ────
+      // ── CORREÇÍO CRÍTICA: link SÍNCRONO via RPC, setMembro APÓS o link ────
       // IMPORTANTE: setMembro() é chamado DEPOIS do RPC, não antes.
       // Se setMembro() fosse chamado primeiro, React re-renderizaria imediatamente
       // com auth_user_id=NULL no banco → as queries de comunidades/atuações

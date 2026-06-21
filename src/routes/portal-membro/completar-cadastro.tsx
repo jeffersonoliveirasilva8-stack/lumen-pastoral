@@ -551,7 +551,7 @@ function CompletarCadastroPage() {
                   {/* Grid de missas */}
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                      Selecione os horários em que <strong className="text-destructive">NÃO</strong> pode servir:
+                      Selecione os horários em que <strong className="text-destructive">NÍO</strong> pode servir:
                     </p>
                     <div className="space-y-4">
                       {missasPorDia.map(({ dia, list }) => (

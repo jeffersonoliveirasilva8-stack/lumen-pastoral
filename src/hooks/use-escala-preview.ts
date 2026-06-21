@@ -163,7 +163,7 @@ export function useEscalaPreview(params: {
       setSuggestedAssignments(stored.suggestedAssignments);
       setPreviewHash(stored.previewHash);
       setLastGeneratedAt(new Date(stored.savedAt));
-      // Restaurado do localStorage = dados NÃO estão no banco ainda.
+      // Restaurado do localStorage = dados NÍO estão no banco ainda.
       // dirtyPreview = true garante que "Publicar" vai salvar antes de mudar status.
       setDirtyPreview(true);
     }

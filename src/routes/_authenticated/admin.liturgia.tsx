@@ -270,7 +270,7 @@ function AdminLiturgiaPage() {
           <div className="rounded-xl border border-border bg-card p-4">
             <p className="text-xs text-muted-foreground mb-4">
               Adicione celebrações locais: padroeiros, datas especiais da paróquia, etc.
-              Celebrações locais NÃO sobrescrevem solenidades universais.
+              Celebrações locais NÍO sobrescrevem solenidades universais.
             </p>
 
             {loadingParo ? (

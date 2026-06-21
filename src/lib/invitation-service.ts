@@ -44,7 +44,7 @@ export const AccessInvitationService = {
    * Fallback para signInWithOtp se a Edge Function falhar.
    *
    * Retorna `{ cooldown: N }` quando o Supabase Auth está em rate-limit —
-   * isso NÃO é falha de envio; o chamador deve tratar como "aguardar N segundos".
+   * isso NÍO é falha de envio; o chamador deve tratar como "aguardar N segundos".
    */
   async sendEmail(params: {
     email: string;
