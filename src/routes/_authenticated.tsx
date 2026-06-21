@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
   Flame, BookOpen, Bell, UserCircle, Church, Leaf,
-  PanelLeftClose, PanelLeftOpen, Menu, Trophy, HelpCircle,
+  PanelLeftClose, PanelLeftOpen, X, Trophy, HelpCircle,
   ArrowLeftRight, AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -230,10 +230,9 @@ function AuthLayout() {
     ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),
   ];
 
-  // No mobile o bottom nav exibe apenas os 5 primeiros itens do mainNav.
-  // Os itens restantes (Liturgia, Pastoral, Ocorrências, Configuração) ficam
-  // acessíveis pelo drawer "Mais" para que nenhuma página fique oculta.
-  const mobileNavOverflow = mainNav.slice(5);
+  // No mobile o bottom nav exibe 4 itens (2 + FAB + 2).
+  // Os itens a partir do índice 4 ficam acessíveis pelo drawer do FAB.
+  const mobileNavOverflow = mainNav.slice(4);
 
   async function logout() {
     sessionStorage.removeItem("admin_mfa_token");
@@ -436,10 +435,13 @@ function AuthLayout() {
               </button>
               <button
                 onClick={() => setMenuOpen(true)}
-                className="sm:hidden btn-icon"
+                className="sm:hidden relative btn-icon"
                 aria-label="Menu"
               >
-                <Menu className="h-4 w-4" />
+                <UserCircle className="h-4.5 w-4.5" />
+                {(notifsNaoLidas > 0 || solicitacoesPendentes > 0 || ocorrenciasAbertas > 0) && (
+                  <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-background" />
+                )}
               </button>
             </div>
           </div>
@@ -563,43 +565,83 @@ function AuthLayout() {
           </DrawerContent>
         </Drawer>
 
-        {/* ── Mobile bottom navigation ───────── */}
+        {/* ── Mobile bottom navigation (FAB pattern) ───────── */}
         <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 glass border-t border-border/50 safe-area-pb" style={{ boxShadow: "0 -1px 0 0 var(--color-border), 0 -8px 24px rgba(0,0,0,0.07)" }}>
           <div className="flex items-stretch h-[58px]">
-            {mainNav.slice(0, 5).map((item) => {
+
+            {/* 2 itens esquerda: Painel, Escalas */}
+            {mainNav.slice(0, 2).map((item) => {
               const active = activeModule === item.to;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 min-w-0 relative tap-highlight transition-all duration-150 active:opacity-70 ${
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 relative tap-highlight transition-colors duration-150 active:scale-[0.88] ${
                     active ? "text-primary" : "text-muted-foreground"
                   }`}
                 >
                   {active && <span className="nav-active-pip" />}
-                  <div className={`relative transition-all duration-200 ${active ? "scale-[1.08]" : "scale-100"}`}>
-                    <div className={`absolute inset-[-5px] rounded-xl transition-all duration-200 ${active ? "bg-primary/10" : "bg-transparent"}`} />
-                    <item.icon className={`h-[18px] w-[18px] shrink-0 transition-all duration-200 relative ${active ? "stroke-[2.2]" : "stroke-[1.7]"}`} />
+                  <div className={`relative mt-2 transition-all duration-200 ${active ? "scale-110" : "scale-100"}`}>
+                    <div className={`absolute inset-[-6px] rounded-xl transition-all duration-200 ${active ? "bg-primary/10" : "bg-transparent"}`} />
+                    <item.icon className={`h-[19px] w-[19px] shrink-0 relative transition-all duration-200 ${active ? "stroke-[2.3]" : "stroke-[1.6]"}`} />
                     {(item.badge ?? 0) > 0 && (
-                      <span className="absolute -top-1 -right-2 h-3.5 min-w-[0.875rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5 animate-bounce-in">
-                        {(item.badge ?? 0) > 9 ? "9+" : item.badge}
-                      </span>
+                      <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-card animate-bounce-in" />
                     )}
                   </div>
-                  <span className={`text-[9.5px] leading-none truncate max-w-full px-0.5 mt-1 transition-all duration-150 ${active ? "font-bold" : "font-medium"}`}>
+                  <span className={`text-[9px] leading-none truncate max-w-full px-1 mt-0.5 transition-all duration-150 ${active ? "font-bold" : "font-medium"}`}>
                     {item.label}
                   </span>
                 </Link>
               );
             })}
-            {/* "Mais" — abre drawer */}
-            <button
-              onClick={() => setMenuOpen(true)}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 min-w-0 relative tap-highlight text-muted-foreground active:opacity-70 transition-all duration-150"
-            >
-              <Menu className="h-[18px] w-[18px] stroke-[1.7]" />
-              <span className="text-[9.5px] leading-none font-medium mt-1">Mais</span>
-            </button>
+
+            {/* Centro: FAB Lumen */}
+            <div className="flex-1 relative flex flex-col items-center justify-end pb-1.5">
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className={`absolute -top-5 h-[54px] w-[54px] rounded-full bg-primary text-primary-foreground
+                  flex items-center justify-center tap-highlight
+                  shadow-[0_8px_28px_oklch(0.22_0.03_260/0.45)]
+                  transition-all duration-200 active:scale-90
+                  ${menuOpen ? "scale-95 rotate-90" : "scale-100 hover:scale-105"}`}
+                aria-label="Menu"
+              >
+                {menuOpen
+                  ? <X className="h-[22px] w-[22px] transition-all duration-200" />
+                  : <Flame className="h-[22px] w-[22px] transition-all duration-200" />
+                }
+              </button>
+              <span className={`text-[9px] font-semibold leading-none transition-colors duration-150 ${menuOpen ? "text-primary" : "text-muted-foreground"}`}>
+                Mais
+              </span>
+            </div>
+
+            {/* 2 itens direita: Substituições, Membros */}
+            {mainNav.slice(2, 4).map((item) => {
+              const active = activeModule === item.to;
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 pb-1 min-w-0 relative tap-highlight transition-colors duration-150 active:scale-[0.88] ${
+                    active ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {active && <span className="nav-active-pip" />}
+                  <div className={`relative mt-2 transition-all duration-200 ${active ? "scale-110" : "scale-100"}`}>
+                    <div className={`absolute inset-[-6px] rounded-xl transition-all duration-200 ${active ? "bg-primary/10" : "bg-transparent"}`} />
+                    <item.icon className={`h-[19px] w-[19px] shrink-0 relative transition-all duration-200 ${active ? "stroke-[2.3]" : "stroke-[1.6]"}`} />
+                    {(item.badge ?? 0) > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-card animate-bounce-in" />
+                    )}
+                  </div>
+                  <span className={`text-[9px] leading-none truncate max-w-full px-1 mt-0.5 transition-all duration-150 ${active ? "font-bold" : "font-medium"}`}>
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+
           </div>
         </nav>
       </div>
