@@ -645,10 +645,44 @@ function EscalasPage() {
     },
     onSuccess: () => {
       refetchAtribuicoes();
-      // Sincroniza com portal do membro
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
     },
+  });
+
+  const removerPublicadaMutation = useMutation({
+    mutationFn: async (args: {
+      atribId: string;
+      membroId: string;
+      motivo: string;
+      abrirVaga: boolean;
+      penalidade: "nenhuma" | "justificou" | "faltou";
+    }) => {
+      const { error, data } = await (supabase as any).rpc("admin_remover_membro_escala", {
+        p_escala_membro_id: args.atribId,
+        p_motivo:           args.motivo || null,
+        p_abrir_vaga:       args.abrirVaga,
+        p_penalidade:       args.penalidade,
+      });
+      if (error) throw error;
+      return data as { acao: string; substituicao_id?: string };
+    },
+    onSuccess: (data) => {
+      refetchAtribuicoes();
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      qc.invalidateQueries({ queryKey: ["membros-ativos", profile?.paroquia_id] });
+      if (data?.acao === "vaga_aberta") {
+        toast.success("Vaga aberta para substituição.");
+        qc.invalidateQueries({ queryKey: ["substituicoes", profile?.paroquia_id] });
+      } else {
+        toast.success("Membro removido da escala.");
+        if (data?.acao !== "removido") {
+          // fallback
+        }
+      }
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
 
   const updateStatusMutation = useMutation({
@@ -1592,6 +1626,7 @@ ${rodapeUrl
               paroquiaNome={paroquiaNome}
               onAtribuir={(mid, minid) => atribuirMutation.mutate({ membro_id: mid, ministerio_id: minid })}
               onRemoverAtribuicao={(id) => removerAtribuicaoMutation.mutate(id)}
+              onRemoverPublicada={(args) => removerPublicadaMutation.mutate(args)}
               onStatusChange={(status) => updateStatusMutation.mutate({ id: detailEscala.id, status })}
               onNotificarVaga={async ({ escalaId, ministerioId, ministerioNome }) => {
                 const paroquiaId = profile?.paroquia_id;
@@ -3221,7 +3256,7 @@ function EscalaDetail({
   membroAtuacoes,
   indisponibilidades, funcaoRestricoes, missasPadrao, membroMissaRestricoes, paroquiaConfig,
   paroquiaNome, initialEditMode, comunidades, tiposMissa, isSaving, onSave,
-  onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onStatusChange, onNotificarVaga,
+  onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onRemoverPublicada, onStatusChange, onNotificarVaga,
   preferenciaisSolene,
 }: {
   escala: Escala;
@@ -3249,6 +3284,7 @@ function EscalaDetail({
   onRemoveFuncao: (id: string) => void;
   onAtribuir: (memberId: string, ministerioId: string) => void;
   onRemoverAtribuicao: (id: string) => void;
+  onRemoverPublicada: (args: { atribId: string; membroId: string; motivo: string; abrirVaga: boolean; penalidade: "nenhuma" | "justificou" | "faltou" }) => void;
   onStatusChange: (status: string) => void;
   onNotificarVaga: (args: { escalaId: string; ministerioId: string; ministerioNome: string }) => void;
 }) {
@@ -3256,8 +3292,11 @@ function EscalaDetail({
   const [escalaForm, setEscalaForm] = useState<EscalaForm>(EMPTY_FORM);
   const [equilibrioOpen, setEquilibrioOpen] = useState(false);
   const [removerPendente, setRemoverPendente] = useState<{
-    atribId: string; membroNome: string; ministerioId: string; ministerioNome: string;
+    atribId: string; membroId: string; membroNome: string; ministerioId: string; ministerioNome: string;
   } | null>(null);
+  const [motivoRemocao, setMotivoRemocao] = useState("");
+  const [abrirVagaChecked, setAbrirVagaChecked] = useState(true);
+  const [penalidade, setPenalidade] = useState<"nenhuma" | "justificou" | "faltou">("nenhuma");
   const [notificarVaga, setNotificarVaga] = useState(true);
   const [confirmarCancelamento, setConfirmarCancelamento] = useState(false);
   const [membroBuscaOpen, setMembroBuscaOpen] = useState<Record<string, boolean>>({});
@@ -4269,8 +4308,12 @@ function EscalaDetail({
                                 title="Remover desta escala"
                                 onClick={() => {
                                   setNotificarVaga(true);
+                                  setAbrirVagaChecked(true);
+                                  setPenalidade("nenhuma");
+                                  setMotivoRemocao("");
                                   setRemoverPendente({
                                     atribId: a.id,
+                                    membroId: a.membro_id,
                                     membroNome: a.membro.nome,
                                     ministerioId: f.ministerio_id,
                                     ministerioNome: f.ministerio.nome,
@@ -5024,49 +5067,151 @@ function EscalaDetail({
         </AlertDialog>
       )}
 
-      {/* ── Confirmar remoção de membro ─────────────────────────────────────── */}
-      {removerPendente && <AlertDialog open onOpenChange={(o) => { if (!o) setRemoverPendente(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover {removerPendente.membroNome}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Este membro será retirado da função <strong>{removerPendente.ministerioNome}</strong> nesta escala.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex items-center gap-2 px-1 pb-2">
-            <input
-              id="notif-vaga-check"
-              type="checkbox"
-              checked={notificarVaga}
-              onChange={(e) => setNotificarVaga(e.target.checked)}
-              className="h-4 w-4 rounded border-input accent-primary"
-            />
-            <label htmlFor="notif-vaga-check" className="text-sm cursor-pointer">
-              Notificar membros disponíveis para <strong>{removerPendente.ministerioNome}</strong>
-            </label>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => {
-                if (!removerPendente) return;
-                onRemoverAtribuicao(removerPendente.atribId);
-                if (notificarVaga) {
-                  onNotificarVaga({
-                    escalaId: escala.id,
-                    ministerioId: removerPendente.ministerioId,
-                    ministerioNome: removerPendente.ministerioNome,
-                  });
-                }
-                setRemoverPendente(null);
-              }}
-            >
-              Remover
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>}
+      {/* ── Remover membro da escala ─────────────────────────────────────────── */}
+      {removerPendente && (
+        <AlertDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) { setRemoverPendente(null); setMotivoRemocao(""); setPenalidade("nenhuma"); }
+          }}
+        >
+          <AlertDialogContent className="sm:max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {escala.status === "publicada" ? "Remover da escala publicada?" : `Remover ${removerPendente.membroNome}?`}
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div>
+                  <strong>{removerPendente.membroNome}</strong> será retirado(a) da função{" "}
+                  <strong>{removerPendente.ministerioNome}</strong> nesta escala.
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            {escala.status === "publicada" ? (
+              <div className="space-y-4 py-2">
+                {/* Motivo */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Motivo (opcional)</p>
+                  <textarea
+                    value={motivoRemocao}
+                    onChange={(e) => setMotivoRemocao(e.target.value)}
+                    placeholder="Ex: imprevisto de saúde, viagem..."
+                    rows={2}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+
+                {/* Abrir vaga */}
+                <div
+                  className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${abrirVagaChecked ? "border-primary/40 bg-primary/5" : "border-border bg-muted/20"}`}
+                  onClick={() => setAbrirVagaChecked(!abrirVagaChecked)}
+                >
+                  <div className={`mt-0.5 h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${abrirVagaChecked ? "border-primary bg-primary" : "border-muted-foreground/40"}`}>
+                    {abrirVagaChecked && <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium leading-none">Abrir vaga para substituição</p>
+                    <p className="text-xs text-muted-foreground mt-1">A vaga ficará visível na aba Substituições para acompanhamento</p>
+                  </div>
+                </div>
+
+                {/* Penalidade de pontos */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Penalidade de pontos</p>
+                  {([
+                    { value: "nenhuma",   label: "Nenhuma penalidade",              badge: null },
+                    { value: "justificou", label: "Justificou com antecedência",     badge: { text: "0 pts",  cls: "text-muted-foreground" } },
+                    { value: "faltou",    label: "Cancelamento em cima da hora",    badge: { text: "−pts",  cls: "text-red-500 font-semibold" } },
+                  ] as const).map(({ value, label, badge }) => (
+                    <label
+                      key={value}
+                      className="flex items-center gap-2.5 cursor-pointer py-1"
+                      onClick={() => setPenalidade(value)}
+                    >
+                      <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${penalidade === value ? "border-primary" : "border-muted-foreground/40"}`}>
+                        {penalidade === value && <div className="h-2 w-2 rounded-full bg-primary" />}
+                      </div>
+                      <span className="text-sm flex-1">{label}</span>
+                      {badge && <span className={`text-xs ${badge.cls}`}>{badge.text}</span>}
+                    </label>
+                  ))}
+                </div>
+
+                {/* Notificar vaga */}
+                {abrirVagaChecked && (
+                  <div className="flex items-center gap-2.5 pt-1">
+                    <input
+                      id="notif-vaga-check-pub"
+                      type="checkbox"
+                      checked={notificarVaga}
+                      onChange={(e) => setNotificarVaga(e.target.checked)}
+                      className="h-4 w-4 rounded border-input accent-primary shrink-0"
+                    />
+                    <label htmlFor="notif-vaga-check-pub" className="text-xs cursor-pointer text-muted-foreground">
+                      Notificar membros disponíveis para <strong className="text-foreground">{removerPendente.ministerioNome}</strong>
+                    </label>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Escala em rascunho: dialog simples */
+              <div className="flex items-center gap-2 pb-2">
+                <input
+                  id="notif-vaga-check"
+                  type="checkbox"
+                  checked={notificarVaga}
+                  onChange={(e) => setNotificarVaga(e.target.checked)}
+                  className="h-4 w-4 rounded border-input accent-primary"
+                />
+                <label htmlFor="notif-vaga-check" className="text-sm cursor-pointer">
+                  Notificar membros disponíveis para <strong>{removerPendente.ministerioNome}</strong>
+                </label>
+              </div>
+            )}
+
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className={escala.status === "publicada" && abrirVagaChecked ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-destructive text-white hover:bg-destructive/90"}
+                onClick={() => {
+                  if (!removerPendente) return;
+                  if (escala.status === "publicada") {
+                    onRemoverPublicada({
+                      atribId: removerPendente.atribId,
+                      membroId: removerPendente.membroId,
+                      motivo: motivoRemocao,
+                      abrirVaga: abrirVagaChecked,
+                      penalidade,
+                    });
+                    if (abrirVagaChecked && notificarVaga) {
+                      onNotificarVaga({
+                        escalaId: escala.id,
+                        ministerioId: removerPendente.ministerioId,
+                        ministerioNome: removerPendente.ministerioNome,
+                      });
+                    }
+                  } else {
+                    onRemoverAtribuicao(removerPendente.atribId);
+                    if (notificarVaga) {
+                      onNotificarVaga({
+                        escalaId: escala.id,
+                        ministerioId: removerPendente.ministerioId,
+                        ministerioNome: removerPendente.ministerioNome,
+                      });
+                    }
+                  }
+                  setRemoverPendente(null);
+                  setMotivoRemocao("");
+                  setPenalidade("nenhuma");
+                }}
+              >
+                {escala.status === "publicada" && abrirVagaChecked ? "Abrir vaga" : "Remover"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       {/* ── Confirmar publicação ──────────────────────────────────────────── */}
       {/* Invariante: o que o coordenador vê na tela é exatamente o que é publicado.
