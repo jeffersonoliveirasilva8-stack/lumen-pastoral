@@ -129,7 +129,8 @@ function AuthLayout() {
         .from("notificacoes")
         .select("id", { count: "exact", head: true })
         .eq("paroquia_id", profile!.paroquia_id)
-        .eq("lida", false);
+        .eq("lida", false)
+        .or("apenas_admin.eq.true,apenas_coordenacao.eq.true");
       return count ?? 0;
     },
   });
