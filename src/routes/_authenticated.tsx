@@ -230,6 +230,11 @@ function AuthLayout() {
     ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),
   ];
 
+  // No mobile o bottom nav exibe apenas os 5 primeiros itens do mainNav.
+  // Os itens restantes (Liturgia, Pastoral, Ocorrências, Configuração) ficam
+  // acessíveis pelo drawer "Mais" para que nenhuma página fique oculta.
+  const mobileNavOverflow = mainNav.slice(5);
+
   async function logout() {
     sessionStorage.removeItem("admin_mfa_token");
     await supabase.auth.signOut();
@@ -452,7 +457,7 @@ function AuthLayout() {
 
         {/* Drawer "Mais" — perfil + itens secundários */}
         <Drawer open={menuOpen} onOpenChange={setMenuOpen}>
-          <DrawerContent className="max-h-[70vh]">
+          <DrawerContent className="max-h-[85vh]">
             <DrawerHeader className="px-5 pt-5 pb-4 border-b border-border/60">
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0 ring-2 ring-primary/20">
@@ -472,37 +477,77 @@ function AuthLayout() {
               </div>
             </DrawerHeader>
 
-            <div className="px-4 py-4 overflow-y-auto">
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground mb-3 px-1">Acesso rápido</p>
-              <div className="grid grid-cols-3 gap-2.5">
-                {drawerItems.map((item, i) => {
-                  const active = pathname === item.to || pathname.startsWith(item.to + "/");
-                  return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setMenuOpen(false)}
-                      style={{ animationDelay: `${i * 30}ms` }}
-                      className={`relative flex flex-col items-center gap-2 rounded-2xl px-2 py-4 text-center transition-all duration-150 active:scale-[0.93] animate-slide-up ${
-                        active
-                          ? "bg-primary/10 text-primary ring-1 ring-primary/20"
-                          : "bg-muted/40 text-foreground/70 hover:bg-muted hover:text-foreground hover:scale-[1.03]"
-                      }`}
-                    >
-                      <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${
-                        active ? "bg-primary/15" : (item.color ?? "bg-slate-500")
-                      }`}>
-                        <item.icon className={`h-5 w-5 ${active ? "text-primary" : "text-white"}`} />
-                      </div>
-                      <span className="text-xs font-medium leading-tight">{item.label}</span>
-                      {(item.badge ?? 0) > 0 && (
-                        <span className="absolute top-2 right-2 h-4 min-w-[1rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold px-0.5">
-                          {(item.badge ?? 0) > 9 ? "9+" : item.badge}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
+            <div className="px-4 py-4 overflow-y-auto space-y-4">
+              {/* Páginas que transbordam do bottom nav — garantem acesso a tudo no mobile */}
+              {mobileNavOverflow.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground mb-3 px-1">Módulos</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {mobileNavOverflow.map((item, i) => {
+                      const active = activeModule === item.to;
+                      return (
+                        <Link
+                          key={item.to}
+                          to={item.to}
+                          onClick={() => setMenuOpen(false)}
+                          style={{ animationDelay: `${i * 30}ms` }}
+                          className={`relative flex flex-col items-center gap-1.5 rounded-2xl px-1 py-3 text-center transition-all duration-150 active:scale-[0.93] animate-slide-up ${
+                            active
+                              ? "bg-primary/10 text-primary ring-1 ring-primary/20"
+                              : "bg-muted/40 text-foreground/70 hover:bg-muted hover:text-foreground hover:scale-[1.03]"
+                          }`}
+                        >
+                          <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${
+                            active ? "bg-primary/15" : (item.color ?? "bg-slate-500")
+                          }`}>
+                            <item.icon className={`h-5 w-5 ${active ? "text-primary" : "text-white"}`} />
+                          </div>
+                          <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+                          {(item.badge ?? 0) > 0 && (
+                            <span className="absolute top-2 right-2 h-4 min-w-[1rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold px-0.5">
+                              {(item.badge ?? 0) > 9 ? "9+" : item.badge}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Itens utilitários */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground mb-3 px-1">Acesso rápido</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {drawerItems.map((item, i) => {
+                    const active = pathname === item.to || pathname.startsWith(item.to + "/");
+                    return (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setMenuOpen(false)}
+                        style={{ animationDelay: `${i * 30}ms` }}
+                        className={`relative flex flex-col items-center gap-1.5 rounded-2xl px-1 py-3 text-center transition-all duration-150 active:scale-[0.93] animate-slide-up ${
+                          active
+                            ? "bg-primary/10 text-primary ring-1 ring-primary/20"
+                            : "bg-muted/40 text-foreground/70 hover:bg-muted hover:text-foreground hover:scale-[1.03]"
+                        }`}
+                      >
+                        <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${
+                          active ? "bg-primary/15" : (item.color ?? "bg-slate-500")
+                        }`}>
+                          <item.icon className={`h-5 w-5 ${active ? "text-primary" : "text-white"}`} />
+                        </div>
+                        <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+                        {(item.badge ?? 0) > 0 && (
+                          <span className="absolute top-2 right-2 h-4 min-w-[1rem] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold px-0.5">
+                            {(item.badge ?? 0) > 9 ? "9+" : item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
