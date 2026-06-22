@@ -549,7 +549,67 @@ function EscalasPage() {
             }))
           );
 
-          // Funções inseridas — sugestões serão geradas pelo coordenador via Preview
+          // Busca nomes dos ministérios para o motor
+          const minIds = (tipoFuncoes as { ministerio_id: string }[]).map((tf) => tf.ministerio_id);
+          const { data: ministData } = await anyDb
+            .from("ministerios")
+            .select("id, nome, cor, relevancia, duplicidade_permitida, ordem_prioridade")
+            .in("id", minIds);
+          const ministMap = new Map((ministData ?? []).map((m: any) => [m.id, m]));
+
+          const funcoesPedido = (tipoFuncoes as { ministerio_id: string; quantidade_min: number }[]).map((tf) => {
+            const min = ministMap.get(tf.ministerio_id) as any;
+            return {
+              ministerio_id: tf.ministerio_id,
+              quantidade: tf.quantidade_min,
+              ministerio: { id: tf.ministerio_id, nome: min?.nome ?? "", cor: min?.cor },
+              relevancia: min?.relevancia,
+              duplicidade_permitida: min?.duplicidade_permitida,
+              ordem_prioridade: min?.ordem_prioridade,
+            };
+          });
+
+          const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
+          const config = {
+            usa_tochas: paroquiaConfig?.usa_tochas ?? false,
+            limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
+            limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
+            impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+            distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
+            intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
+            variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
+          };
+
+          const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+
+          const resultado = generateEscalaWithAlertas(
+            { titulo: payload.titulo, data: payload.data, tipo: payload.tipo, observacoes: payload.observacoes },
+            funcoesPedido,
+            membrosComAtuacoes,
+            membroMinisterios,
+            {
+              history: assignmentHistory,
+              indisponibilidades,
+              restricoes: funcaoRestricoes,
+              incompatibilidades: membroIncompat,
+              config,
+              solene: payload.solene,
+              preferenciaisSolene,
+            }
+          );
+
+          if (resultado.sugestoes.length > 0) {
+            await anyDb.from("escala_membros").insert(
+              resultado.sugestoes.map((s) => ({
+                escala_id: nova.id,
+                membro_id: s.membro_id,
+                ministerio_id: s.ministerio_id,
+                status: "pendente",
+                origem: "motor",
+              }))
+            );
+            autoSugestoes = resultado.sugestoes.length;
+          }
         }
       }
 
@@ -581,7 +641,11 @@ function EscalasPage() {
         );
         toast.success("Escala atualizada.");
       } else {
-        toast.success("Escala criada. Clique em \"Gerar Sugestão\" para o motor sugerir os membros.");
+        if (autoSugestoes > 0) {
+          toast.success(`Escala criada com ${autoSugestoes} membro(s) sugerido(s) pelo motor.`);
+        } else {
+          toast.success("Escala criada. Clique em \"Gerar Sugestão\" para distribuir os membros.");
+        }
       }
       if (!editId) setFormOpen(false);
     },
