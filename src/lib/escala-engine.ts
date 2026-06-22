@@ -77,6 +77,7 @@ type AllocOptions = {
   existingAssignments?: { membro_id: string; ministerio_id: string }[];
   indisponibilidades?: IndisponibilidadeEngine[];
   restricoes?: FuncaoRestricao[];
+  incompatibilidades?: { membro_a_id: string; membro_b_id: string }[];
   config?: ConfigParoquia;
   solene?: boolean;
   tem_adoracao?: boolean;
@@ -240,9 +241,17 @@ function _buildAndAllocate(
     console.groupEnd();
   }
 
+  const incompatMap = new Map<string, Set<string>>();
+  for (const pair of options?.incompatibilidades ?? []) {
+    if (!incompatMap.has(pair.membro_a_id)) incompatMap.set(pair.membro_a_id, new Set());
+    if (!incompatMap.has(pair.membro_b_id)) incompatMap.set(pair.membro_b_id, new Set());
+    incompatMap.get(pair.membro_a_id)!.add(pair.membro_b_id);
+    incompatMap.get(pair.membro_b_id)!.add(pair.membro_a_id);
+  }
+
   const resultado = alocarMembros(
     funcoesEngine, membrosEngine, indisponibilidades, contexto,
-    historicoRecente, config, options?.preferenciaisSolene ?? [],
+    historicoRecente, config, options?.preferenciaisSolene ?? [], incompatMap,
   );
 
   if (debug) {

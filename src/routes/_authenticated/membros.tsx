@@ -2190,6 +2190,8 @@ function MembrosPage() {
   const [bulkSendLog, setBulkSendLog] = useState<{ nome: string; ok: boolean }[]>([]);
   const [newIndisp, setNewIndisp] = useState("");
   const [newIndispMotivo, setNewIndispMotivo] = useState("");
+  const [incompatSelectId, setIncompatSelectId] = useState("");
+  const [incompatMotivo, setIncompatMotivo] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>(EMPTY_BULK_EDIT);
@@ -2870,6 +2872,45 @@ function MembrosPage() {
       if (error) throw error;
     },
     onSuccess: () => refetchIndisp(),
+  });
+
+  const { data: incompatibilidades = [], refetch: refetchIncompat } = useQuery<{ id: string; motivo: string | null; outro: { id: string; nome: string } }[]>({
+    queryKey: ["membro-incompatibilidades", editId],
+    enabled: !!editId,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("membro_incompatibilidades")
+        .select("id, membro_a_id, membro_b_id, motivo, membros_a:membro_a_id(id, nome), membros_b:membro_b_id(id, nome)")
+        .or(`membro_a_id.eq.${editId},membro_b_id.eq.${editId}`);
+      return (data ?? []).map((row: any) => ({
+        id: row.id,
+        motivo: row.motivo,
+        outro: row.membro_a_id === editId ? row.membros_b : row.membros_a,
+      }));
+    },
+  });
+
+  const addIncompatMutation = useMutation({
+    mutationFn: async ({ outroId, motivo }: { outroId: string; motivo: string }) => {
+      const [a, b] = editId! < outroId ? [editId!, outroId] : [outroId, editId!];
+      const { error } = await anyDb.from("membro_incompatibilidades").insert({
+        paroquia_id: pid!,
+        membro_a_id: a,
+        membro_b_id: b,
+        motivo: motivo || null,
+      });
+      if (error) throw new Error(supabaseErrorMessage(error));
+    },
+    onSuccess: () => { refetchIncompat(); setIncompatSelectId(""); setIncompatMotivo(""); },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const removeIncompatMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await anyDb.from("membro_incompatibilidades").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => refetchIncompat(),
   });
 
   async function openCreate() {
@@ -3686,6 +3727,64 @@ function MembrosPage() {
                   onClick={() => addIndispMutation.mutate({ data: newIndisp, motivo: newIndispMotivo })}
                 >
                   {addIndispMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Incompatibilidades — só ao editar */}
+          {editId && (
+            <div className="mt-6 border-t border-border pt-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <UserX className="h-4 w-4 text-muted-foreground" />
+                <p className="text-sm font-semibold">Não pode servir junto com</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                O motor nunca escalará estes membros na mesma celebração.
+              </p>
+              {incompatibilidades.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {incompatibilidades.map((inc) => (
+                    <span key={inc.id} className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/5 px-2.5 py-1 text-xs font-medium text-destructive">
+                      {inc.outro?.nome ?? "—"}
+                      {inc.motivo && <span className="text-destructive/60">· {inc.motivo}</span>}
+                      <button
+                        type="button"
+                        onClick={() => removeIncompatMutation.mutate(inc.id)}
+                        disabled={removeIncompatMutation.isPending}
+                        className="ml-0.5 hover:text-destructive/70"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Select value={incompatSelectId} onValueChange={setIncompatSelectId}>
+                  <SelectTrigger className="flex-1 h-8 text-sm">
+                    <SelectValue placeholder="Selecionar membro…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {membros
+                      .filter((m) => m.id !== editId && !incompatibilidades.some((i) => i.outro?.id === m.id))
+                      .map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Motivo (opcional)"
+                  className="flex-1 h-8 text-sm"
+                  value={incompatMotivo}
+                  onChange={(e) => setIncompatMotivo(e.target.value)}
+                />
+                <Button
+                  size="sm" className="h-8 shrink-0"
+                  disabled={!incompatSelectId || addIncompatMutation.isPending}
+                  onClick={() => addIncompatMutation.mutate({ outroId: incompatSelectId, motivo: incompatMotivo })}
+                >
+                  {addIncompatMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                 </Button>
               </div>
             </div>

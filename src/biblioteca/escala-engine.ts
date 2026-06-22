@@ -521,6 +521,7 @@ export function alocarMembros(
   historicoRecente: HistoricoRecente[] = [],
   config?: ConfigParoquia,
   preferenciaisSolene: PreferencialSolene[] = [],
+  incompatMap?: Map<string, Set<string>>,
 ): ResultadoAlocacao {
   const alocacoes:        MembroAlocado[]  = [];
   const alertas:          string[]         = [];
@@ -594,6 +595,7 @@ export function alocarMembros(
     for (const m of membros) {
       if (!m.ministerio_ids.includes(funcao.ministerio_id)) { excluidos.sem_vinculo++; continue; }
       if (m.funcoes_nao_pode_ids?.includes(funcao.ministerio_id)) { excluidos.funcao_nao_pode++; continue; }
+      if (incompatMap?.has(m.id) && [...ja_alocados].some((id) => incompatMap.get(m.id)!.has(id))) { excluidos.funcao_nao_pode++; continue; }
       if (funcao.atuacoes_exigidas?.length && !funcao.atuacoes_exigidas.some((a) => (m.atuacao_ids ?? []).includes(a))) { excluidos.atuacao++; continue; }
       if (estaIndisponivel(m.id, contexto.data, indisponibilidades)) { excluidos.indisponibilidade++; continue; }
       if (m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data))) { excluidos.dia_semana++; continue; }

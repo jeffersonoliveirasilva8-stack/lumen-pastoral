@@ -454,6 +454,20 @@ function EscalasPage() {
     },
   });
 
+  const { data: membroIncompat = [] } = useQuery<{ membro_a_id: string; membro_b_id: string }[]>({
+    queryKey: ["membro-incompatibilidades-paroquia", profile?.paroquia_id, membroIds.length],
+    enabled: !!profile?.paroquia_id && membroIds.length > 0,
+    queryFn: async () => {
+      const idList = membroIds.join(",");
+      const { data } = await (supabase as any)
+        .from("membro_incompatibilidades")
+        .select("membro_a_id, membro_b_id")
+        .eq("paroquia_id", profile!.paroquia_id)
+        .or(`membro_a_id.in.(${idList}),membro_b_id.in.(${idList})`);
+      return (data ?? []) as { membro_a_id: string; membro_b_id: string }[];
+    },
+  });
+
   // missa_padrao_id → membro_ids que não podem servir nessa missa
   const { data: membroMissaRestricoes = {} } = useQuery<Record<string, string[]>>({
     queryKey: ["membro-missa-restricoes", profile?.paroquia_id, membroIds.length],
@@ -969,6 +983,7 @@ function EscalasPage() {
           history: assignmentHistory.filter((h) => h.date !== escala.data),
           indisponibilidades,
           restricoes: funcaoRestricoes,
+          incompatibilidades: membroIncompat,
           config: engineConfig,
           solene: escala.solene,
           tem_adoracao: escala.tem_adoracao,
@@ -1717,6 +1732,7 @@ function EscalasPage() {
               membroAtuacoes={membroAtuacoes}
               indisponibilidades={indisponibilidades}
               funcaoRestricoes={funcaoRestricoes}
+              incompatibilidades={membroIncompat}
               missasPadrao={missasPadrao}
               membroMissaRestricoes={membroMissaRestricoes}
               paroquiaConfig={paroquiaConfig}
@@ -3360,7 +3376,7 @@ function CalendarioView({
 function EscalaDetail({
   escala, ministerios, membros, funcoes, atribuicoes, membroMinisterios, assignmentHistory,
   membroAtuacoes,
-  indisponibilidades, funcaoRestricoes, missasPadrao, membroMissaRestricoes, paroquiaConfig,
+  indisponibilidades, funcaoRestricoes, incompatibilidades, missasPadrao, membroMissaRestricoes, paroquiaConfig,
   paroquiaNome, initialEditMode, comunidades, tiposMissa, isSaving, onSave,
   onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onRemoverPublicada, onStatusChange, onNotificarVaga,
   preferenciaisSolene,
@@ -3375,6 +3391,7 @@ function EscalaDetail({
   membroAtuacoes: Record<string, string[]>;
   indisponibilidades: IndispRow[];
   funcaoRestricoes: FuncaoRestricao[];
+  incompatibilidades: { membro_a_id: string; membro_b_id: string }[];
   missasPadrao: { id: string; dia_semana: number; hora_inicio: string | null }[];
   membroMissaRestricoes: Record<string, string[]>;
   paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
@@ -3851,6 +3868,7 @@ function EscalaDetail({
         })),
         indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
         restricoes: funcaoRestricoes,
+        incompatibilidades: incompatibilidades,
         config,
         solene: escala.solene,
         tem_adoracao: escala.tem_adoracao,
@@ -3970,6 +3988,7 @@ function EscalaDetail({
         existingAssignments: atribuicoes.map((a) => ({ membro_id: a.membro_id, ministerio_id: a.ministerio_id })),
         indisponibilidades,
         restricoes: funcaoRestricoes,
+        incompatibilidades: incompatibilidades,
         config,
         solene: escala.solene,
         tem_adoracao: escala.tem_adoracao,
@@ -4045,6 +4064,7 @@ function EscalaDetail({
         history: assignmentHistory,
         indisponibilidades,
         restricoes: funcaoRestricoes,
+        incompatibilidades: incompatibilidades,
         preferenciaisSolene: preferenciaisSolene ?? [],
         debug: true,
       },
