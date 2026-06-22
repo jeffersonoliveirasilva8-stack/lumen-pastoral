@@ -172,23 +172,32 @@ function PortalMembroEscalas() {
   }, [membro?.id, membro?.paroquia_id, qc]);
 
   // ── Regras da paróquia ────────────────────────────────────────────────
-  const { data: paroquiaRegras } = useQuery<{ confirmacaoAtiva: boolean; diasAntecedencia: number }>({
+  const { data: paroquiaRegras } = useQuery<{ confirmacaoAtiva: boolean; substituicaoAtiva: boolean; diasAntecedencia: number }>({
     queryKey: ["pm-config-regras", membro?.paroquia_id],
     enabled: !!membro?.paroquia_id,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("paroquias")
-        .select("regras_escala")
-        .eq("id", membro!.paroquia_id)
-        .maybeSingle();
-      const regras = (data?.regras_escala as Record<string, unknown>) ?? {};
+      const [configRes, paroquiaRes] = await Promise.all([
+        anyDb
+          .from("paroquia_config_escalas")
+          .select("confirmacao_ativa, substituicao_ativa")
+          .eq("paroquia_id", membro!.paroquia_id)
+          .maybeSingle(),
+        supabase
+          .from("paroquias")
+          .select("regras_escala")
+          .eq("id", membro!.paroquia_id)
+          .maybeSingle(),
+      ]);
+      const regras = (paroquiaRes.data?.regras_escala as Record<string, unknown>) ?? {};
       return {
-        confirmacaoAtiva: (regras.confirmacao_escala_ativa as boolean) ?? false,
+        confirmacaoAtiva: configRes.data?.confirmacao_ativa ?? (regras.confirmacao_escala_ativa as boolean) ?? false,
+        substituicaoAtiva: configRes.data?.substituicao_ativa ?? false,
         diasAntecedencia: (regras.dias_antecedencia_indisp as number) ?? 0,
       };
     },
   });
   const confirmacaoAtiva = paroquiaRegras?.confirmacaoAtiva ?? false;
+  const substituicaoAtiva = paroquiaRegras?.substituicaoAtiva ?? false;
   const diasAntecedencia = paroquiaRegras?.diasAntecedencia ?? 0;
 
   // ── Todas as escalas publicadas da paróquia ───────────────────────────

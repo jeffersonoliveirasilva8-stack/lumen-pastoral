@@ -304,11 +304,18 @@ function PortalMembroHome() {
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data } = await anyDb
+        .from("paroquia_config_escalas")
+        .select("confirmacao_ativa")
+        .eq("paroquia_id", membro!.paroquia_id)
+        .maybeSingle();
+      if (data?.confirmacao_ativa != null) return data.confirmacao_ativa as boolean;
+      // fallback para JSONB legado
+      const { data: par } = await anyDb
         .from("paroquias")
         .select("regras_escala")
         .eq("id", membro!.paroquia_id)
-        .single();
-      const regras = (data?.regras_escala as Record<string, unknown>) ?? {};
+        .maybeSingle();
+      const regras = (par?.regras_escala as Record<string, unknown>) ?? {};
       return (regras.confirmacao_escala_ativa as boolean) ?? false;
     },
   });
