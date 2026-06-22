@@ -193,7 +193,8 @@ function RelatoriosEquilibrioPage() {
     { label: "Sacristia",          to: "/sacristia",                       isActive: false },
     { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
     { label: "Substituições",      to: "/substituicoes",                   isActive: false },
-    { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: true  },
+    { label: "Equilíbrio",          to: "/relatorios-equilibrio",           isActive: true  },
+    { label: "Escalas",             to: "/relatorios-escalas",              isActive: false },
   ]);
 
   return (
