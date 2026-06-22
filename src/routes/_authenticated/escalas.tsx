@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import {
   Plus, Loader2, Calendar, List, ChevronLeft, ChevronRight, ChevronDown,
-  MapPin, Clock, Trash2, Pencil, UserPlus, X, Check, Sparkles, Send,
+  MapPin, Clock, Trash2, Pencil, UserPlus, UserMinus, X, Check, Sparkles, Send,
   MoreVertical, FileText, AlertTriangle, Users, ClipboardCheck,
   CheckCircle2, XCircle, Church, Ban, RefreshCw, Activity,
   TrendingUp, TrendingDown, Minus, ChevronUp, BarChart2, Star,
@@ -324,6 +324,19 @@ function EscalasPage() {
         ...r,
         membro: r.membros,
       })) as EscalaMembro[];
+    },
+  });
+
+  const { data: removidos = [], refetch: refetchRemovidos } = useQuery({
+    queryKey: ["escala-membros-removidos", detailEscala?.id],
+    enabled: !!detailEscala,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("escala_membros")
+        .select("id, membro_id, ministerio_id, removido_em, membros!membro_id(id, nome)")
+        .eq("escala_id", detailEscala!.id)
+        .eq("ativo", false);
+      return ((data ?? []) as any[]).map((r) => ({ ...r, membro: r.membros }));
     },
   });
 
@@ -735,11 +748,15 @@ function EscalasPage() {
 
   const removerAtribuicaoMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("escala_membros").delete().eq("id", id);
+      const { error } = await supabase
+        .from("escala_membros")
+        .update({ ativo: false, removido_em: new Date().toISOString() } as any)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       refetchAtribuicoes();
+      refetchRemovidos();
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
     },
@@ -985,14 +1002,18 @@ function EscalasPage() {
 
   const swapMembroMutation = useMutation({
     mutationFn: async ({ removeId, escalaId, membroId, ministerioId }: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => {
-      const { error: delErr } = await (supabase as any).from("escala_membros").delete().eq("id", removeId);
-      if (delErr) throw delErr;
+      const { error: updErr } = await (supabase as any)
+        .from("escala_membros")
+        .update({ ativo: false, removido_em: new Date().toISOString() })
+        .eq("id", removeId);
+      if (updErr) throw updErr;
       const { error: insErr } = await (supabase as any).from("escala_membros").insert({ escala_id: escalaId, membro_id: membroId, ministerio_id: ministerioId, status: "pendente" });
       if (insErr) throw insErr;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["escalas-counts"] });
       qc.invalidateQueries({ queryKey: ["escala-membros"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros-removidos"] });
       qc.invalidateQueries({ queryKey: ["escala-historico"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       toast.success("Substituição realizada.");
@@ -1805,6 +1826,7 @@ function EscalasPage() {
               membros={membros}
               funcoes={funcoes}
               atribuicoes={atribuicoes}
+              removidos={removidos}
               membroMinisterios={membroMinisterios}
               assignmentHistory={assignmentHistory}
               membroAtuacoes={membroAtuacoes}
@@ -3452,7 +3474,7 @@ function CalendarioView({
 // ── Detalhe da escala ────────────────────────────────────────────────────────
 
 function EscalaDetail({
-  escala, ministerios, membros, funcoes, atribuicoes, membroMinisterios, assignmentHistory,
+  escala, ministerios, membros, funcoes, atribuicoes, removidos, membroMinisterios, assignmentHistory,
   membroAtuacoes,
   indisponibilidades, funcaoRestricoes, incompatibilidades, missasPadrao, membroMissaRestricoes, paroquiaConfig,
   paroquiaNome, initialEditMode, comunidades, tiposMissa, isSaving, onSave,
@@ -3464,6 +3486,7 @@ function EscalaDetail({
   membros: Membro[];
   funcoes: EscalaFuncao[];
   atribuicoes: EscalaMembro[];
+  removidos: { id: string; membro_id: string; ministerio_id: string; removido_em: string | null; membro: { id: string; nome: string } }[];
   membroMinisterios: Record<string, string[]>;
   assignmentHistory: AssignmentHistoryEntry[];
   membroAtuacoes: Record<string, string[]>;
@@ -3501,6 +3524,7 @@ function EscalaDetail({
   const [notificarVaga, setNotificarVaga] = useState(true);
   const [confirmarCancelamento, setConfirmarCancelamento] = useState(false);
   const [membroBuscaOpen, setMembroBuscaOpen] = useState<Record<string, boolean>>({});
+  const [removidosOpen, setRemovidosOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setEditMode(initialEditMode);
@@ -4530,6 +4554,40 @@ function EscalaDetail({
                           </div>
                         );
                       })}
+
+                      {/* Membros removidos desta função */}
+                      {(() => {
+                        const removidosFuncao = removidos.filter((r) => r.ministerio_id === f.ministerio_id);
+                        if (removidosFuncao.length === 0) return null;
+                        const isOpen = !!removidosOpen[f.ministerio_id];
+                        return (
+                          <div className="pl-5">
+                            <button
+                              type="button"
+                              className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 hover:text-muted-foreground transition-colors py-0.5"
+                              onClick={() => setRemovidosOpen((p) => ({ ...p, [f.ministerio_id]: !isOpen }))}
+                            >
+                              <UserMinus className="h-3 w-3" />
+                              <span>{removidosFuncao.length} removido{removidosFuncao.length > 1 ? "s" : ""}</span>
+                              <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                            </button>
+                            {isOpen && (
+                              <div className="mt-1 space-y-1 border-l border-dashed border-border ml-1.5 pl-2.5">
+                                {removidosFuncao.map((r) => (
+                                  <div key={r.id} className="flex items-center justify-between gap-2 text-xs text-muted-foreground/60">
+                                    <span className="line-through truncate">{r.membro?.nome ?? "—"}</span>
+                                    {r.removido_em && (
+                                      <span className="tabular-nums shrink-0 text-[10px]">
+                                        {new Date(r.removido_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Atribuir membro */}
                       {atrib.length < f.quantidade && (() => {
