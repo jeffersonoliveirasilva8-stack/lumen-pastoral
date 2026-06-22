@@ -31,6 +31,7 @@ type MembroEscala = {
   ministerio_id: string;
   escala_id: string;
   status: string;
+  justificativa: string | null;
   membro: { id: string; nome: string; telefone: string | null };
   ministerio: { id: string; nome: string; cor: string };
 };
@@ -55,6 +56,7 @@ function SacristiaPage() {
   const qc = useQueryClient();
   const hojeStr = format(new Date(), "yyyy-MM-dd");
   const [presencaMap, setPresencaMap] = useState<Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente">>({});
+  const [justificativaMap, setJustificativaMap] = useState<Record<string, string>>({});
   const [savingEscalaId, setSavingEscalaId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("em_andamento");
   const [busca, setBusca] = useState("");
@@ -91,6 +93,7 @@ function SacristiaPage() {
         .gte("data", desde)
         .lte("data", hojeStr)
         .neq("status", "rascunho")
+        .neq("status", "cancelada")
         .order("data", { ascending: false })
         .order("hora_inicio", { ascending: false });
       return (data ?? []) as EscalaItem[];
@@ -105,7 +108,7 @@ function SacristiaPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("escala_membros")
-        .select("id, membro_id, ministerio_id, escala_id, status, membros!membro_id(id, nome, telefone), ministerios(id, nome, cor)")
+        .select("id, membro_id, ministerio_id, escala_id, status, justificativa, membros!membro_id(id, nome, telefone), ministerios(id, nome, cor)")
         .in("escala_id", escalaIds);
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
@@ -177,10 +180,14 @@ function SacristiaPage() {
     mutationFn: async (escalaId: string) => {
       const membrosDestaEscala = membrosEscala.filter((m: any) => m.escala_id === escalaId);
       if (membrosDestaEscala.length === 0) return;
-      const updates = membrosDestaEscala.map((m: MembroEscala) => ({
-        id: m.id,
-        status: presencaMap[m.id] ?? m.status,
-      }));
+      const updates = membrosDestaEscala.map((m: MembroEscala) => {
+        const st = presencaMap[m.id] ?? m.status;
+        const entry: Record<string, string> = { id: m.id, status: st };
+        if (st === "justificou") {
+          entry.justificativa = justificativaMap[m.id] ?? m.justificativa ?? "";
+        }
+        return entry;
+      });
       const { error } = await supabase.rpc("salvar_presencas_escala", {
         p_escala_id: escalaId,
         p_updates: updates,
@@ -209,16 +216,23 @@ function SacristiaPage() {
     }));
   }
 
-  // Inicializa presencaMap com status já gravados ao carregar membrosEscala
+  // Inicializa presencaMap e justificativaMap com dados já gravados ao carregar membrosEscala
   useEffect(() => {
     const initial: Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente"> = {};
+    const justInitial: Record<string, string> = {};
     membrosEscala.forEach((m) => {
       if (STATUS_FINAIS.includes(m.status)) {
         initial[m.id] = m.status as "presente" | "faltou" | "atrasado" | "justificou" | "pendente";
       }
+      if (m.justificativa) {
+        justInitial[m.id] = m.justificativa;
+      }
     });
     if (Object.keys(initial).length > 0) {
       setPresencaMap((prev) => ({ ...initial, ...prev }));
+    }
+    if (Object.keys(justInitial).length > 0) {
+      setJustificativaMap((prev) => ({ ...justInitial, ...prev }));
     }
   }, [membrosEscala]);
 
@@ -243,10 +257,14 @@ function SacristiaPage() {
       for (const escala of escalasExibidas) {
         const membrosDestaEscala = membrosEscala.filter((m) => m.escala_id === escala.id);
         if (membrosDestaEscala.length === 0) continue;
-        const updates = membrosDestaEscala.map((m: MembroEscala) => ({
-          id: m.id,
-          status: presencaMap[m.id] ?? m.status,
-        }));
+        const updates = membrosDestaEscala.map((m: MembroEscala) => {
+          const st = presencaMap[m.id] ?? m.status;
+          const entry: Record<string, string> = { id: m.id, status: st };
+          if (st === "justificou") {
+            entry.justificativa = justificativaMap[m.id] ?? m.justificativa ?? "";
+          }
+          return entry;
+        });
         const { error } = await supabase.rpc("salvar_presencas_escala", {
           p_escala_id: escala.id,
           p_updates: updates,
@@ -539,7 +557,7 @@ function SacristiaPage() {
                             return (
                               <div
                                 key={m.id}
-                                className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 border transition-all ${
+                                className={`rounded-xl px-3 py-2.5 border transition-all ${
                                   statusFinal === "presente"
                                     ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30"
                                     : statusFinal === "faltou"
@@ -551,6 +569,7 @@ function SacristiaPage() {
                                     : "border-border bg-background"
                                 }`}
                               >
+                                <div className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className="font-medium text-sm truncate">{m.membro.nome}</p>
                                   {m.membro.telefone && (
@@ -607,6 +626,19 @@ function SacristiaPage() {
                                     <XCircle className="h-4 w-4" />
                                   </button>
                                 </div>
+                                </div>
+                                {statusFinal === "justificou" && tab === "concluidas" ? (
+                                  <p className="mt-1.5 text-xs text-blue-600 dark:text-blue-400 italic">
+                                    {justificativaMap[m.id] ?? m.justificativa ?? "Sem motivo informado"}
+                                  </p>
+                                ) : statusFinal === "justificou" ? (
+                                  <Input
+                                    placeholder="Informe o motivo da justificativa..."
+                                    value={justificativaMap[m.id] ?? m.justificativa ?? ""}
+                                    onChange={(ev) => setJustificativaMap((prev) => ({ ...prev, [m.id]: ev.target.value }))}
+                                    className="mt-2 h-7 text-xs border-blue-200 focus-visible:ring-blue-300"
+                                  />
+                                ) : null}
                               </div>
                             );
                           })}

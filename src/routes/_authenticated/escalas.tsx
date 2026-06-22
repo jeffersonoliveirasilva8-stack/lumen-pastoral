@@ -70,6 +70,20 @@ import { nomeExibicao } from "@/lib/nome";
 import { AssistenteGeracaoEscalas } from "@/components/escalas/assistente-geracao";
 import { EscalaPreviewPanel } from "@/components/escalas/escala-preview-panel";
 
+async function _pdfUrlToBase64(url: string): Promise<{ data: string; format: string } | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve({ data: reader.result as string, format: blob.type.includes("png") ? "PNG" : "JPEG" });
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
+
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
 type Ministerio = { id: string; nome: string; cor: string; categoria?: string | null; relevancia?: "normal" | "principal"; duplicidade_permitida?: boolean; ordem_prioridade?: number };
@@ -1136,15 +1150,73 @@ function EscalasPage() {
   });
 
   // ── PDF Export ──────────────────────────────────────────────────────────────
-  function exportarEscalasPDF(ids: string[]) {
+  async function exportarEscalasPDF(ids: string[]) {
     const selected = escalas.filter((e) => ids.includes(e.id));
     if (selected.length === 0) return;
-    const hoje = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-    const nomeParoquia = paroquiaConfig?.nome ?? "Pastoral Litúrgica";
-    const cabecalhoUrl = paroquiaConfig?.pdf_cabecalho_url ?? null;
-    const rodapeUrl    = paroquiaConfig?.pdf_rodape_url    ?? null;
 
-    // Period label from date range of selected escalas
+    const { jsPDF } = await import("jspdf");
+    const { default: autoTable } = await import("jspdf-autotable");
+
+    const doc = new jsPDF("p", "mm", "a4");
+    const W = 210;
+    const H = 297;
+    const MARGIN = 14;
+
+    const NAVY:        [number,number,number] = [15,  23,  42];
+    const GOLD:        [number,number,number] = [245, 158, 11];
+    const WHITE:       [number,number,number] = [255, 255, 255];
+    const GRAY:        [number,number,number] = [100, 116, 139];
+    const LIGHT_GRAY:  [number,number,number] = [248, 250, 252];
+    const BORDER_GRAY: [number,number,number] = [226, 232, 240];
+    const STEEL:       [number,number,number] = [71,  85,  105];
+    const SECTION_BG:  [number,number,number] = [241, 245, 249];
+
+    const nomeParoquia = paroquiaConfig?.nome ?? "Pastoral Litúrgica";
+    const hoje = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+
+    // Load images
+    const imgCabecalho = paroquiaConfig?.pdf_cabecalho_url
+      ? await _pdfUrlToBase64(paroquiaConfig.pdf_cabecalho_url) : null;
+    const imgRodape = paroquiaConfig?.pdf_rodape_url
+      ? await _pdfUrlToBase64(paroquiaConfig.pdf_rodape_url) : null;
+
+    // Calculate header height
+    let headerH = 0;
+    if (imgCabecalho) {
+      const props = doc.getImageProperties(imgCabecalho.data);
+      headerH = W * (props.height / props.width);
+      doc.addImage(imgCabecalho.data, imgCabecalho.format as "PNG" | "JPEG", 0, 0, W, headerH);
+    } else {
+      headerH = 34;
+      doc.setFillColor(...NAVY);
+      doc.rect(0, 0, W, headerH, "F");
+      doc.setFillColor(...GOLD);
+      doc.rect(0, headerH - 2.5, W, 2.5, "F");
+      doc.setTextColor(...WHITE);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text(nomeParoquia, W / 2, 12, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...GOLD);
+      doc.text("Pastoral Litúrgica  ·  Escalas de Serviço", W / 2, 19, { align: "center" });
+      doc.setTextColor(160, 170, 190);
+      doc.setFontSize(6.5);
+      doc.text("Emitido em " + hoje, W / 2, 27, { align: "center" });
+    }
+
+    // Calculate footer height
+    let footerH = 10;
+    let footerDisplayH = 0;
+    if (imgRodape) {
+      const props = doc.getImageProperties(imgRodape.data);
+      footerDisplayH = W * (props.height / props.width);
+      footerH = footerDisplayH;
+    }
+
+    let y = headerH + 6;
+
+    // Meta line
     const dates = selected.map((e) => new Date(e.data + "T00:00:00"));
     const minDate = dates.reduce((a, b) => (a < b ? a : b));
     const maxDate = dates.reduce((a, b) => (a > b ? a : b));
@@ -1153,196 +1225,230 @@ function EscalasPage() {
         ? format(minDate, "MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()
         : `${format(minDate, "MMM", { locale: ptBR })} – ${format(maxDate, "MMM 'de' yyyy", { locale: ptBR })}`.toUpperCase();
 
-    const escalasSections = selected.map((e) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...GRAY);
+    doc.text(
+      `${selected.length} escala${selected.length !== 1 ? "s" : ""}  ·  ${periodoTitle}  ·  ${hoje}`,
+      MARGIN, y
+    );
+    y += 4;
+    doc.setDrawColor(...BORDER_GRAY);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, y, W - MARGIN, y);
+    y += 7;
+
+    function _drawTextFooter(pageNum: number) {
+      doc.setFillColor(...NAVY);
+      doc.rect(0, H - 10, W, 10, "F");
+      doc.setFillColor(...GOLD);
+      doc.rect(0, H - 10, W, 0.8, "F");
+      doc.setTextColor(...WHITE);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+      doc.text(nomeParoquia, MARGIN, H - 4.5);
+      doc.text("Pagina " + pageNum, W - MARGIN, H - 4.5, { align: "right" });
+    }
+
+    const STATUS_LABELS: Record<string, string> = {
+      publicada: "Publicada", rascunho: "Rascunho",
+      arquivada: "Arquivada", cancelada: "Cancelada",
+    };
+    const STATUS_COLORS: Record<string, [[number,number,number],[number,number,number]]> = {
+      publicada: [[16, 185, 129], WHITE],
+      rascunho:  [STEEL, [200, 210, 220]],
+      arquivada: [STEEL, GRAY],
+      cancelada: [[220, 38, 38], WHITE],
+    };
+
+    for (const e of selected) {
       const d = new Date(e.data + "T00:00:00");
-      const diaSemana = format(d, "EEEE", { locale: ptBR });
-      const dataCompleta = format(d, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
+      const diaSemana = format(d, "EEEE", { locale: ptBR }).toUpperCase();
+      const dataCompleta = format(d, "d 'de' MMMM 'de' yyyy", { locale: ptBR });
       const preview = escalaCounts[e.id];
       const funcoes = preview?.funcoes ?? [];
 
-      // group by categoria
-      const grouped: { categoria: string; funcoes: typeof funcoes }[] = [];
-      const uncategorized: typeof funcoes = [];
-      funcoes.forEach((f) => {
-        if (f.categoria) {
-          const g = grouped.find((x) => x.categoria === f.categoria);
-          if (g) g.funcoes.push(f);
-          else grouped.push({ categoria: f.categoria, funcoes: [f] });
-        } else {
-          uncategorized.push(f);
-        }
-      });
-      if (uncategorized.length > 0) grouped.push({ categoria: "", funcoes: uncategorized });
+      // Estimate header height to check for page break
+      const titleLines = doc.splitTextToSize(e.titulo, W - 2 * MARGIN - 58);
+      let cardHeaderH = 7 + titleLines.length * 5.5 + 4.5 + 8;
+      if (e.hora_inicio) cardHeaderH += 5;
+      if (cardHeaderH < 30) cardHeaderH = 30;
 
-      // 4-column paired table: funcao | membro | funcao | membro
-      const renderTabela = (fs: typeof funcoes) => {
-        const rows: string[] = [];
-        for (let i = 0; i < fs.length; i += 2) {
-          const f1 = fs[i];
-          const f2 = fs[i + 1];
-          const m1 = f1.membros.length > 0 ? f1.membros.map((m) => nomeExibicao(m.nome)).join(", ") : "—";
-          const v1 = f1.membros.length === 0;
-          if (f2) {
-            const m2 = f2.membros.length > 0 ? f2.membros.map((m) => nomeExibicao(m.nome)).join(", ") : "—";
-            const v2 = f2.membros.length === 0;
-            rows.push(`<tr><td class="td-f">${f1.nome}</td><td class="td-m${v1 ? " vaga" : ""}">${m1}</td><td class="td-f td-f2">${f2.nome}</td><td class="td-m${v2 ? " vaga" : ""}">${m2}</td></tr>`);
+      if (y + cardHeaderH + 8 > H - footerH - 5) {
+        if (!imgRodape) _drawTextFooter((doc as any).internal.getNumberOfPages());
+        doc.addPage();
+        y = 15;
+      }
+
+      const cX = MARGIN;
+      const cW = W - 2 * MARGIN;
+      const cardStartY = y;
+
+      // Card header background
+      doc.setFillColor(...NAVY);
+      doc.rect(cX, y, cW, cardHeaderH, "F");
+      doc.setFillColor(...GOLD);
+      doc.rect(cX, y, 4, cardHeaderH, "F");
+
+      const tx = cX + 9;
+      let hy = y + 7;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(...GOLD);
+      doc.text(diaSemana, tx, hy);
+      hy += 5.5;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(...WHITE);
+      doc.text(titleLines, tx, hy);
+      hy += titleLines.length * 5.5;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(170, 185, 210);
+      doc.text(dataCompleta, tx, hy);
+      hy += 4.5;
+
+      if (e.hora_inicio) {
+        const timeStr = e.hora_inicio.slice(0, 5)
+          + (e.hora_fim ? ` – ${e.hora_fim.slice(0, 5)}` : "")
+          + (e.local ? `  ·  ${e.local}` : "");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(251, 191, 36);
+        doc.text(timeStr, tx, hy);
+      }
+
+      // Badges top-right
+      let bx = cX + cW - 4;
+      const badgeY = y + 6;
+
+      const sLabel = STATUS_LABELS[e.status] ?? e.status;
+      const [sBg, sFg] = STATUS_COLORS[e.status] ?? [STEEL, GRAY];
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.5);
+      const sW = doc.getTextWidth(sLabel) + 6;
+      doc.setFillColor(...sBg);
+      doc.roundedRect(bx - sW, badgeY, sW, 5.5, 1, 1, "F");
+      doc.setTextColor(...sFg);
+      doc.text(sLabel, bx - sW / 2, badgeY + 3.8, { align: "center" });
+      bx -= sW + 3;
+
+      if (e.solene) {
+        const sol = "Solene";
+        const solW = doc.getTextWidth(sol) + 6;
+        doc.setFillColor(92, 62, 5);
+        doc.roundedRect(bx - solW, badgeY, solW, 5.5, 1, 1, "F");
+        doc.setTextColor(...GOLD);
+        doc.text(sol, bx - solW / 2, badgeY + 3.8, { align: "center" });
+      }
+
+      y += cardHeaderH;
+
+      // Observations row
+      if (e.observacoes) {
+        const obsH = 10;
+        doc.setFillColor(255, 251, 235);
+        doc.rect(cX, y, cW, obsH, "F");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(120, 53, 15);
+        const obsLines = doc.splitTextToSize(e.observacoes, cW - 10);
+        doc.text(obsLines[0], cX + 5, y + 6.5);
+        y += obsH;
+      }
+
+      // Functions table
+      if (funcoes.length === 0) {
+        doc.setFillColor(250, 251, 252);
+        doc.rect(cX, y, cW, 10, "F");
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(8);
+        doc.setTextColor(...GRAY);
+        doc.text("Nenhuma funcao definida para esta escala.", W / 2, y + 6.5, { align: "center" });
+        y += 10;
+      } else {
+        // Group by categoria
+        const groups: { cat: string | null; funcoes: typeof funcoes }[] = [];
+        funcoes.forEach((f) => {
+          if (f.categoria) {
+            const g = groups.find((x) => x.cat === f.categoria);
+            if (g) g.funcoes.push(f); else groups.push({ cat: f.categoria, funcoes: [f] });
           } else {
-            rows.push(`<tr><td class="td-f">${f1.nome}</td><td class="td-m${v1 ? " vaga" : ""}" colspan="3">${m1}</td></tr>`);
+            const g = groups.find((x) => x.cat === null);
+            if (g) g.funcoes.push(f); else groups.push({ cat: null, funcoes: [f] });
+          }
+        });
+
+        const tableBody: any[][] = [];
+        for (const group of groups) {
+          if (group.cat) {
+            tableBody.push([{
+              content: group.cat.toUpperCase(), colSpan: 4,
+              styles: { fontStyle: "bold" as const, textColor: GRAY, fillColor: SECTION_BG, fontSize: 7 },
+            }]);
+          }
+          for (let i = 0; i < group.funcoes.length; i += 2) {
+            const f1 = group.funcoes[i];
+            const f2 = group.funcoes[i + 1];
+            const m1 = f1.membros.length > 0 ? f1.membros.map((m) => nomeExibicao(m.nome)).join(", ") : "—";
+            if (f2) {
+              const m2 = f2.membros.length > 0 ? f2.membros.map((m) => nomeExibicao(m.nome)).join(", ") : "—";
+              tableBody.push([
+                { content: f1.nome, styles: { fontStyle: "bold" as const, textColor: STEEL } },
+                { content: m1, styles: { textColor: f1.membros.length === 0 ? GRAY : NAVY } },
+                { content: f2.nome, styles: { fontStyle: "bold" as const, textColor: STEEL } },
+                { content: m2, styles: { textColor: f2.membros.length === 0 ? GRAY : NAVY } },
+              ]);
+            } else {
+              tableBody.push([
+                { content: f1.nome, styles: { fontStyle: "bold" as const, textColor: STEEL } },
+                { content: m1, colSpan: 3, styles: { textColor: f1.membros.length === 0 ? GRAY : NAVY } },
+              ]);
+            }
           }
         }
-        return `<table class="ft">${rows.join("")}</table>`;
-      };
 
-      const funcoesHtml =
-        funcoes.length > 0
-          ? grouped
-              .map((g) =>
-                g.categoria
-                  ? `<div class="cat-label">${g.categoria}</div>${renderTabela(g.funcoes)}`
-                  : renderTabela(g.funcoes)
-              )
-              .join("")
-          : `<p class="sem-funcoes">Nenhuma função definida para esta escala.</p>`;
+        autoTable(doc, {
+          startY: y,
+          body: tableBody,
+          margin: { left: cX, right: MARGIN, bottom: footerH + 4 },
+          styles: { fontSize: 8.5, cellPadding: { top: 2.5, bottom: 2.5, left: 6, right: 6 } },
+          columnStyles: {
+            0: { cellWidth: 44 }, 1: { cellWidth: 47 },
+            2: { cellWidth: 44 }, 3: { cellWidth: 47 },
+          },
+          alternateRowStyles: { fillColor: LIGHT_GRAY },
+          tableLineColor: BORDER_GRAY,
+          tableLineWidth: 0.2,
+          didDrawPage: (data: any) => {
+            if (!imgRodape) _drawTextFooter(data.pageNumber);
+          },
+        });
 
-      return `<div class="ec">
-  <div class="eh">
-    <div class="eh-accent"></div>
-    <div class="eh-content">
-      <div class="eh-day">${diaSemana.toUpperCase()}</div>
-      <div class="eh-title">${e.titulo}</div>
-      <div class="eh-date">${dataCompleta}</div>
-      ${e.hora_inicio ? `<div class="eh-time">⏰ ${e.hora_inicio.slice(0, 5)}${e.hora_fim ? ` – ${e.hora_fim.slice(0, 5)}` : ""}${e.local ? ` &nbsp;·&nbsp; ${e.local}` : ""}</div>` : ""}
-    </div>
-    <div class="eh-badges-wrap">
-      ${e.solene ? `<span class="badge b-solene">✦ Solene</span>` : ""}
-      <span class="badge s-${e.status}">${STATUS_CONFIG[e.status]?.label ?? e.status}</span>
-    </div>
-  </div>
-  ${e.observacoes ? `<div class="obs"><span class="obs-icon">ℹ</span>${e.observacoes}</div>` : ""}
-  ${funcoesHtml}
-</div>`;
-    }).join("\n");
+        y = (doc as any).lastAutoTable.finalY;
+      }
 
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<title>Escalas — ${nomeParoquia}</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-@page{margin:2cm 1.8cm}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:#fff;color:#1e293b;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact;line-height:1.5}
-
-/* ── Cabeçalho ── */
-.doc-cabecalho{width:100%;display:block;margin-bottom:0}
-.doc-header-text{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);color:#fff;padding:22px 32px;display:flex;align-items:center;justify-content:space-between;gap:20px}
-.doc-header-left{display:flex;align-items:center;gap:16px}
-.doc-header-icon{width:42px;height:42px;background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.35);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;line-height:1}
-.doc-header-text .nome{font-size:18px;font-weight:800;letter-spacing:-.01em;line-height:1.2}
-.doc-header-text .subtitle{font-size:10px;color:rgba(255,255,255,.5);margin-top:2px;letter-spacing:.06em;text-transform:uppercase;font-weight:500}
-.doc-header-right{text-align:right;flex-shrink:0}
-.doc-header-right .periodo-label{font-size:9px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px}
-.doc-header-right .periodo-val{font-size:14px;font-weight:800;color:#f59e0b;letter-spacing:.05em}
-
-/* ── Barra de metadados ── */
-.meta-bar{background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:6px 32px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.meta-bar .count{font-size:10px;color:#64748b;font-weight:600}
-.meta-bar .emit{font-size:10px;color:#94a3b8}
-.meta-sep{width:1px;height:12px;background:#e2e8f0}
-
-/* ── Área de conteúdo ── */
-.content{padding:20px 0 32px}
-
-/* ── Card de escala ── */
-.ec{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;page-break-inside:avoid;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-
-/* ── Cabeçalho do card ── */
-.eh{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:14px 20px;position:relative;overflow:hidden}
-.eh::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,#0f172a 0%,#1a3050 60%,#1e3a5f 100%)}
-.eh-accent{position:absolute;top:0;left:0;bottom:0;width:4px;background:linear-gradient(180deg,#f59e0b,#d97706)}
-.eh-content{position:relative;z-index:1;flex:1;min-width:0}
-.eh-badges-wrap{position:relative;z-index:1;display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;padding-top:1px}
-.eh-day{font-size:8.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#f59e0b;margin-bottom:4px}
-.eh-title{font-size:15px;font-weight:700;line-height:1.25;color:#fff;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.eh-date{font-size:10px;color:rgba(255,255,255,.45);text-transform:capitalize;letter-spacing:.01em}
-.eh-time{margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:#fbbf24;border-radius:5px;padding:3px 10px;font-size:9px;font-weight:700;letter-spacing:.05em}
-
-/* ── Badges ── */
-.badge{padding:3px 10px;border-radius:99px;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;line-height:1.4}
-.s-publicada{background:#d1fae5;color:#065f46}
-.s-rascunho{background:rgba(255,255,255,.12);color:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.15)}
-.s-arquivada{background:rgba(255,255,255,.07);color:rgba(255,255,255,.35);border:1px solid rgba(255,255,255,.1)}
-.b-solene{background:rgba(245,158,11,.18);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
-
-/* ── Observação ── */
-.obs{display:flex;align-items:flex-start;gap:8px;padding:9px 20px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:10.5px;color:#78350f;line-height:1.55}
-.obs-icon{flex-shrink:0;margin-top:1px;opacity:.6;font-size:11px}
-
-/* ── Categoria ── */
-.cat-label{padding:6px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;font-size:7.5px;font-weight:800;text-transform:uppercase;letter-spacing:.22em;color:#94a3b8;display:flex;align-items:center;gap:6px}
-.cat-label::before{content:'';display:inline-block;width:12px;height:1.5px;background:#cbd5e1;flex-shrink:0}
-
-/* ── Tabela de funções ── */
-.ft{width:100%;border-collapse:collapse}
-.ft tr:not(:last-child) td{border-bottom:1px solid #f1f5f9}
-.ft tr:nth-child(even) td{background:#fafbfc}
-.ft td{padding:7px 16px;font-size:11px;vertical-align:middle}
-.td-f{color:#475569;font-weight:600;width:24%;border-right:1px solid #e8edf2;white-space:nowrap;font-size:10.5px;letter-spacing:.01em}
-.td-f2{border-left:2px solid #e8edf2;border-right:1px solid #e8edf2}
-.td-m{color:#0f172a;font-weight:600;font-size:11.5px}
-.td-m.vaga{color:#c1ccd8;font-weight:400;font-style:italic;font-size:10.5px}
-.sem-funcoes{padding:14px 20px;font-size:11px;color:#94a3b8;font-style:italic;text-align:center}
-
-/* ── Rodapé ── */
-.doc-rodape{display:none}
-.doc-footer-default{margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:9px;color:#cbd5e1}
-
-@media print{
-  @page{margin:1.6cm 1.5cm}
-  body{font-size:11.5px}
-  .doc-footer-default{display:none}
-  .doc-rodape{display:block;width:100%;page-break-inside:avoid;margin-top:28px}
-  .doc-rodape img{width:100%;display:block}
-  .ec{margin-bottom:14px}
-}
-</style>
-</head>
-<body>
-${cabecalhoUrl
-  ? `<img class="doc-cabecalho" src="${cabecalhoUrl}" alt="">`
-  : `<div class="doc-header-text">
-      <div class="doc-header-left">
-        <div class="doc-header-icon">✦</div>
-        <div>
-          <div class="nome">${nomeParoquia}</div>
-          <div class="subtitle">Pastoral Litúrgica · Escalas de Serviço</div>
-        </div>
-      </div>
-      <div class="doc-header-right">
-        <div class="periodo-label">Período</div>
-        <div class="periodo-val">ESCALA ${periodoTitle}</div>
-      </div>
-    </div>`}
-<div class="meta-bar">
-  <span class="count">${selected.length} escala${selected.length !== 1 ? "s" : ""} selecionada${selected.length !== 1 ? "s" : ""}</span>
-  <div class="meta-sep"></div>
-  <span class="emit">Emitido em ${hoje}</span>
-</div>
-<div class="content">
-${escalasSections}
-</div>
-${rodapeUrl
-  ? `<div class="doc-rodape"><img src="${rodapeUrl}" alt=""></div>`
-  : `<div class="doc-footer-default"><span>${nomeParoquia} · Pastoral Litúrgica</span><span>Emitido em ${hoje}</span></div>`}
-</body></html>`;
-
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const url  = URL.createObjectURL(blob);
-    const win  = window.open(url, "_blank");
-    if (win) {
-      setTimeout(() => { win.focus(); win.print(); URL.revokeObjectURL(url); }, 800);
+      // Separator line between cards
+      doc.setDrawColor(...BORDER_GRAY);
+      doc.setLineWidth(0.3);
+      doc.line(MARGIN, y + 1, W - MARGIN, y + 1);
+      y += 7;
     }
+
+    // Footer images on all pages
+    if (imgRodape) {
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.addImage(imgRodape.data, imgRodape.format as "PNG" | "JPEG", 0, H - footerDisplayH, W, footerDisplayH);
+      }
+    }
+
+    const nomeArq = `escalas_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`;
+    doc.save(nomeArq);
   }
 
   const [escalaForm, setEscalaForm] = useState<EscalaForm>(EMPTY_FORM);

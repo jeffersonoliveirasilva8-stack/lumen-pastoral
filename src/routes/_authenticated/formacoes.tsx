@@ -1575,16 +1575,30 @@ function PresencaSheet({
       const tipoLabel = TIPOS.find((t) => t.value === evento.tipo)?.label ?? evento.tipo;
       const now = format(new Date(), "d/MM/yyyy 'as' HH:mm", { locale: ptBR });
 
+      // ── CARREGA IMAGENS ────────────────────────────────────────
+      const imgCabecalho = paroquia?.pdf_cabecalho_url
+        ? await urlToBase64(paroquia.pdf_cabecalho_url) : null;
+      const imgRodape = paroquia?.pdf_rodape_url
+        ? await urlToBase64(paroquia.pdf_rodape_url) : null;
+
+      // Calcula altura do rodapé com proporção correta para reservar margem na tabela
+      let FOOTER_H = 10;
+      let rodapeDisplayH = 0;
+      if (imgRodape) {
+        const rProps = doc.getImageProperties(imgRodape.data);
+        rodapeDisplayH = W * (rProps.height / rProps.width);
+        FOOTER_H = rodapeDisplayH;
+      }
+
       // ── CABECALHO ─────────────────────────────────────────────
       const HEADER_H = 38;
       let yHeader = 0;
 
-      const imgCabecalho = paroquia?.pdf_cabecalho_url
-        ? await urlToBase64(paroquia.pdf_cabecalho_url) : null;
-
       if (imgCabecalho) {
-        doc.addImage(imgCabecalho.data, imgCabecalho.format as "PNG" | "JPEG", 0, 0, W, HEADER_H);
-        yHeader = HEADER_H + 1;
+        const hProps = doc.getImageProperties(imgCabecalho.data);
+        const headerDisplayH = W * (hProps.height / hProps.width);
+        doc.addImage(imgCabecalho.data, imgCabecalho.format as "PNG" | "JPEG", 0, 0, W, headerDisplayH);
+        yHeader = headerDisplayH + 1;
       } else {
         // Design proprio do sistema
         doc.setFillColor(...NAVY);
@@ -1715,17 +1729,12 @@ function PresencaSheet({
           { content: String(idx + 1), styles: { halign: "center" as const, textColor: GRAY } },
           { content: m.nome, styles: {} },
           { content: statusText, styles: { textColor: statusColor, fontStyle: "bold" as const, halign: "center" as const } },
-          { content: p?.justificativa ?? "", styles: { textColor: GRAY } },
-          { content: p?.observacoes ?? "", styles: { textColor: GRAY } },
         ];
       });
 
-      // Prefooter height reservation
-      const FOOTER_H = paroquia?.pdf_rodape_url ? 22 : 10;
-
       autoTable(doc, {
         startY: y,
-        head: [["#", "Nome", "Status", "Justificativa", "Observacoes"]],
+        head: [["#", "Nome", "Status"]],
         body: tableRows as any,
         margin: { left: MARGIN, right: MARGIN, bottom: FOOTER_H + 4 },
         headStyles: {
@@ -1743,14 +1752,12 @@ function PresencaSheet({
         alternateRowStyles: { fillColor: LIGHT_GRAY },
         columnStyles: {
           0: { cellWidth: 9 },
-          1: { cellWidth: 52 },
-          2: { cellWidth: 30 },
-          3: { cellWidth: 45 },
-          4: { cellWidth: 45 },
+          1: { cellWidth: 133 },
+          2: { cellWidth: 40 },
         },
         didDrawPage: (data: any) => {
           // Footer em cada pagina
-          if (!paroquia?.pdf_rodape_url) {
+          if (!imgRodape) {
             doc.setFillColor(...NAVY);
             doc.rect(0, H - 10, W, 10, "F");
             doc.setFillColor(...GOLD);
@@ -1765,14 +1772,11 @@ function PresencaSheet({
       });
 
       // ── RODAPE COM IMAGEM (todas as paginas) ──────────────────
-      if (paroquia?.pdf_rodape_url) {
-        const imgRodape = await urlToBase64(paroquia.pdf_rodape_url);
-        if (imgRodape) {
-          const pageCount = (doc as any).internal.getNumberOfPages();
-          for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.addImage(imgRodape.data, imgRodape.format as "PNG" | "JPEG", 0, H - 22, W, 22);
-          }
+      if (imgRodape) {
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+          doc.setPage(i);
+          doc.addImage(imgRodape.data, imgRodape.format as "PNG" | "JPEG", 0, H - rodapeDisplayH, W, rodapeDisplayH);
         }
       }
 
