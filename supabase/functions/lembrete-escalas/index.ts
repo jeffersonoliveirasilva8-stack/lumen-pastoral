@@ -59,7 +59,8 @@ Deno.serve(async (req) => {
   const { data: atrib, error: aErr } = await admin
     .from("escala_membros")
     .select("escala_id, ministerio_id, membros(id, nome, email), ministerios(nome)")
-    .in("escala_id", escalaIds);
+    .in("escala_id", escalaIds)
+    .neq("ativo", false);
 
   if (aErr) return json({ ok: false, error: aErr.message }, 500);
 
