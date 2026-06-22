@@ -23,9 +23,5 @@ CREATE INDEX ON public.membro_incompatibilidades (paroquia_id, membro_b_id);
 ALTER TABLE public.membro_incompatibilidades ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "lider_coordenador_rw" ON public.membro_incompatibilidades
-  FOR ALL USING (
-    paroquia_id IN (
-      SELECT paroquia_id FROM public.profiles
-      WHERE id = auth.uid() AND role IN ('lider', 'coordenador', 'admin')
-    )
-  );
+  FOR ALL USING (_portal_is_admin(paroquia_id))
+  WITH CHECK (_portal_is_admin(paroquia_id));
