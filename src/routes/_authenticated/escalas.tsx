@@ -318,7 +318,8 @@ function EscalasPage() {
       const { data } = await supabase
         .from("escala_membros")
         .select("id, membro_id, ministerio_id, status, membros!membro_id(id, nome, telefone)")
-        .eq("escala_id", detailEscala!.id);
+        .eq("escala_id", detailEscala!.id)
+        .neq("ativo", false);
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
         membro: r.membros,
@@ -366,14 +367,16 @@ function EscalasPage() {
       const sixMonthsAgo = format(subMonths(new Date(), 6), "yyyy-MM-dd");
       const { data, error } = await supabase
         .from("escalas")
-        .select("id, data, escala_membros(membro_id, ministerio_id)")
+        .select("id, data, escala_membros(membro_id, ministerio_id, ativo)")
         .eq("paroquia_id", profile!.paroquia_id!)
         .gte("data", sixMonthsAgo);
 
       if (error || !data) return [];
 
       return (data as any[]).flatMap((escala) =>
-        (escala.escala_membros ?? []).map((entry: any) => ({
+        (escala.escala_membros ?? [])
+          .filter((entry: any) => entry.ativo !== false)
+          .map((entry: any) => ({
           memberId: entry.membro_id,
           ministerioId: entry.ministerio_id,
           date: escala.data,
@@ -783,6 +786,17 @@ function EscalasPage() {
       if (status === "publicada") {
         patch.published_at = new Date().toISOString();
         patch.published_by = profile?.id ?? null;
+
+        // Calcula aderência ao motor: % de linhas ativas com origem='motor'
+        const { data: linhas } = await (supabase as any)
+          .from("escala_membros")
+          .select("origem, ativo")
+          .eq("escala_id", id);
+        const ativas = (linhas ?? []).filter((l: any) => l.ativo !== false);
+        if (ativas.length > 0) {
+          const motor = ativas.filter((l: any) => l.origem === "motor").length;
+          patch.aderencia_motor = Math.round((motor / ativas.length) * 100 * 100) / 100;
+        }
       }
       const { error } = await (supabase as any).from("escalas").update(patch).eq("id", id);
       if (error) throw error;

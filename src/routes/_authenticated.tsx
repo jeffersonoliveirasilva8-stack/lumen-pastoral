@@ -118,6 +118,22 @@ function AuthLayout() {
     },
   });
 
+  // Badge de substituições pendentes no menu
+  const { data: substituicoesPendentes = 0 } = useQuery<number>({
+    queryKey: ["substituicoes-pendentes-count", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { count } = await anyDb
+        .from("substituicoes")
+        .select("id", { count: "exact", head: true })
+        .eq("paroquia_id", profile!.paroquia_id)
+        .in("status", ["solicitada", "com_voluntario"]);
+      return count ?? 0;
+    },
+  });
+
   // Badge de notificações não lidas (header Bell)
   const { data: notifsNaoLidas = 0 } = useQuery<number>({
     queryKey: ["admin-notif-unread", profile?.paroquia_id],
@@ -214,7 +230,7 @@ function AuthLayout() {
   const mainNav: NavItem[] = [
     { to: "/painel",                 label: "Painel",        icon: LayoutDashboard,  color: "bg-slate-600" },
     { to: "/escalas",                label: "Escalas",        icon: Calendar,         color: "bg-blue-600" },
-    { to: "/substituicoes",          label: "Substituições",  icon: ArrowLeftRight,   color: "bg-orange-500" },
+    { to: "/substituicoes",          label: "Substituições",  icon: ArrowLeftRight,   color: "bg-orange-500", badge: substituicoesPendentes },
     ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
     { to: "/ranking",                label: "Ranking",        icon: Trophy,           color: "bg-amber-600" },
     { to: "/espiritualidade",        label: "Liturgia",       icon: BookOpen,         color: "bg-violet-600" },

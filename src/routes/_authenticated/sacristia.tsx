@@ -109,7 +109,8 @@ function SacristiaPage() {
       const { data } = await supabase
         .from("escala_membros")
         .select("id, membro_id, ministerio_id, escala_id, status, justificativa, membros!membro_id(id, nome, telefone), ministerios(id, nome, cor)")
-        .in("escala_id", escalaIds);
+        .in("escala_id", escalaIds)
+        .neq("ativo", false);
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
         membro: r.membros,

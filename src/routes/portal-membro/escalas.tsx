@@ -266,6 +266,7 @@ function PortalMembroEscalas() {
           historico_participacoes(pontos)
         `)
         .eq("membro_id", membro!.id)
+        .neq("ativo", false)
         .eq("escalas.status", "publicada")
         .lt("escalas.data", new Date().toISOString().slice(0, 10))
         .order("escalas.data", { ascending: false })
@@ -361,7 +362,8 @@ function PortalMembroEscalas() {
       const { data: allRows, error: e3 } = await anyDb
         .from("escala_membros")
         .select("id, status, membro_id, escala_id, membros!membro_id(id, nome)")
-        .in("escala_id", escalaIdsPublicadas);
+        .in("escala_id", escalaIdsPublicadas)
+        .neq("ativo", false);
       if (e3) throw e3;
 
       return (escalasData ?? []).map((esc: any): CoordEscala => ({
