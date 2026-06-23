@@ -109,6 +109,8 @@ function buildEngineConfig(cfg: ParoquiaConfigRaw): ConfigParoquia {
     intervalo_minimo_dias:     (regras.intervalo_minimo_dias       as number  | undefined)   ?? undefined,
     variedade_ministerio:      (regras.variedade_ministerio        as boolean | undefined)   ?? false,
     bonus_preferencial_solene: (regras.bonus_preferencial_solene   as number  | undefined)   ?? undefined,
+    prioridade_bonus_alto:     (regras.prioridade_bonus_alto       as number  | undefined)   ?? undefined,
+    prioridade_bonus_medio:    (regras.prioridade_bonus_medio      as number  | undefined)   ?? undefined,
   };
 }
 
