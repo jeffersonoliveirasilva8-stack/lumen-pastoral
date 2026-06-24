@@ -694,6 +694,51 @@ function EscalasPage() {
     },
   });
 
+  async function handleNotificarVaga({ escalaId, ministerioId, ministerioNome }: { escalaId: string; ministerioId: string; ministerioNome: string }) {
+    const paroquiaId = profile?.paroquia_id;
+    if (!paroquiaId) return;
+    const escalaRef = escalas.find((e) => e.id === escalaId) ?? detailEscala;
+    const { data: memMinData } = await supabase
+      .from("membro_ministerios").select("membro_id").eq("ministerio_id", ministerioId);
+    const elegiveisIds = (memMinData ?? []).map((m: { membro_id: string }) => m.membro_id);
+    if (elegiveisIds.length === 0) return;
+    const { data: jaAtribData } = await supabase
+      .from("escala_membros").select("membro_id")
+      .eq("escala_id", escalaId).eq("ministerio_id", ministerioId);
+    const jaAtrib = new Set((jaAtribData ?? []).map((a: { membro_id: string }) => a.membro_id));
+    const destinatariosIds = elegiveisIds.filter((id: string) => !jaAtrib.has(id));
+    if (destinatariosIds.length === 0) return;
+    const { data: membrosData } = await supabase
+      .from("membros").select("id, nome, email").in("id", destinatariosIds).eq("ativo", true);
+    const membrosList = membrosData ?? [];
+    const notifs = (membrosList as { id: string; nome: string; email: string | null }[]).map((m) => ({
+      paroquia_id: paroquiaId,
+      membro_id: m.id,
+      titulo: `Vaga disponível: ${ministerioNome}`,
+      mensagem: `Uma vaga em ${ministerioNome} ficou disponível na escala "${escalaRef?.titulo ?? ""}". Se você puder servir, entre em contato com a coordenação.`,
+      tipo: "info" as const,
+      lida: false,
+      apenas_admin: false,
+      link_referencia: "/escalas",
+    }));
+    await (supabase as any).from("notificacoes").insert(notifs);
+    for (const m of membrosList as { id: string; nome: string; email: string | null }[]) {
+      if (!m.email) continue;
+      await supabase.functions.invoke("send-email", {
+        body: {
+          template: "vaga_disponivel",
+          to: m.email,
+          nome: m.nome,
+          paroquia: paroquiaNome ?? "",
+          ministerioNome,
+          escalaTitulo: escalaRef?.titulo ?? "",
+          escalaData: escalaRef?.data ?? "",
+          escalaHora: escalaRef?.hora_inicio?.slice(0, 5) ?? "",
+        },
+      });
+    }
+  }
+
   const removerPublicadaMutation = useMutation({
     mutationFn: async (args: {
       atribId: string;
@@ -701,6 +746,10 @@ function EscalasPage() {
       motivo: string;
       abrirVaga: boolean;
       penalidade: "nenhuma" | "justificou" | "faltou";
+      notificarVaga: boolean;
+      escalaId: string;
+      ministerioId: string;
+      ministerioNome: string;
     }) => {
       const { error, data } = await (supabase as any).rpc("admin_remover_membro_escala", {
         p_escala_membro_id: args.atribId,
@@ -711,7 +760,7 @@ function EscalasPage() {
       if (error) throw error;
       return data as { acao: string; substituicao_id?: string };
     },
-    onSuccess: (data) => {
+    onSuccess: (data, args) => {
       refetchAtribuicoes();
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
@@ -719,11 +768,16 @@ function EscalasPage() {
       if (data?.acao === "vaga_aberta") {
         toast.success("Vaga aberta para substituição.");
         qc.invalidateQueries({ queryKey: ["substituicoes", profile?.paroquia_id] });
+        // Notificação só é enviada após confirmação da criação da substituição
+        if (args.notificarVaga) {
+          handleNotificarVaga({
+            escalaId:      args.escalaId,
+            ministerioId:  args.ministerioId,
+            ministerioNome: args.ministerioNome,
+          });
+        }
       } else {
         toast.success("Membro removido da escala.");
-        if (data?.acao !== "removido") {
-          // fallback
-        }
       }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
@@ -1767,60 +1821,7 @@ function EscalasPage() {
               onRemoverPublicada={(args) => removerPublicadaMutation.mutate(args)}
               onStatusChange={(status) => updateStatusMutation.mutate({ id: detailEscala.id, status })}
               onNotificarVaga={async ({ escalaId, ministerioId, ministerioNome }) => {
-                const paroquiaId = profile?.paroquia_id;
-                if (!paroquiaId) return;
-                // Busca dados da escala para o e-mail
-                const escalaRef = escalas.find((e) => e.id === escalaId) ?? detailEscala;
-                // Busca membros elegíveis: no ministério e não já na escala nesta função
-                const { data: memMinData } = await supabase
-                  .from("membro_ministerios")
-                  .select("membro_id")
-                  .eq("ministerio_id", ministerioId);
-                const elegiveisIds = (memMinData ?? []).map((m: { membro_id: string }) => m.membro_id);
-                if (elegiveisIds.length === 0) return;
-                const { data: jaAtribData } = await supabase
-                  .from("escala_membros")
-                  .select("membro_id")
-                  .eq("escala_id", escalaId)
-                  .eq("ministerio_id", ministerioId);
-                const jaAtrib = new Set((jaAtribData ?? []).map((a: { membro_id: string }) => a.membro_id));
-                const destinatariosIds = elegiveisIds.filter((id: string) => !jaAtrib.has(id));
-                if (destinatariosIds.length === 0) return;
-                // Busca dados dos membros (nome + e-mail)
-                const { data: membrosData } = await supabase
-                  .from("membros")
-                  .select("id, nome, email")
-                  .in("id", destinatariosIds)
-                  .eq("ativo", true);
-                const membrosList = membrosData ?? [];
-                // Notificações in-app
-                const notifs = membrosList.map((m: { id: string; nome: string; email: string | null }) => ({
-                  paroquia_id: paroquiaId,
-                  membro_id: m.id,
-                  titulo: `Vaga disponível: ${ministerioNome}`,
-                  mensagem: `Uma vaga em ${ministerioNome} ficou disponível na escala "${escalaRef?.titulo ?? ""}". Se você puder servir, entre em contato com a coordenação.`,
-                  tipo: "info" as const,
-                  lida: false,
-                  apenas_admin: false,
-                  link_referencia: "/escalas",
-                }));
-                await (supabase as any).from("notificacoes").insert(notifs);
-                // E-mails individuais
-                for (const m of membrosList as { id: string; nome: string; email: string | null }[]) {
-                  if (!m.email) continue;
-                  await supabase.functions.invoke("send-email", {
-                    body: {
-                      template: "vaga_disponivel",
-                      to: m.email,
-                      nome: m.nome,
-                      paroquia: paroquiaNome ?? "",
-                      ministerioNome,
-                      escalaTitulo: escalaRef?.titulo ?? "",
-                      escalaData: escalaRef?.data ?? "",
-                      escalaHora: escalaRef?.hora_inicio?.slice(0, 5) ?? "",
-                    },
-                  });
-                }
+                await handleNotificarVaga({ escalaId, ministerioId, ministerioNome });
               }}
             />
           )}
@@ -3422,7 +3423,7 @@ function EscalaDetail({
   onRemoveFuncao: (id: string) => void;
   onAtribuir: (memberId: string, ministerioId: string) => void;
   onRemoverAtribuicao: (id: string) => void;
-  onRemoverPublicada: (args: { atribId: string; membroId: string; motivo: string; abrirVaga: boolean; penalidade: "nenhuma" | "justificou" | "faltou" }) => void;
+  onRemoverPublicada: (args: { atribId: string; membroId: string; motivo: string; abrirVaga: boolean; penalidade: "nenhuma" | "justificou" | "faltou"; notificarVaga: boolean; escalaId: string; ministerioId: string; ministerioNome: string }) => void;
   onStatusChange: (status: string) => void;
   onNotificarVaga: (args: { escalaId: string; ministerioId: string; ministerioNome: string }) => void;
 }) {
@@ -5325,19 +5326,16 @@ function EscalaDetail({
                   if (!removerPendente) return;
                   if (escala.status === "publicada") {
                     onRemoverPublicada({
-                      atribId: removerPendente.atribId,
-                      membroId: removerPendente.membroId,
-                      motivo: motivoRemocao,
-                      abrirVaga: abrirVagaChecked,
+                      atribId:       removerPendente.atribId,
+                      membroId:      removerPendente.membroId,
+                      motivo:        motivoRemocao,
+                      abrirVaga:     abrirVagaChecked,
                       penalidade,
+                      notificarVaga: abrirVagaChecked && notificarVaga,
+                      escalaId:      escala.id,
+                      ministerioId:  removerPendente.ministerioId,
+                      ministerioNome: removerPendente.ministerioNome,
                     });
-                    if (abrirVagaChecked && notificarVaga) {
-                      onNotificarVaga({
-                        escalaId: escala.id,
-                        ministerioId: removerPendente.ministerioId,
-                        ministerioNome: removerPendente.ministerioNome,
-                      });
-                    }
                   } else {
                     onRemoverAtribuicao(removerPendente.atribId);
                     if (notificarVaga) {
