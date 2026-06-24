@@ -767,7 +767,7 @@ function EscalasPage() {
       qc.invalidateQueries({ queryKey: ["membros-ativos", profile?.paroquia_id] });
       if (data?.acao === "vaga_aberta") {
         toast.success("Vaga aberta para substituição.");
-        qc.invalidateQueries({ queryKey: ["substituicoes", profile?.paroquia_id] });
+        qc.invalidateQueries({ queryKey: ["admin-substituicoes"] });
         // Notificação só é enviada após confirmação da criação da substituição
         if (args.notificarVaga) {
           handleNotificarVaga({
