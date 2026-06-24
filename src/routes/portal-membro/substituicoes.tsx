@@ -82,8 +82,9 @@ function PortalMembroSubstituicoes() {
         .from("paroquia_config_escalas")
         .select("substituicao_ativa")
         .eq("paroquia_id", membro!.paroquia_id)
-        .single();
-      return (data?.substituicao_ativa as boolean) ?? false;
+        .maybeSingle();
+      // Se não há config, assume ativa (paróquias sem config não devem bloquear voluntários)
+      return (data?.substituicao_ativa as boolean) ?? true;
     },
   });
 
@@ -433,11 +434,6 @@ function SubstAbertaCard({
         <p className="text-xs text-muted-foreground">
           Solicitante: <span className="font-medium text-foreground">{subst.solicitante_nome}</span>
         </p>
-        {subst.motivo_solicitacao && subst.motivo_solicitacao !== "Membro recusou a escala" && (
-          <p className="text-xs text-muted-foreground italic border-l-2 border-border pl-2">
-            "{subst.motivo_solicitacao}"
-          </p>
-        )}
       </div>
       <div className="border-t border-border/40 px-4 py-3">
         <Button
@@ -508,11 +504,6 @@ function SubstCard({
         </div>
 
         {/* Detalhes */}
-        {subst.motivo_solicitacao && (
-          <p className="text-xs text-muted-foreground italic border-l-2 border-border pl-2">
-            "{subst.motivo_solicitacao}"
-          </p>
-        )}
 
         {subst.status === "com_voluntario" && subst.substituto_nome && (
           <div className="flex items-center gap-2 text-xs text-blue-700 dark:text-blue-400 bg-blue-500/10 rounded-lg px-3 py-2">

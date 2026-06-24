@@ -302,7 +302,7 @@ function EscalasPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("escala_funcoes")
-        .select("id, escala_id, ministerio_id, quantidade, ministerios(id, nome, cor, categoria, relevancia, duplicidade_permitida, ordem_prioridade)")
+        .select("id, escala_id, ministerio_id, quantidade, atuacoes_exigidas, ministerios(id, nome, cor, categoria, relevancia, duplicidade_permitida, ordem_prioridade)")
         .eq("escala_id", detailEscala!.id);
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
@@ -452,6 +452,7 @@ function EscalasPage() {
         .from("indisponibilidades")
         .select("id, membro_id, data, hora_inicio, hora_fim, tipo, data_fim, cancelada, motivo")
         .eq("paroquia_id", profile!.paroquia_id!)
+        .or("cancelada.is.null,cancelada.eq.false")
         .order("data", { ascending: false });
       return (data ?? []) as unknown as IndispRow[];
     },
@@ -475,11 +476,13 @@ function EscalasPage() {
     enabled: !!profile?.paroquia_id && membroIds.length > 0,
     queryFn: async () => {
       const idList = membroIds.join(",");
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("membro_incompatibilidades")
         .select("membro_a_id, membro_b_id")
         .eq("paroquia_id", profile!.paroquia_id)
         .or(`membro_a_id.in.(${idList}),membro_b_id.in.(${idList})`);
+      if (error) console.warn("[incompatibilidades] RLS bloqueou a query:", error.message);
+      else console.log("[incompatibilidades] pares carregados:", data?.length ?? 0, data);
       return (data ?? []) as { membro_a_id: string; membro_b_id: string }[];
     },
   });
@@ -587,16 +590,30 @@ function EscalasPage() {
 
           const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
           const config = {
-            usa_tochas: paroquiaConfig?.usa_tochas ?? false,
-            limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
-            limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
-            impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-            distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
-            intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
-            variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
+            usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
+            limite_semanal:           (regras.limite_semanal           as number  | undefined) ?? undefined,
+            limite_mensal:            (regras.limite_mensal            as number  | undefined) ?? undefined,
+            impedir_repeticao_seguida:(regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+            distribuicao_masc_pct:    (regras.distribuicao_masc_pct    as number  | undefined) ?? undefined,
+            intervalo_minimo_dias:    (regras.intervalo_minimo_dias     as number  | undefined) ?? undefined,
+            variedade_ministerio:     (regras.variedade_ministerio      as boolean | undefined) ?? false,
+            prioridade_bonus_alto:    (regras.prioridade_bonus_alto     as number  | undefined) ?? undefined,
+            prioridade_bonus_medio:   (regras.prioridade_bonus_medio    as number  | undefined) ?? undefined,
+            bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
           };
 
           const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+
+          const saveDia  = new Date(payload.data + "T12:00:00").getDay();
+          const saveHora = (payload.hora_inicio ?? "").slice(0, 5);
+          const saveMissasMatch = missasPadrao.filter((mp) => {
+            if (mp.dia_semana !== saveDia) return false;
+            if (saveHora && mp.hora_inicio) return mp.hora_inicio.slice(0, 5) === saveHora;
+            return true;
+          });
+          const saveMissaRestricaoIndisp = saveMissasMatch.flatMap((mp) =>
+            (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: payload.data }))
+          );
 
           const resultado = generateEscalaWithAlertas(
             { titulo: payload.titulo, data: payload.data, tipo: payload.tipo, observacoes: payload.observacoes },
@@ -605,7 +622,7 @@ function EscalasPage() {
             membroMinisterios,
             {
               history: assignmentHistory,
-              indisponibilidades,
+              indisponibilidades: [...indisponibilidades, ...saveMissaRestricaoIndisp],
               restricoes: funcaoRestricoes,
               incompatibilidades: membroIncompat,
               config,
@@ -1059,19 +1076,33 @@ function EscalasPage() {
 
       const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
       const engineConfig = {
-        usa_tochas: paroquiaConfig?.usa_tochas ?? false,
-        limite_semanal: (regras.limite_semanal as number | undefined) ?? undefined,
-        limite_mensal: (regras.limite_mensal as number | undefined) ?? undefined,
-        impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-        distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
-        intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
-        variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
+        usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
+        limite_semanal:           (regras.limite_semanal           as number  | undefined) ?? undefined,
+        limite_mensal:            (regras.limite_mensal            as number  | undefined) ?? undefined,
+        impedir_repeticao_seguida:(regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+        distribuicao_masc_pct:    (regras.distribuicao_masc_pct    as number  | undefined) ?? undefined,
+        intervalo_minimo_dias:    (regras.intervalo_minimo_dias     as number  | undefined) ?? undefined,
+        variedade_ministerio:     (regras.variedade_ministerio      as boolean | undefined) ?? false,
+        prioridade_bonus_alto:    (regras.prioridade_bonus_alto     as number  | undefined) ?? undefined,
+        prioridade_bonus_medio:   (regras.prioridade_bonus_medio    as number  | undefined) ?? undefined,
+        bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
       };
 
       const membrosComAtuacoes = membros.map((m) => ({
         ...m,
         atuacao_ids: membroAtuacoes[m.id] ?? [],
       }));
+
+      const reorgDia  = new Date(escala.data + "T12:00:00").getDay();
+      const reorgHora = (escala.hora_inicio ?? "").slice(0, 5);
+      const reorgMissasMatch = missasPadrao.filter((mp) => {
+        if (mp.dia_semana !== reorgDia) return false;
+        if (reorgHora && mp.hora_inicio) return mp.hora_inicio.slice(0, 5) === reorgHora;
+        return true;
+      });
+      const reorgMissaRestricaoIndisp = reorgMissasMatch.flatMap((mp) =>
+        (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
+      );
 
       const resultado = generateEscalaWithAlertas(
         { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
@@ -1080,7 +1111,7 @@ function EscalasPage() {
         membroMinisterios,
         {
           history: assignmentHistory.filter((h) => h.date !== escala.data),
-          indisponibilidades,
+          indisponibilidades: [...indisponibilidades, ...reorgMissaRestricaoIndisp],
           restricoes: funcaoRestricoes,
           incompatibilidades: membroIncompat,
           config: engineConfig,
@@ -3922,15 +3953,18 @@ function EscalaDetail({
       return;
     }
 
-    const regras = paroquiaConfig?.regras_escala ?? {};
+    const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
     const config = {
-      usa_tochas: paroquiaConfig?.usa_tochas ?? false,
-      limite_semanal: regras.limite_semanal ?? undefined,
-      limite_mensal: regras.limite_mensal ?? undefined,
-      impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? false,
-      distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
-      intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
-      variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
+      usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
+      limite_semanal:           (regras.limite_semanal           as number  | undefined) ?? undefined,
+      limite_mensal:            (regras.limite_mensal            as number  | undefined) ?? undefined,
+      impedir_repeticao_seguida:(regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+      distribuicao_masc_pct:    (regras.distribuicao_masc_pct    as number  | undefined) ?? undefined,
+      intervalo_minimo_dias:    (regras.intervalo_minimo_dias     as number  | undefined) ?? undefined,
+      variedade_ministerio:     (regras.variedade_ministerio      as boolean | undefined) ?? false,
+      prioridade_bonus_alto:    (regras.prioridade_bonus_alto     as number  | undefined) ?? undefined,
+      prioridade_bonus_medio:   (regras.prioridade_bonus_medio    as number  | undefined) ?? undefined,
+      bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
     };
 
     // Encontra missas_padrao que correspondem a esta escala (mesmo dia da semana + hora)
@@ -4061,15 +4095,18 @@ function EscalaDetail({
     }
     setSlotLoading((prev) => ({ ...prev, [minId]: true }));
 
-    const regras = paroquiaConfig?.regras_escala ?? {};
+    const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
     const config = {
-      usa_tochas: paroquiaConfig?.usa_tochas ?? false,
-      limite_semanal: regras.limite_semanal ?? undefined,
-      limite_mensal: regras.limite_mensal ?? undefined,
-      impedir_repeticao_seguida: regras.impedir_repeticao_consecutiva ?? false,
-      distribuicao_masc_pct: (regras.distribuicao_masc_pct as number | undefined) ?? undefined,
-      intervalo_minimo_dias: (regras.intervalo_minimo_dias as number | undefined) ?? undefined,
-      variedade_ministerio: (regras.variedade_ministerio as boolean | undefined) ?? false,
+      usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
+      limite_semanal:           (regras.limite_semanal           as number  | undefined) ?? undefined,
+      limite_mensal:            (regras.limite_mensal            as number  | undefined) ?? undefined,
+      impedir_repeticao_seguida:(regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+      distribuicao_masc_pct:    (regras.distribuicao_masc_pct    as number  | undefined) ?? undefined,
+      intervalo_minimo_dias:    (regras.intervalo_minimo_dias     as number  | undefined) ?? undefined,
+      variedade_ministerio:     (regras.variedade_ministerio      as boolean | undefined) ?? false,
+      prioridade_bonus_alto:    (regras.prioridade_bonus_alto     as number  | undefined) ?? undefined,
+      prioridade_bonus_medio:   (regras.prioridade_bonus_medio    as number  | undefined) ?? undefined,
+      bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
     };
 
     const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
@@ -4150,6 +4187,31 @@ function EscalaDetail({
     });
 
     // ── Rodar motor com debug=true ────────────────────────────────────────
+    const debugRegras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
+    const debugConfig = {
+      usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
+      limite_semanal:           (debugRegras.limite_semanal           as number  | undefined) ?? undefined,
+      limite_mensal:            (debugRegras.limite_mensal            as number  | undefined) ?? undefined,
+      impedir_repeticao_seguida:(debugRegras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+      distribuicao_masc_pct:    (debugRegras.distribuicao_masc_pct    as number  | undefined) ?? undefined,
+      intervalo_minimo_dias:    (debugRegras.intervalo_minimo_dias     as number  | undefined) ?? undefined,
+      variedade_ministerio:     (debugRegras.variedade_ministerio      as boolean | undefined) ?? false,
+      prioridade_bonus_alto:    (debugRegras.prioridade_bonus_alto     as number  | undefined) ?? undefined,
+      prioridade_bonus_medio:   (debugRegras.prioridade_bonus_medio    as number  | undefined) ?? undefined,
+      bonus_preferencial_solene:(debugRegras.bonus_preferencial_solene as number  | undefined) ?? undefined,
+    };
+
+    const debugDia  = new Date(escala.data + "T12:00:00").getDay();
+    const debugHora = (escala.hora_inicio ?? "").slice(0, 5);
+    const debugMissasMatch = missasPadrao.filter((mp) => {
+      if (mp.dia_semana !== debugDia) return false;
+      if (debugHora && mp.hora_inicio) return mp.hora_inicio.slice(0, 5) === debugHora;
+      return true;
+    });
+    const debugMissaRestricaoIndisp = debugMissasMatch.flatMap((mp) =>
+      (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
+    );
+
     const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
     const funcoesPedidoDebug = funcoes.map((f) => ({
       ...f,
@@ -4164,9 +4226,10 @@ function EscalaDetail({
       membroMinisterios,
       {
         history: assignmentHistory,
-        indisponibilidades,
+        indisponibilidades: [...indisponibilidades, ...debugMissaRestricaoIndisp],
         restricoes: funcaoRestricoes,
         incompatibilidades: incompatibilidades,
+        config: debugConfig,
         preferenciaisSolene: preferenciaisSolene ?? [],
         debug: true,
       },

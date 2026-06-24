@@ -6,7 +6,7 @@
 -- duplicatas inversas (A,B) e (B,A).
 -- ═══════════════════════════════════════════════════════════════════════════
 
-CREATE TABLE public.membro_incompatibilidades (
+CREATE TABLE IF NOT EXISTS public.membro_incompatibilidades (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   paroquia_id UUID NOT NULL REFERENCES public.paroquias(id) ON DELETE CASCADE,
   membro_a_id UUID NOT NULL REFERENCES public.membros(id) ON DELETE CASCADE,
@@ -17,11 +17,12 @@ CREATE TABLE public.membro_incompatibilidades (
   UNIQUE (membro_a_id, membro_b_id)
 );
 
-CREATE INDEX ON public.membro_incompatibilidades (paroquia_id, membro_a_id);
-CREATE INDEX ON public.membro_incompatibilidades (paroquia_id, membro_b_id);
+CREATE INDEX IF NOT EXISTS membro_incompat_a_idx ON public.membro_incompatibilidades (paroquia_id, membro_a_id);
+CREATE INDEX IF NOT EXISTS membro_incompat_b_idx ON public.membro_incompatibilidades (paroquia_id, membro_b_id);
 
 ALTER TABLE public.membro_incompatibilidades ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "lider_coordenador_rw" ON public.membro_incompatibilidades;
 CREATE POLICY "lider_coordenador_rw" ON public.membro_incompatibilidades
   FOR ALL USING (_portal_is_admin(paroquia_id))
   WITH CHECK (_portal_is_admin(paroquia_id));

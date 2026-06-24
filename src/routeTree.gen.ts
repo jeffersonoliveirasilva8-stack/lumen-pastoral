@@ -45,6 +45,7 @@ import { Route as AuthenticatedSubstituicoesRouteImport } from './routes/_authen
 import { Route as AuthenticatedSolicitacoesRouteImport } from './routes/_authenticated/solicitacoes'
 import { Route as AuthenticatedSacristiaRouteImport } from './routes/_authenticated/sacristia'
 import { Route as AuthenticatedRelatoriosSubstituicoesRouteImport } from './routes/_authenticated/relatorios-substituicoes'
+import { Route as AuthenticatedRelatoriosEscalasRouteImport } from './routes/_authenticated/relatorios-escalas'
 import { Route as AuthenticatedRelatoriosEquilibrioRouteImport } from './routes/_authenticated/relatorios-equilibrio'
 import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
 import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authenticated/planejamento'
@@ -252,6 +253,12 @@ const AuthenticatedRelatoriosSubstituicoesRoute =
     path: '/relatorios-substituicoes',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRelatoriosEscalasRoute =
+  AuthenticatedRelatoriosEscalasRouteImport.update({
+    id: '/relatorios-escalas',
+    path: '/relatorios-escalas',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRelatoriosEquilibrioRoute =
   AuthenticatedRelatoriosEquilibrioRouteImport.update({
     id: '/relatorios-equilibrio',
@@ -396,6 +403,7 @@ export interface FileRoutesByFullPath {
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/ranking': typeof AuthenticatedRankingRoute
   '/relatorios-equilibrio': typeof AuthenticatedRelatoriosEquilibrioRoute
+  '/relatorios-escalas': typeof AuthenticatedRelatoriosEscalasRoute
   '/relatorios-substituicoes': typeof AuthenticatedRelatoriosSubstituicoesRoute
   '/sacristia': typeof AuthenticatedSacristiaRoute
   '/solicitacoes': typeof AuthenticatedSolicitacoesRoute
@@ -454,6 +462,7 @@ export interface FileRoutesByTo {
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/ranking': typeof AuthenticatedRankingRoute
   '/relatorios-equilibrio': typeof AuthenticatedRelatoriosEquilibrioRoute
+  '/relatorios-escalas': typeof AuthenticatedRelatoriosEscalasRoute
   '/relatorios-substituicoes': typeof AuthenticatedRelatoriosSubstituicoesRoute
   '/sacristia': typeof AuthenticatedSacristiaRoute
   '/solicitacoes': typeof AuthenticatedSolicitacoesRoute
@@ -514,6 +523,7 @@ export interface FileRoutesById {
   '/_authenticated/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/_authenticated/ranking': typeof AuthenticatedRankingRoute
   '/_authenticated/relatorios-equilibrio': typeof AuthenticatedRelatoriosEquilibrioRoute
+  '/_authenticated/relatorios-escalas': typeof AuthenticatedRelatoriosEscalasRoute
   '/_authenticated/relatorios-substituicoes': typeof AuthenticatedRelatoriosSubstituicoesRoute
   '/_authenticated/sacristia': typeof AuthenticatedSacristiaRoute
   '/_authenticated/solicitacoes': typeof AuthenticatedSolicitacoesRoute
@@ -574,6 +584,7 @@ export interface FileRouteTypes {
     | '/planejamento'
     | '/ranking'
     | '/relatorios-equilibrio'
+    | '/relatorios-escalas'
     | '/relatorios-substituicoes'
     | '/sacristia'
     | '/solicitacoes'
@@ -632,6 +643,7 @@ export interface FileRouteTypes {
     | '/planejamento'
     | '/ranking'
     | '/relatorios-equilibrio'
+    | '/relatorios-escalas'
     | '/relatorios-substituicoes'
     | '/sacristia'
     | '/solicitacoes'
@@ -691,6 +703,7 @@ export interface FileRouteTypes {
     | '/_authenticated/planejamento'
     | '/_authenticated/ranking'
     | '/_authenticated/relatorios-equilibrio'
+    | '/_authenticated/relatorios-escalas'
     | '/_authenticated/relatorios-substituicoes'
     | '/_authenticated/sacristia'
     | '/_authenticated/solicitacoes'
@@ -1001,6 +1014,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRelatoriosSubstituicoesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/relatorios-escalas': {
+      id: '/_authenticated/relatorios-escalas'
+      path: '/relatorios-escalas'
+      fullPath: '/relatorios-escalas'
+      preLoaderRoute: typeof AuthenticatedRelatoriosEscalasRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/relatorios-equilibrio': {
       id: '/_authenticated/relatorios-equilibrio'
       path: '/relatorios-equilibrio'
@@ -1187,6 +1207,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPlanejamentoRoute: typeof AuthenticatedPlanejamentoRoute
   AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
   AuthenticatedRelatoriosEquilibrioRoute: typeof AuthenticatedRelatoriosEquilibrioRoute
+  AuthenticatedRelatoriosEscalasRoute: typeof AuthenticatedRelatoriosEscalasRoute
   AuthenticatedRelatoriosSubstituicoesRoute: typeof AuthenticatedRelatoriosSubstituicoesRoute
   AuthenticatedSacristiaRoute: typeof AuthenticatedSacristiaRoute
   AuthenticatedSolicitacoesRoute: typeof AuthenticatedSolicitacoesRoute
@@ -1215,6 +1236,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRankingRoute: AuthenticatedRankingRoute,
   AuthenticatedRelatoriosEquilibrioRoute:
     AuthenticatedRelatoriosEquilibrioRoute,
+  AuthenticatedRelatoriosEscalasRoute: AuthenticatedRelatoriosEscalasRoute,
   AuthenticatedRelatoriosSubstituicoesRoute:
     AuthenticatedRelatoriosSubstituicoesRoute,
   AuthenticatedSacristiaRoute: AuthenticatedSacristiaRoute,

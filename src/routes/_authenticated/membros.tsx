@@ -791,6 +791,20 @@ function MemberForm({
               ],
             },
             {
+              value: "vice",
+              label: "Vice-Coordenador",
+              badge: "Painel parcial",
+              badgeColor: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+              desc: "Gerencia escalas e membros, sem configurações avançadas.",
+              bullets: [
+                "Cria, edita e publica escalas",
+                "Gerencia membros e presenças",
+                "Visualiza relatórios e ocorrências",
+                "Não gerencia outros coordenadores",
+                "Sem acesso a configurações avançadas",
+              ],
+            },
+            {
               value: "coordenador",
               label: "Coordenação",
               badge: "Acesso completo",
@@ -3333,9 +3347,11 @@ function MembrosPage() {
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
                             m.tipo_acesso === "coordenador"
                               ? "bg-amber-50 text-amber-700 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300"
+                              : m.tipo_acesso === "vice"
+                              ? "bg-violet-50 text-violet-700 border border-violet-200/80 dark:bg-violet-950/40 dark:text-violet-300"
                               : "bg-blue-50 text-blue-700 border border-blue-200/80 dark:bg-blue-950/40 dark:text-blue-300"
                           }`}>
-                            {m.tipo_acesso === "coordenador" ? "Coord." : "Admin."}
+                            {m.tipo_acesso === "coordenador" ? "Coord." : m.tipo_acesso === "vice" ? "Vice" : "Admin."}
                           </span>
                         )}
                         {comunidadeNome && (

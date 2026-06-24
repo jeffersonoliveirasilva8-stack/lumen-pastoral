@@ -39,7 +39,8 @@ type AdminUser = {
 
 // tipo_acesso do membro → role da página
 function tipoAcessoToRole(tipo: string): "admin" | "coordenador" | "auxiliar" | null {
-  if (tipo === "coordenador") return "admin"; // Coordenador = papel mais alto
+  if (tipo === "coordenador" || tipo === "administrador") return "admin";
+  if (tipo === "vice") return "coordenador"; // Vice-Coordenador
   if (tipo === "auxiliar") return "auxiliar";
   return null;
 }
@@ -211,7 +212,7 @@ function AdministradoresPage() {
         .from("membros")
         .select("id, auth_user_id, tipo_acesso, created_at, nome, email")
         .eq("paroquia_id", profile!.paroquia_id!)
-        .in("tipo_acesso", ["coordenador", "auxiliar"])
+        .in("tipo_acesso", ["coordenador", "vice", "auxiliar"])
         .eq("ativo", true)
         .order("tipo_acesso")
         .order("nome");

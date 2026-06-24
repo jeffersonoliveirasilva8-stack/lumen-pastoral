@@ -664,35 +664,38 @@ export function alocarMembros(
       }).sort((a, b) => b.breakdown.total - a.breakdown.total);
     }
 
-    // Aplica distribuição de gênero ao pool já pontuado e retorna os selecionados
-    function aplicarGeneroESelecionar(
+    // Ordena o pool por prioridade de gênero (alvos GLOBAIS) sem fatiar.
+    // Retorna a lista COMPLETA reordenada: cota masculina → cota feminina →
+    // neutros (sexo null) → excedente de gênero.
+    // A fatiação ocorre DEPOIS, durante a seleção integrada com incompat,
+    // garantindo que candidatos válidos do pool não sejam descartados antes
+    // de haver chance de substituir um rejeitado.
+    function ordenarPorGenero(
       scored: ReturnType<typeof scorePool>,
-      vagasDisponiveis: number,
+      mascJa: number,
+      femJa: number,
+      totalVagas: number,
     ): typeof scored {
       const mascPct = config?.distribuicao_masc_pct;
-      if (mascPct === undefined || vagasDisponiveis < 2 || scored.length < 2) {
-        return scored.slice(0, vagasDisponiveis);
-      }
-      const alvoMasc = Math.round(vagasDisponiveis * mascPct / 100);
-      const alvoFem  = vagasDisponiveis - alvoMasc;
+      if (mascPct === undefined || scored.length < 1) return scored;
+
+      const alvoMascTotal    = Math.round(totalVagas * mascPct / 100);
+      const alvoFemTotal     = totalVagas - alvoMascTotal;
+      const alvoMascRestante = Math.max(0, alvoMascTotal - mascJa);
+      const alvoFemRestante  = Math.max(0, alvoFemTotal  - femJa);
+
       const machos   = scored.filter((c) => c.membro.sexo === "M");
       const femeas   = scored.filter((c) => c.membro.sexo === "F");
-      const escolhidos = [...machos.slice(0, alvoMasc), ...femeas.slice(0, alvoFem)];
-      const escolhidosIds = new Set(escolhidos.map((c) => c.membro.id));
-      const faltam = vagasDisponiveis - escolhidos.length;
-      if (faltam > 0) {
-        escolhidos.push(...scored.filter((c) => !escolhidosIds.has(c.membro.id)).slice(0, faltam));
-      }
-      const mascObtidos = escolhidos.filter((c) => c.membro.sexo === "M").length;
-      const femObtidos  = escolhidos.filter((c) => c.membro.sexo === "F").length;
-      if ((alvoMasc > 0 && mascObtidos < alvoMasc && machos.length < alvoMasc) ||
-          (alvoFem  > 0 && femObtidos  < alvoFem  && femeas.length < alvoFem)) {
-        alertas.push(
-          `⚠ "${funcao.ministerio_nome}": proporção ${mascPct}/${100 - mascPct} (M/F) não atingida` +
-          ` — M: ${machos.length} (alvo ${alvoMasc}), F: ${femeas.length} (alvo ${alvoFem}).`,
-        );
-      }
-      return escolhidos;
+      const neutros  = scored.filter((c) => c.membro.sexo !== "M" && c.membro.sexo !== "F");
+
+      // Ordem de preferência: cota M → cota F → neutros → excedente M → excedente F
+      return [
+        ...machos.slice(0, alvoMascRestante),
+        ...femeas.slice(0, alvoFemRestante),
+        ...neutros,
+        ...machos.slice(alvoMascRestante),
+        ...femeas.slice(alvoFemRestante),
+      ];
     }
 
     // Pontua todos os pools UMA vez — evita double Math.random() entre seleção e insights
@@ -701,12 +704,49 @@ export function alocarMembros(
     const scored3 = scorePool(pool3, true);
     const scored4 = scorePool(pool4, true);
 
-    // Seleção progressiva usando scores pré-calculados
+    // Contadores globais de gênero para distribuição consolidada entre pools
+    const totalVagasFuncao = vagas;
+    let mascSelecionados = 0;
+    let femSelecionados  = 0;
+
+    // Seleção progressiva: ordena por gênero e seleciona até `vagas` candidatos
+    // compatíveis em um único loop — candidatos rejeitados por incompatibilidade
+    // são substituídos pelo próximo na lista ordenada do mesmo pool.
     for (const scored of [scored1, scored2, scored3, scored4]) {
       if (vagas <= 0) break;
-      const escolhidos = aplicarGeneroESelecionar(scored, vagas);
-      selecionados.push(...escolhidos);
-      vagas -= escolhidos.length;
+      const ordenados = ordenarPorGenero(scored, mascSelecionados, femSelecionados, totalVagasFuncao);
+
+      const aprovados: typeof ordenados = [];
+      const aprovadosIds = new Set<string>();
+
+      for (const c of ordenados) {
+        if (aprovados.length >= vagas) break;
+        const incompat = incompatMap?.get(c.membro.id);
+        const conflito = incompat && [...aprovadosIds].some((id) => incompat.has(id));
+        if (!conflito) {
+          aprovados.push(c);
+          aprovadosIds.add(c.membro.id);
+        }
+      }
+
+      selecionados.push(...aprovados);
+      mascSelecionados += aprovados.filter((c) => c.membro.sexo === "M").length;
+      femSelecionados  += aprovados.filter((c) => c.membro.sexo === "F").length;
+      vagas -= aprovados.length;
+    }
+
+    // Alerta de proporção consolidado — emitido UMA vez sobre o resultado final da função
+    if (config?.distribuicao_masc_pct !== undefined && selecionados.length > 0) {
+      const mascPct       = config.distribuicao_masc_pct;
+      const alvoMascTotal = Math.round(totalVagasFuncao * mascPct / 100);
+      const alvoFemTotal  = totalVagasFuncao - alvoMascTotal;
+      if ((alvoMascTotal > 0 && mascSelecionados < alvoMascTotal) ||
+          (alvoFemTotal  > 0 && femSelecionados  < alvoFemTotal)) {
+        alertas.push(
+          `⚠ "${funcao.ministerio_nome}": proporção ${mascPct}/${100 - mascPct} (M/F) — ` +
+          `obtido M:${mascSelecionados} (alvo ${alvoMascTotal}), F:${femSelecionados} (alvo ${alvoFemTotal}).`,
+        );
+      }
     }
 
     // ── Registrar alocações ───────────────────────────────────────────────────
