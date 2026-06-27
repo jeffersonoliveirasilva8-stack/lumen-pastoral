@@ -40,7 +40,7 @@ const NAV_SIDEBAR = [
   { to: "/portal-membro/eventos",        label: "Agenda",        icon: CalendarDays },
   { to: "/portal-membro/liturgia",       label: "Liturgia",      icon: BookOpen },
   { to: "/portal-membro/ranking",        label: "Ranking",       icon: Trophy },
-  { to: "/portal-membro/ocorrencias",    label: "Ocorrências",   icon: MessageSquare },
+  { to: "/portal-membro/ocorrencias",    label: "Ocorrências",   icon: AlertCircle },
   { to: "/portal-membro/notificacoes",   label: "Notificações",  icon: Bell },
   { to: "/portal-membro/perfil",         label: "Perfil",        icon: User },
   { to: "/portal-membro/ajuda",          label: "Ajuda",         icon: HelpCircle },
@@ -60,7 +60,7 @@ const DRAWER_ITEMS = [
   { to: "/portal-membro/eventos",       label: "Agenda",        icon: CalendarDays,   color: "bg-blue-500" },
   { to: "/portal-membro/ranking",       label: "Ranking",       icon: Trophy,         color: "bg-amber-500" },
   { to: "/portal-membro/notificacoes",  label: "Avisos",        icon: Bell,           color: "bg-sky-500" },
-  { to: "/portal-membro/ocorrencias",   label: "Ocorrências",   icon: MessageSquare,  color: "bg-rose-500" },
+  { to: "/portal-membro/ocorrencias",   label: "Ocorrências",   icon: AlertCircle,    color: "bg-rose-500" },
   { to: "/portal-membro/calendario",    label: "Calendário",    icon: CalendarRange,  color: "bg-teal-500" },
   { to: "/portal-membro/ajuda",         label: "Ajuda",         icon: HelpCircle,     color: "bg-slate-500" },
 ] as const;

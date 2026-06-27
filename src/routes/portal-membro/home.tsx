@@ -79,7 +79,7 @@ function PortalMembroHome() {
     if (!membro?.id || !membro?.paroquia_id) return;
     const channel = supabase
       .channel(`pm-home-rt-${membro.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "escala_membros" }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "escala_membros", filter: `membro_id=eq.${membro.id}` }, () => {
         qc.invalidateQueries({ queryKey: ["portal-home-escalas", membro.id] });
         qc.invalidateQueries({ queryKey: ["portal-chart-presenca", membro.id] });
       })

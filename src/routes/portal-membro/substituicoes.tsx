@@ -142,21 +142,25 @@ function PortalMembroSubstituicoes() {
         p_motivo: motivo.trim() || null,
       });
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error ?? "Erro ao solicitar substituição");
+      if (!data?.success) {
+        const err = new Error(data?.error ?? "Erro ao solicitar substituição") as Error & { prazo_dias?: number };
+        err.prazo_dias = data?.prazo_dias;
+        throw err;
+      }
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-substituicoes", membro!.id] });
       toast.success("Solicitação enviada para aprovação.");
       setShowForm(false);
       setSelectedEscala("");
       setMotivo("");
     },
-    onError: (e: Error) => {
+    onError: (e: Error & { prazo_dias?: number }) => {
       const msg = e.message === "confirmacao_desativada"
         ? "A coordenação desativou confirmações e substituições."
         : e.message === "prazo_expirado"
-        ? "Prazo encerrado: a coordenação exige mais dias de antecedência para pedir substituto."
+        ? `Prazo encerrado: é necessário pedir com pelo menos ${e.prazo_dias ?? "alguns"} dia(s) de antecedência.`
         : e.message === "substituicao_ja_ativa"
         ? "Já existe uma solicitação ativa para esta escala."
         : e.message === "escala_passada"

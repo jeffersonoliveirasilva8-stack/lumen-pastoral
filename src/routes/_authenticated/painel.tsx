@@ -1109,6 +1109,7 @@ function DashboardPage() {
       qcDash.invalidateQueries({ queryKey: ["escala-membros"] });
       qcDash.invalidateQueries({ queryKey: ["pm-escalas"] });
       qcDash.invalidateQueries({ queryKey: ["proximas-celebracoes-detalhe"] });
+      qcDash.invalidateQueries({ queryKey: ["proximas-escalas"] });
       setCandidaturaTarget(null);
       toast.success("Disponibilidade registrada! A coordenação será notificada.");
     },
@@ -1159,7 +1160,7 @@ function DashboardPage() {
             { to: "/membros",      label: "+ Novo membro",   icon: UserCheck,      color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-500/20" },
             { to: "/substituicoes",label: "Substituições",   icon: ArrowLeftRight, color: "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-200 dark:border-violet-800 hover:bg-violet-500/20" },
             { to: "/ocorrencias",  label: "Ocorrências",     icon: AlertTriangle,  color: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-500/20" },
-            { to: "/liturgia",     label: "Liturgia",        icon: BookOpen,       color: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-500/20" },
+            { to: "/admin/liturgia", label: "Liturgia",       icon: BookOpen,       color: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-500/20" },
           ].map(({ to, label, icon: Icon, color }) => (
             <Link
               key={to}
