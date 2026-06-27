@@ -384,20 +384,50 @@ function PortalMembroEscalas() {
     },
   });
 
+  // ── Preferência de calendário ─────────────────────────────────────────
+  const { data: calendarioPref, refetch: refetchCalPref } = useQuery<"google" | "ics" | null>({
+    queryKey: ["pm-calendario-pref", membro?.id],
+    enabled: !!membro?.id,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("membros")
+        .select("calendario_preferencia")
+        .eq("id", membro!.id)
+        .maybeSingle();
+      return (data?.calendario_preferencia as "google" | "ics" | null) ?? null;
+    },
+  });
+
+  const salvarCalPrefMutation = useMutation({
+    mutationFn: async (pref: "google" | "ics" | null) => {
+      const { error } = await anyDb
+        .from("membros")
+        .update({ calendario_preferencia: pref })
+        .eq("id", membro!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchCalPref();
+      toast.success("Preferência de calendário salva.");
+    },
+    onError: () => toast.error("Erro ao salvar preferência."),
+  });
+
   // ── Mutations ─────────────────────────────────────────────────────────
   const responderMutation = useMutation({
-    mutationFn: async (args: { escala_membro_id: string; status: string; justificativa?: string }) => {
+    mutationFn: async (args: {
+      escala_membro_id: string; status: string; justificativa?: string;
+      escala?: EscalaPublicada; ministerioNome?: string;
+    }) => {
       if (args.status === "recusado") {
-        // Usa RPC com SECURITY DEFINER para garantir persistência e criar substituição
         const { data, error } = await anyDb.rpc("portal_recusar_escala", {
           p_escala_membro_id: args.escala_membro_id,
           p_motivo: args.justificativa ?? "",
         });
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error ?? "Erro ao registrar recusa");
-        // Dispara notificação de e-mail em background (não bloqueia nem exibe erro para o membro)
       } else {
-        // Confirmação e volta para pendente: direct update
         const { error } = await anyDb
           .from("escala_membros")
           .update({ status: args.status, justificativa: args.justificativa ?? null })
@@ -410,7 +440,17 @@ function PortalMembroEscalas() {
       qc.invalidateQueries({ queryKey: ["pm-todas-escalas", membro!.paroquia_id] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas", membro!.id] });
       qc.invalidateQueries({ queryKey: ["pm-substituicoes", membro!.id] });
-      toast.success(args.status === "recusado" ? "Recusa registrada." : "Resposta registrada.");
+
+      if (args.status === "confirmado" && args.escala && calendarioPref) {
+        const minNome = args.ministerioNome ?? "";
+        if (calendarioPref === "ics") {
+          baixarICS(args.escala, minNome);
+        } else if (calendarioPref === "google") {
+          window.open(googleCalendarUrl(args.escala, minNome), "_blank", "noopener");
+        }
+      }
+
+      toast.success(args.status === "recusado" ? "Recusa registrada." : "Presença confirmada.");
     },
     onError: (e: Error) => {
       const msg = e.message === "confirmacao_desativada"
@@ -569,6 +609,14 @@ function PortalMembroEscalas() {
 
         {/* ── Tab: Escalas ── */}
         <TabsContent value="escalas" className="space-y-3">
+
+          {/* Preferência de calendário */}
+          <CalendarioPreferenciaCard
+            pref={calendarioPref ?? null}
+            saving={salvarCalPrefMutation.isPending}
+            onSave={(p) => salvarCalPrefMutation.mutate(p)}
+          />
+
           {/* Filtro de escalas */}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -663,8 +711,8 @@ function PortalMembroEscalas() {
                           confirmacaoAtiva={confirmacaoAtiva}
                           membroId={membro!.id}
                           isAdministrador={isCoordinator}
-                          onResponder={(escala_membro_id, status, justificativa) =>
-                            responderMutation.mutate({ escala_membro_id, status, justificativa })
+                          onResponder={(escala_membro_id, status, justificativa, ministerioNome) =>
+                            responderMutation.mutate({ escala_membro_id, status, justificativa, escala: esc, ministerioNome })
                           }
                           onUpdateMemberStatus={(id, status) =>
                             updateMembroStatusMutation.mutate({ escala_membro_id: id, status })
@@ -777,6 +825,81 @@ function googleCalendarUrl(escala: EscalaPublicada, ministerioNome: string): str
   return `https://www.google.com/calendar/render?${params.toString()}`;
 }
 
+// ── CalendarioPreferenciaCard ─────────────────────────────────────────
+
+function CalendarioPreferenciaCard({
+  pref, saving, onSave,
+}: {
+  pref: "google" | "ics" | null;
+  saving: boolean;
+  onSave: (p: "google" | "ics" | null) => void;
+}) {
+  const [open, setOpen] = useState(!pref);
+
+  if (!open && pref) {
+    return (
+      <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3">
+        <div className="flex items-center gap-2">
+          <CalendarPlus className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-sm font-medium">Calendário:</span>
+          <span className="text-sm text-muted-foreground">
+            {pref === "google" ? "Google Agenda" : "iOS / iCal"}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-xs text-muted-foreground hover:text-foreground underline"
+        >
+          Alterar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <CalendarPlus className="h-4 w-4 text-primary shrink-0" />
+        <p className="text-sm font-semibold">Onde salvar suas escalas?</p>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Ao confirmar presença, o evento será adicionado automaticamente ao seu calendário.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {([
+          { value: "google", label: "Google Agenda", icon: "🗓️" },
+          { value: "ics",    label: "iOS / iCal",    icon: "📅" },
+        ] as const).map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            disabled={saving}
+            onClick={() => { onSave(opt.value); setOpen(false); }}
+            className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-sm font-medium transition ${
+              pref === opt.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background border-border hover:border-primary/50"
+            }`}
+          >
+            <span>{opt.icon}</span>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {pref && (
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="w-full text-xs text-muted-foreground hover:text-foreground"
+        >
+          Cancelar
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── EscalaPortalCard ──────────────────────────────────────────────────
 
 function EscalaPortalCard({
@@ -787,7 +910,7 @@ function EscalaPortalCard({
   confirmacaoAtiva: boolean;
   membroId: string;
   isAdministrador: boolean;
-  onResponder: (escala_membro_id: string, status: string, justificativa?: string) => void;
+  onResponder: (escala_membro_id: string, status: string, justificativa?: string, ministerioNome?: string) => void;
   onUpdateMemberStatus: (escala_membro_id: string, status: string) => void;
   saving: boolean;
   savingStatus: boolean;
@@ -948,7 +1071,7 @@ function EscalaPortalCard({
             size="sm"
             className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-xl"
             disabled={saving}
-            onClick={() => onResponder(myMembro.id, "confirmado")}
+            onClick={() => onResponder(myMembro.id, "confirmado", undefined, myMembro.ministerio_nome)}
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
             Confirmar

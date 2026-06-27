@@ -520,15 +520,64 @@ function tEventoConvite(nome: string, paroquia: string, titulo: string, data: st
   return baseLayout(paroquia, body, siteUrl);
 }
 
+// ─── Gerador de ICS (para anexo no e-mail) ────────────────────────────────────
+
+function gerarIcsContent(titulo: string, data: string, horaInicio: string, horaFim: string, ministerio: string, local: string): string {
+  function toIcsDate(dateStr: string, horaStr: string): string {
+    if (!horaStr) return dateStr.replace(/-/g, "");
+    const [y, mo, d] = dateStr.split("-");
+    const [h, m] = horaStr.split(":");
+    let hUtc = parseInt(h, 10) + 3; // UTC-3 → UTC
+    let dNum = parseInt(d, 10);
+    if (hUtc >= 24) { hUtc -= 24; dNum += 1; }
+    return `${y}${mo}${String(dNum).padStart(2, "0")}T${String(hUtc).padStart(2, "0")}${m}00Z`;
+  }
+  const dtStart = toIcsDate(data, horaInicio);
+  const dtEnd   = toIcsDate(data, horaFim || horaInicio);
+  const isAllDay = !horaInicio;
+  const uid = `lumen-${data}-${Date.now()}@lumenpastoral`;
+  const safe = (s: string) => s.replace(/[,;\\]/g, "").replace(/\n/g, "\\n");
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Lumen Pastoral//Portal do Servidor//PT",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `SUMMARY:${safe(titulo)}`,
+    isAllDay ? `DTSTART;VALUE=DATE:${dtStart}` : `DTSTART:${dtStart}`,
+    isAllDay ? `DTEND;VALUE=DATE:${dtEnd}`     : `DTEND:${dtEnd}`,
+    ministerio ? `DESCRIPTION:Função\\: ${safe(ministerio)}` : "",
+    local      ? `LOCATION:${safe(local)}` : "",
+    "STATUS:CONFIRMED",
+    "BEGIN:VALARM",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:Lembrete de escala",
+    "TRIGGER:-PT1H",
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].filter(Boolean).join("\r\n");
+  return lines;
+}
+
 // ─── Resend API ────────────────────────────────────────────────────────────────
 
-interface SendOpts { apiKey: string; from: string; to: string; subject: string; html: string; }
+interface SendOpts {
+  apiKey: string; from: string; to: string; subject: string; html: string;
+  icsAttachment?: { filename: string; content: string }; // content = base64
+}
 
 async function sendViaResend(o: SendOpts): Promise<{ ok: boolean; id?: string; error?: string }> {
   // TextEncoder garante UTF-8 explícito: evita encoding incorreto no Deno fetch
-  const payload = new TextEncoder().encode(
-    JSON.stringify({ from: o.from, to: [o.to], subject: o.subject, html: o.html }),
-  );
+  const body: Record<string, unknown> = {
+    from: o.from, to: [o.to], subject: o.subject, html: o.html,
+  };
+  if (o.icsAttachment) {
+    body.attachments = [{ filename: o.icsAttachment.filename, content: o.icsAttachment.content }];
+  }
+  const payload = new TextEncoder().encode(JSON.stringify(body));
   const res = await fetch("https://api.resend.com/emails", {
     method:  "POST",
     headers: {
@@ -810,7 +859,19 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: `Unknown template: ${template}` }, 400);
     }
 
-    const result = await sendViaResend({ apiKey: resendKey, from: emailFrom, to, subject, html });
+    // Anexa .ics nos e-mails de escala (publicada + lembretes) para import direto no calendário
+    let icsAttachment: { filename: string; content: string } | undefined;
+    if (escalaTitulo && escalaData && ["escala_publicada", "lembrete_escala", "lembrete_confirmacao"].includes(template)) {
+      try {
+        const icsText = gerarIcsContent(escalaTitulo, escalaData, escalaHora, "", ministerioNome, "");
+        icsAttachment = {
+          filename: `escala-${escalaData}.ics`,
+          content:  btoa(unescape(encodeURIComponent(icsText))),
+        };
+      } catch { /* não bloqueia o envio se ICS falhar */ }
+    }
+
+    const result = await sendViaResend({ apiKey: resendKey, from: emailFrom, to, subject, html, icsAttachment });
 
     await logEmail(admin, {
       tipo:         template,
