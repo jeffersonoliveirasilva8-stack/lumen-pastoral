@@ -68,15 +68,17 @@ BEGIN
       ELSE NULL
     END;
 
+    -- Remove roles existentes para esta paróquia (exceto super_admin)
+    DELETE FROM public.user_roles
+    WHERE user_id = v_auth_user
+      AND paroquia_id = v_paroquia_id
+      AND role <> 'super_admin';
+
     IF v_role IS NOT NULL THEN
-      -- Upsert: garante que só existe 1 entrada por (user_id, paroquia_id)
+      -- Insere o novo role
       INSERT INTO public.user_roles (user_id, paroquia_id, role)
       VALUES (v_auth_user, v_paroquia_id, v_role)
-      ON CONFLICT (user_id, paroquia_id) DO UPDATE SET role = EXCLUDED.role;
-    ELSE
-      -- Remove acesso ao painel (tipo_acesso = membro/servidor)
-      DELETE FROM public.user_roles
-      WHERE user_id = v_auth_user AND paroquia_id = v_paroquia_id;
+      ON CONFLICT (user_id, paroquia_id, role) DO NOTHING;
     END IF;
   END IF;
 
@@ -107,9 +109,15 @@ BEGIN
       WHEN 'auxiliar'      THEN 'lider'::public.app_role
     END;
 
+    -- Remove roles anteriores (exceto super_admin) e insere o correto
+    DELETE FROM public.user_roles
+    WHERE user_id = r.auth_user_id
+      AND paroquia_id = r.paroquia_id
+      AND role <> 'super_admin';
+
     INSERT INTO public.user_roles (user_id, paroquia_id, role)
     VALUES (r.auth_user_id, r.paroquia_id, v_role)
-    ON CONFLICT (user_id, paroquia_id) DO UPDATE SET role = EXCLUDED.role;
+    ON CONFLICT (user_id, paroquia_id, role) DO NOTHING;
   END LOOP;
 END;
 $$;
