@@ -685,16 +685,37 @@ function DashboardPage() {
   });
 
   const enviarAlertaMutation = useMutation({
-    mutationFn: async (escalaMembroId: string) => {
+    mutationFn: async ({ escalaMembroId, membroNome }: { escalaMembroId: string; membroNome: string }) => {
+      // 1. Notificação in-app
       const { data } = await anyDb.rpc("enviar_alerta_confirmacao", { p_escala_membro_id: escalaMembroId });
       if (!data?.success) throw new Error(data?.error ?? "Erro ao enviar alerta");
+
+      // 2. E-mail via send-email Edge Function
+      if (data.membro_email) {
+        await supabase.functions.invoke("send-email", {
+          body: {
+            template:      "lembrete_confirmacao",
+            to:            data.membro_email,
+            nome:          membroNome,
+            paroquia:      paroquia?.nome ?? "Pastoral",
+            escalaTitulo:  data.escala_titulo,
+            escalaData:    data.escala_data,
+            ministerioNome: data.ministerio_nome ?? "",
+          },
+        });
+      }
       return data;
     },
     onSuccess: (data) => {
       refetchExpiradas();
-      toast.success(`Lembrete enviado para ${data.membro_email ?? "o membro"}.`);
+      toast.success(`Lembrete enviado${data.membro_email ? ` para ${data.membro_email}` : ""}.`);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      const msg = (e.message === "alerta_ja_enviado_recentemente")
+        ? "Lembrete já enviado nas últimas 24 h."
+        : e.message;
+      toast.error(msg);
+    },
   });
 
   // ── Escalas futuras em rascunho ───────────────────────────────────────────────
@@ -1421,11 +1442,11 @@ function DashboardPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => enviarAlertaMutation.mutate(c.escala_membro_id)}
+                        onClick={() => enviarAlertaMutation.mutate({ escalaMembroId: c.escala_membro_id, membroNome: c.membro_nome })}
                         disabled={enviarAlertaMutation.isPending}
                         className="shrink-0 text-[11px] font-semibold text-red-600 hover:text-red-700 border border-red-300 dark:border-red-700 rounded-lg px-2.5 py-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 transition"
                       >
-                        {enviarAlertaMutation.isPending && enviarAlertaMutation.variables === c.escala_membro_id
+                        {enviarAlertaMutation.isPending && enviarAlertaMutation.variables?.escalaMembroId === c.escala_membro_id
                           ? <Loader2 className="h-3 w-3 animate-spin" />
                           : "Lembrar"}
                       </button>

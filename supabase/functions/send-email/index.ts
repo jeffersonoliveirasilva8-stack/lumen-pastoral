@@ -472,6 +472,25 @@ function tLembreteEscala(nome: string, paroquia: string, escalaTitulo: string, e
   return baseLayout(paroquia, body, siteUrl);
 }
 
+function tLembreteConfirmacao(nome: string, paroquia: string, escalaTitulo: string, escalaData: string, ministerioNome: string, siteUrl: string): string {
+  const sn = htmlSafe(nome); const sp = htmlSafe(paroquia); const st = htmlSafe(escalaTitulo); const sm = htmlSafe(ministerioNome);
+  let dataFmt = escalaData;
+  try { const [y,mo,d] = escalaData.split("-").map(Number); const M=["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]; dataFmt=`${d} de ${M[mo-1]} de ${y}`; } catch{/**/}
+  const portalUrl = `${siteUrl}/portal-membro/escalas`;
+  const body = `
+    <h1>&#9888; Confirma&ccedil;&atilde;o pendente</h1>
+    <p>Ol&aacute;, <span class="hi">${sn}</span>!</p>
+    <p>A coordena&ccedil;&atilde;o da <span class="hi">${sp}</span> percebeu que voc&ecirc; ainda n&atilde;o confirmou sua presen&ccedil;a na escala abaixo. Por favor, acesse o portal e confirme o mais breve poss&iacute;vel.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;width:100px;">Escala</td><td style="padding:6px 0;font-weight:600;color:#111;">${st}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Data</td><td style="padding:6px 0;font-weight:600;color:#111;">${dataFmt}</td></tr>
+      <tr><td style="padding:6px 0;color:#888;font-size:13px;">Fun&ccedil;&atilde;o</td><td style="padding:6px 0;font-weight:600;color:#111;">${sm}</td></tr>
+    </table>
+    <div class="bw"><a href="${portalUrl}" class="btn">Confirmar presença &rarr;</a></div>
+    <p class="note">Caso n&atilde;o possa comparecer, solicite substitui&ccedil;&atilde;o com anteced&ecirc;ncia pelo portal.</p>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
 function tEventoConvite(nome: string, paroquia: string, titulo: string, data: string, hora: string, siteUrl: string): string {
   const sn = htmlSafe(nome) || "Servidor(a)";
   const sp = htmlSafe(paroquia);
@@ -781,6 +800,11 @@ Deno.serve(async (req) => {
       const diasRestantes = Number(body.total ?? 1);
       subject = `${paroquia} — Lembrete: ${escalaTitulo}`;
       html    = tLembreteEscala(nome, paroquia, escalaTitulo, escalaData, escalaHora, ministerioNome, diasRestantes, siteUrl);
+
+    // ── Lembrete de confirmação (enviado pelo coordenador manualmente) ────────
+    } else if (template === "lembrete_confirmacao") {
+      subject = `${paroquia} — ⚠️ Confirmação pendente: ${escalaTitulo}`;
+      html    = tLembreteConfirmacao(nome, paroquia, escalaTitulo, escalaData, ministerioNome, siteUrl);
 
     } else {
       return json({ ok: false, error: `Unknown template: ${template}` }, 400);

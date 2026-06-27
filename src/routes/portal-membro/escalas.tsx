@@ -7,7 +7,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Loader2, Calendar, MapPin, CheckCircle2, XCircle,
   CalendarOff, History, ChevronDown, ChevronUp, Plus, X,
-  Shield, Users, AlertTriangle, Save, Trash2,
+  Shield, Users, AlertTriangle, Save, Trash2, CalendarPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
@@ -707,6 +707,76 @@ function PortalMembroEscalas() {
   );
 }
 
+// ── Calendário helpers ────────────────────────────────────────────────
+
+function formatIcsDate(dateStr: string, horaStr: string | null): string {
+  const [y, mo, d] = dateStr.split("-");
+  if (!horaStr) return `${y}${mo}${d}`;
+  const [h, m] = horaStr.replace(/:/g, "").padEnd(4, "0").match(/.{2}/g)!;
+  // UTC-3 → UTC
+  let hUtc = parseInt(h, 10) + 3;
+  let dUtc = parseInt(d, 10);
+  if (hUtc >= 24) { hUtc -= 24; dUtc += 1; }
+  return `${y}${mo}${String(dUtc).padStart(2, "0")}T${String(hUtc).padStart(2, "0")}${m}00Z`;
+}
+
+function gerarICS(escala: EscalaPublicada, ministerioNome: string): string {
+  const dtStart = formatIcsDate(escala.data, escala.hora_inicio);
+  const dtEnd   = formatIcsDate(escala.data, escala.hora_fim ?? escala.hora_inicio);
+  const isAllDay = !escala.hora_inicio;
+  const uid = `escala-${escala.id}@lumenpastoral`;
+  const summary = escala.titulo.replace(/[,;\\]/g, "");
+  const desc = ministerioNome ? `Função: ${ministerioNome}` : "";
+  const loc  = escala.local ?? "";
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Lumen Pastoral//Portal do Servidor//PT",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `SUMMARY:${summary}`,
+    isAllDay ? `DTSTART;VALUE=DATE:${dtStart}` : `DTSTART:${dtStart}`,
+    isAllDay ? `DTEND;VALUE=DATE:${dtEnd}`     : `DTEND:${dtEnd}`,
+    desc ? `DESCRIPTION:${desc}` : "",
+    loc  ? `LOCATION:${loc}`     : "",
+    "STATUS:CONFIRMED",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].filter(Boolean);
+  return lines.join("\r\n");
+}
+
+function baixarICS(escala: EscalaPublicada, ministerioNome: string) {
+  const content = gerarICS(escala, ministerioNome);
+  const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `escala-${escala.data}.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function googleCalendarUrl(escala: EscalaPublicada, ministerioNome: string): string {
+  const fmt = (s: string) => s.replace(/[-:]/g, "");
+  const dtStart = escala.hora_inicio
+    ? `${fmt(escala.data)}T${fmt(escala.hora_inicio)}00`
+    : fmt(escala.data);
+  const dtEnd = (escala.hora_fim ?? escala.hora_inicio)
+    ? `${fmt(escala.data)}T${fmt(escala.hora_fim ?? escala.hora_inicio!)}00`
+    : fmt(escala.data);
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text:   escala.titulo,
+    dates:  `${dtStart}/${dtEnd}`,
+    details: ministerioNome ? `Função: ${ministerioNome}` : "",
+    location: escala.local ?? "",
+  });
+  return `https://www.google.com/calendar/render?${params.toString()}`;
+}
+
 // ── EscalaPortalCard ──────────────────────────────────────────────────
 
 function EscalaPortalCard({
@@ -1076,6 +1146,30 @@ function EscalaPortalCard({
       {escala.observacoes && !showPresenca && (
         <div className="border-t border-border/40 px-4 py-2.5">
           <p className="text-xs text-muted-foreground italic">{escala.observacoes}</p>
+        </div>
+      )}
+
+      {/* Adicionar ao calendário — só para membros escalados */}
+      {isAssigned && (
+        <div className="border-t border-border/40 px-4 py-2.5 flex items-center gap-2">
+          <CalendarPlus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-[11px] text-muted-foreground mr-1">Calendário:</span>
+          <button
+            type="button"
+            onClick={() => baixarICS(escala, myMembro?.ministerio_nome ?? "")}
+            className="text-[11px] font-medium text-primary hover:underline"
+          >
+            iOS / iCal
+          </button>
+          <span className="text-muted-foreground/40">·</span>
+          <a
+            href={googleCalendarUrl(escala, myMembro?.ministerio_nome ?? "")}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-medium text-primary hover:underline"
+          >
+            Google Agenda
+          </a>
         </div>
       )}
     </div>
