@@ -156,7 +156,7 @@ function PortalMembroSubstituicoes() {
       const msg = e.message === "confirmacao_desativada"
         ? "A coordenação desativou confirmações e substituições."
         : e.message === "prazo_expirado"
-        ? "Prazo para solicitação expirado."
+        ? "Prazo encerrado: a coordenação exige mais dias de antecedência para pedir substituto."
         : e.message === "substituicao_ja_ativa"
         ? "Já existe uma solicitação ativa para esta escala."
         : e.message === "escala_passada"

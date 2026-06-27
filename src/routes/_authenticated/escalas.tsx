@@ -840,6 +840,10 @@ function EscalasPage() {
       // Sincroniza com portal do membro quando status é alterado
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      if (vars.status === "cancelada") {
+        qc.invalidateQueries({ queryKey: ["sacristia-todas"] });
+        qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
+      }
       setDetailEscala((prev) => prev ? { ...prev, status: vars.status } : prev);
       toast.success("Status da escala atualizado.");
 
@@ -927,8 +931,12 @@ function EscalasPage() {
       qc.invalidateQueries({ queryKey: ["escalas"] });
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      if (status === "cancelada") {
+        qc.invalidateQueries({ queryKey: ["sacristia-todas"] });
+        qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
+      }
       setSelectedEscalaIds(new Set());
-      toast.success(`${ids.length} escala(s) ${status === "publicada" ? "publicada(s)" : "arquivada(s)"}.`);
+      toast.success(`${ids.length} escala(s) ${status === "publicada" ? "publicada(s)" : status === "cancelada" ? "cancelada(s)" : "arquivada(s)"}.`);
 
       // Envia e-mails ao publicar ou cancelar múltiplas escalas em lote
       if ((status === "publicada" || status === "cancelada") && ids.length > 0) {

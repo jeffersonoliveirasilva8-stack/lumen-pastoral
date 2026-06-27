@@ -5,7 +5,7 @@ import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   CheckCircle2, XCircle, Clock, MapPin, Users, Loader2, FileText,
-  AlertCircle, TrendingUp, Search, X, CheckCheck,
+  AlertCircle, TrendingUp, Search, X, CheckCheck, History,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -62,6 +62,7 @@ function SacristiaPage() {
   const [busca, setBusca] = useState("");
   const [filtroMinisterio, setFiltroMinisterio] = useState<string | null>(null);
   const [salvandoTodos, setSalvandoTodos] = useState(false);
+  const [periodoHistorico, setPeriodoHistorico] = useState<90 | 365 | 730>(90);
   const autoSwitchedRef = useRef(false);
 
   // Para auxiliares: descobre o membro_id do usuário logado para filtrar escalas
@@ -79,11 +80,11 @@ function SacristiaPage() {
     },
   });
 
-  // Busca escalas dos últimos 90 dias + hoje
-  const desde = format(subDays(new Date(), 90), "yyyy-MM-dd");
+  // Busca escalas do período configurado + hoje
+  const desde = format(subDays(new Date(), periodoHistorico), "yyyy-MM-dd");
 
   const { data: todasEscalas = [], isLoading } = useQuery<EscalaItem[]>({
-    queryKey: ["sacristia-todas", profile?.paroquia_id, hojeStr],
+    queryKey: ["sacristia-todas", profile?.paroquia_id, hojeStr, periodoHistorico],
     enabled: !!profile?.paroquia_id,
     queryFn: async () => {
       const { data } = await supabase
@@ -363,7 +364,7 @@ function SacristiaPage() {
           <p className="mt-4 text-sm text-muted-foreground">
             {tab === "pendentes" && "Nenhuma missa aguardando conferência."}
             {tab === "em_andamento" && "Nenhuma missa em andamento."}
-            {tab === "concluidas" && "Nenhuma missa concluída nos últimos 90 dias."}
+            {tab === "concluidas" && `Nenhuma missa concluída nos últimos ${periodoHistorico} dias.`}
           </p>
         </div>
       ) : (
@@ -438,7 +439,7 @@ function SacristiaPage() {
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Resumo — últimos 90 dias
+                  Resumo — últimos {periodoHistorico} dias
                 </p>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -461,6 +462,32 @@ function SacristiaPage() {
               </div>
             </div>
           )}
+          {/* Ver histórico completo (aba concluídas) */}
+          {tab === "concluidas" && (
+            <div className="flex items-center gap-2">
+              {periodoHistorico < 365 && (
+                <Button variant="outline" size="sm" className="flex-1 gap-2 rounded-xl text-xs"
+                  onClick={() => setPeriodoHistorico(365)}>
+                  <History className="h-3.5 w-3.5" />
+                  Ver último ano
+                </Button>
+              )}
+              {periodoHistorico === 365 && (
+                <Button variant="outline" size="sm" className="flex-1 gap-2 rounded-xl text-xs"
+                  onClick={() => setPeriodoHistorico(730)}>
+                  <History className="h-3.5 w-3.5" />
+                  Ver 2 anos
+                </Button>
+              )}
+              {periodoHistorico > 90 && (
+                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground"
+                  onClick={() => setPeriodoHistorico(90)}>
+                  Reduzir
+                </Button>
+              )}
+            </div>
+          )}
+
           {escalasExibidas.map((escala) => {
             const membros = membrosEscala.filter((m: any) => m.escala_id === escala.id);
             const finais = membros.filter((m: MembroEscala) => {

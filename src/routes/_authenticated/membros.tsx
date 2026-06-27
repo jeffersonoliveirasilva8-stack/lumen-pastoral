@@ -2632,6 +2632,14 @@ function MembrosPage() {
           );
         }
       } catch { /* migration ainda não aplicada */ }
+
+      // Sincroniza user_roles com o nível de acesso definido
+      try {
+        await anyDb.rpc("admin_set_membro_acesso", {
+          p_membro_id: membroId!,
+          p_tipo_acesso: form.tipo_acesso || "membro",
+        });
+      } catch { /* RPC migration ainda não aplicada */ }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["membros"] });

@@ -59,8 +59,11 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthLayout() {
-  const { user, profile, loading, isServidor, hasAdminAccess, roles, isAdmin, isCoordenador } = useAuth();
+  const { user, profile, loading, isServidor, hasAdminAccess, roles, isAdmin, isCoordenador, isLider } = useAuth();
+  // isLimitedCoord: Vice-Coordenador (não é coordenador pleno/admin)
   const isLimitedCoord = isCoordenador && !isAdmin;
+  // isSecretario: Secretário/Auxiliar (lider sem coordenação)
+  const isSecretario = isLider && !isAdmin && !isCoordenador;
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const today = new Date();
@@ -229,14 +232,23 @@ function AuthLayout() {
   // Navegação principal
   const mainNav: NavItem[] = [
     { to: "/painel",                 label: "Painel",        icon: LayoutDashboard,  color: "bg-slate-600" },
-    { to: "/escalas",                label: "Escalas",        icon: Calendar,         color: "bg-blue-600" },
-    { to: "/substituicoes",          label: "Substituições",  icon: ArrowLeftRight,   color: "bg-orange-500", badge: substituicoesPendentes },
-    ...(!isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
-    { to: "/ranking",                label: "Ranking",        icon: Trophy,           color: "bg-amber-600" },
-    { to: "/espiritualidade",        label: "Liturgia",       icon: BookOpen,         color: "bg-violet-600" },
-    { to: "/formacoes",              label: "Pastoral",       icon: Leaf,             color: "bg-teal-600" },
-    { to: "/ocorrencias",            label: "Ocorrências",    icon: AlertCircle,      color: "bg-red-500",   badge: ocorrenciasAbertas },
-    { to: "/configuracoes/paroquia", label: "Configuração",   icon: Settings,         color: "bg-indigo-600" },
+    // Secretário (isSecretario) acessa só sacristia — sem escalas, membros, etc.
+    ...(!isSecretario ? [
+      { to: "/escalas",       label: "Escalas",       icon: Calendar,       color: "bg-blue-600" },
+      { to: "/substituicoes", label: "Substituições",  icon: ArrowLeftRight, color: "bg-orange-500", badge: substituicoesPendentes },
+    ] : []),
+    // Vice e admin veem membros; secretário não
+    ...(!isLimitedCoord && !isSecretario ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
+    // Vice vê membros também (pode gerenciar presenças)
+    ...(isLimitedCoord ? [{ to: "/membros", label: "Membros", icon: Users, color: "bg-emerald-600" }] : []),
+    ...(!isSecretario ? [
+      { to: "/ranking",        label: "Ranking",    icon: Trophy,       color: "bg-amber-600" },
+      { to: "/espiritualidade",label: "Liturgia",   icon: BookOpen,     color: "bg-violet-600" },
+      { to: "/formacoes",      label: "Pastoral",   icon: Leaf,         color: "bg-teal-600" },
+      { to: "/ocorrencias",    label: "Ocorrências",icon: AlertCircle,  color: "bg-red-500", badge: ocorrenciasAbertas },
+    ] : []),
+    // Configuração visível apenas para admin pleno
+    ...(isAdmin ? [{ to: "/configuracoes/paroquia", label: "Configuração", icon: Settings, color: "bg-indigo-600" }] : []),
   ];
 
   // Itens secundários para o drawer (extra e utilitários)

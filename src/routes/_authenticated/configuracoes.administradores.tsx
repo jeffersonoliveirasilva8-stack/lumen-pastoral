@@ -230,12 +230,15 @@ function AdministradoresPage() {
 
   const removeMutation = useMutation({
     mutationFn: async (id: string) => {
-      // id aqui é o membros.id — redefine tipo_acesso para membro
-      const { error } = await anyDb
-        .from("membros")
-        .update({ tipo_acesso: "membro" })
-        .eq("id", id);
+      // Usa RPC para atualizar tipo_acesso E remover de user_roles
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (anyDb as any).rpc("admin_set_membro_acesso", {
+        p_membro_id: id,
+        p_tipo_acesso: "membro",
+      });
       if (error) throw error;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (data && !(data as any).success) throw new Error((data as any).error);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admins-lista"] });

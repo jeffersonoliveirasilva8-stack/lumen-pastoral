@@ -36,6 +36,7 @@ export type ConfigEscalas = {
   confirmacao_horas_antes: number;
   substituicao_ativa: boolean;
   substituicao_horas_antes: number;
+  substituicao_prazo_dias: number | null;
   auto_pontuar: boolean;
   pontuacao_presenca: number;
   pontuacao_presenca_solene: number;
@@ -72,6 +73,7 @@ export const DEFAULTS: ConfigEscalas = {
   confirmacao_horas_antes: 72,
   substituicao_ativa: false,
   substituicao_horas_antes: 48,
+  substituicao_prazo_dias: null,
   auto_pontuar: false,
   pontuacao_presenca: 1,
   pontuacao_presenca_solene: 3,
@@ -114,8 +116,16 @@ function PRow({ label, color, value, onChange }: {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 function ConfiguracaoEscalas() {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const paroquiaId = profile?.paroquia_id ?? null;
+
+  if (!isAdmin) {
+    return (
+      <div className="p-10 text-center text-sm text-muted-foreground">
+        Acesso restrito ao Coordenador da paróquia.
+      </div>
+    );
+  }
   const qc = useQueryClient();
 
   const [regras, setRegras]   = useState<RegrasEscala>(DEFAULT_REGRAS);
@@ -371,11 +381,23 @@ function ConfiguracaoEscalas() {
           <Switch checked={form.substituicao_ativa} onCheckedChange={(v) => c("substituicao_ativa", v)} />
         </div>
         {form.substituicao_ativa && (
-          <div>
-            <Label className="text-xs text-muted-foreground">Prazo mínimo (horas antes da escala)</Label>
-            <input type="number" min={1} max={168} value={form.substituicao_horas_antes}
-              onChange={(e) => c("substituicao_horas_antes", Math.max(1, parseInt(e.target.value) || 1))}
-              className="mt-1 w-28 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Antecedência mínima para pedir substituto (dias)</Label>
+              <p className="text-[11px] text-muted-foreground/70 mt-0.5 mb-1.5">
+                Membro só pode recusar a escala e pedir substituto se a missa estiver a pelo menos esse número de dias. Vazio = sem restrição.
+              </p>
+              <input type="number" min={1} max={90} placeholder="Sem restrição"
+                value={form.substituicao_prazo_dias ?? ""}
+                onChange={(e) => c("substituicao_prazo_dias", e.target.value === "" ? null : Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-32 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Prazo mínimo (horas antes da escala)</Label>
+              <input type="number" min={1} max={168} value={form.substituicao_horas_antes}
+                onChange={(e) => c("substituicao_horas_antes", Math.max(1, parseInt(e.target.value) || 1))}
+                className="mt-1 w-28 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
+            </div>
           </div>
         )}
       </section>

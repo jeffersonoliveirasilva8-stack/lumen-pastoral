@@ -79,27 +79,30 @@ export function useAuth() {
     await fetchProfile(user.id);
   }
 
-  // Nível 1 — Coordenação: acesso total ao painel pastoral
+  // Nível 1 — Coordenador pleno: admin_paroquial / super_admin → acesso total
   const isAdmin = roles.some((r) => r === "admin_paroquial" || r === "super_admin");
+
+  // Nível 2 — Vice-Coordenador: role='coordenador' em user_roles → acesso a escalas/membros/sacristia
+  // (NÃO confundir com tipo_acesso='coordenador' — aqui é o role da tabela user_roles)
   const isCoordenador = roles.some((r) => r === "coordenador");
 
-  // Nível 2 — Administrador: portal do membro + confirmação de presenças nas suas escalas
-  const isAuxiliar = roles.some((r) => r === "auxiliar");
+  // Nível 3 — Secretário/Auxiliar: role='lider' em user_roles → sacristia apenas
+  // (tipo_acesso='auxiliar' no membro → role='lider' via admin_set_membro_acesso)
+  const isLider = roles.some((r) => r === "lider");
 
-  // Nível 3 — Membro: portal padrão
-  // 'servidor' = legado de 'membro'
+  // Legado: 'auxiliar' nunca existiu no enum — isAuxiliar sempre foi false; mantido por compatibilidade
+  const isAuxiliar = isLider;
 
-  // Qualquer papel que deve ir para o portal do membro (não o painel admin)
-  // isAuxiliar puro (sem coordenação) → portal com capacidades extras
+  // Vai para o portal do membro (não o painel admin)
   const isServidor = roles.length > 0 && roles.every((r) =>
-    r === "servidor" || r === "membro" || r === "auxiliar"
+    r === "servidor" || r === "membro"
   );
 
-  // Flag para capacidades de coordenação/supervisão dentro do portal do membro
-  const isAdministrador = isAuxiliar && !isAdmin && !isCoordenador;
+  // Secretário puro → acesso ao painel admin só para sacristia das próprias escalas
+  const isAdministrador = isLider && !isAdmin && !isCoordenador;
 
-  // Qualquer papel com acesso ao painel admin (necessário para guarda do onboarding)
-  const hasAdminAccess = isAdmin || isCoordenador || isAuxiliar;
+  // Qualquer papel com acesso ao painel admin
+  const hasAdminAccess = isAdmin || isCoordenador || isLider;
 
-  return { user, profile, loading, roles, isServidor, isAdmin, isCoordenador, isAuxiliar, isAdministrador, hasAdminAccess, refreshProfile };
+  return { user, profile, loading, roles, isServidor, isAdmin, isCoordenador, isLider, isAuxiliar, isAdministrador, hasAdminAccess, refreshProfile };
 }
