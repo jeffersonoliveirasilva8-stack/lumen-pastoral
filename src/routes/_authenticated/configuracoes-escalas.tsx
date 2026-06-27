@@ -118,14 +118,6 @@ function PRow({ label, color, value, onChange }: {
 function ConfiguracaoEscalas() {
   const { profile, isAdmin } = useAuth();
   const paroquiaId = profile?.paroquia_id ?? null;
-
-  if (!isAdmin) {
-    return (
-      <div className="p-10 text-center text-sm text-muted-foreground">
-        Acesso restrito ao Coordenador da paróquia.
-      </div>
-    );
-  }
   const qc = useQueryClient();
 
   const [regras, setRegras]   = useState<RegrasEscala>(DEFAULT_REGRAS);
@@ -246,6 +238,14 @@ function ConfiguracaoEscalas() {
     { label: "Coordenação", to: "/configuracoes/administradores", isActive: false },
     { label: "Auditoria",   to: "/auditoria",                     isActive: false },
   ]);
+
+  if (!isAdmin) {
+    return (
+      <div className="p-10 text-center text-sm text-muted-foreground">
+        Acesso restrito ao Coordenador da paróquia.
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
