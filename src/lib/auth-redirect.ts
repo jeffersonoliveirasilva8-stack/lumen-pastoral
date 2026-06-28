@@ -68,8 +68,22 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
       return "/portal-membro/home";
     }
 
-    // Sem roles — tenta auto-link pelo email
+    // Sem roles — membro regular sem entrada em user_roles (ex: após backfill que limpa roles)
     if (roles.length === 0) {
+      // 1. Verifica por auth_user_id — membro já vinculado, rota mais confiável
+      const { data: membroById } = await db
+        .from("membros")
+        .select("ativo, conta_ativada")
+        .eq("auth_user_id", user.id)
+        .eq("ativo", true)
+        .maybeSingle();
+
+      if (membroById) {
+        if (membroById.conta_ativada === false) return "/membro/primeiro-acesso";
+        return "/portal-membro/home";
+      }
+
+      // 2. Membro não vinculado — tenta auto-link pelo RPC (bypassa RLS)
       try {
         const { data: linkResult } = await db.rpc("portal_auto_link_by_email");
         if (linkResult?.success) {
@@ -80,15 +94,13 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
             .maybeSingle();
           if (linked?.conta_ativada === false) return "/membro/primeiro-acesso";
           if (linked?.conta_ativada === true) return "/portal-membro/home";
-          // RLS pode bloquear a leitura antes das policies serem aplicadas —
-          // primeiro-acesso detecta sessão e carrega por email.
           return "/membro/primeiro-acesso";
         }
       } catch {
         // RPC pode não existir — continua para fallback
       }
 
-      // Verifica se existe membro ativo com este email (fallback sem RPC)
+      // 3. Fallback por email (membro ativo com este e-mail mas sem auth_user_id)
       if (user.email) {
         const { data: membroByEmail } = await db
           .from("membros")
@@ -103,7 +115,7 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
         }
       }
 
-      // Sem vínculo identificado → login do membro para escolher paróquia
+      // Sem vínculo identificado → login do membro
       return "/membro/login";
     }
 
