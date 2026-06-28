@@ -155,7 +155,7 @@ function PrimeiroAcessoPage() {
         navigate({ to: "/reset-senha" as any, replace: true });
       } else {
         setEstado("ja_ativo");
-        setTimeout(() => navigate({ to: "/membro/login" }), 2500);
+        setTimeout(() => navigate({ to: "/portal-membro/home" as any, replace: true }), 2500);
       }
     } else {
       setEstado("formulario");
@@ -193,7 +193,7 @@ function PrimeiroAcessoPage() {
 
       if (infoData.conta_ativada) {
         setEstado("ja_ativo");
-        setTimeout(() => navigate({ to: "/membro/login" }), 2500);
+        setTimeout(() => navigate({ to: "/portal-membro/home" as any, replace: true }), 2500);
         return;
       }
 

@@ -29,6 +29,9 @@ function MembroLoginPage() {
       if (session?.user) {
         const route = await getPostLoginRoute(supabase);
         clearTimeout(timeout);
+        // Se a rota resolvida for esta mesma página, não navegar (evita loop infinito)
+        // e mostrar o formulário em vez do spinner eterno
+        if (route === "/membro/login") { setChecking(false); return; }
         navigate({ to: route, replace: true });
       }
     });
@@ -41,6 +44,8 @@ function MembroLoginPage() {
           // e o navigate acontece logo em seguida (sem problema).
           const route = await getPostLoginRoute(supabase);
           clearTimeout(timeout);
+          // Se a rota for esta mesma página, apenas mostra o formulário (sem loop)
+          if (route === "/membro/login") { setChecking(false); return; }
           navigate({ to: route, replace: true });
         } else {
           clearTimeout(timeout);
@@ -297,6 +302,10 @@ function SenhaForm({ onShowOtp }: { onShowOtp: () => void }) {
         return;
       }
       const route = await getPostLoginRoute(supabase);
+      if (route === "/membro/login") {
+        toast.error("Acesso não encontrado. Verifique com o coordenador se seu cadastro está ativo.");
+        return;
+      }
       navigate({ to: route, replace: true });
     } catch {
       toast.error("Erro de conexão. Verifique sua internet e tente novamente.");
