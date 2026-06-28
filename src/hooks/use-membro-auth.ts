@@ -165,20 +165,22 @@ export function useMembroAuth(): UseMembroAuth {
   async function tryLink(userId: string, userEmail?: string): Promise<void> {
     setLinking(true);
     try {
-      // Primeiro tenta RPC (bypassa RLS, mais confiável se existir)
-      const { data: rpcData } = await anyDb.rpc("portal_auto_link_by_email");
-      if (rpcData?.success) {
-        await loadMembro(userId, userEmail);
-        setLinking(false);
-        return;
+      try {
+        // Primeiro tenta RPC (bypassa RLS, mais confiável se existir)
+        const { data: rpcData } = await anyDb.rpc("portal_auto_link_by_email");
+        if (rpcData?.success) {
+          await loadMembro(userId, userEmail);
+          return;
+        }
+      } catch {
+        // RPC pode não existir ou falhar — continua para loadMembro com email
       }
-    } catch {
-      // RPC pode não existir ou falhar — continua para loadMembro com email
-    }
 
-    // Fallback: loadMembro já faz busca por email internamente
-    await loadMembro(userId, userEmail);
-    setLinking(false);
+      // Fallback: loadMembro já faz busca por email internamente
+      await loadMembro(userId, userEmail);
+    } finally {
+      setLinking(false);
+    }
   }
 
   async function fetchRoles(userId: string): Promise<void> {
