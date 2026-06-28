@@ -165,20 +165,21 @@ export function useMembroAuth(): UseMembroAuth {
   async function tryLink(userId: string, userEmail?: string): Promise<void> {
     setLinking(true);
     try {
-      // Primeiro tenta RPC (bypassa RLS, mais confiável se existir)
-      const { data: rpcData } = await anyDb.rpc("portal_auto_link_by_email");
-      if (rpcData?.success) {
-        await loadMembro(userId, userEmail);
-        setLinking(false);
-        return;
+      try {
+        // Primeiro tenta RPC (bypassa RLS, mais confiável se existir)
+        const { data: rpcData } = await anyDb.rpc("portal_auto_link_by_email");
+        if (rpcData?.success) {
+          await loadMembro(userId, userEmail);
+          return;
+        }
+      } catch {
+        // RPC pode não existir ou falhar — continua para loadMembro com email
       }
-    } catch {
-      // RPC pode não existir ou falhar — continua para loadMembro com email
+      // Fallback: loadMembro já faz busca por email internamente
+      await loadMembro(userId, userEmail);
+    } finally {
+      setLinking(false);
     }
-
-    // Fallback: loadMembro já faz busca por email internamente
-    await loadMembro(userId, userEmail);
-    setLinking(false);
   }
 
   async function fetchRoles(userId: string): Promise<void> {
@@ -238,8 +239,15 @@ export function useMembroAuth(): UseMembroAuth {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
+        // Tenta carregar o membro; se não encontrado, tenta o auto-link por email
+        // (evita que setLoading(false) seja chamado antes do link estar completo,
+        // o que causaria redirect-to-login em loop antes de init() do start() terminar)
+        const loadAndLink = async () => {
+          const found = await loadMembro(u.id, u.email ?? undefined).catch(() => false);
+          if (!found) await tryLink(u.id, u.email ?? undefined).catch(() => null);
+        };
         Promise.all([
-          loadMembro(u.id, u.email ?? undefined).catch(() => null),
+          loadAndLink(),
           fetchRoles(u.id).catch(() => null),
         ]).finally(() => { if (isMounted) setLoading(false); });
       } else {
