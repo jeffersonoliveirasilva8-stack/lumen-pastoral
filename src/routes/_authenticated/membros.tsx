@@ -1901,6 +1901,10 @@ function MembrosVisaoGeral({ membros, atuacoes, comunidades }: VisaoGeralProps) 
     { label: "51+", count: 0 },
     { label: "Não inf.", count: 0 },
   ];
+  type AgeMember = { nome: string; age: number };
+  let youngest: AgeMember | null = null;
+  let oldest: AgeMember | null = null;
+  let ageSum = 0; let ageCount = 0;
   membros.forEach((m) => {
     if (!m.data_nascimento) { faixas[5].count++; return; }
     const dn = new Date(m.data_nascimento);
@@ -1910,7 +1914,11 @@ function MembrosVisaoGeral({ membros, atuacoes, comunidades }: VisaoGeralProps) 
     else if (age <= 35) faixas[2].count++;
     else if (age <= 50) faixas[3].count++;
     else                faixas[4].count++;
+    ageSum += age; ageCount++;
+    if (!youngest || age < youngest.age) youngest = { nome: m.nome, age };
+    if (!oldest || age > oldest.age) oldest = { nome: m.nome, age };
   });
+  const avgAge = ageCount > 0 ? Math.round(ageSum / ageCount) : null;
   const maxFaixa = Math.max(...faixas.map((f) => f.count), 1);
 
   // ── Sexo ──
@@ -2026,6 +2034,49 @@ function MembrosVisaoGeral({ membros, atuacoes, comunidades }: VisaoGeralProps) 
           color="text-amber-600"
         />
       </div>
+
+      {/* Perfil Etário */}
+      {avgAge !== null && (
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+          <p className="text-xs font-bold tracking-wide uppercase text-muted-foreground">Perfil etário</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-center">
+              <p className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold mb-1">Mais novo</p>
+              <p className="text-2xl font-bold text-emerald-600 leading-none">{(youngest as AgeMember | null)?.age ?? "–"}</p>
+              <p className="text-[11px] text-emerald-700/70 mt-1 truncate">{(youngest as AgeMember | null)?.nome.split(" ")[0] ?? ""}</p>
+            </div>
+            <div className="rounded-xl bg-primary/10 border border-primary/20 p-3 text-center">
+              <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-1">Média</p>
+              <p className="text-2xl font-bold text-primary leading-none">{avgAge}</p>
+              <p className="text-[11px] text-primary/60 mt-1">anos</p>
+            </div>
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-center">
+              <p className="text-[10px] uppercase tracking-wider text-amber-600 font-semibold mb-1">Mais velho</p>
+              <p className="text-2xl font-bold text-amber-600 leading-none">{(oldest as AgeMember | null)?.age ?? "–"}</p>
+              <p className="text-[11px] text-amber-700/70 mt-1 truncate">{(oldest as AgeMember | null)?.nome.split(" ")[0] ?? ""}</p>
+            </div>
+          </div>
+          <div className="flex h-3 rounded-full overflow-hidden gap-px">
+            {faixas.filter(f => f.count > 0 && f.label !== "Não inf.").map((f, i) => {
+              const colors = ["#10b981","#3b82f6","#8b5cf6","#f59e0b","#ef4444"];
+              const total2 = faixas.reduce((s, x) => s + x.count, 0) || 1;
+              return <div key={f.label} style={{ width: `${(f.count/total2)*100}%`, backgroundColor: colors[i] }} title={`${f.label}: ${f.count}`} />;
+            })}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {faixas.filter(f => f.count > 0 && f.label !== "Não inf.").map((f, i) => {
+              const colors = ["#10b981","#3b82f6","#8b5cf6","#f59e0b","#ef4444"];
+              return (
+                <div key={f.label} className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: colors[i] }} />
+                  <span className="text-[11px] text-muted-foreground">{f.label}</span>
+                  <span className="text-[11px] font-semibold">{f.count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Faixa etária + Sexo + Tempo de casa */}
       <div className="grid sm:grid-cols-3 gap-4">

@@ -2227,17 +2227,6 @@ function groupFuncoesByCategoria(funcoes: FuncaoPreview[]) {
 
 // ── IndisponibilidadesTab ─────────────────────────────────────────────────────
 
-const WEEK_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-function heatColor(count: number, isToday: boolean): string {
-  if (isToday && count === 0) return "bg-primary/20 border-primary/40";
-  if (count === 0) return "bg-muted/50 border-transparent";
-  if (count === 1) return "bg-amber-400/30 border-amber-400/50";
-  if (count === 2) return "bg-amber-500/50 border-amber-500/60";
-  if (count === 3) return "bg-orange-500/60 border-orange-600/60";
-  return "bg-red-500/70 border-red-600/60";
-}
-
 function IndisponibilidadesTab({
   indisponibilidades,
   membros,
@@ -2247,53 +2236,91 @@ function IndisponibilidadesTab({
   membros: { id: string; nome: string }[];
   onRefresh: () => void;
 }) {
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<"ativas" | "todas">("ativas");
   const [cancelTarget, setCancelTarget] = useState<IndispRow | null>(null);
   const [canceling, setCanceling] = useState(false);
 
   const hoje = format(new Date(), "yyyy-MM-dd");
+  const todayDate = new Date();
 
-  // Build dayMap: date string → list of active IndispRows (expanding intervals)
+  // ── dayMap: expande intervalos para lookup por dia ─────────────────────────
   const dayMap = useMemo(() => {
     const map = new Map<string, IndispRow[]>();
-    const todayDate = new Date();
-    const end = addDays(todayDate, 83); // 12 weeks ahead
-
     for (const row of indisponibilidades) {
       if (row.cancelada) continue;
-      const startDate = new Date(row.data + "T00:00:00");
-      const endDate = row.tipo === "intervalo" && row.data_fim
-        ? new Date(row.data_fim + "T00:00:00")
-        : startDate;
-      let cur = startDate;
-      while (cur <= endDate && cur <= end) {
-        const key = format(cur, "yyyy-MM-dd");
-        if (!map.has(key)) map.set(key, []);
-        map.get(key)!.push(row);
+      const start = new Date(row.data + "T00:00:00");
+      const end = row.tipo === "intervalo" && row.data_fim
+        ? new Date(row.data_fim + "T00:00:00") : start;
+      let cur = start;
+      while (cur <= end) {
+        const k = format(cur, "yyyy-MM-dd");
+        if (!map.has(k)) map.set(k, []);
+        map.get(k)!.push(row);
         cur = addDays(cur, 1);
       }
     }
     return map;
   }, [indisponibilidades]);
 
-  // Generate grid: start from Sunday of current week, 12 weeks
-  const gridStart = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    const dow = d.getDay(); // 0=Sun
-    return addDays(d, -dow);
+  // ── Semana atual: Dom–Sáb ──────────────────────────────────────────────────
+  const weekDays = useMemo(() => {
+    const dow = todayDate.getDay();
+    const sunday = addDays(todayDate, -dow);
+    return Array.from({ length: 7 }, (_, i) => addDays(sunday, i));
   }, []);
 
-  const gridDays = useMemo(() =>
-    Array.from({ length: 84 }, (_, i) => addDays(gridStart, i)),
-    [gridStart]
-  );
+  // ── Insights sobre padrões ─────────────────────────────────────────────────
+  const insights = useMemo(() => {
+    const ativas = indisponibilidades.filter((i) => !i.cancelada && i.data >= hoje);
 
-  const weeks = useMemo(() => {
-    const result: Date[][] = [];
-    for (let i = 0; i < 84; i += 7) result.push(gridDays.slice(i, i + 7));
-    return result;
-  }, [gridDays]);
+    // Dia da semana com mais ocorrências
+    const byDow: number[] = [0, 0, 0, 0, 0, 0, 0];
+    for (const row of ativas) {
+      const d = new Date(row.data + "T00:00:00").getDay();
+      byDow[d]++;
+      if (row.tipo === "intervalo" && row.data_fim) {
+        let cur = addDays(new Date(row.data + "T00:00:00"), 1);
+        const end = new Date(row.data_fim + "T00:00:00");
+        while (cur <= end) { byDow[cur.getDay()]++; cur = addDays(cur, 1); }
+      }
+    }
+    const dowNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    const maxDow = Math.max(...byDow);
+    const peakDow = maxDow > 0 ? dowNames[byDow.indexOf(maxDow)] : null;
+    const peakDowCount = maxDow;
+
+    // Membros com mais indisponibilidades ativas
+    const byMembro: Record<string, number> = {};
+    for (const row of ativas) byMembro[row.membro_id] = (byMembro[row.membro_id] ?? 0) + 1;
+    const topMembros = Object.entries(byMembro)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([id, count]) => ({ nome: membros.find((m) => m.id === id)?.nome ?? "—", count }));
+
+    // Motivos mais comuns
+    const byMotivo: Record<string, number> = {};
+    for (const row of ativas) {
+      if (row.motivo) byMotivo[row.motivo] = (byMotivo[row.motivo] ?? 0) + 1;
+    }
+    const topMotivos = Object.entries(byMotivo)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([motivo, count]) => ({ motivo, count }));
+
+    // Dia com mais simultâneos (próximos 60 dias)
+    let peakDay: string | null = null; let peakDayCount = 0;
+    for (let i = 0; i < 60; i++) {
+      const d = format(addDays(todayDate, i), "yyyy-MM-dd");
+      const c = dayMap.get(d)?.length ?? 0;
+      if (c > peakDayCount) { peakDayCount = c; peakDay = d; }
+    }
+
+    // % membros que têm ao menos 1 indisp ativa
+    const membroUids = new Set(ativas.map((r) => r.membro_id));
+    const pct = membros.length > 0 ? Math.round((membroUids.size / membros.length) * 100) : 0;
+
+    return { peakDow, peakDowCount, topMembros, topMotivos, peakDay, peakDayCount, membrosAfetados: membroUids.size, pctAfetados: pct };
+  }, [indisponibilidades, membros, dayMap, hoje]);
 
   function nomeMembro(id: string) {
     return membros.find((m) => m.id === id)?.nome ?? "—";
@@ -2303,7 +2330,7 @@ function IndisponibilidadesTab({
     if (row.tipo === "intervalo" && row.data_fim) {
       return `${format(new Date(row.data + "T00:00:00"), "dd/MM/yyyy")} → ${format(new Date(row.data_fim + "T00:00:00"), "dd/MM/yyyy")}`;
     }
-    return format(new Date(row.data + "T00:00:00"), "dd/MM/yyyy, EEEE", { locale: ptBR });
+    return format(new Date(row.data + "T00:00:00"), "EEEE, dd/MM/yyyy", { locale: ptBR });
   }
 
   function labelHorario(row: IndispRow) {
@@ -2336,177 +2363,238 @@ function IndisponibilidadesTab({
   const passadas = indisponibilidades.filter((i) => !i.cancelada && i.data < hoje).length;
   const canceladas = indisponibilidades.filter((i) => i.cancelada).length;
 
-  const selectedRows = selectedDay ? (dayMap.get(selectedDay) ?? []) : [];
-  const selectedDate = selectedDay ? new Date(selectedDay + "T00:00:00") : null;
+  const lista = useMemo(() => {
+    const base = filtro === "ativas"
+      ? indisponibilidades.filter((i) => !i.cancelada && i.data >= hoje)
+      : indisponibilidades;
+    return [...base].sort((a, b) => a.data.localeCompare(b.data));
+  }, [indisponibilidades, filtro, hoje]);
 
-  // Upcoming list: next 14 days with at least 1 indisp
-  const upcoming = useMemo(() => {
-    const entries: { date: string; rows: IndispRow[] }[] = [];
-    for (let i = 0; i < 28; i++) {
-      const d = format(addDays(new Date(), i), "yyyy-MM-dd");
-      const rows = dayMap.get(d);
-      if (rows && rows.length > 0) entries.push({ date: d, rows });
-    }
-    return entries;
-  }, [dayMap]);
+  const DOWLABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
   return (
-    <div className="mt-6 space-y-5">
-      {/* Resumo */}
-      <div className="grid grid-cols-3 gap-2.5">
-        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 text-center">
-          <p className="text-xl font-bold font-serif text-amber-600">{ativas}</p>
-          <p className="text-[10px] uppercase tracking-wide text-amber-700/70 mt-0.5">Ativas</p>
+    <div className="mt-6 space-y-5 pb-6">
+
+      {/* ── Semana atual ──────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Esta semana</p>
+        <div className="grid grid-cols-7 gap-1.5">
+          {weekDays.map((day) => {
+            const key = format(day, "yyyy-MM-dd");
+            const count = dayMap.get(key)?.length ?? 0;
+            const isToday = key === hoje;
+            const isPast = key < hoje;
+            const dow = day.getDay();
+            const isSunday = dow === 0;
+            return (
+              <div
+                key={key}
+                className={`flex flex-col items-center gap-1 rounded-xl py-2.5 px-1 border transition-all
+                  ${isToday ? "border-primary/40 bg-primary/8" : isPast ? "border-transparent bg-muted/30 opacity-50" : "border-border bg-muted/20"}
+                  ${count > 0 && !isPast ? "border-amber-400/50 bg-amber-400/8" : ""}
+                  ${isSunday && !isPast ? "border-red-300/40" : ""}
+                `}
+              >
+                <span className={`text-[9px] font-bold uppercase tracking-wider ${isToday ? "text-primary" : isSunday ? "text-red-500/70" : "text-muted-foreground/60"}`}>
+                  {DOWLABELS[dow]}
+                </span>
+                <span className={`text-sm font-bold leading-none ${isToday ? "text-primary" : "text-foreground"}`}>
+                  {day.getDate()}
+                </span>
+                {count > 0 ? (
+                  <span className={`text-[10px] font-semibold leading-none px-1.5 py-0.5 rounded-full
+                    ${count >= 4 ? "bg-red-500 text-white" : count >= 2 ? "bg-amber-500 text-white" : "bg-amber-400/30 text-amber-700"}`}>
+                    {count}
+                  </span>
+                ) : (
+                  <span className="h-4" />
+                )}
+              </div>
+            );
+          })}
         </div>
-        <div className="rounded-xl bg-muted border border-border px-3 py-2.5 text-center">
-          <p className="text-xl font-bold font-serif text-muted-foreground">{passadas}</p>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Passadas</p>
-        </div>
-        <div className="rounded-xl bg-muted border border-border px-3 py-2.5 text-center">
-          <p className="text-xl font-bold font-serif text-muted-foreground">{canceladas}</p>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Canceladas</p>
-        </div>
+
+        {/* Nomes dos indisponíveis desta semana */}
+        {(() => {
+          const semanaKeys = weekDays.map((d) => format(d, "yyyy-MM-dd")).filter((k) => k >= hoje);
+          const ids = new Set<string>();
+          semanaKeys.forEach((k) => dayMap.get(k)?.forEach((r) => ids.add(r.membro_id)));
+          const nomes = [...ids].map((id) => nomeMembro(id)).filter(Boolean);
+          if (nomes.length === 0) return <p className="text-xs text-muted-foreground text-center">Nenhum membro indisponível esta semana.</p>;
+          return (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {nomes.map((n) => (
+                <span key={n} className="text-[11px] bg-amber-500/10 border border-amber-400/30 text-amber-800 dark:text-amber-300 rounded-full px-2.5 py-0.5 font-medium">
+                  {n.split(" ")[0]}
+                </span>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
-      {/* Calendário Heatmap */}
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Mapa de indisponibilidades</p>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-muted-foreground">Menos</span>
-            {["bg-muted/50", "bg-amber-400/30", "bg-amber-500/50", "bg-orange-500/60", "bg-red-500/70"].map((c, i) => (
-              <span key={i} className={`h-3 w-3 rounded-sm border border-transparent ${c}`} />
-            ))}
-            <span className="text-[10px] text-muted-foreground">Mais</span>
+      {/* ── Insights ──────────────────────────────────────────────────────── */}
+      {ativas > 0 && (
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Insights</p>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">Análise</span>
           </div>
-        </div>
 
-        {/* Grade semanal */}
-        <div className="overflow-x-auto -mx-1 px-1">
-          <div className="min-w-[320px]">
-            {/* Header dias da semana */}
-            <div className="grid grid-cols-7 gap-1 mb-1">
-              {WEEK_LABELS.map((d) => (
-                <div key={d} className="text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60">{d}</div>
-              ))}
+          <div className="grid grid-cols-2 gap-2">
+            {/* % membros afetados */}
+            <div className="rounded-xl bg-muted/40 border border-border p-3 space-y-0.5">
+              <p className="text-2xl font-bold text-foreground leading-none">{insights.pctAfetados}%</p>
+              <p className="text-[11px] text-muted-foreground">dos membros têm indisp. ativa</p>
+              <p className="text-[10px] text-muted-foreground/60">{insights.membrosAfetados} de {membros.length}</p>
             </div>
-            {/* Semanas */}
-            <div className="space-y-1">
-              {weeks.map((week, wi) => (
-                <div key={wi} className="grid grid-cols-7 gap-1">
-                  {week.map((day) => {
-                    const key = format(day, "yyyy-MM-dd");
-                    const count = dayMap.get(key)?.length ?? 0;
-                    const isToday = key === hoje;
-                    const isPast = key < hoje;
-                    const isSelected = key === selectedDay;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setSelectedDay(isSelected ? null : key)}
-                        className={`
-                          aspect-square rounded-md border text-[10px] font-semibold transition-all
-                          ${isPast ? "opacity-40" : ""}
-                          ${isSelected ? "ring-2 ring-primary ring-offset-1 scale-110 z-10" : "hover:scale-105"}
-                          ${heatColor(count, isToday)}
-                        `}
-                        title={`${format(day, "d MMM", { locale: ptBR })}: ${count} indisp.`}
-                      >
-                        {day.getDate()}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {/* Painel do dia selecionado */}
-        {selectedDay && (
-          <div className="mt-1 rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-primary">
-                {selectedDate && format(selectedDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
-              </p>
-              <button type="button" onClick={() => setSelectedDay(null)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            {selectedRows.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Nenhuma indisponibilidade neste dia.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {selectedRows.map((row) => (
-                  <div key={row.id} className="flex items-center gap-2 text-xs">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-                    <span className="font-medium">{nomeMembro(row.membro_id)}</span>
-                    <span className="text-muted-foreground">·</span>
-                    <span className="text-muted-foreground">{labelHorario(row)}</span>
-                    {row.motivo && <span className="text-muted-foreground truncate">· {row.motivo}</span>}
+            {/* Dia da semana mais afetado */}
+            {insights.peakDow && (
+              <div className="rounded-xl bg-amber-500/8 border border-amber-400/30 p-3 space-y-0.5">
+                <p className="text-2xl font-bold text-amber-600 leading-none">{insights.peakDow}</p>
+                <p className="text-[11px] text-muted-foreground">dia mais crítico</p>
+                <p className="text-[10px] text-amber-600/70">{insights.peakDowCount} ocorrência{insights.peakDowCount !== 1 ? "s" : ""}</p>
+              </div>
+            )}
+
+            {/* Pico de simultâneos */}
+            {insights.peakDay && insights.peakDayCount > 1 && (
+              <div className="rounded-xl bg-red-500/8 border border-red-400/30 p-3 space-y-0.5 col-span-2">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground">Maior concentração nos próximos 60 dias</p>
+                    <p className="text-sm font-semibold mt-0.5">
+                      {format(new Date(insights.peakDay + "T00:00:00"), "EEEE, d 'de' MMMM", { locale: ptBR })}
+                    </p>
                   </div>
-                ))}
+                  <span className="text-2xl font-bold text-red-500 leading-none shrink-0">{insights.peakDayCount}</span>
+                </div>
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Próximos dias com indisponibilidades */}
-      {upcoming.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Próximos 28 dias</p>
-          {upcoming.map(({ date, rows }) => (
-            <div key={date} className="rounded-2xl border bg-card px-4 py-3">
-              <p className="text-xs font-semibold text-foreground/70 mb-2">
-                {format(new Date(date + "T00:00:00"), "EEEE, d 'de' MMM", { locale: ptBR })}
-                <span className="ml-2 text-amber-600 font-bold">{rows.length}×</span>
-              </p>
-              <div className="space-y-1.5">
-                {rows.map((row) => (
-                  <div key={row.id} className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium truncate">{nomeMembro(row.membro_id)}</span>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{labelHorario(row)}</Badge>
-                        {row.motivo && <span className="text-[11px] text-muted-foreground truncate max-w-[120px]">{row.motivo}</span>}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setCancelTarget(row)}
-                      className="shrink-0 text-muted-foreground hover:text-red-600 transition-colors"
-                      title="Cancelar"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+          {/* Membros que mais registram */}
+          {insights.topMembros.length > 0 && (
+            <div className="space-y-1.5 pt-1 border-t border-border/40">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Membros com mais ausências registradas</p>
+              {insights.topMembros.map(({ nome, count }) => (
+                <div key={nome} className="flex items-center gap-2">
+                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary/60 rounded-full"
+                      style={{ width: `${(count / (insights.topMembros[0]?.count || 1)) * 100}%` }}
+                    />
                   </div>
+                  <span className="text-[11px] font-medium w-28 truncate text-right">{nome.split(" ")[0]}</span>
+                  <span className="text-[11px] text-muted-foreground w-4 text-right">{count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Motivos recorrentes */}
+          {insights.topMotivos.length > 0 && (
+            <div className="space-y-1.5 pt-1 border-t border-border/40">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Motivos mais comuns</p>
+              <div className="flex flex-wrap gap-1.5">
+                {insights.topMotivos.map(({ motivo, count }) => (
+                  <span key={motivo} className="text-[11px] bg-muted border border-border rounded-full px-2.5 py-0.5 font-medium">
+                    {motivo} · <span className="text-primary font-bold">{count}×</span>
+                  </span>
                 ))}
               </div>
             </div>
-          ))}
+          )}
         </div>
       )}
 
-      {upcoming.length === 0 && indisponibilidades.filter((i) => !i.cancelada).length === 0 && (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
+      {/* ── Totais + filtro ───────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setFiltro("ativas")}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${filtro === "ativas" ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:border-primary/50"}`}
+          >
+            Ativas ({ativas})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFiltro("todas")}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${filtro === "todas" ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-muted-foreground hover:border-primary/50"}`}
+          >
+            Todas ({ativas + passadas + canceladas})
+          </button>
+        </div>
+      </div>
+
+      {/* ── Cards ─────────────────────────────────────────────────────────── */}
+      {lista.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
           <Ban className="h-6 w-6 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhuma indisponibilidade registrada.</p>
+          <p className="text-sm text-muted-foreground">Nenhuma indisponibilidade encontrada.</p>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {lista.map((row) => {
+            const isPast = row.data < hoje;
+            const isInterval = row.tipo === "intervalo" && !!row.data_fim;
+            return (
+              <div
+                key={row.id}
+                className={`rounded-2xl border bg-card overflow-hidden transition-opacity ${row.cancelada || isPast ? "opacity-50" : ""}`}
+              >
+                {/* Topo colorido por estado */}
+                <div className={`h-1 w-full ${row.cancelada ? "bg-muted" : isPast ? "bg-muted" : isInterval ? "bg-violet-500" : "bg-amber-500"}`} />
+
+                <div className="px-4 py-3.5 flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold">{nomeMembro(row.membro_id)}</p>
+                      {row.cancelada && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">Cancelada</span>
+                      )}
+                      {isPast && !row.cancelada && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">Passada</span>
+                      )}
+                      {isInterval && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-400/30 text-violet-700 dark:text-violet-300 font-medium">Intervalo</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{labelData(row)}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] bg-muted/60 border border-border/60 rounded-md px-2 py-0.5 font-medium">{labelHorario(row)}</span>
+                      {row.motivo && (
+                        <span className="text-[11px] text-muted-foreground italic truncate max-w-[180px]">"{row.motivo}"</span>
+                      )}
+                    </div>
+                  </div>
+                  {!row.cancelada && row.data >= hoje && (
+                    <button
+                      type="button"
+                      onClick={() => setCancelTarget(row)}
+                      className="shrink-0 mt-0.5 text-muted-foreground hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20"
+                      title="Cancelar"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Confirmar cancelamento */}
+      {/* ── Confirmar cancelamento ─────────────────────────────────────────── */}
       <AlertDialog open={!!cancelTarget} onOpenChange={(o) => { if (!o) setCancelTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar indisponibilidade?</AlertDialogTitle>
             <AlertDialogDescription>
               {cancelTarget && (
-                <>
-                  <strong>{nomeMembro(cancelTarget.membro_id)}</strong> — {labelData(cancelTarget)}.
-                  O membro poderá voltar a ser escalado nessa data.
-                </>
+                <><strong>{nomeMembro(cancelTarget.membro_id)}</strong> — {labelData(cancelTarget)}. O membro poderá voltar a ser escalado nessa data.</>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
