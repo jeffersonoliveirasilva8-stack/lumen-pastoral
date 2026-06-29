@@ -18,7 +18,34 @@ type Step = {
   text: string;
 };
 
-const STEPS: Step[] = [
+const STEPS_MEMBRO: Step[] = [
+  {
+    icon: Sparkles,
+    color: "bg-amber-100 text-amber-600",
+    title: "Bem-vindo ao Portal do Servidor!",
+    text: "Este é o seu espaço para acompanhar escalas, confirmar presenças e se manter conectado com a pastoral. Veja um rápido resumo do que você pode fazer aqui.",
+  },
+  {
+    icon: Calendar,
+    color: "bg-blue-100 text-blue-600",
+    title: "Escalas",
+    text: "Veja todas as missas em que você está escalado. Confirme ou recuse sua presença — faça isso logo após receber a notificação para facilitar o planejamento da coordenação.",
+  },
+  {
+    icon: Bell,
+    color: "bg-rose-100 text-rose-600",
+    title: "Avisos e notificações",
+    text: "A coordenação pode enviar avisos para toda a equipe. Fique de olho no sino no topo da tela para não perder nada importante.",
+  },
+  {
+    icon: User,
+    color: "bg-emerald-100 text-emerald-600",
+    title: "Mantenha seu perfil atualizado",
+    text: "Acesse Perfil para atualizar telefone, foto e dados pessoais. Em 'Disponibilidade semanal' você define quais dias nunca pode ser escalado.",
+  },
+];
+
+const STEPS_COORD: Step[] = [
   {
     icon: Sparkles,
     color: "bg-amber-100 text-amber-600",
@@ -41,7 +68,7 @@ const STEPS: Step[] = [
     icon: ArrowLeftRight,
     color: "bg-teal-100 text-teal-600",
     title: "Substituições",
-    text: "Surgiu um imprevisto? Peça uma substituição pela aba Substituições. Outro membro disponível será notificado e pode aceitar no lugar de você.",
+    text: "Acompanhe pedidos de substituição da equipe pela aba Substituições. Você pode gerenciar quem cobre quem e manter a escala completa.",
   },
   {
     icon: Bell,
@@ -57,10 +84,15 @@ const STEPS: Step[] = [
   },
 ];
 
-export function WelcomeGuide() {
+type Props = {
+  isCoordenador?: boolean;
+};
+
+export function WelcomeGuide({ isCoordenador = false }: Props) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const navigate = useNavigate();
+  const STEPS = isCoordenador ? STEPS_COORD : STEPS_MEMBRO;
 
   useEffect(() => {
     if (!localStorage.getItem(STORAGE_KEY)) {

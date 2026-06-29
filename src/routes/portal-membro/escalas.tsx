@@ -329,40 +329,89 @@ function PortalMembroEscalas() {
 
   const isCoordinator = isAdministrador || isInCoordTable;
 
+  // Secretário (auxiliar): pode registrar presença das próprias escalas.
+  // Vice/Coordenação: pode ver e registrar presença de TODAS as escalas da paróquia.
+  const isSecretario = isAdministrador && !isInCoordTable;
+
   const { data: coordEscalas = [], isLoading: loadingCoord } = useQuery<CoordEscala[]>({
-    queryKey: ["pm-coord-escalas", membro?.paroquia_id],
-    enabled: isCoordinator && !!membro?.paroquia_id,
+    queryKey: ["pm-coord-escalas", membro?.paroquia_id, membro?.id, isSecretario],
+    enabled: isCoordinator && !!membro?.paroquia_id && !!membro?.id,
     queryFn: async () => {
-      // Busca TODAS as escalas da paróquia (últimos 90 dias + futuro), excluindo rascunho e cancelada.
-      // Inclui "arquivada" para que escalas auto-arquivadas continuem visíveis.
       const noventa = new Date();
       noventa.setDate(noventa.getDate() - 90);
-      const { data: escalasData, error: e1 } = await anyDb
+      const noveStr = noventa.toISOString().slice(0, 10);
+
+      let escalasData: any[];
+      let allRows: any[];
+
+      if (isSecretario) {
+        // Secretário: apenas escalas em que ESTÁ ESCALADO, dos últimos 90 dias
+        const { data: memRows, error: e0 } = await anyDb
+          .from("escala_membros")
+          .select("id, status, escala_id, membros!membro_id(id, nome)")
+          .eq("membro_id", membro!.id)
+          .neq("ativo", false);
+        if (e0) throw e0;
+        if (!memRows?.length) return [];
+
+        const escalaIds: string[] = memRows.map((r: any) => r.escala_id);
+        const { data: escs, error: e1 } = await anyDb
+          .from("escalas")
+          .select("id, titulo, data, hora_inicio")
+          .in("id", escalaIds)
+          .not("status", "in", '("rascunho","cancelada")')
+          .gte("data", noveStr)
+          .order("data", { ascending: false });
+        if (e1) throw e1;
+        if (!escs?.length) return [];
+
+        // Para secretário: os "membros" de cada escala são só ele mesmo
+        return (escs ?? []).map((esc: any): CoordEscala => {
+          const myRow = (memRows as any[]).find((r) => r.escala_id === esc.id);
+          return {
+            escala_id: esc.id,
+            titulo: esc.titulo,
+            data: esc.data,
+            hora_inicio: esc.hora_inicio,
+            membros: myRow
+              ? [{
+                  escala_membro_id: myRow.id,
+                  membro_id: membro!.id,
+                  nome: myRow.membros?.nome ?? membro!.nome ?? "Você",
+                  status: myRow.status,
+                }]
+              : [],
+          };
+        });
+      }
+
+      // Vice / Coordenação: TODAS as escalas da paróquia (90 dias + futuro)
+      const { data: escs, error: e1 } = await anyDb
         .from("escalas")
         .select("id, titulo, data, hora_inicio")
         .eq("paroquia_id", membro!.paroquia_id)
         .not("status", "in", '("rascunho","cancelada")')
-        .gte("data", noventa.toISOString().slice(0, 10))
+        .gte("data", noveStr)
         .order("data", { ascending: false });
       if (e1) throw e1;
-      if (!escalasData?.length) return [];
+      escalasData = escs ?? [];
+      if (!escalasData.length) return [];
 
       const escalaIds: string[] = escalasData.map((e: any) => e.id);
-
-      // Todos os membros dessas escalas
-      const { data: allRows, error: e2 } = await anyDb
+      const { data: rows, error: e2 } = await anyDb
         .from("escala_membros")
         .select("id, status, membro_id, escala_id, membros!membro_id(id, nome)")
         .in("escala_id", escalaIds)
         .neq("ativo", false);
       if (e2) throw e2;
+      allRows = rows ?? [];
 
-      return (escalasData ?? []).map((esc: any): CoordEscala => ({
+      return escalasData.map((esc: any): CoordEscala => ({
         escala_id: esc.id,
         titulo: esc.titulo,
         data: esc.data,
         hora_inicio: esc.hora_inicio,
-        membros: (allRows ?? [])
+        membros: allRows
           .filter((r: any) => r.escala_id === esc.id)
           .map((r: any): CoordMembro => ({
             escala_membro_id: r.id,
@@ -586,6 +635,7 @@ function PortalMembroEscalas() {
               coordEscalas={coordEscalas}
               loading={loadingCoord}
               membroId={membro?.id ?? ""}
+              isSecretario={isSecretario}
               savingStatus={updateMembroStatusMutation.isPending}
               savingOcorrencia={addOcorrenciaMutation.isPending}
               onUpdateMemberStatus={(id, status) =>
@@ -1296,6 +1346,7 @@ type CoordinatorTabProps = {
   coordEscalas: CoordEscala[];
   loading: boolean;
   membroId: string;
+  isSecretario: boolean;
   savingStatus: boolean;
   savingOcorrencia: boolean;
   onUpdateMemberStatus: (escala_membro_id: string, status: string) => void;
@@ -1303,7 +1354,7 @@ type CoordinatorTabProps = {
 };
 
 function CoordinatorTab({
-  coordEscalas, loading, membroId,
+  coordEscalas, loading, membroId, isSecretario,
   savingStatus, savingOcorrencia,
   onUpdateMemberStatus, onAddOcorrencia,
 }: CoordinatorTabProps) {
@@ -1331,7 +1382,11 @@ function CoordinatorTab({
       <div className="empty-state">
         <div className="empty-state-icon"><Shield className="h-5 w-5" /></div>
         <p className="empty-state-title">Nenhuma escala encontrada</p>
-        <p className="empty-state-desc">Nenhuma escala publicada nos últimos 90 dias.</p>
+        <p className="empty-state-desc">
+          {isSecretario
+            ? "Você não está escalado em nenhuma missa dos últimos 90 dias."
+            : "Nenhuma escala publicada nos últimos 90 dias."}
+        </p>
       </div>
     );
   }

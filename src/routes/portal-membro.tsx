@@ -215,7 +215,11 @@ function PortalMembroLayout() {
         user_id: user.id, email: user.email,
         motivo_do_bloqueio: "membro === null após loadMembro()",
       });
-      navigate({ to: "/membro/login" as any });
+      // Encerra a sessão antes de redirecionar: evita spinner infinito na tela de login
+      // (sem signOut, getSession retorna sessão ativa → getPostLoginRoute → /membro/login → loop)
+      supabase.auth.signOut().finally(() => {
+        navigate({ to: "/membro/login" as any });
+      });
     }
   }, [loading, linking, user, membro, navigate]);
 
@@ -475,7 +479,11 @@ function PortalMembroLayout() {
         </main>
       </div>
 
-      <WelcomeGuide />
+      <WelcomeGuide isCoordenador={
+        membro.tipo_acesso === "vice" ||
+        membro.tipo_acesso === "coordenador" ||
+        membro.tipo_acesso === "administrador"
+      } />
 
       {/* ── Drawer "Mais" ── */}
       <Drawer open={menuOpen} onOpenChange={setMenuOpen}>

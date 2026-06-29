@@ -29,19 +29,26 @@ function MembroLoginPage() {
       if (session?.user) {
         const route = await getPostLoginRoute(supabase);
         clearTimeout(timeout);
-        navigate({ to: route, replace: true });
+        if (route === "/membro/login") {
+          // Membro não encontrado no portal — exibe form em vez de loop infinito
+          setChecking(false);
+        } else {
+          navigate({ to: route, replace: true });
+        }
       }
     });
 
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
         if (session?.user) {
-          // Não cancela o timeout aqui — deixa ele correr caso getPostLoginRoute trave.
-          // Se o timeout disparar antes de getPostLoginRoute resolver, o form aparece
-          // e o navigate acontece logo em seguida (sem problema).
           const route = await getPostLoginRoute(supabase);
           clearTimeout(timeout);
-          navigate({ to: route, replace: true });
+          if (route === "/membro/login") {
+            // Sessão ativa mas membro não encontrado — mostra form sem loop infinito
+            setChecking(false);
+          } else {
+            navigate({ to: route, replace: true });
+          }
         } else {
           clearTimeout(timeout);
           setChecking(false);
@@ -297,6 +304,11 @@ function SenhaForm({ onShowOtp }: { onShowOtp: () => void }) {
         return;
       }
       const route = await getPostLoginRoute(supabase);
+      if (route === "/membro/login") {
+        await supabase.auth.signOut();
+        toast.error("Sua conta ainda não foi vinculada ao portal. Entre em contato com o coordenador da sua paróquia.");
+        return;
+      }
       navigate({ to: route, replace: true });
     } catch {
       toast.error("Erro de conexão. Verifique sua internet e tente novamente.");
