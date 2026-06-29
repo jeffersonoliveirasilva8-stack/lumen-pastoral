@@ -334,7 +334,38 @@ function PortalMembroEscalas() {
       let escalasData: any[];
       let allRows: any[];
 
-      const EM_SELECT = "id, status, escala_id, membro_id, presenca_registrada_em, membros!membro_id(id, nome), registrado_por:presenca_registrada_por(nome)";
+      // Tenta select com colunas de rastreio (migration 107).
+      // Se as colunas não existirem ainda, cai no fallback sem elas.
+      const EM_SELECT_FULL = "id, status, escala_id, membro_id, presenca_registrada_em, membros!membro_id(id, nome), registrado_por:presenca_registrada_por(nome)";
+      const EM_SELECT_BASIC = "id, status, escala_id, membro_id, membros!membro_id(id, nome)";
+
+      async function fetchEscalaMembros(ids: string[]) {
+        const full = await anyDb
+          .from("escala_membros")
+          .select(EM_SELECT_FULL)
+          .in("escala_id", ids)
+          .or("ativo.is.null,ativo.eq.true");
+        if (!full.error) return full.data ?? [];
+        // Fallback: sem colunas de rastreio
+        const basic = await anyDb
+          .from("escala_membros")
+          .select(EM_SELECT_BASIC)
+          .in("escala_id", ids)
+          .or("ativo.is.null,ativo.eq.true");
+        if (basic.error) throw basic.error;
+        return basic.data ?? [];
+      }
+
+      function mapRow(r: any): CoordMembro {
+        return {
+          escala_membro_id: r.id,
+          membro_id: r.membro_id,
+          nome: r.membros?.nome ?? "—",
+          status: r.status,
+          registrado_por_nome: r.registrado_por?.nome ?? null,
+          registrado_em: r.presenca_registrada_em ?? null,
+        };
+      }
 
       if (isSecretario) {
         // Secretário: apenas escalas em que ESTÁ ESCALADO, mas vê TODOS os membros
@@ -342,7 +373,7 @@ function PortalMembroEscalas() {
           .from("escala_membros")
           .select("escala_id")
           .eq("membro_id", membro!.id)
-          .neq("ativo", false);
+          .or("ativo.is.null,ativo.eq.true");
         if (e0) throw e0;
         if (!myRows?.length) return [];
 
@@ -357,15 +388,8 @@ function PortalMembroEscalas() {
         if (e1) throw e1;
         if (!escs?.length) return [];
 
-        // Busca TODOS os membros das escalas do secretário
         const filteredIds = (escs as any[]).map((e: any) => e.id);
-        const { data: todosRows, error: e2 } = await anyDb
-          .from("escala_membros")
-          .select(EM_SELECT)
-          .in("escala_id", filteredIds)
-          .neq("ativo", false);
-        if (e2) throw e2;
-        const todosMembers = todosRows ?? [];
+        const todosMembers = await fetchEscalaMembros(filteredIds);
 
         return (escs as any[]).map((esc: any): CoordEscala => ({
           escala_id: esc.id,
@@ -374,14 +398,7 @@ function PortalMembroEscalas() {
           hora_inicio: esc.hora_inicio,
           membros: (todosMembers as any[])
             .filter((r: any) => r.escala_id === esc.id)
-            .map((r: any): CoordMembro => ({
-              escala_membro_id: r.id,
-              membro_id: r.membro_id,
-              nome: r.membros?.nome ?? "—",
-              status: r.status,
-              registrado_por_nome: r.registrado_por?.nome ?? null,
-              registrado_em: r.presenca_registrada_em ?? null,
-            }))
+            .map(mapRow)
             .sort((a: CoordMembro, b: CoordMembro) => a.nome.localeCompare(b.nome, "pt-BR")),
         }));
       }
@@ -399,13 +416,7 @@ function PortalMembroEscalas() {
       if (!escalasData.length) return [];
 
       const escalaIds: string[] = escalasData.map((e: any) => e.id);
-      const { data: rows, error: e2 } = await anyDb
-        .from("escala_membros")
-        .select(EM_SELECT)
-        .in("escala_id", escalaIds)
-        .neq("ativo", false);
-      if (e2) throw e2;
-      allRows = rows ?? [];
+      allRows = await fetchEscalaMembros(escalaIds);
 
       return escalasData.map((esc: any): CoordEscala => ({
         escala_id: esc.id,
@@ -414,14 +425,7 @@ function PortalMembroEscalas() {
         hora_inicio: esc.hora_inicio,
         membros: allRows
           .filter((r: any) => r.escala_id === esc.id)
-          .map((r: any): CoordMembro => ({
-            escala_membro_id: r.id,
-            membro_id: r.membro_id,
-            nome: r.membros?.nome ?? "—",
-            status: r.status,
-            registrado_por_nome: r.registrado_por?.nome ?? null,
-            registrado_em: r.presenca_registrada_em ?? null,
-          }))
+          .map(mapRow)
           .sort((a: CoordMembro, b: CoordMembro) => a.nome.localeCompare(b.nome, "pt-BR")),
       }));
     },
