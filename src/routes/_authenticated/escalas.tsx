@@ -2625,7 +2625,7 @@ function ListaView({
   isBulkPublishing: boolean;
 }) {
   const [radarOpen, setRadarOpen] = useState(false);
-  const [filtro, setFiltro] = useState<"todos" | "semana" | "2semanas" | "incompletas" | "rascunho" | "publicadas">("todos");
+  const [filtro, setFiltro] = useState<"todos" | "semana" | "2semanas" | "incompletas" | "rascunho" | "publicadas" | "arquivadas">("todos");
   const [paginaEscalas, setPaginaEscalas] = useState(20);
   const [swapTarget, setSwapTarget] = useState<{ membroId: string; nome: string } | null>(null);
   const allSelected = escalas.length > 0 && escalas.every((e) => selectedIds.has(e.id));
@@ -2722,6 +2722,7 @@ function ListaView({
       if (filtro === "incompletas") { const c = escalaCounts[e.id]; return c ? c.filled < c.needed : false; }
       if (filtro === "rascunho")    return e.status === "rascunho";
       if (filtro === "publicadas")  return e.status === "publicada";
+      if (filtro === "arquivadas")  return e.status === "arquivada";
       return true;
     });
   }, [escalas, filtro, escalaCounts]);
@@ -3080,6 +3081,7 @@ function ListaView({
           { id: "publicadas",  label: "Publicadas",      count: publishedCount || null },
           { id: "incompletas", label: "Incompletas",     count: escalas.filter((e) => { const c = escalaCounts[e.id]; return c && c.filled < c.needed; }).length || null },
           { id: "rascunho",    label: "Rascunho",        count: draftCount || null },
+          { id: "arquivadas",  label: "Histórico",        count: archivedCount || null },
         ] as const).map((f) => (
           <button
             key={f.id}

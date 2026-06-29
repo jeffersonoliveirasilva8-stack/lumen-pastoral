@@ -330,41 +330,32 @@ function PortalMembroEscalas() {
   const isCoordinator = isAdministrador || isInCoordTable;
 
   const { data: coordEscalas = [], isLoading: loadingCoord } = useQuery<CoordEscala[]>({
-    queryKey: ["pm-coord-escalas", membro?.id],
-    enabled: isCoordinator && !!membro?.id,
+    queryKey: ["pm-coord-escalas", membro?.paroquia_id],
+    enabled: isCoordinator && !!membro?.paroquia_id,
     queryFn: async () => {
-      // Passo 1 — escalas em que este membro está escalado (sem filtro embedded)
-      const { data: memRows, error: e1 } = await anyDb
-        .from("escala_membros")
-        .select("id, escala_id")
-        .eq("membro_id", membro!.id);
-      if (e1) throw e1;
-      if (!memRows?.length) return [];
-
-      const escalaIds: string[] = memRows.map((r: any) => r.escala_id);
-
-      // Passo 2 — dados das escalas: publicadas, dos últimos 30 dias até futuro
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const { data: escalasData, error: e2 } = await anyDb
+      // Busca TODAS as escalas da paróquia (últimos 90 dias + futuro), excluindo rascunho e cancelada.
+      // Inclui "arquivada" para que escalas auto-arquivadas continuem visíveis.
+      const noventa = new Date();
+      noventa.setDate(noventa.getDate() - 90);
+      const { data: escalasData, error: e1 } = await anyDb
         .from("escalas")
         .select("id, titulo, data, hora_inicio")
-        .in("id", escalaIds)
-        .eq("status", "publicada")
-        .gte("data", thirtyDaysAgo.toISOString().slice(0, 10))
+        .eq("paroquia_id", membro!.paroquia_id)
+        .not("status", "in", '("rascunho","cancelada")')
+        .gte("data", noventa.toISOString().slice(0, 10))
         .order("data", { ascending: false });
-      if (e2) throw e2;
+      if (e1) throw e1;
       if (!escalasData?.length) return [];
 
-      const escalaIdsPublicadas: string[] = escalasData.map((e: any) => e.id);
+      const escalaIds: string[] = escalasData.map((e: any) => e.id);
 
-      // Passo 3 — todos os membros dessas escalas
-      const { data: allRows, error: e3 } = await anyDb
+      // Todos os membros dessas escalas
+      const { data: allRows, error: e2 } = await anyDb
         .from("escala_membros")
         .select("id, status, membro_id, escala_id, membros!membro_id(id, nome)")
-        .in("escala_id", escalaIdsPublicadas)
+        .in("escala_id", escalaIds)
         .neq("ativo", false);
-      if (e3) throw e3;
+      if (e2) throw e2;
 
       return (escalasData ?? []).map((esc: any): CoordEscala => ({
         escala_id: esc.id,
@@ -572,8 +563,8 @@ function PortalMembroEscalas() {
           {isCoordinator && (
             <TabsTrigger value="coordenacao" className="flex-1 min-w-[80px] rounded-lg py-1.5 text-xs sm:text-sm flex items-center gap-1 whitespace-nowrap">
               <Shield className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden sm:inline">Gestão</span>
-              <span className="sm:hidden">Gestão</span>
+              <span className="hidden sm:inline">Sacristia</span>
+              <span className="sm:hidden">Sacristia</span>
             </TabsTrigger>
           )}
           <TabsTrigger value="escalas" className="flex-1 min-w-[70px] rounded-lg py-1.5 text-xs sm:text-sm whitespace-nowrap">
@@ -748,7 +739,7 @@ function PortalMembroEscalas() {
 
         {/* ── Tab: Histórico ── */}
         <TabsContent value="historico">
-          <HistoricoTab historico={historico} canceladas={escalasCanceladas} loading={loadingHistorico} />
+          <HistoricoTab historico={historico} loading={loadingHistorico} />
         </TabsContent>
       </Tabs>
     </div>
@@ -1216,7 +1207,7 @@ function EscalaPortalCard({
           <div className="px-4 py-2.5 flex items-center gap-2 border-b border-blue-200/40 dark:border-blue-800/40">
             <Shield className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
             <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-              Gestão de escala
+              Sacristia
             </p>
           </div>
 
@@ -1316,6 +1307,17 @@ function CoordinatorTab({
   savingStatus, savingOcorrencia,
   onUpdateMemberStatus, onAddOcorrencia,
 }: CoordinatorTabProps) {
+  const hojeStr = new Date().toISOString().slice(0, 10);
+
+  // Separa missas passadas com presença pendente das próximas
+  const pendentes = coordEscalas.filter(
+    (e) => e.data < hojeStr && e.membros.some((m) => m.status === "pendente"),
+  );
+  const proximas = coordEscalas.filter((e) => e.data >= hojeStr);
+  const concluidas = coordEscalas.filter(
+    (e) => e.data < hojeStr && e.membros.every((m) => m.status !== "pendente"),
+  );
+
   if (loading) {
     return (
       <div className="space-y-2.5">
@@ -1328,37 +1330,94 @@ function CoordinatorTab({
     return (
       <div className="empty-state">
         <div className="empty-state-icon"><Shield className="h-5 w-5" /></div>
-        <p className="empty-state-title">Nenhuma escala recente</p>
-        <p className="empty-state-desc">Nenhuma escala publicada nos últimos 30 dias.</p>
+        <p className="empty-state-title">Nenhuma escala encontrada</p>
+        <p className="empty-state-desc">Nenhuma escala publicada nos últimos 90 dias.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-4 py-3">
-        <div className="flex items-start gap-2">
-          <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">Gestão de escala</p>
-            <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
-              Confirme a presença de cada membro e registre ocorrências da celebração.
+
+      {/* ── Missas passadas com presença pendente ── */}
+      {pendentes.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+              Presença pendente ({pendentes.length})
             </p>
           </div>
+          {pendentes.map((escala) => (
+            <EscalaCoordCard
+              key={escala.escala_id}
+              escala={escala}
+              membroId={membroId}
+              savingStatus={savingStatus}
+              savingOcorrencia={savingOcorrencia}
+              onUpdateMemberStatus={onUpdateMemberStatus}
+              onAddOcorrencia={onAddOcorrencia}
+            />
+          ))}
         </div>
-      </div>
+      )}
 
-      {coordEscalas.map((escala) => (
-        <EscalaCoordCard
-          key={escala.escala_id}
-          escala={escala}
-          membroId={membroId}
-          savingStatus={savingStatus}
-          savingOcorrencia={savingOcorrencia}
-          onUpdateMemberStatus={onUpdateMemberStatus}
-          onAddOcorrencia={onAddOcorrencia}
-        />
-      ))}
+      {/* ── Escalas próximas ── */}
+      {proximas.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Próximas escalas
+            </p>
+          </div>
+          {proximas.map((escala) => (
+            <EscalaCoordCard
+              key={escala.escala_id}
+              escala={escala}
+              membroId={membroId}
+              savingStatus={savingStatus}
+              savingOcorrencia={savingOcorrencia}
+              onUpdateMemberStatus={onUpdateMemberStatus}
+              onAddOcorrencia={onAddOcorrencia}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Histórico concluído ── */}
+      {concluidas.length > 0 && (
+        <details className="group">
+          <summary className="flex items-center gap-2 px-1 cursor-pointer list-none">
+            <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Concluídas ({concluidas.length})
+            </p>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-auto group-open:rotate-180 transition-transform" />
+          </summary>
+          <div className="mt-3 space-y-3">
+            {concluidas.map((escala) => (
+              <EscalaCoordCard
+                key={escala.escala_id}
+                escala={escala}
+                membroId={membroId}
+                savingStatus={savingStatus}
+                savingOcorrencia={savingOcorrencia}
+                onUpdateMemberStatus={onUpdateMemberStatus}
+                onAddOcorrencia={onAddOcorrencia}
+              />
+            ))}
+          </div>
+        </details>
+      )}
+
+      {pendentes.length === 0 && proximas.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-state-icon"><Shield className="h-5 w-5" /></div>
+          <p className="empty-state-title">Tudo em dia</p>
+          <p className="empty-state-desc">Nenhuma presença pendente e nenhuma escala próxima.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1938,7 +1997,7 @@ function IndisponibilidadeTab({
 
 // ── HistoricoTab ──────────────────────────────────────────────────────
 
-function HistoricoTab({ historico, canceladas, loading }: { historico: HistoricoItem[]; canceladas: HistoricoItem[]; loading: boolean }) {
+function HistoricoTab({ historico, loading }: { historico: HistoricoItem[]; loading: boolean }) {
   const totalPontos = historico.reduce((s, h) => s + (h.pontos ?? 0), 0);
   const servidas = historico.filter((h) => h.status === "presente" || h.status === "confirmado" || h.status === "atrasado").length;
 
@@ -1964,7 +2023,7 @@ function HistoricoTab({ historico, canceladas, loading }: { historico: Historico
           </div>
         </div>
       )}
-      {historico.length === 0 && canceladas.length === 0 ? (
+      {historico.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-10 text-center">
           <History className="h-7 w-7 mx-auto text-muted-foreground mb-2" />
           <p className="text-sm text-muted-foreground">Nenhuma participação registrada ainda.</p>
@@ -2001,28 +2060,6 @@ function HistoricoTab({ historico, canceladas, loading }: { historico: Historico
             </div>
           ))}
 
-          {canceladas.length > 0 && (
-            <>
-              <p className="text-xs font-semibold uppercase text-muted-foreground pt-2 pb-1">Escalas canceladas</p>
-              {canceladas.map((h) => (
-                <div key={h.escala_membro_id} className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3 opacity-70">
-                  <CalendarOff className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate line-through text-muted-foreground">{h.titulo}</p>
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 shrink-0">Cancelada</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: h.ministerio_cor }} />
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(h.data + "T12:00:00"), "d MMM yyyy", { locale: ptBR })} · {h.ministerio_nome}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
         </div>
       )}
     </div>
