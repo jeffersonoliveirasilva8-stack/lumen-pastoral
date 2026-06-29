@@ -2239,6 +2239,10 @@ function IndisponibilidadesTab({
   const [filtro, setFiltro] = useState<"ativas" | "todas">("ativas");
   const [cancelTarget, setCancelTarget] = useState<IndispRow | null>(null);
   const [canceling, setCanceling] = useState(false);
+  // dia selecionado na grade "esta semana" (string yyyy-MM-dd)
+  const [weekDaySelected, setWeekDaySelected] = useState<string | null>(null);
+  // membro selecionado pelo pill de nome
+  const [membroSelected, setMembroSelected] = useState<string | null>(null);
 
   const hoje = format(new Date(), "yyyy-MM-dd");
   const todayDate = new Date();
@@ -2386,19 +2390,29 @@ function IndisponibilidadesTab({
             const isPast = key < hoje;
             const dow = day.getDay();
             const isSunday = dow === 0;
+            const isSelected = weekDaySelected === key;
             return (
-              <div
+              <button
                 key={key}
-                className={`flex flex-col items-center gap-1 rounded-xl py-2.5 px-1 border transition-all
-                  ${isToday ? "border-primary/40 bg-primary/8" : isPast ? "border-transparent bg-muted/30 opacity-50" : "border-border bg-muted/20"}
-                  ${count > 0 && !isPast ? "border-amber-400/50 bg-amber-400/8" : ""}
-                  ${isSunday && !isPast ? "border-red-300/40" : ""}
+                type="button"
+                disabled={isPast}
+                onClick={() => {
+                  setMembroSelected(null);
+                  setWeekDaySelected(isSelected ? null : key);
+                }}
+                className={`flex flex-col items-center gap-1 rounded-xl py-2.5 px-1 border transition-all w-full
+                  ${isPast ? "border-transparent bg-muted/30 opacity-40 cursor-default" : "cursor-pointer hover:border-primary/30"}
+                  ${isSelected ? "border-primary bg-primary/10 ring-2 ring-primary/30" : ""}
+                  ${!isSelected && isToday ? "border-primary/40 bg-primary/5" : ""}
+                  ${!isSelected && !isPast && !isToday && count > 0 ? "border-amber-400/50 bg-amber-400/5" : ""}
+                  ${!isSelected && !isPast && !isToday && count === 0 ? "border-border bg-muted/20" : ""}
+                  ${isSunday && !isPast && !isSelected ? "border-red-300/40" : ""}
                 `}
               >
-                <span className={`text-[9px] font-bold uppercase tracking-wider ${isToday ? "text-primary" : isSunday ? "text-red-500/70" : "text-muted-foreground/60"}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-wider ${isSelected ? "text-primary" : isToday ? "text-primary" : isSunday ? "text-red-500/70" : "text-muted-foreground/60"}`}>
                   {DOWLABELS[dow]}
                 </span>
-                <span className={`text-sm font-bold leading-none ${isToday ? "text-primary" : "text-foreground"}`}>
+                <span className={`text-sm font-bold leading-none ${isSelected || isToday ? "text-primary" : "text-foreground"}`}>
                   {day.getDate()}
                 </span>
                 {count > 0 ? (
@@ -2409,25 +2423,105 @@ function IndisponibilidadesTab({
                 ) : (
                   <span className="h-4" />
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
 
-        {/* Nomes dos indisponíveis desta semana */}
-        {(() => {
-          const semanaKeys = weekDays.map((d) => format(d, "yyyy-MM-dd")).filter((k) => k >= hoje);
-          const ids = new Set<string>();
-          semanaKeys.forEach((k) => dayMap.get(k)?.forEach((r) => ids.add(r.membro_id)));
-          const nomes = [...ids].map((id) => nomeMembro(id)).filter(Boolean);
-          if (nomes.length === 0) return <p className="text-xs text-muted-foreground text-center">Nenhum membro indisponível esta semana.</p>;
+        {/* Painel: dia selecionado → membros daquele dia */}
+        {weekDaySelected && (() => {
+          const rows = dayMap.get(weekDaySelected) ?? [];
+          const dayDate = new Date(weekDaySelected + "T00:00:00");
           return (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {nomes.map((n) => (
-                <span key={n} className="text-[11px] bg-amber-500/10 border border-amber-400/30 text-amber-800 dark:text-amber-300 rounded-full px-2.5 py-0.5 font-medium">
-                  {n.split(" ")[0]}
-                </span>
-              ))}
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-primary capitalize">
+                  {format(dayDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
+                </p>
+                <button type="button" onClick={() => setWeekDaySelected(null)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {rows.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhum membro indisponível neste dia.</p>
+              ) : (
+                <div className="space-y-2">
+                  {rows.map((row) => (
+                    <div key={row.id} className="flex items-start gap-2.5 rounded-lg bg-card border border-border/60 px-3 py-2">
+                      <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${row.tipo === "intervalo" ? "bg-violet-500" : "bg-amber-500"}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold leading-snug">{nomeMembro(row.membro_id)}</p>
+                        <p className="text-[11px] text-muted-foreground">{labelHorario(row)}{row.motivo ? ` · "${row.motivo}"` : ""}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Pills de nomes — toda a semana (sem dia selecionado) */}
+        {!weekDaySelected && (() => {
+          const semanaKeys = weekDays.map((d) => format(d, "yyyy-MM-dd")).filter((k) => k >= hoje);
+          const idSet = new Set<string>();
+          semanaKeys.forEach((k) => dayMap.get(k)?.forEach((r) => idSet.add(r.membro_id)));
+          if (idSet.size === 0) return <p className="text-xs text-muted-foreground text-center py-1">Nenhum membro indisponível esta semana.</p>;
+          return (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Indisponíveis esta semana — toque para ver os dias</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[...idSet].map((id) => {
+                  const isActive = membroSelected === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setMembroSelected(isActive ? null : id)}
+                      className={`text-[11px] rounded-full px-2.5 py-0.5 font-medium border transition-all
+                        ${isActive
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-amber-500/10 border-amber-400/30 text-amber-800 dark:text-amber-300 hover:border-amber-500"}`}
+                    >
+                      {nomeMembro(id).split(" ")[0]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Painel: membro selecionado → todos os dias futuros dele */}
+        {membroSelected && (() => {
+          const futuras = indisponibilidades
+            .filter((r) => r.membro_id === membroSelected && !r.cancelada && r.data >= hoje)
+            .sort((a, b) => a.data.localeCompare(b.data));
+          return (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2 animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-primary">
+                  Indisponibilidades futuras — {nomeMembro(membroSelected).split(" ")[0]}
+                </p>
+                <button type="button" onClick={() => setMembroSelected(null)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {futuras.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Sem indisponibilidades futuras registradas.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {futuras.map((row) => (
+                    <div key={row.id} className="flex items-center gap-2 rounded-lg bg-card border border-border/60 px-3 py-2">
+                      <div className={`h-2 w-2 rounded-full shrink-0 ${row.tipo === "intervalo" ? "bg-violet-500" : "bg-amber-500"}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold">{labelData(row)}</p>
+                        <p className="text-[11px] text-muted-foreground">{labelHorario(row)}{row.motivo ? ` · "${row.motivo}"` : ""}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -2529,63 +2623,94 @@ function IndisponibilidadesTab({
         </div>
       </div>
 
-      {/* ── Cards ─────────────────────────────────────────────────────────── */}
+      {/* ── Cards agrupados por data ──────────────────────────────────────── */}
       {lista.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
           <Ban className="h-6 w-6 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">Nenhuma indisponibilidade encontrada.</p>
         </div>
-      ) : (
-        <div className="space-y-2.5">
-          {lista.map((row) => {
-            const isPast = row.data < hoje;
-            const isInterval = row.tipo === "intervalo" && !!row.data_fim;
-            return (
-              <div
-                key={row.id}
-                className={`rounded-2xl border bg-card overflow-hidden transition-opacity ${row.cancelada || isPast ? "opacity-50" : ""}`}
-              >
-                {/* Topo colorido por estado */}
-                <div className={`h-1 w-full ${row.cancelada ? "bg-muted" : isPast ? "bg-muted" : isInterval ? "bg-violet-500" : "bg-amber-500"}`} />
-
-                <div className="px-4 py-3.5 flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold">{nomeMembro(row.membro_id)}</p>
-                      {row.cancelada && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">Cancelada</span>
-                      )}
-                      {isPast && !row.cancelada && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">Passada</span>
-                      )}
-                      {isInterval && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-400/30 text-violet-700 dark:text-violet-300 font-medium">Intervalo</span>
-                      )}
+      ) : (() => {
+        // Agrupar por data de início
+        const groups = new Map<string, IndispRow[]>();
+        for (const row of lista) {
+          if (!groups.has(row.data)) groups.set(row.data, []);
+          groups.get(row.data)!.push(row);
+        }
+        return (
+          <div className="space-y-5">
+            {[...groups.entries()].map(([date, rows]) => {
+              const dateObj = new Date(date + "T00:00:00");
+              const isPastGroup = date < hoje;
+              const isThisWeek = weekDays.some((d) => format(d, "yyyy-MM-dd") === date);
+              return (
+                <div key={date} className="space-y-2">
+                  {/* Cabeçalho do grupo */}
+                  <div className="flex items-center gap-3">
+                    <div className={`h-px flex-1 ${isPastGroup ? "bg-border/40" : "bg-border"}`} />
+                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-semibold
+                      ${isPastGroup ? "border-border/40 text-muted-foreground/50 bg-muted/20" :
+                        isThisWeek ? "border-primary/30 text-primary bg-primary/8" :
+                        "border-border text-foreground/70 bg-card"}`}>
+                      <span className="capitalize">{format(dateObj, "EEEE", { locale: ptBR })}</span>
+                      <span className="text-muted-foreground font-normal">·</span>
+                      <span>{format(dateObj, "d 'de' MMM", { locale: ptBR })}</span>
+                      {isThisWeek && <span className="text-[9px] text-primary font-bold uppercase tracking-wider ml-0.5">esta semana</span>}
+                      <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold
+                        ${isPastGroup ? "bg-muted text-muted-foreground" : rows.length >= 3 ? "bg-red-500 text-white" : "bg-amber-500/20 text-amber-700"}`}>
+                        {rows.length}
+                      </span>
                     </div>
-                    <p className="text-xs text-muted-foreground">{labelData(row)}</p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] bg-muted/60 border border-border/60 rounded-md px-2 py-0.5 font-medium">{labelHorario(row)}</span>
-                      {row.motivo && (
-                        <span className="text-[11px] text-muted-foreground italic truncate max-w-[180px]">"{row.motivo}"</span>
-                      )}
-                    </div>
+                    <div className={`h-px flex-1 ${isPastGroup ? "bg-border/40" : "bg-border"}`} />
                   </div>
-                  {!row.cancelada && row.data >= hoje && (
-                    <button
-                      type="button"
-                      onClick={() => setCancelTarget(row)}
-                      className="shrink-0 mt-0.5 text-muted-foreground hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20"
-                      title="Cancelar"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+
+                  {/* Cards do grupo */}
+                  <div className="space-y-2">
+                    {rows.map((row) => {
+                      const isPast = row.data < hoje;
+                      const isInterval = row.tipo === "intervalo" && !!row.data_fim;
+                      return (
+                        <div
+                          key={row.id}
+                          className={`rounded-2xl border bg-card overflow-hidden ${row.cancelada || isPast ? "opacity-50" : ""}`}
+                        >
+                          <div className={`h-1 w-full ${row.cancelada ? "bg-muted" : isPast ? "bg-muted" : isInterval ? "bg-violet-500" : "bg-amber-500"}`} />
+                          <div className="px-4 py-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-semibold">{nomeMembro(row.membro_id)}</p>
+                                {row.cancelada && <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">Cancelada</span>}
+                                {isInterval && <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-400/30 text-violet-700 dark:text-violet-300 font-medium">Intervalo</span>}
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[11px] bg-muted/60 border border-border/60 rounded-md px-2 py-0.5 font-medium">{labelHorario(row)}</span>
+                                {row.motivo && <span className="text-[11px] text-muted-foreground italic truncate max-w-[200px]">"{row.motivo}"</span>}
+                              </div>
+                              {isInterval && row.data_fim && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  até {format(new Date(row.data_fim + "T00:00:00"), "d 'de' MMM", { locale: ptBR })}
+                                </p>
+                              )}
+                            </div>
+                            {!row.cancelada && row.data >= hoje && (
+                              <button
+                                type="button"
+                                onClick={() => setCancelTarget(row)}
+                                className="shrink-0 mt-0.5 text-muted-foreground hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* ── Confirmar cancelamento ─────────────────────────────────────────── */}
       <AlertDialog open={!!cancelTarget} onOpenChange={(o) => { if (!o) setCancelTarget(null); }}>
