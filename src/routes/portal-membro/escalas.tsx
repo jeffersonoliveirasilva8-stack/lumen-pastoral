@@ -154,6 +154,7 @@ function PortalMembroEscalas() {
         table: "escala_membros",
       }, () => {
         qc.invalidateQueries({ queryKey: ["pm-todas-escalas", membro.paroquia_id] });
+        qc.invalidateQueries({ queryKey: ["pm-coord-escalas"] });
         qc.invalidateQueries({ queryKey: ["pm-historico", membro.id] });
         qc.invalidateQueries({ queryKey: ["portal-home-escalas", membro.id] });
       })
