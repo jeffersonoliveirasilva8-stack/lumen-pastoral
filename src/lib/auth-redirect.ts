@@ -7,13 +7,14 @@
  *   - Magic Link (membro/login.tsx)
  *   - Recuperação de sessão (_authenticated.tsx)
  *
- * Lógica de destino:
- *   super_admin | admin_paroquial | coordenador → /auth/admin-mfa (MFA customizado)
- *   servidor | membro | auxiliar (puro)         → /portal-membro/home
- *   sem roles + membro ativo (auto-link)        → /portal-membro/home
- *   sem roles + sem membro                      → /membro/login
- *   membro desativado                           → /acesso-negado
- *   sem paróquia (admin novo)                   → /onboarding (após MFA)
+ * Mapeamento tipo_acesso → user_roles (após migration 102):
+ *   coordenador  → admin_paroquial  → /auth/admin-mfa
+ *   administrador→ admin_paroquial  → /auth/admin-mfa
+ *   vice         → coordenador      → /auth/admin-mfa
+ *   auxiliar     → lider            → /portal-membro/home  (Secretário)
+ *   membro       → servidor (105)   → /portal-membro/home
+ *   servidor     → servidor (105)   → /portal-membro/home
+ *   (sem roles)  → —                → /portal-membro/home  (via auth_user_id)
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -35,28 +36,33 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabase as any;
 
-    // Busca roles em paralelo com perfil
     const [{ data: rolesData }] = await Promise.all([
       db.from("user_roles").select("role").eq("user_id", user.id),
     ]);
 
     const roles: string[] = (rolesData ?? []).map((r: { role: string }) => r.role);
 
-    // Roles de coordenação → MFA customizado primeiro
+    // ── Roles de coordenação/admin → MFA obrigatório ─────────────────────────
+    // admin_paroquial: coordenador, administrador (migration 102)
+    // coordenador:     vice (migration 102)
+    // super_admin:     super admin global
     const isAdmin = roles.some((r) => r === "admin_paroquial" || r === "super_admin");
     const isCoordenador = roles.some((r) => r === "coordenador");
 
     if (isAdmin || isCoordenador) {
-      // Sempre exige MFA para admin/coordenador (código 6 dígitos via e-mail)
       return "/auth/admin-mfa";
     }
 
-    // Roles de membro/servidor/auxiliar → portal do membro
-    const isMembroRole = roles.some((r) =>
-      r === "membro" || r === "servidor" || r === "auxiliar",
+    // ── Roles de portal do membro ─────────────────────────────────────────────
+    // servidor: membro/servidor após migration 105 (restauração)
+    // lider:    auxiliar (Secretário) após migration 102
+    // membro:   legado (antes das migrations de enum cleanup)
+    // auxiliar: legado (antes das migrations de enum cleanup)
+    const isPortalRole = roles.some((r) =>
+      r === "servidor" || r === "lider" || r === "membro" || r === "auxiliar",
     );
 
-    if (isMembroRole) {
+    if (isPortalRole) {
       const { data: membroData } = await db
         .from("membros")
         .select("ativo, conta_ativada")
@@ -68,9 +74,12 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
       return "/portal-membro/home";
     }
 
-    // Sem roles — membro regular sem entrada em user_roles (ex: após backfill que limpa roles)
-    if (roles.length === 0) {
-      // 1. Verifica por auth_user_id — membro já vinculado, rota mais confiável
+    // ── Sem roles ou role desconhecido — tenta localizar o membro ─────────────
+    // Cobre: membros cujos roles foram apagados pela migration 102,
+    // primeiros acessos (auth_user_id ainda não vinculado), e qualquer
+    // combinação futura de roles não mapeada acima.
+    {
+      // 1. Já vinculado — busca direta por auth_user_id (mais confiável)
       const { data: membroById } = await db
         .from("membros")
         .select("ativo, conta_ativada")
@@ -83,7 +92,7 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
         return "/portal-membro/home";
       }
 
-      // 2. Membro não vinculado — tenta auto-link pelo RPC (bypassa RLS)
+      // 2. Não vinculado — tenta auto-link pelo RPC (SECURITY DEFINER, bypassa RLS)
       try {
         const { data: linkResult } = await db.rpc("portal_auto_link_by_email");
         if (linkResult?.success) {
@@ -97,10 +106,10 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
           return "/membro/primeiro-acesso";
         }
       } catch {
-        // RPC pode não existir — continua para fallback
+        // RPC pode não existir ou falhar — continua para fallback
       }
 
-      // 3. Fallback por email (membro ativo com este e-mail mas sem auth_user_id)
+      // 3. Fallback por email (membro sem auth_user_id)
       if (user.email) {
         const { data: membroByEmail } = await db
           .from("membros")
@@ -114,11 +123,9 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
           return "/portal-membro/home";
         }
       }
-
-      // Sem vínculo identificado → login do membro
-      return "/membro/login";
     }
 
+    // Sem vínculo identificado → tela de login do membro
     return "/membro/login";
   } catch {
     return "/membro/login";
