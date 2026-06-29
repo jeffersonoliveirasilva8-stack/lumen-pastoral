@@ -1720,7 +1720,7 @@ function EscalasPage() {
 
       {/* Barra de ações em massa — fixa na base */}
       {selectedEscalaIds.size > 0 && (
-        <div className="fixed bottom-[74px] lg:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5 max-w-[calc(100vw-2rem)]">
+        <div className="fixed floating-bar-bottom left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5 max-w-[calc(100vw-2rem)]">
           <span className="text-sm font-semibold whitespace-nowrap">
             <span className="text-primary">{selectedEscalaIds.size}</span> escala(s)
           </span>
@@ -1759,7 +1759,7 @@ function EscalasPage() {
 
       {/* Barra de mudanças pendentes de membros */}
       {hasPendingMemberChanges && (
-        <div className="fixed bottom-[74px] lg:bottom-6 right-4 z-50 flex items-center gap-2 rounded-2xl border border-amber-400/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5">
+        <div className="fixed floating-bar-bottom right-4 z-50 flex items-center gap-2 rounded-2xl border border-amber-400/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5">
           <span className="text-sm font-semibold text-amber-600 whitespace-nowrap">
             {pendingAdds.length + pendingRemoves.length} mudança(s) pendente(s)
           </span>

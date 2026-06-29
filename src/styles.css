@@ -419,6 +419,14 @@
   .safe-area-pt  { padding-top: env(safe-area-inset-top, 0px); }
   .safe-area-px  { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 
+  /* Barra flutuante de ações em massa — fica acima do bottom nav (58px) + safe-area iOS */
+  .floating-bar-bottom {
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 10px);
+  }
+  @media (min-width: 1024px) {
+    .floating-bar-bottom { bottom: 1.5rem; }
+  }
+
   /* Animações com curvas iOS */
   .animate-slide-up   { animation: slide-up-fade var(--duration-normal) var(--ease-out-ios) both; }
   .animate-slide-down { animation: slide-down-fade var(--duration-normal) var(--ease-out-ios) both; }

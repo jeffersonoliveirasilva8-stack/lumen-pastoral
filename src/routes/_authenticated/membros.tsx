@@ -3474,7 +3474,7 @@ function MembrosPage() {
 
           {/* Barra de ações em massa — fixa na base */}
           {selectedIds.size > 0 && (
-            <div className="fixed bottom-[74px] lg:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5 max-w-[calc(100vw-2rem)]">
+            <div className="fixed floating-bar-bottom left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5 max-w-[calc(100vw-2rem)]">
               <span className="text-sm font-semibold whitespace-nowrap">
                 <span className="text-primary">{selectedIds.size}</span> selecionado(s)
               </span>
