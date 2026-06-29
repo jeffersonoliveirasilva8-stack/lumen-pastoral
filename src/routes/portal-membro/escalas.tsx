@@ -259,37 +259,17 @@ function PortalMembroEscalas() {
     queryKey: ["pm-historico", membro?.id],
     enabled: !!membro?.id,
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await anyDb
-        .from("escala_membros")
-        .select(`
-          id, status,
-          escalas!inner(titulo, data, status),
-          ministerios(nome, cor),
-          historico_participacoes(pontos)
-        `)
-        .eq("membro_id", membro!.id)
-        .neq("ativo", false)
-        .not("status", "in", '("recusado","pendente")')
-        .limit(100);
+      const { data, error } = await anyDb.rpc("portal_membro_get_historico");
       if (error) throw error;
-      const EXCLUDE_STATUS = ["rascunho", "cancelada"];
-      return (data ?? [])
-        .filter((row: any) => {
-          const esc = row.escalas;
-          return esc && !EXCLUDE_STATUS.includes(esc.status) && esc.data < today;
-        })
-        .sort((a: any, b: any) => b.escalas.data.localeCompare(a.escalas.data))
-        .slice(0, 30)
-        .map((row: any) => ({
-          escala_membro_id: row.id,
-          status: row.status,
-          titulo: row.escalas.titulo,
-          data: row.escalas.data,
-          ministerio_nome: row.ministerios?.nome ?? "—",
-          ministerio_cor: row.ministerios?.cor ?? "#6B7280",
-          pontos: row.historico_participacoes?.[0]?.pontos ?? null,
-        }));
+      return (data as any[] ?? []).map((row: any) => ({
+        escala_membro_id: row.escala_membro_id,
+        status: row.status,
+        titulo: row.titulo,
+        data: row.data,
+        ministerio_nome: row.ministerio_nome ?? "—",
+        ministerio_cor: row.ministerio_cor ?? "#6B7280",
+        pontos: row.pontos ?? null,
+      }));
     },
   });
 
