@@ -1177,12 +1177,13 @@ function EscalasPage() {
   const archivePastEscalasMutation = useMutation({
     mutationFn: async () => {
       const today = format(new Date(), "yyyy-MM-dd");
+      // Arquiva apenas escalas publicadas passadas (não canceladas — mantêm status próprio)
       const { error } = await supabase
         .from("escalas")
         .update({ status: "arquivada" })
         .eq("paroquia_id", profile!.paroquia_id!)
-        .lt("data", today)
-        .not("status", "eq", "arquivada");
+        .eq("status", "publicada")
+        .lt("data", today);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -1225,7 +1226,7 @@ function EscalasPage() {
     if (autoArchiveTriggered || !profile?.paroquia_id) return;
     const hasPast = escalas.some((e) => {
       const eventDate = new Date(e.data + "T00:00:00");
-      return eventDate < new Date(today.toDateString()) && e.status !== "arquivada";
+      return eventDate < new Date(today.toDateString()) && e.status === "publicada";
     });
     if (hasPast) {
       archivePastEscalasMutation.mutate();

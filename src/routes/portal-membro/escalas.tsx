@@ -78,6 +78,8 @@ type CoordMembro = {
   membro_id: string;
   nome: string;
   status: string;
+  registrado_por_nome: string | null;
+  registrado_em: string | null;
 };
 
 type CoordEscala = {
@@ -268,7 +270,7 @@ function PortalMembroEscalas() {
         .eq("membro_id", membro!.id)
         .neq("ativo", false)
         .not("status", "in", '("recusado","pendente")')
-        .eq("escalas.status", "publicada")
+        .not("escalas.status", "in", '("rascunho","cancelada")')
         .lt("escalas.data", new Date().toISOString().slice(0, 10))
         .order("escalas.data", { ascending: false })
         .limit(30);
@@ -345,11 +347,13 @@ function PortalMembroEscalas() {
       let escalasData: any[];
       let allRows: any[];
 
+      const EM_SELECT = "id, status, escala_id, membro_id, presenca_registrada_em, membros!membro_id(id, nome), registrado_por:presenca_registrada_por(nome)";
+
       if (isSecretario) {
         // Secretário: apenas escalas em que ESTÁ ESCALADO, dos últimos 90 dias
         const { data: memRows, error: e0 } = await anyDb
           .from("escala_membros")
-          .select("id, status, escala_id, membros!membro_id(id, nome)")
+          .select(EM_SELECT)
           .eq("membro_id", membro!.id)
           .neq("ativo", false);
         if (e0) throw e0;
@@ -380,6 +384,8 @@ function PortalMembroEscalas() {
                   membro_id: membro!.id,
                   nome: myRow.membros?.nome ?? membro!.nome ?? "Você",
                   status: myRow.status,
+                  registrado_por_nome: myRow.registrado_por?.nome ?? null,
+                  registrado_em: myRow.presenca_registrada_em ?? null,
                 }]
               : [],
           };
@@ -401,7 +407,7 @@ function PortalMembroEscalas() {
       const escalaIds: string[] = escalasData.map((e: any) => e.id);
       const { data: rows, error: e2 } = await anyDb
         .from("escala_membros")
-        .select("id, status, membro_id, escala_id, membros!membro_id(id, nome)")
+        .select(EM_SELECT)
         .in("escala_id", escalaIds)
         .neq("ativo", false);
       if (e2) throw e2;
@@ -419,6 +425,8 @@ function PortalMembroEscalas() {
             membro_id: r.membro_id,
             nome: r.membros?.nome ?? "—",
             status: r.status,
+            registrado_por_nome: r.registrado_por?.nome ?? null,
+            registrado_em: r.presenca_registrada_em ?? null,
           }))
           .sort((a: CoordMembro, b: CoordMembro) => a.nome.localeCompare(b.nome, "pt-BR")),
       }));
@@ -567,6 +575,24 @@ function PortalMembroEscalas() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const salvarPresencasMutation = useMutation({
+    mutationFn: async (args: { escala_id: string; updates: { id: string; status: string }[] }) => {
+      const { error } = await anyDb.rpc("salvar_presencas_escala", {
+        p_escala_id: args.escala_id,
+        p_updates: args.updates,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pm-coord-escalas"] });
+      qc.invalidateQueries({ queryKey: ["pm-todas-escalas", membro!.paroquia_id] });
+      qc.invalidateQueries({ queryKey: ["pm-historico", membro!.id] });
+      toast.success("Presenças salvas.");
+    },
+    onError: (e: Error) => toast.error("Erro ao salvar presenças: " + e.message),
+  });
+
+  // Mantido para compatibilidade com EscalasTab (confirmação do próprio membro)
   const updateMembroStatusMutation = useMutation({
     mutationFn: async (args: { escala_membro_id: string; status: string }) => {
       const { error } = await anyDb
@@ -576,7 +602,7 @@ function PortalMembroEscalas() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["pm-coord-escalas", membro!.id] });
+      qc.invalidateQueries({ queryKey: ["pm-coord-escalas"] });
       qc.invalidateQueries({ queryKey: ["pm-todas-escalas", membro!.paroquia_id] });
       toast.success("Presença atualizada.");
     },
@@ -637,10 +663,10 @@ function PortalMembroEscalas() {
               loading={loadingCoord}
               membroId={membro?.id ?? ""}
               isSecretario={isSecretario}
-              savingStatus={updateMembroStatusMutation.isPending}
+              savingPresencas={salvarPresencasMutation.isPending}
               savingOcorrencia={addOcorrenciaMutation.isPending}
-              onUpdateMemberStatus={(id, status) =>
-                updateMembroStatusMutation.mutate({ escala_membro_id: id, status })
+              onSavePresencas={(escala_id, updates) =>
+                salvarPresencasMutation.mutate({ escala_id, updates })
               }
               onAddOcorrencia={(escala_id, tipo, descricao) =>
                 addOcorrenciaMutation.mutate({ escala_id, tipo, descricao })
@@ -1348,16 +1374,16 @@ type CoordinatorTabProps = {
   loading: boolean;
   membroId: string;
   isSecretario: boolean;
-  savingStatus: boolean;
+  savingPresencas: boolean;
   savingOcorrencia: boolean;
-  onUpdateMemberStatus: (escala_membro_id: string, status: string) => void;
+  onSavePresencas: (escala_id: string, updates: { id: string; status: string }[]) => void;
   onAddOcorrencia: (escala_id: string, tipo: string, descricao: string) => void;
 };
 
 function CoordinatorTab({
   coordEscalas, loading, membroId, isSecretario,
-  savingStatus, savingOcorrencia,
-  onUpdateMemberStatus, onAddOcorrencia,
+  savingPresencas, savingOcorrencia,
+  onSavePresencas, onAddOcorrencia,
 }: CoordinatorTabProps) {
   const hojeStr = new Date().toISOString().slice(0, 10);
 
@@ -1409,9 +1435,9 @@ function CoordinatorTab({
               key={escala.escala_id}
               escala={escala}
               membroId={membroId}
-              savingStatus={savingStatus}
+              saving={savingPresencas}
               savingOcorrencia={savingOcorrencia}
-              onUpdateMemberStatus={onUpdateMemberStatus}
+              onSavePresencas={onSavePresencas}
               onAddOcorrencia={onAddOcorrencia}
             />
           ))}
@@ -1432,9 +1458,9 @@ function CoordinatorTab({
               key={escala.escala_id}
               escala={escala}
               membroId={membroId}
-              savingStatus={savingStatus}
+              saving={savingPresencas}
               savingOcorrencia={savingOcorrencia}
-              onUpdateMemberStatus={onUpdateMemberStatus}
+              onSavePresencas={onSavePresencas}
               onAddOcorrencia={onAddOcorrencia}
             />
           ))}
@@ -1457,9 +1483,9 @@ function CoordinatorTab({
                 key={escala.escala_id}
                 escala={escala}
                 membroId={membroId}
-                savingStatus={savingStatus}
+                saving={savingPresencas}
                 savingOcorrencia={savingOcorrencia}
-                onUpdateMemberStatus={onUpdateMemberStatus}
+                onSavePresencas={onSavePresencas}
                 onAddOcorrencia={onAddOcorrencia}
               />
             ))}
@@ -1483,26 +1509,66 @@ function CoordinatorTab({
 type EscalaCoordCardProps = {
   escala: CoordEscala;
   membroId: string;
-  savingStatus: boolean;
+  saving: boolean;
   savingOcorrencia: boolean;
-  onUpdateMemberStatus: (escala_membro_id: string, status: string) => void;
+  onSavePresencas: (escala_id: string, updates: { id: string; status: string }[]) => void;
   onAddOcorrencia: (escala_id: string, tipo: string, descricao: string) => void;
 };
 
 function EscalaCoordCard({
-  escala, membroId, savingStatus, savingOcorrencia,
-  onUpdateMemberStatus, onAddOcorrencia,
+  escala, membroId, saving, savingOcorrencia,
+  onSavePresencas, onAddOcorrencia,
 }: EscalaCoordCardProps) {
   const [showOcorrencia, setShowOcorrencia] = useState(false);
   const [ocorrenciaTipo, setOcorrenciaTipo] = useState("atraso");
   const [ocorrenciaDescricao, setOcorrenciaDescricao] = useState("");
-  const dateObj = new Date(escala.data + "T12:00:00");
 
-  const presentes   = escala.membros.filter((m) => m.status === "presente" || m.status === "confirmado").length;
-  const faltaram    = escala.membros.filter((m) => m.status === "faltou"   || m.status === "ausente").length;
-  const atrasados   = escala.membros.filter((m) => m.status === "atrasado").length;
-  const justificaram= escala.membros.filter((m) => m.status === "justificou" || m.status === "recusado").length;
-  const pendentes   = escala.membros.filter((m) => m.status === "pendente").length;
+  // Local state: guarda alterações antes de salvar
+  const [pending, setPending] = useState<Record<string, string>>({});
+
+  // Sincroniza quando o servidor retorna dados atualizados (após salvar)
+  useEffect(() => {
+    if (Object.keys(pending).length === 0) return;
+    // Limpa pending apenas para membros cujo status no servidor já bateu
+    setPending((prev) => {
+      const next = { ...prev };
+      for (const m of escala.membros) {
+        if (next[m.escala_membro_id] === m.status) {
+          delete next[m.escala_membro_id];
+        }
+      }
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [escala.membros]);
+
+  const dateObj = new Date(escala.data + "T12:00:00");
+  const isDirty = Object.keys(pending).length > 0;
+
+  // Status efetivo = pending se houver, senão o do servidor
+  function effectiveStatus(m: CoordMembro) {
+    return pending[m.escala_membro_id] ?? m.status;
+  }
+
+  function toggleStatus(m: CoordMembro, s: string) {
+    const current = effectiveStatus(m);
+    const next = current === s ? "pendente" : s;
+    setPending((prev) => ({ ...prev, [m.escala_membro_id]: next }));
+  }
+
+  function handleSave() {
+    const updates = Object.entries(pending).map(([id, status]) => ({ id, status }));
+    if (!updates.length) return;
+    onSavePresencas(escala.escala_id, updates);
+  }
+
+  // Contadores baseados no status efetivo
+  const membrosEfetivos = escala.membros.map((m) => ({ ...m, status: effectiveStatus(m) }));
+  const presentes    = membrosEfetivos.filter((m) => m.status === "presente" || m.status === "confirmado").length;
+  const faltaram     = membrosEfetivos.filter((m) => m.status === "faltou"   || m.status === "ausente").length;
+  const atrasados    = membrosEfetivos.filter((m) => m.status === "atrasado").length;
+  const justificaram = membrosEfetivos.filter((m) => m.status === "justificou" || m.status === "recusado").length;
+  const pendentesN   = membrosEfetivos.filter((m) => m.status === "pendente").length;
 
   return (
     <div className="rounded-3xl border border-border bg-card shadow-altar overflow-hidden">
@@ -1516,21 +1582,11 @@ function EscalaCoordCard({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1 shrink-0 text-xs">
-          {presentes > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-700 dark:text-green-400 font-medium">{presentes} ✓</span>
-          )}
-          {faltaram > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-600 font-medium">{faltaram} ✗</span>
-          )}
-          {atrasados > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-700 dark:text-orange-400 font-medium">{atrasados} ⏰</span>
-          )}
-          {justificaram > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 font-medium">{justificaram} J</span>
-          )}
-          {pendentes > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{pendentes} ?</span>
-          )}
+          {presentes    > 0 && <span className="px-2 py-0.5 rounded-full bg-green-500/15 text-green-700 dark:text-green-400 font-medium">{presentes} ✓</span>}
+          {faltaram     > 0 && <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-600 font-medium">{faltaram} ✗</span>}
+          {atrasados    > 0 && <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-700 dark:text-orange-400 font-medium">{atrasados} ⏰</span>}
+          {justificaram > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 font-medium">{justificaram} J</span>}
+          {pendentesN   > 0 && <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{pendentesN} ?</span>}
         </div>
       </div>
 
@@ -1540,60 +1596,82 @@ function EscalaCoordCard({
           <Users className="h-3.5 w-3.5" />
           <span>{escala.membros.length} membro{escala.membros.length !== 1 ? "s" : ""} escalado{escala.membros.length !== 1 ? "s" : ""}</span>
         </div>
-        {escala.membros.map((m) => (
-          <div key={m.escala_membro_id} className="px-4 py-3 border-t border-border/60 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {m.nome}
-                  {m.membro_id === membroId && (
-                    <span className="ml-2 text-[10px] text-muted-foreground font-normal">(você)</span>
-                  )}
-                </p>
-                <StatusBadge status={m.status} />
+        {escala.membros.map((m) => {
+          const status = effectiveStatus(m);
+          const hasPending = m.escala_membro_id in pending;
+          return (
+            <div key={m.escala_membro_id} className={`px-4 py-3 border-t border-border/60 space-y-2 ${hasPending ? "bg-primary/3" : ""}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {m.nome}
+                    {m.membro_id === membroId && (
+                      <span className="ml-2 text-[10px] text-muted-foreground font-normal">(você)</span>
+                    )}
+                    {hasPending && (
+                      <span className="ml-2 text-[10px] text-primary font-normal">· alterado</span>
+                    )}
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <StatusBadge status={status} />
+                    {/* Quem registrou */}
+                    {m.registrado_por_nome && !hasPending && (
+                      <span className="text-[10px] text-muted-foreground">
+                        por {m.registrado_por_nome}
+                        {m.registrado_em && (
+                          <> · {format(new Date(m.registrado_em), "d/MM HH:mm")}</>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {(["presente", "faltou", "justificou", "atrasado"] as const).map((s) => {
+                  const isActive =
+                    s === "presente"    ? status === "presente"   || status === "confirmado"
+                    : s === "faltou"    ? status === "faltou"     || status === "ausente"
+                    : s === "justificou"? status === "justificou" || status === "recusado"
+                    : status === "atrasado";
+
+                  const colors: Record<string, string> = {
+                    presente:   isActive ? "bg-green-500 text-white" : "bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20",
+                    faltou:     s === "faltou" && isActive ? "bg-red-500 text-white" : "bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20",
+                    justificou: s === "justificou" && isActive ? "bg-amber-500 text-white" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
+                    atrasado:   s === "atrasado" && isActive ? "bg-orange-500 text-white" : "bg-orange-500/10 text-orange-700 dark:text-orange-400 hover:bg-orange-500/20",
+                  };
+                  const label: Record<string, string> = { presente: "Presente", faltou: "Faltou", justificou: "Justificou", atrasado: "Atrasado" };
+                  return (
+                    <button
+                      key={s}
+                      disabled={saving}
+                      onClick={() => toggleStatus(m, s)}
+                      className={`text-xs px-2 py-2.5 rounded-xl font-semibold transition min-h-[44px] ${colors[s]}`}
+                    >
+                      {label[s]}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {(["presente", "faltou", "justificou", "atrasado"] as const).map((s) => {
-                // Mapeia o status atual para o botão correspondente
-                const isActive =
-                  s === "presente"   ? m.status === "presente"   || m.status === "confirmado"
-                  : s === "faltou"   ? m.status === "faltou"     || m.status === "ausente"
-                  : s === "justificou" ? m.status === "justificou" || m.status === "recusado"
-                  : m.status === "atrasado";
+          );
+        })}
+      </div>
 
-                const colors: Record<string, string> = {
-                  presente:  isActive
-                    ? "bg-green-500 text-white"
-                    : "bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20",
-                  faltou:    s === "faltou" && isActive
-                    ? "bg-red-500 text-white"
-                    : "bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20",
-                  justificou: s === "justificou" && isActive
-                    ? "bg-amber-500 text-white"
-                    : "bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
-                  atrasado:  s === "atrasado" && isActive
-                    ? "bg-orange-500 text-white"
-                    : "bg-orange-500/10 text-orange-700 dark:text-orange-400 hover:bg-orange-500/20",
-                };
-                const label: Record<string, string> = {
-                  presente: "Presente", faltou: "Faltou",
-                  justificou: "Justificou", atrasado: "Atrasado",
-                };
-                return (
-                  <button
-                    key={s}
-                    disabled={savingStatus}
-                    onClick={() => onUpdateMemberStatus(m.escala_membro_id, isActive ? "pendente" : s)}
-                    className={`text-xs px-2 py-2.5 rounded-xl font-semibold transition min-h-[44px] ${colors[s]}`}
-                  >
-                    {label[s]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      {/* Botão Salvar presenças */}
+      <div className="border-t border-border px-4 py-3">
+        <Button
+          className="w-full gap-2"
+          disabled={!isDirty || saving}
+          onClick={handleSave}
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          {isDirty ? "Salvar presenças" : "Sem alterações"}
+        </Button>
       </div>
 
       {/* Registrar ocorrência */}
@@ -1635,11 +1713,7 @@ function EscalaCoordCard({
               }}
               className="w-full"
             >
-              {savingOcorrencia ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Save className="h-3.5 w-3.5" />
-              )}
+              {savingOcorrencia ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
               Registrar ocorrência
             </Button>
           </div>
