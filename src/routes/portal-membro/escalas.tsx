@@ -7,7 +7,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Loader2, Calendar, MapPin, CheckCircle2, XCircle,
   CalendarOff, History, ChevronDown, ChevronUp, Plus, X,
-  Shield, Users, AlertTriangle, Save, Trash2, CalendarPlus,
+  Shield, Users, AlertTriangle, Save, Trash2, CalendarPlus, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
@@ -267,6 +267,7 @@ function PortalMembroEscalas() {
         `)
         .eq("membro_id", membro!.id)
         .neq("ativo", false)
+        .not("status", "in", '("recusado","pendente")')
         .eq("escalas.status", "publicada")
         .lt("escalas.data", new Date().toISOString().slice(0, 10))
         .order("escalas.data", { ascending: false })
@@ -2054,7 +2055,8 @@ function IndisponibilidadeTab({
 
 function HistoricoTab({ historico, loading }: { historico: HistoricoItem[]; loading: boolean }) {
   const totalPontos = historico.reduce((s, h) => s + (h.pontos ?? 0), 0);
-  const servidas = historico.filter((h) => h.status === "presente" || h.status === "confirmado" || h.status === "atrasado").length;
+  // 'confirmado' = membro sinalizou que vai, mas secretário ainda não registrou presença real
+  const servidas = historico.filter((h) => h.status === "presente" || h.status === "atrasado").length;
 
   if (loading) {
     return (
@@ -2088,10 +2090,12 @@ function HistoricoTab({ historico, loading }: { historico: HistoricoItem[]; load
           {historico.map((h) => (
             <div key={h.escala_membro_id} className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
               <div className="shrink-0">
-                {(h.status === "presente" || h.status === "confirmado") ? (
+                {h.status === "presente" ? (
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
                 ) : h.status === "atrasado" ? (
                   <CheckCircle2 className="h-4 w-4 text-orange-400" />
+                ) : h.status === "confirmado" ? (
+                  <Clock className="h-4 w-4 text-blue-400" />
                 ) : (h.status === "faltou" || h.status === "ausente") ? (
                   <XCircle className="h-4 w-4 text-red-400" />
                 ) : h.status === "justificou" ? (
@@ -2106,11 +2110,16 @@ function HistoricoTab({ historico, loading }: { historico: HistoricoItem[]; load
                   <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: h.ministerio_cor }} />
                   <p className="text-xs text-muted-foreground">
                     {format(new Date(h.data + "T12:00:00"), "d MMM yyyy", { locale: ptBR })} · {h.ministerio_nome}
+                    {h.status === "confirmado" && (
+                      <span className="ml-1 text-blue-500">· aguardando secretário</span>
+                    )}
                   </p>
                 </div>
               </div>
-              {h.pontos != null && h.pontos > 0 && (
-                <span className="text-xs font-medium text-muted-foreground shrink-0">+{h.pontos}pts</span>
+              {h.pontos != null && h.pontos !== 0 && h.status !== "confirmado" && (
+                <span className={`text-xs font-medium shrink-0 ${h.pontos > 0 ? "text-muted-foreground" : "text-red-400"}`}>
+                  {h.pontos > 0 ? "+" : ""}{h.pontos}pts
+                </span>
               )}
             </div>
           ))}
