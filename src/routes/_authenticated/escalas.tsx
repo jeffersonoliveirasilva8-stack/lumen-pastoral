@@ -1653,6 +1653,7 @@ function EscalasPage() {
 
   useSetPageTabs([
     { label: "Planejamento",       onClick: () => setView("lista"),              isActive: view === "lista" },
+    { label: "Sacristia",          to: "/sacristia",                             isActive: false },
     { label: "Indisponibilidades", onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
   ]);
 

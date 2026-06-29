@@ -24,9 +24,8 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
       key={key}
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(6px)",
         transition: visible
-          ? "opacity 200ms cubic-bezier(0.25,0.46,0.45,0.94), transform 200ms cubic-bezier(0.25,0.46,0.45,0.94)"
+          ? "opacity 200ms cubic-bezier(0.25,0.46,0.45,0.94)"
           : "none",
       }}
     >

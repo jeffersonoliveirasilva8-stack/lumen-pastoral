@@ -103,11 +103,7 @@ function OcorrenciasPage() {
     },
   });
 
-  useSetPageTabs([
-    { label: "Eventos",     to: "/formacoes",   isActive: false },
-    { label: "Formações",   to: "/formacoes",   isActive: false },
-    { label: "Ocorrências", to: "/ocorrencias", isActive: true  },
-  ]);
+  useSetPageTabs([]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto space-y-6 pb-24 lg:pb-10">
