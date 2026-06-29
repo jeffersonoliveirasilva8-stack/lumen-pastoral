@@ -355,7 +355,7 @@ function DashboardPage() {
     staleTime: 10 * 60 * 1000,
     queryFn: async () => {
       const [{ data: mbs }, { data: atuacoes }, { data: matuacoes }] = await Promise.all([
-        supabase.from("membros").select("id, sexo, data_nascimento").eq("paroquia_id", pid!).eq("ativo", true),
+        supabase.from("membros").select("id, nome, sexo, data_nascimento").eq("paroquia_id", pid!).eq("ativo", true),
         anyDb.from("atuacoes_pastorais").select("id, nome, cor").eq("paroquia_id", pid!).eq("ativo", true).order("ordem"),
         anyDb.from("membro_atuacoes").select("membro_id, atuacao_id"),
       ]);
@@ -371,16 +371,25 @@ function DashboardPage() {
       // By age
       const now = new Date();
       const ag: Record<string, number> = { "<18": 0, "18–29": 0, "30–44": 0, "45–59": 0, "60+": 0 };
-      (mbs ?? []).forEach((m: { data_nascimento: string | null }) => {
+      type AgeMember = { nome: string; age: number };
+      let youngest: AgeMember | null = null;
+      let oldest: AgeMember | null = null;
+      let ageSum = 0; let ageCount = 0;
+      (mbs ?? []).forEach((m: { id: string; nome: string; data_nascimento: string | null }) => {
         if (!m.data_nascimento) return;
-        const age = now.getFullYear() - new Date(m.data_nascimento + "T12:00:00").getFullYear();
+        const born = new Date(m.data_nascimento + "T12:00:00");
+        const age = now.getFullYear() - born.getFullYear() - (now < new Date(now.getFullYear(), born.getMonth(), born.getDate()) ? 1 : 0);
         if (age < 18) ag["<18"]++;
         else if (age < 30) ag["18–29"]++;
         else if (age < 45) ag["30–44"]++;
         else if (age < 60) ag["45–59"]++;
         else ag["60+"]++;
+        ageSum += age; ageCount++;
+        if (!youngest || age < youngest.age) youngest = { nome: m.nome, age };
+        if (!oldest || age > oldest.age) oldest = { nome: m.nome, age };
       });
       const byAge = Object.entries(ag).filter(([, v]) => v > 0).map(([nome, membros]) => ({ nome, membros }));
+      const avgAge = ageCount > 0 ? Math.round(ageSum / ageCount) : null;
 
       // By pastoral
       const ids = new Set((mbs ?? []).map((m: { id: string }) => m.id));
@@ -393,7 +402,7 @@ function DashboardPage() {
         .filter((x: { membros: number }) => x.membros > 0)
         .sort((a: { membros: number }, b: { membros: number }) => b.membros - a.membros);
 
-      return { bySex, byAge, byPastoral };
+      return { bySex, byAge, byPastoral, youngest: youngest as AgeMember | null, oldest: oldest as AgeMember | null, avgAge };
     },
   });
 
@@ -1656,6 +1665,89 @@ function DashboardPage() {
                       <span className="text-sm font-bold">{totalMembros}</span>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Perfil Etário */}
+              {memberStats && memberStats.avgAge !== null && (
+                <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Perfil etário</p>
+                  </div>
+
+                  {/* Trio: mais novo · média · mais velho */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-center">
+                      <p className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold mb-1">Mais novo</p>
+                      <p className="text-2xl font-bold text-emerald-600 leading-none">{memberStats.youngest?.age ?? "–"}</p>
+                      <p className="text-[11px] text-emerald-700/70 mt-1 truncate">{memberStats.youngest?.nome.split(" ")[0] ?? ""}</p>
+                    </div>
+                    <div className="rounded-xl bg-primary/10 border border-primary/20 p-3 text-center">
+                      <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-1">Média</p>
+                      <p className="text-2xl font-bold text-primary leading-none">{memberStats.avgAge}</p>
+                      <p className="text-[11px] text-primary/60 mt-1">anos</p>
+                    </div>
+                    <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 text-center">
+                      <p className="text-[10px] uppercase tracking-wider text-amber-600 font-semibold mb-1">Mais velho</p>
+                      <p className="text-2xl font-bold text-amber-600 leading-none">{memberStats.oldest?.age ?? "–"}</p>
+                      <p className="text-[11px] text-amber-700/70 mt-1 truncate">{memberStats.oldest?.nome.split(" ")[0] ?? ""}</p>
+                    </div>
+                  </div>
+
+                  {/* Barra de distribuição por faixa */}
+                  {memberStats.byAge.length > 0 && (() => {
+                    const total = memberStats.byAge.reduce((s: number, b: { membros: number }) => s + b.membros, 0);
+                    const colors: Record<string, string> = {
+                      "<18": "#10b981", "18–29": "#3b82f6", "30–44": "#8b5cf6", "45–59": "#f59e0b", "60+": "#ef4444",
+                    };
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex h-3 rounded-full overflow-hidden gap-px">
+                          {memberStats.byAge.map((b: { nome: string; membros: number }) => (
+                            <div
+                              key={b.nome}
+                              style={{ width: `${(b.membros / total) * 100}%`, backgroundColor: colors[b.nome] ?? "#6b7280" }}
+                              title={`${b.nome}: ${b.membros}`}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                          {memberStats.byAge.map((b: { nome: string; membros: number }) => (
+                            <div key={b.nome} className="flex items-center gap-1">
+                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: colors[b.nome] ?? "#6b7280" }} />
+                              <span className="text-[11px] text-muted-foreground">{b.nome}</span>
+                              <span className="text-[11px] font-semibold">{b.membros}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Gênero */}
+                  {memberStats.bySex.length > 0 && (() => {
+                    const total = memberStats.bySex.reduce((s: number, b: { membros: number }) => s + b.membros, 0);
+                    return (
+                      <div className="pt-1 border-t border-border/40 space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Gênero</p>
+                        <div className="flex h-2.5 rounded-full overflow-hidden gap-px">
+                          {memberStats.bySex.map((b: { nome: string; membros: number; cor: string }) => (
+                            <div key={b.nome} style={{ width: `${(b.membros / total) * 100}%`, backgroundColor: b.cor }} title={`${b.nome}: ${b.membros}`} />
+                          ))}
+                        </div>
+                        <div className="flex gap-3">
+                          {memberStats.bySex.map((b: { nome: string; membros: number; cor: string }) => (
+                            <div key={b.nome} className="flex items-center gap-1">
+                              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: b.cor }} />
+                              <span className="text-[11px] text-muted-foreground">{b.nome}</span>
+                              <span className="text-[11px] font-semibold">{b.membros}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
