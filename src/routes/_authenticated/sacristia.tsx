@@ -5,7 +5,7 @@ import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   CheckCircle2, XCircle, Clock, MapPin, Users, Loader2, FileText,
-  AlertCircle, TrendingUp, Search, X, CheckCheck, History,
+  AlertCircle, TrendingUp, Search, X, CheckCheck, History, Ban,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -110,7 +110,7 @@ function SacristiaPage() {
         .from("escala_membros")
         .select("id, membro_id, ministerio_id, escala_id, status, justificativa, membros!membro_id(id, nome, telefone), ministerios(id, nome, cor)")
         .in("escala_id", escalaIds)
-        .neq("ativo", false);
+        .or("ativo.is.null,ativo.eq.true");
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
         membro: r.membros,
@@ -286,6 +286,22 @@ function SacristiaPage() {
       setSalvandoTodos(false);
     }
   }
+
+  const cancelarEscalaMutation = useMutation({
+    mutationFn: async (escalaId: string) => {
+      const { error } = await supabase
+        .from("escalas")
+        .update({ status: "cancelada" })
+        .eq("id", escalaId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sacristia-todas"] });
+      qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
+      toast.success("Missa cancelada.");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
 
   function marcarTodosPresentes(escalaId: string) {
     const membrosDestaEscala = membrosEscala.filter((m) => m.escala_id === escalaId);
@@ -559,6 +575,22 @@ function SacristiaPage() {
                         <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 text-[10px]">
                           Solene
                         </Badge>
+                      )}
+                      {tab === "pendentes" && !isAdministrador && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1"
+                          disabled={cancelarEscalaMutation.isPending}
+                          onClick={() => {
+                            if (confirm(`Cancelar "${escala.titulo}"?\nEla sairá da sacristia.`)) {
+                              cancelarEscalaMutation.mutate(escala.id);
+                            }
+                          }}
+                        >
+                          <Ban className="h-3 w-3" />
+                          Cancelar
+                        </Button>
                       )}
                     </div>
                   </div>
