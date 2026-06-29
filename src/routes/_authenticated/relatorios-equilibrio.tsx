@@ -189,12 +189,8 @@ function RelatoriosEquilibrioPage() {
   const periodoLabel = PERIODOS.find((p) => p.dias === periodoDias)?.label ?? `${periodoDias} dias`;
 
   useSetPageTabs([
-    { label: "Planejamento",       to: "/escalas",                         isActive: false },
-    { label: "Sacristia",          to: "/sacristia",                       isActive: false },
-    { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
-    { label: "Substituições",      to: "/substituicoes",                   isActive: false },
-    { label: "Equilíbrio",          to: "/relatorios-equilibrio",           isActive: true  },
-    { label: "Escalas",             to: "/relatorios-escalas",              isActive: false },
+    { label: "Equilíbrio", to: "/relatorios-equilibrio", isActive: true  },
+    { label: "Escalas",    to: "/relatorios-escalas",    isActive: false },
   ]);
 
   return (

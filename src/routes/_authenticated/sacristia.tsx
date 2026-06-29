@@ -322,13 +322,7 @@ function SacristiaPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, em_andamento.length, pendentes.length]);
 
-  useSetPageTabs([
-    { label: "Planejamento",       to: "/escalas",                         isActive: false },
-    { label: "Sacristia",          to: "/sacristia",                       isActive: true  },
-    { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
-    { label: "Substituições",      to: "/substituicoes",                   isActive: false },
-    { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: false },
-  ]);
+  useSetPageTabs([]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-2xl mx-auto pb-24">

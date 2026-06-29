@@ -81,12 +81,8 @@ function RelatoriosEscalasPage() {
   const desde = format(subDays(new Date(), periodoDias), "yyyy-MM-dd");
 
   useSetPageTabs([
-    { label: "Planejamento",       to: "/escalas",                         isActive: false },
-    { label: "Sacristia",          to: "/sacristia",                       isActive: false },
-    { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
-    { label: "Substituições",      to: "/substituicoes",                   isActive: false },
-    { label: "Equilíbrio",         to: "/relatorios-equilibrio",           isActive: false },
-    { label: "Escalas",            to: "/relatorios-escalas",              isActive: true  },
+    { label: "Equilíbrio", to: "/relatorios-equilibrio", isActive: false },
+    { label: "Escalas",    to: "/relatorios-escalas",    isActive: true  },
   ]);
 
   const { data: escalas = [], isLoading } = useQuery<EscalaRow[]>({

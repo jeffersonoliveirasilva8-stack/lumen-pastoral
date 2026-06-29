@@ -213,6 +213,11 @@ function EscalasPage() {
   const [reorganizarOpen, setReorganizarOpen] = useState(false);
   const [reorganizarEscalaId, setReorganizarEscalaId] = useState("");
 
+  // Buffer de mudanças de membros — aplica só ao clicar Salvar
+  const [pendingAdds, setPendingAdds] = useState<{ membro_id: string; ministerio_id: string }[]>([]);
+  const [pendingRemoves, setPendingRemoves] = useState<string[]>([]);
+  const hasPendingMemberChanges = pendingAdds.length > 0 || pendingRemoves.length > 0;
+
   // ── Queries ────────────────────────────────────────────────────────────────
 
   const { data: escalas = [], isLoading } = useQuery({
@@ -326,6 +331,41 @@ function EscalasPage() {
       })) as EscalaMembro[];
     },
   });
+
+  // Limpa buffer quando o painel muda de escala
+  useEffect(() => {
+    setPendingAdds([]);
+    setPendingRemoves([]);
+  }, [detailEscala?.id]);
+
+  // Atribuicoes com mudanças pendentes aplicadas (otimista)
+  const atribuicoesComPending = useMemo((): EscalaMembro[] => {
+    const base = atribuicoes.filter((a) => !pendingRemoves.includes(a.id));
+    const fakeAdds: EscalaMembro[] = pendingAdds.map((add, i) => ({
+      id: `pending-add-${i}`,
+      membro_id: add.membro_id,
+      ministerio_id: add.ministerio_id,
+      status: "pendente",
+      membro: membros.find((m) => m.id === add.membro_id) ?? ({ id: add.membro_id, nome: "…" } as any),
+    }));
+    return [...base, ...fakeAdds];
+  }, [atribuicoes, pendingRemoves, pendingAdds, membros]);
+
+  async function applyPendingMemberChanges() {
+    try {
+      for (const id of pendingRemoves) {
+        await removerAtribuicaoMutation.mutateAsync(id);
+      }
+      for (const add of pendingAdds) {
+        await atribuirMutation.mutateAsync(add);
+      }
+      setPendingAdds([]);
+      setPendingRemoves([]);
+      toast.success("Mudanças salvas.");
+    } catch {
+      // erro já exibido pelas mutations
+    }
+  }
 
   const { data: removidos = [], refetch: refetchRemovidos } = useQuery({
     queryKey: ["escala-membros-removidos", detailEscala?.id],
@@ -1613,10 +1653,7 @@ function EscalasPage() {
 
   useSetPageTabs([
     { label: "Planejamento",       onClick: () => setView("lista"),              isActive: view === "lista" },
-    { label: "Sacristia",          to: "/sacristia",                             isActive: false },
     { label: "Indisponibilidades", onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
-    { label: "Substituições",      to: "/substituicoes",                         isActive: false },
-    { label: "Relatório",          to: "/relatorios-equilibrio",                 isActive: false },
   ]);
 
   return (
@@ -1683,7 +1720,7 @@ function EscalasPage() {
 
       {/* Barra de ações em massa — fixa na base */}
       {selectedEscalaIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5 max-w-[calc(100vw-2rem)]">
+        <div className="fixed bottom-[74px] lg:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-2xl border border-border/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5 max-w-[calc(100vw-2rem)]">
           <span className="text-sm font-semibold whitespace-nowrap">
             <span className="text-primary">{selectedEscalaIds.size}</span> escala(s)
           </span>
@@ -1717,6 +1754,29 @@ function EscalasPage() {
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Barra de mudanças pendentes de membros */}
+      {hasPendingMemberChanges && (
+        <div className="fixed bottom-[74px] lg:bottom-6 right-4 z-50 flex items-center gap-2 rounded-2xl border border-amber-400/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5">
+          <span className="text-sm font-semibold text-amber-600 whitespace-nowrap">
+            {pendingAdds.length + pendingRemoves.length} mudança(s) pendente(s)
+          </span>
+          <div className="h-4 w-px bg-border mx-0.5 shrink-0" />
+          <Button
+            size="sm" className="h-7 text-xs"
+            disabled={atribuirMutation.isPending || removerAtribuicaoMutation.isPending}
+            onClick={applyPendingMemberChanges}
+          >
+            Salvar
+          </Button>
+          <Button
+            size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground"
+            onClick={() => { setPendingAdds([]); setPendingRemoves([]); }}
+          >
+            Descartar
+          </Button>
         </div>
       )}
 
@@ -1865,7 +1925,7 @@ function EscalasPage() {
               ministerios={ministerios}
               membros={membros}
               funcoes={funcoes}
-              atribuicoes={atribuicoes}
+              atribuicoes={atribuicoesComPending}
               removidos={removidos}
               membroMinisterios={membroMinisterios}
               assignmentHistory={assignmentHistory}
@@ -1886,8 +1946,8 @@ function EscalasPage() {
               onAddFuncao={(mid, qty) => addFuncaoMutation.mutate({ ministerio_id: mid, quantidade: qty })}
               onRemoveFuncao={(id) => removeFuncaoMutation.mutate(id)}
               paroquiaNome={paroquiaNome}
-              onAtribuir={(mid, minid) => atribuirMutation.mutate({ membro_id: mid, ministerio_id: minid })}
-              onRemoverAtribuicao={(id) => removerAtribuicaoMutation.mutate(id)}
+              onAtribuir={(mid, minid) => setPendingAdds((prev) => [...prev, { membro_id: mid, ministerio_id: minid }])}
+              onRemoverAtribuicao={(id) => setPendingRemoves((prev) => [...prev, id])}
               onRemoverPublicada={(args) => removerPublicadaMutation.mutate(args)}
               onStatusChange={(status) => updateStatusMutation.mutate({ id: detailEscala.id, status })}
               onNotificarVaga={async ({ escalaId, ministerioId, ministerioNome }) => {

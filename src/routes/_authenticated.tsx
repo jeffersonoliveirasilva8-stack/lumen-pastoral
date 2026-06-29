@@ -450,14 +450,14 @@ function AuthLayout() {
               </Link>
               <Link
                 to="/minha-conta"
-                className="hidden sm:inline-flex btn-icon"
+                className="hidden sm:inline-flex lg:hidden btn-icon"
                 title="Minha conta"
               >
                 <UserCircle className="h-4 w-4" />
               </Link>
               <button
                 onClick={logout}
-                className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-destructive/8 text-xs font-semibold text-destructive transition hover:bg-destructive/15 active:scale-95"
+                className="hidden sm:inline-flex lg:hidden items-center gap-1.5 h-9 px-3 rounded-xl bg-destructive/8 text-xs font-semibold text-destructive transition hover:bg-destructive/15 active:scale-95"
               >
                 <LogOut className="h-3.5 w-3.5" />
                 Sair

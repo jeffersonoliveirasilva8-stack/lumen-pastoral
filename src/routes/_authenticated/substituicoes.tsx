@@ -199,13 +199,7 @@ function AdminSubstituicoes() {
   const rejeitadas = substituicoes.filter((s) => s.status === "rejeitada").length;
   const canceladas = substituicoes.filter((s) => s.status === "cancelada").length;
 
-  useSetPageTabs([
-    { label: "Planejamento",       to: "/escalas",                         isActive: false },
-    { label: "Presença",           to: "/sacristia",                       isActive: false },
-    { label: "Indisponibilidades", to: "/escalas?view=indisponibilidades", isActive: false },
-    { label: "Substituições",      to: "/substituicoes",                   isActive: true  },
-    { label: "Relatório",          to: "/relatorios-equilibrio",           isActive: false },
-  ]);
+  useSetPageTabs([]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 lg:px-6 space-y-6 pb-10">
