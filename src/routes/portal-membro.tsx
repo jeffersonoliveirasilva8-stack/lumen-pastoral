@@ -152,9 +152,13 @@ function PortalMembroLayout() {
     }
   }, [completenessLoaded, profileCompleteness, pathname, navigate]);
 
+  // Avisos urgentes: somente vice/coordenação (tipo_acesso não é 'membro' nem 'auxiliar')
+  const isViceOuCoordenacao = ["vice", "coordenador", "administrador"].includes(
+    membro?.tipo_acesso ?? ""
+  );
   const { data: urgentNotifs = [] } = useQuery<{ id: string; titulo: string; mensagem: string | null }[]>({
     queryKey: ["urgent-notifs", membro?.id],
-    enabled: !!membro?.id,
+    enabled: !!membro?.id && isViceOuCoordenacao,
     queryFn: async () => {
       const { data } = await anyDb.rpc("portal_get_notif_urgentes_nao_lidas");
       return data ?? [];

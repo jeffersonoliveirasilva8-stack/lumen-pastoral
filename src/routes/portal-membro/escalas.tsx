@@ -259,6 +259,7 @@ function PortalMembroEscalas() {
     queryKey: ["pm-historico", membro?.id],
     enabled: !!membro?.id,
     queryFn: async () => {
+      const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await anyDb
         .from("escala_membros")
         .select(`
@@ -270,20 +271,25 @@ function PortalMembroEscalas() {
         .eq("membro_id", membro!.id)
         .neq("ativo", false)
         .not("status", "in", '("recusado","pendente")')
-        .not("escalas.status", "in", '("rascunho","cancelada")')
-        .lt("escalas.data", new Date().toISOString().slice(0, 10))
-        .order("escalas.data", { ascending: false })
-        .limit(30);
+        .limit(100);
       if (error) throw error;
-      return (data ?? []).map((row: any) => ({
-        escala_membro_id: row.id,
-        status: row.status,
-        titulo: row.escalas.titulo,
-        data: row.escalas.data,
-        ministerio_nome: row.ministerios?.nome ?? "—",
-        ministerio_cor: row.ministerios?.cor ?? "#6B7280",
-        pontos: row.historico_participacoes?.[0]?.pontos ?? null,
-      }));
+      const EXCLUDE_STATUS = ["rascunho", "cancelada"];
+      return (data ?? [])
+        .filter((row: any) => {
+          const esc = row.escalas;
+          return esc && !EXCLUDE_STATUS.includes(esc.status) && esc.data < today;
+        })
+        .sort((a: any, b: any) => b.escalas.data.localeCompare(a.escalas.data))
+        .slice(0, 30)
+        .map((row: any) => ({
+          escala_membro_id: row.id,
+          status: row.status,
+          titulo: row.escalas.titulo,
+          data: row.escalas.data,
+          ministerio_nome: row.ministerios?.nome ?? "—",
+          ministerio_cor: row.ministerios?.cor ?? "#6B7280",
+          pontos: row.historico_participacoes?.[0]?.pontos ?? null,
+        }));
     },
   });
 
@@ -350,46 +356,53 @@ function PortalMembroEscalas() {
       const EM_SELECT = "id, status, escala_id, membro_id, presenca_registrada_em, membros!membro_id(id, nome), registrado_por:presenca_registrada_por(nome)";
 
       if (isSecretario) {
-        // Secretário: apenas escalas em que ESTÁ ESCALADO, dos últimos 90 dias
-        const { data: memRows, error: e0 } = await anyDb
+        // Secretário: apenas escalas em que ESTÁ ESCALADO, mas vê TODOS os membros
+        const { data: myRows, error: e0 } = await anyDb
           .from("escala_membros")
-          .select(EM_SELECT)
+          .select("escala_id")
           .eq("membro_id", membro!.id)
           .neq("ativo", false);
         if (e0) throw e0;
-        if (!memRows?.length) return [];
+        if (!myRows?.length) return [];
 
-        const escalaIds: string[] = memRows.map((r: any) => r.escala_id);
+        const escalaIdsDoSecretario: string[] = myRows.map((r: any) => r.escala_id);
         const { data: escs, error: e1 } = await anyDb
           .from("escalas")
           .select("id, titulo, data, hora_inicio")
-          .in("id", escalaIds)
+          .in("id", escalaIdsDoSecretario)
           .not("status", "in", '("rascunho","cancelada")')
           .gte("data", noveStr)
           .order("data", { ascending: false });
         if (e1) throw e1;
         if (!escs?.length) return [];
 
-        // Para secretário: os "membros" de cada escala são só ele mesmo
-        return (escs ?? []).map((esc: any): CoordEscala => {
-          const myRow = (memRows as any[]).find((r) => r.escala_id === esc.id);
-          return {
-            escala_id: esc.id,
-            titulo: esc.titulo,
-            data: esc.data,
-            hora_inicio: esc.hora_inicio,
-            membros: myRow
-              ? [{
-                  escala_membro_id: myRow.id,
-                  membro_id: membro!.id,
-                  nome: myRow.membros?.nome ?? membro!.nome ?? "Você",
-                  status: myRow.status,
-                  registrado_por_nome: myRow.registrado_por?.nome ?? null,
-                  registrado_em: myRow.presenca_registrada_em ?? null,
-                }]
-              : [],
-          };
-        });
+        // Busca TODOS os membros das escalas do secretário
+        const filteredIds = (escs as any[]).map((e: any) => e.id);
+        const { data: todosRows, error: e2 } = await anyDb
+          .from("escala_membros")
+          .select(EM_SELECT)
+          .in("escala_id", filteredIds)
+          .neq("ativo", false);
+        if (e2) throw e2;
+        const todosMembers = todosRows ?? [];
+
+        return (escs as any[]).map((esc: any): CoordEscala => ({
+          escala_id: esc.id,
+          titulo: esc.titulo,
+          data: esc.data,
+          hora_inicio: esc.hora_inicio,
+          membros: (todosMembers as any[])
+            .filter((r: any) => r.escala_id === esc.id)
+            .map((r: any): CoordMembro => ({
+              escala_membro_id: r.id,
+              membro_id: r.membro_id,
+              nome: r.membros?.nome ?? "—",
+              status: r.status,
+              registrado_por_nome: r.registrado_por?.nome ?? null,
+              registrado_em: r.presenca_registrada_em ?? null,
+            }))
+            .sort((a: CoordMembro, b: CoordMembro) => a.nome.localeCompare(b.nome, "pt-BR")),
+        }));
       }
 
       // Vice / Coordenação: TODAS as escalas da paróquia (90 dias + futuro)
