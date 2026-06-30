@@ -1314,7 +1314,8 @@ function EscalasPage() {
         (supabase as any)
           .from("escala_membros")
           .select("escala_id, ministerio_id, status, membros!membro_id(id, nome)")
-          .in("escala_id", escalaIds),
+          .in("escala_id", escalaIds)
+          .neq("ativo", false),
       ]);
       const counts: Record<string, EscalaPreview> = {};
       ((funcRes.data ?? []) as any[]).forEach((f) => {
