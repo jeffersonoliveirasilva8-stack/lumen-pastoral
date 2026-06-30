@@ -4064,6 +4064,43 @@ function EscalaDetail({
 
   const queryClient = useQueryClient();
 
+  // ── Mutations locais de atribuição (rascunho) ────────────────────────────
+  // Definidas aqui para ter acesso direto a escala.id sem passar por closure do pai
+  const atribuirLocalMutation = useMutation({
+    mutationFn: async ({ membro_id, ministerio_id }: { membro_id: string; ministerio_id: string }) => {
+      const { error } = await (supabase as any).from("escala_membros").insert({
+        escala_id: escala.id,
+        membro_id,
+        ministerio_id,
+        status: "pendente",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["escala-membros", escala.id] });
+      queryClient.invalidateQueries({ queryKey: ["pm-escalas"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      toast.success("Membro adicionado.");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const removerLocalMutation = useMutation({
+    mutationFn: async (atribId: string) => {
+      const { error } = await (supabase as any)
+        .from("escala_membros")
+        .update({ ativo: false, removido_em: new Date().toISOString() })
+        .eq("id", atribId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["escala-membros", escala.id] });
+      queryClient.invalidateQueries({ queryKey: ["pm-escalas"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
   // ── Salvar Rascunho (Sprint 2) ────────────────────────────────────────────
   // DELETE + INSERT com campos de auditoria + optimistic locking via updated_at
   const salvarRascunhoMutation = useMutation({
@@ -5107,7 +5144,11 @@ function EscalaDetail({
                                                 key={m.id}
                                                 value={nomeExibicao(m.nome)}
                                                 onSelect={() => {
-                                                  onAtribuir(m.id, f.ministerio_id);
+                                                  if (escala.status === "rascunho") {
+                                                    atribuirLocalMutation.mutate({ membro_id: m.id, ministerio_id: f.ministerio_id });
+                                                  } else {
+                                                    onAtribuir(m.id, f.ministerio_id);
+                                                  }
                                                   setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
                                                   setMembroBuscaOpen((prev) => ({ ...prev, [f.ministerio_id]: false }));
                                                 }}
@@ -5129,7 +5170,11 @@ function EscalaDetail({
                                                 key={m.id}
                                                 value={nomeExibicao(m.nome)}
                                                 onSelect={() => {
-                                                  onAtribuir(m.id, f.ministerio_id);
+                                                  if (escala.status === "rascunho") {
+                                                    atribuirLocalMutation.mutate({ membro_id: m.id, ministerio_id: f.ministerio_id });
+                                                  } else {
+                                                    onAtribuir(m.id, f.ministerio_id);
+                                                  }
                                                   setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
                                                   setMembroBuscaOpen((prev) => ({ ...prev, [f.ministerio_id]: false }));
                                                 }}
@@ -5213,7 +5258,11 @@ function EscalaDetail({
                                           variant="ghost"
                                           className="h-6 px-2 text-[11px] text-primary hover:bg-primary/10"
                                           onClick={() => {
-                                            onAtribuir(c.membro_id, f.ministerio_id);
+                                            if (escala.status === "rascunho") {
+                                              atribuirLocalMutation.mutate({ membro_id: c.membro_id, ministerio_id: f.ministerio_id });
+                                            } else {
+                                              onAtribuir(c.membro_id, f.ministerio_id);
+                                            }
                                             setSlotCandidatos((prev) => { const n = { ...prev }; delete n[f.ministerio_id]; return n; });
                                           }}
                                         >
@@ -5926,7 +5975,7 @@ function EscalaDetail({
                       });
                     }
                   } else {
-                    onRemoverAtribuicao(removerPendente.atribId);
+                    removerLocalMutation.mutate(removerPendente.atribId);
                     if (notificarVaga) {
                       onNotificarVaga({
                         escalaId: escala.id,
