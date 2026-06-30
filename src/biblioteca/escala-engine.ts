@@ -556,6 +556,13 @@ export function alocarMembros(
     (a, b) => (a.ordem_prioridade ?? 0) - (b.ordem_prioridade ?? 0),
   );
 
+  // Contadores globais de gênero — distribuição calculada sobre TODAS as funções,
+  // não por função isolada. Isso evita que funções de 1 vaga com Math.round(0.5)=1
+  // sempre priorizem masculino.
+  const totalVagasGlobal = funcoesOrdenadas.reduce((s, f) => s + f.quantidade, 0);
+  let mascGlobal = 0;
+  let femGlobal  = 0;
+
   for (const funcao of funcoesOrdenadas) {
     const jaNestaFuncao = alocacoes.filter((a) => a.ministerio_id === funcao.ministerio_id).length;
     let vagas = funcao.quantidade - jaNestaFuncao;
@@ -586,11 +593,13 @@ export function alocarMembros(
     // Pool 2: apto + acima limite semanal mas abaixo mensal + não alocado
     // Pool 3: apto + acima limite mensal + não alocado (último recurso)
     // Pool 4: já alocado em outra função MAS funcao.duplicidade_permitida=true
+    // Pool 5: excluído por intervalo_minimo_dias — usado só se pools 1-4 não bastam
 
     const pool1: MembroEngine[] = [];
     const pool2: MembroEngine[] = [];
     const pool3: MembroEngine[] = [];
     const pool4: MembroEngine[] = []; // multi-função (duplicidade)
+    const pool5: MembroEngine[] = []; // intervalo mínimo violado (alerta ao coordenador)
 
     for (const m of membros) {
       if (!m.ministerio_ids.includes(funcao.ministerio_id)) { excluidos.sem_vinculo++; continue; }
@@ -609,6 +618,7 @@ export function alocarMembros(
         const limite = somarDias(contexto.data, -config.intervalo_minimo_dias);
         if (historicoRecente.some((h) => h.membro_id === m.id && h.data > limite && h.data < contexto.data)) {
           excluidos.indisponibilidade++;
+          if (!ja_alocados.has(m.id)) pool5.push(m);
           continue;
         }
       }
@@ -703,18 +713,23 @@ export function alocarMembros(
     const scored2 = scorePool(pool2, false);
     const scored3 = scorePool(pool3, true);
     const scored4 = scorePool(pool4, true);
+    const scored5 = scorePool(pool5, true); // intervalo mínimo violado
 
-    // Contadores globais de gênero para distribuição consolidada entre pools
+    // Contadores por função (para alerta de proporção e atualização do global)
     const totalVagasFuncao = vagas;
     let mascSelecionados = 0;
     let femSelecionados  = 0;
 
-    // Seleção progressiva: ordena por gênero e seleciona até `vagas` candidatos
-    // compatíveis em um único loop — candidatos rejeitados por incompatibilidade
-    // são substituídos pelo próximo na lista ordenada do mesmo pool.
-    for (const scored of [scored1, scored2, scored3, scored4]) {
+    // Seleção progressiva: ordena por gênero com contadores GLOBAIS (inclui funções já
+    // processadas) para evitar que funções de 1 vaga sempre priorizem o mesmo gênero.
+    for (const [poolIdx, scored] of [[0, scored1], [1, scored2], [2, scored3], [3, scored4], [4, scored5]] as const) {
       if (vagas <= 0) break;
-      const ordenados = ordenarPorGenero(scored, mascSelecionados, femSelecionados, totalVagasFuncao);
+      const ordenados = ordenarPorGenero(
+        scored as ReturnType<typeof scorePool>,
+        mascGlobal + mascSelecionados,
+        femGlobal  + femSelecionados,
+        totalVagasGlobal,
+      );
 
       const aprovados: typeof ordenados = [];
       const aprovadosIds = new Set<string>();
@@ -726,6 +741,12 @@ export function alocarMembros(
         if (!conflito) {
           aprovados.push(c);
           aprovadosIds.add(c.membro.id);
+          // Pool 5: emite alerta individualizado por membro alocado com intervalo violado
+          if (poolIdx === 4) {
+            alertas.push(
+              `⚠ "${funcao.ministerio_nome}": ${c.membro.nome} escalado mesmo dentro do intervalo mínimo de ${config?.intervalo_minimo_dias} dias por falta de outros candidatos disponíveis.`,
+            );
+          }
         }
       }
 
@@ -734,6 +755,10 @@ export function alocarMembros(
       femSelecionados  += aprovados.filter((c) => c.membro.sexo === "F").length;
       vagas -= aprovados.length;
     }
+
+    // Atualiza contadores globais de gênero para a próxima função
+    mascGlobal += mascSelecionados;
+    femGlobal  += femSelecionados;
 
     // Alerta de proporção consolidado — emitido UMA vez sobre o resultado final da função
     if (config?.distribuicao_masc_pct !== undefined && selecionados.length > 0) {

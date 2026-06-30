@@ -1949,6 +1949,8 @@ function EscalasPage() {
               paroquiaNome={paroquiaNome}
               onAtribuir={(mid, minid) => setPendingAdds((prev) => [...prev, { membro_id: mid, ministerio_id: minid }])}
               onRemoverAtribuicao={(id) => setPendingRemoves((prev) => [...prev, id])}
+              hasPendingMemberChanges={hasPendingMemberChanges}
+              onApplyPendingMemberChanges={applyPendingMemberChanges}
               onRemoverPublicada={(args) => removerPublicadaMutation.mutate(args)}
               onStatusChange={(status) => updateStatusMutation.mutate({ id: detailEscala.id, status })}
               onNotificarVaga={async ({ escalaId, ministerioId, ministerioNome }) => {
@@ -3916,7 +3918,7 @@ function EscalaDetail({
   indisponibilidades, funcaoRestricoes, incompatibilidades, missasPadrao, membroMissaRestricoes, paroquiaConfig,
   paroquiaNome, initialEditMode, comunidades, tiposMissa, isSaving, onSave,
   onDelete, onAddFuncao, onRemoveFuncao, onAtribuir, onRemoverAtribuicao, onRemoverPublicada, onStatusChange, onNotificarVaga,
-  preferenciaisSolene,
+  preferenciaisSolene, hasPendingMemberChanges, onApplyPendingMemberChanges,
 }: {
   escala: Escala;
   ministerios: Ministerio[];
@@ -3948,6 +3950,8 @@ function EscalaDetail({
   onRemoverPublicada: (args: { atribId: string; membroId: string; motivo: string; abrirVaga: boolean; penalidade: "nenhuma" | "justificou" | "faltou" }) => void;
   onStatusChange: (status: string) => void;
   onNotificarVaga: (args: { escalaId: string; ministerioId: string; ministerioNome: string }) => void;
+  hasPendingMemberChanges: boolean;
+  onApplyPendingMemberChanges: () => Promise<void>;
 }) {
   const [editMode, setEditMode] = useState(initialEditMode);
   const [escalaForm, setEscalaForm] = useState<EscalaForm>(EMPTY_FORM);
@@ -5984,13 +5988,19 @@ function EscalaDetail({
             <AlertDialogAction
               className="bg-green-600 hover:bg-green-700 text-white"
               onClick={async () => {
-                // Salva preview sempre que houver assignments em memória (independente de dirtyPreview).
-                // Garante invariante: o que o coordenador vê é o que é publicado.
+                // 1. Salva mudanças manuais pendentes (add/remove membros)
+                if (hasPendingMemberChanges) {
+                  try {
+                    await onApplyPendingMemberChanges();
+                  } catch {
+                    return;
+                  }
+                }
+                // 2. Salva preview do motor se houver assignments em memória
                 if (preview.suggestedAssignments.length > 0) {
                   try {
                     await salvarRascunhoMutation.mutateAsync(preview.suggestedAssignments);
                   } catch {
-                    // salvarRascunhoMutation já exibe toast de erro — aborta publicação
                     return;
                   }
                 }
