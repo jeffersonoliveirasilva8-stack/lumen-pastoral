@@ -56,9 +56,9 @@ function formatScore(score: number | null): string {
   return score.toFixed(1);
 }
 
-function poolLabel(pool: 1 | 2 | 3 | 4 | undefined): string {
+function poolLabel(pool: 1 | 2 | 3 | 4 | 5 | undefined): string {
   if (!pool) return "";
-  return ["", "Livre", "Sem semana", "Sem mês", "Forçado"][pool] ?? "";
+  return ["", "Livre", "Sem semana", "Sem mês", "Forçado", "Intervalo mín."][pool] ?? "";
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────

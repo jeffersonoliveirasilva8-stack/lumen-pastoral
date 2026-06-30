@@ -5988,18 +5988,19 @@ function EscalaDetail({
             <AlertDialogAction
               className="bg-green-600 hover:bg-green-700 text-white"
               onClick={async () => {
-                // 1. Salva mudanças manuais pendentes (add/remove membros)
-                if (hasPendingMemberChanges) {
+                // 1. Salva preview do motor PRIMEIRO se tiver mudanças não salvas
+                // (salvarRascunho faz DELETE+INSERT — precisa rodar antes de pendingChanges)
+                if (preview.dirtyPreview && preview.suggestedAssignments.length > 0) {
                   try {
-                    await onApplyPendingMemberChanges();
+                    await salvarRascunhoMutation.mutateAsync(preview.suggestedAssignments);
                   } catch {
                     return;
                   }
                 }
-                // 2. Salva preview do motor se houver assignments em memória
-                if (preview.suggestedAssignments.length > 0) {
+                // 2. Aplica mudanças manuais pendentes POR CIMA do estado atual do banco
+                if (hasPendingMemberChanges) {
                   try {
-                    await salvarRascunhoMutation.mutateAsync(preview.suggestedAssignments);
+                    await onApplyPendingMemberChanges();
                   } catch {
                     return;
                   }

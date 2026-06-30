@@ -13,7 +13,7 @@ export type JustificativaMotorV3 = {
   score: number;
   participacoes_30d: number;
   dias_sem_servir: number;
-  pool: 1 | 2 | 3 | 4;
+  pool: 1 | 2 | 3 | 4 | 5;
   forcado: boolean;
 };
 
