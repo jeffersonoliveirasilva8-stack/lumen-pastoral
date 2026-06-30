@@ -793,7 +793,7 @@ Deno.serve(async (req) => {
       });
       if (storeErr) return json({ ok: false, error: storeErr.message }, 500);
 
-      subject = `${paroquia || "Lumen Pastoral"} — Código de verificação`;
+      subject = `${mfaCode} é o seu código de verificação — ${paroquia || "Lumen Pastoral"}`;
       html    = tMfaAdminCode(nome, paroquia, mfaCode, siteUrl);
 
     // ── Boas-vindas ──────────────────────────────────────────────────────────
