@@ -1947,8 +1947,20 @@ function EscalasPage() {
               onAddFuncao={(mid, qty) => addFuncaoMutation.mutate({ ministerio_id: mid, quantidade: qty })}
               onRemoveFuncao={(id) => removeFuncaoMutation.mutate(id)}
               paroquiaNome={paroquiaNome}
-              onAtribuir={(mid, minid) => setPendingAdds((prev) => [...prev, { membro_id: mid, ministerio_id: minid }])}
-              onRemoverAtribuicao={(id) => setPendingRemoves((prev) => [...prev, id])}
+              onAtribuir={(mid, minid) => {
+                if (detailEscala.status === "rascunho") {
+                  atribuirMutation.mutate({ membro_id: mid, ministerio_id: minid });
+                } else {
+                  setPendingAdds((prev) => [...prev, { membro_id: mid, ministerio_id: minid }]);
+                }
+              }}
+              onRemoverAtribuicao={(id) => {
+                if (detailEscala.status === "rascunho") {
+                  removerAtribuicaoMutation.mutate(id);
+                } else {
+                  setPendingRemoves((prev) => [...prev, id]);
+                }
+              }}
               hasPendingMemberChanges={hasPendingMemberChanges}
               onApplyPendingMemberChanges={applyPendingMemberChanges}
               onRemoverPublicada={(args) => removerPublicadaMutation.mutate(args)}
