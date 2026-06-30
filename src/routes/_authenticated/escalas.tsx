@@ -5078,39 +5078,6 @@ function EscalaDetail({
                         );
                       })}
 
-                      {/* Membros removidos desta função */}
-                      {(() => {
-                        const removidosFuncao = removidos.filter((r) => r.ministerio_id === f.ministerio_id);
-                        if (removidosFuncao.length === 0) return null;
-                        const isOpen = !!removidosOpen[f.ministerio_id];
-                        return (
-                          <div className="pl-5">
-                            <button
-                              type="button"
-                              className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 hover:text-muted-foreground transition-colors py-0.5"
-                              onClick={() => setRemovidosOpen((p) => ({ ...p, [f.ministerio_id]: !isOpen }))}
-                            >
-                              <UserMinus className="h-3 w-3" />
-                              <span>{removidosFuncao.length} removido{removidosFuncao.length > 1 ? "s" : ""}</span>
-                              <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                            </button>
-                            {isOpen && (
-                              <div className="mt-1 space-y-1 border-l border-dashed border-border ml-1.5 pl-2.5">
-                                {removidosFuncao.map((r) => (
-                                  <div key={r.id} className="flex items-center justify-between gap-2 text-xs text-muted-foreground/60">
-                                    <span className="line-through truncate">{r.membro?.nome ?? "—"}</span>
-                                    {r.removido_em && (
-                                      <span className="tabular-nums shrink-0 text-[10px]">
-                                        {new Date(r.removido_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
 
                       {/* Atribuir membro */}
                       {atrib.length < f.quantidade && (() => {
