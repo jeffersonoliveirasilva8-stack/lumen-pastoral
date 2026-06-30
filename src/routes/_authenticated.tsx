@@ -6,7 +6,7 @@ import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
   Flame, BookOpen, Bell, UserCircle, Church, Leaf,
   PanelLeftClose, PanelLeftOpen, X, Trophy, HelpCircle,
-  ArrowLeftRight, AlertCircle,
+  ArrowLeftRight, AlertCircle, CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -233,10 +233,12 @@ function AuthLayout() {
   const mainNav: NavItem[] = [
     { to: "/painel",                 label: "Painel",        icon: LayoutDashboard,  color: "bg-slate-600" },
     // Secretário (isSecretario) acessa só sacristia — sem escalas, membros, etc.
-    ...(!isSecretario ? [
+    ...(isSecretario ? [
+      { to: "/sacristia", label: "Sacristia", icon: CheckCircle2, color: "bg-blue-600" },
+    ] : [
       { to: "/escalas",       label: "Escalas",       icon: Calendar,       color: "bg-blue-600" },
       { to: "/substituicoes", label: "Substituições",  icon: ArrowLeftRight, color: "bg-orange-500", badge: substituicoesPendentes },
-    ] : []),
+    ]),
     // Vice e admin veem membros; secretário não
     ...(!isLimitedCoord && !isSecretario ? [{ to: "/membros", label: "Membros", icon: Users, badge: solicitacoesPendentes, color: "bg-emerald-600" }] : []),
     // Vice vê membros também (pode gerenciar presenças)
@@ -262,6 +264,14 @@ function AuthLayout() {
   // No mobile o bottom nav exibe 4 itens (2 + FAB + 2).
   // Os itens a partir do índice 4 ficam acessíveis pelo drawer do FAB.
   const mobileNavOverflow = mainNav.slice(4);
+
+  // getActiveModule mapeia /sacristia para "/escalas" (sub-rota do módulo Escalas
+  // para quem tem acesso pleno). Para o secretário, /sacristia é item de 1º nível
+  // — precisa do próprio match para o highlight funcionar.
+  function isNavItemActive(item: NavItem): boolean {
+    if (item.to === "/sacristia") return pathname.startsWith("/sacristia");
+    return activeModule === item.to;
+  }
 
   async function logout() {
     sessionStorage.removeItem("admin_mfa_token");
@@ -292,7 +302,7 @@ function AuthLayout() {
         {/* Nav */}
         <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${sidebarCollapsed ? "px-2" : "px-2.5"}`}>
           {mainNav.map((item) => {
-            const active = activeModule === item.to;
+            const active = isNavItemActive(item);
             return (
               <Link
                 key={item.to}
@@ -515,7 +525,7 @@ function AuthLayout() {
                   <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground mb-3 px-1">Módulos</p>
                   <div className="grid grid-cols-4 gap-2">
                     {mobileNavOverflow.map((item, i) => {
-                      const active = activeModule === item.to;
+                      const active = isNavItemActive(item);
                       return (
                         <Link
                           key={item.to}
@@ -600,7 +610,7 @@ function AuthLayout() {
 
             {/* 2 itens esquerda: Painel, Escalas */}
             {mainNav.slice(0, 2).map((item) => {
-              const active = activeModule === item.to;
+              const active = isNavItemActive(item);
               return (
                 <Link
                   key={item.to}
@@ -647,7 +657,7 @@ function AuthLayout() {
 
             {/* 2 itens direita: Substituições, Membros */}
             {mainNav.slice(2, 4).map((item) => {
-              const active = activeModule === item.to;
+              const active = isNavItemActive(item);
               return (
                 <Link
                   key={item.to}
