@@ -24,6 +24,14 @@ function MfaChallengePage() {
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [checking, setChecking]       = useState(true);
   const [cooldown, setCooldown]       = useState(0);
+  // Quando o usuário tem os dois fatores verificados, guarda ambos para
+  // permitir alternar — sem isso, o sistema travava no e-mail mesmo quando
+  // o usuário queria usar o autenticador (e o código TOTP nunca era aceito
+  // porque era validado contra o fator errado).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [emailFactor, setEmailFactor] = useState<any | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [totpFactor, setTotpFactor]   = useState<any | null>(null);
   const processed = useRef(false);
 
   // Decrementa cooldown de reenvio
@@ -49,13 +57,15 @@ function MfaChallengePage() {
         return;
       }
 
-      // Lista fatores — prefer e-mail (mais amigável)
+      // Lista fatores — guarda os dois verificados para permitir alternar
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: factors } = await (supabase.auth.mfa.listFactors as any)();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const emailFactor = ((factors?.email ?? []) as any[]).find((f: any) => f.status === "verified");
-      const totpFactor  = ((factors?.totp ?? []) as any[]).find((f: any) => f.status === "verified");
-      const activeFactor = emailFactor ?? totpFactor;
+      const emailF = ((factors?.email ?? []) as any[]).find((f: any) => f.status === "verified");
+      const totpF  = ((factors?.totp ?? []) as any[]).find((f: any) => f.status === "verified");
+      setEmailFactor(emailF ?? null);
+      setTotpFactor(totpF ?? null);
+      const activeFactor = totpF ?? emailF;
 
       if (!activeFactor) {
         // Nenhum fator cadastrado — redireciona normalmente
@@ -64,7 +74,9 @@ function MfaChallengePage() {
         return;
       }
 
-      const type: FactorType = emailFactor ? "email" : "totp";
+      // Prefere TOTP quando disponível — é o método que o usuário escolheu
+      // configurar; e-mail fica como alternativa (link "Usar código por e-mail").
+      const type: FactorType = totpF ? "totp" : "email";
       setFactorId(activeFactor.id);
       setFactorType(type);
 
@@ -84,6 +96,26 @@ function MfaChallengePage() {
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function switchFactor(type: FactorType) {
+    const target = type === "email" ? emailFactor : totpFactor;
+    if (!target) return;
+    setCode("");
+    setChallengeId(null);
+    setFactorType(type);
+    setFactorId(target.id);
+    if (type === "email") {
+      setLoading(true);
+      try {
+        const { data: ch, error } = await supabase.auth.mfa.challenge({ factorId: target.id });
+        if (!error) {
+          setChallengeId(ch.id);
+          setCooldown(60);
+        }
+      } catch { /* será tratado na UI */ }
+      finally { setLoading(false); }
+    }
+  }
 
   async function resendEmailCode() {
     if (!factorId || cooldown > 0) return;
@@ -218,6 +250,20 @@ function MfaChallengePage() {
             </Button>
           )}
         </form>
+
+        {/* Alternar método quando o usuário tem os dois fatores verificados */}
+        {emailFactor && totpFactor && (
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => switchFactor(factorType === "totp" ? "email" : "totp")}
+              disabled={loading}
+              className="text-xs text-primary hover:underline underline-offset-4"
+            >
+              {factorType === "totp" ? "Usar código por e-mail" : "Usar app autenticador"}
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 text-center">
           <button
