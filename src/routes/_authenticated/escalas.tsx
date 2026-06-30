@@ -5107,12 +5107,12 @@ function EscalaDetail({
                                                 key={m.id}
                                                 value={nomeExibicao(m.nome)}
                                                 onSelect={() => {
-                                                  setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: m.id }));
+                                                  onAtribuir(m.id, f.ministerio_id);
+                                                  setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
                                                   setMembroBuscaOpen((prev) => ({ ...prev, [f.ministerio_id]: false }));
                                                 }}
                                                 className="text-xs"
                                               >
-                                                <Check className={`h-3 w-3 mr-1.5 shrink-0 ${selectedMembro === m.id ? "opacity-100" : "opacity-0"}`} />
                                                 <span className="flex-1 truncate">{nomeExibicao(m.nome)}</span>
                                                 <span className="ml-2 text-[10px] text-muted-foreground tabular-nums shrink-0">
                                                   {m.score > 0 ? `${m.score}pts` : "0pts"}
@@ -5129,12 +5129,12 @@ function EscalaDetail({
                                                 key={m.id}
                                                 value={nomeExibicao(m.nome)}
                                                 onSelect={() => {
-                                                  setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: m.id }));
+                                                  onAtribuir(m.id, f.ministerio_id);
+                                                  setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
                                                   setMembroBuscaOpen((prev) => ({ ...prev, [f.ministerio_id]: false }));
                                                 }}
                                                 className="text-xs opacity-60"
                                               >
-                                                <Check className={`h-3 w-3 mr-1.5 shrink-0 ${selectedMembro === m.id ? "opacity-100" : "opacity-0"}`} />
                                                 <span className="flex-1 truncate">{nomeExibicao(m.nome)}</span>
                                                 <span className="ml-2 text-[10px] text-amber-600 shrink-0 truncate max-w-[100px]">· {m.motivo}</span>
                                               </CommandItem>
@@ -5145,19 +5145,6 @@ function EscalaDetail({
                                     </Command>
                                   </PopoverContent>
                                 </Popover>
-                                <Button
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  disabled={!selectedMembro}
-                                  onClick={() => {
-                                    if (selectedMembro) {
-                                      onAtribuir(selectedMembro, f.ministerio_id);
-                                      setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
-                                    }
-                                  }}
-                                >
-                                  <UserPlus className="h-3 w-3" />
-                                </Button>
                               </div>
                             ) : (
                               <p className="pl-5 text-xs text-muted-foreground">
