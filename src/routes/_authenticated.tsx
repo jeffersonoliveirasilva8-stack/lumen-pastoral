@@ -271,7 +271,7 @@ function AuthLayout() {
 
   return (
     <PageTabsProvider>
-    <div className="h-screen flex overflow-hidden bg-background">
+    <div className="flex flex-col lg:h-screen lg:flex-row lg:overflow-hidden bg-background">
       {/* Desktop sidebar */}
       <aside className={`hidden lg:flex flex-col bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border/70 shrink-0 shadow-altar overflow-hidden transition-all duration-[260ms] ease-[cubic-bezier(0.34,1.56,0.64,1)] ${sidebarCollapsed ? "w-16" : "w-56"}`}>
         {/* Logo */}
@@ -392,7 +392,7 @@ function AuthLayout() {
       </aside>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 lg:overflow-hidden">
         <header className="sticky top-0 z-30 border-b border-border/60 glass shadow-[0_1px_0_0_var(--color-border)]">
           {/* Faixa litúrgica no topo */}
           {liturgy && (
@@ -478,7 +478,7 @@ function AuthLayout() {
 
         <LayoutTabBar />
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full">
+        <main className="flex-1 overflow-x-hidden min-w-0 w-full lg:overflow-y-auto">
           <div className="mx-auto max-w-7xl px-4 pt-6 pb-32 sm:px-6 lg:px-8 lg:pb-10 min-w-0 w-full">
             <PageTransition>
               <Outlet />
