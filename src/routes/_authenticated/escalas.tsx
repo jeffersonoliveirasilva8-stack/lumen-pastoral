@@ -6,7 +6,7 @@ import {
   MapPin, Clock, Trash2, Pencil, UserPlus, UserMinus, X, Check, Sparkles, Send,
   MoreVertical, FileText, AlertTriangle, Users, ClipboardCheck,
   CheckCircle2, XCircle, Church, Ban, RefreshCw, Activity,
-  TrendingUp, TrendingDown, Minus, ChevronUp, BarChart2, Star,
+  TrendingUp, TrendingDown, Minus, ChevronUp, BarChart2, Star, Archive,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths, addDays } from "date-fns";
@@ -197,7 +197,7 @@ function EscalasPage() {
   const qc = useQueryClient();
   const { abrir, view: viewParam } = Route.useSearch();
 
-  const [view, setView] = useState<"lista" | "indisponibilidades">(() => {
+  const [view, setView] = useState<"lista" | "historico" | "indisponibilidades">(() => {
     if (viewParam === "indisponibilidades") return "indisponibilidades";
     return "lista";
   });
@@ -726,18 +726,46 @@ function EscalasPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("escalas").delete().eq("id", id);
-      if (error) throw error;
+    mutationFn: async (escala: Escala) => {
+      if (escala.status === "publicada" || escala.status === "arquivada") {
+        // Soft-archive: preserva histórico de presenças e atribuições
+        const { error } = await supabase
+          .from("escalas")
+          .update({ status: "arquivada" } as any)
+          .eq("id", escala.id);
+        if (error) throw error;
+      } else {
+        // Rascunhos e canceladas podem ser excluídas definitivamente
+        const { error } = await supabase.from("escalas").delete().eq("id", escala.id);
+        if (error) throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (_data, escala) => {
       qc.invalidateQueries({ queryKey: ["escalas"] });
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
-      toast.success("Escala removida.");
+      const wasPublished = escala.status === "publicada" || escala.status === "arquivada";
+      toast.success(wasPublished ? "Escala arquivada. Consulte o histórico para acessá-la." : "Escala removida.");
       setDeleteTarget(null);
       setDetailEscala(null);
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      // Só chamado a partir do Histórico — remove definitivamente uma escala arquivada
+      const { error } = await (supabase as any).from("escalas").update({ status: "cancelada" }).eq("id", id);
+      if (error) throw error;
+      // Após mudar para cancelada, o trigger não bloqueia mais e podemos excluir
+      const { error: e2 } = await (supabase as any).from("escalas").delete().eq("id", id);
+      if (e2) throw e2;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+      toast.success("Escala excluída permanentemente.");
+      setDeleteTarget(null);
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
@@ -1032,16 +1060,26 @@ function EscalasPage() {
 
   const bulkDeleteEscalasMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.from("escalas").delete().in("id", ids);
-      if (error) throw error;
+      // Escalas publicadas/arquivadas → soft-archive; rascunhos → hard-delete
+      const selecionadas = escalas.filter((e) => ids.includes(e.id));
+      const paraArquivar = selecionadas.filter((e) => e.status === "publicada" || e.status === "arquivada").map((e) => e.id);
+      const paraExcluir  = selecionadas.filter((e) => e.status !== "publicada" && e.status !== "arquivada").map((e) => e.id);
+      if (paraArquivar.length > 0) {
+        const { error } = await (supabase as any).from("escalas").update({ status: "arquivada" }).in("id", paraArquivar);
+        if (error) throw error;
+      }
+      if (paraExcluir.length > 0) {
+        const { error } = await supabase.from("escalas").delete().in("id", paraExcluir);
+        if (error) throw error;
+      }
     },
-    onSuccess: (_, ids) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["escalas"] });
       qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       setSelectedEscalaIds(new Set());
       setBulkDeleteEscalasOpen(false);
-      toast.success(`${ids.length} escala(s) removida(s).`);
+      toast.success("Escalas processadas (publicadas arquivadas, rascunhos excluídos).");
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
@@ -1654,6 +1692,7 @@ function EscalasPage() {
 
   useSetPageTabs([
     { label: "Planejamento",       onClick: () => setView("lista"),              isActive: view === "lista" },
+    { label: "Histórico",          onClick: () => setView("historico"),          isActive: view === "historico" },
     { label: "Sacristia",          to: "/sacristia",                             isActive: false },
     { label: "Indisponibilidades", onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
   ]);
@@ -1822,6 +1861,13 @@ function EscalasPage() {
           onBulkPublish={(ids) => bulkPublishMutation.mutate(ids)}
           onSwapMembro={(args) => swapMembroMutation.mutate(args)}
           isBulkPublishing={bulkPublishMutation.isPending}
+        />
+      ) : view === "historico" ? (
+        <HistoricoView
+          escalas={escalas.filter((e) => e.status === "arquivada")}
+          escalaCounts={escalaCounts}
+          onOpenDetail={(e) => setDetailEscala(e)}
+          onHardDelete={(e) => setDeleteTarget({ ...e, _forceHardDelete: true } as any)}
         />
       ) : view === "indisponibilidades" ? (
         <IndisponibilidadesTab
@@ -2049,24 +2095,57 @@ function EscalasPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Confirm delete ──────────────────────────────────────────────────── */}
+      {/* ── Confirm delete / archive ────────────────────────────────────────── */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover escala?</AlertDialogTitle>
-            <AlertDialogDescription>
-              <strong>{deleteTarget?.titulo}</strong> e todas as atribuições de membros serão
-              removidas permanentemente.
-            </AlertDialogDescription>
+            {(deleteTarget as any)?._forceHardDelete ? (
+              <>
+                <AlertDialogTitle>Excluir permanentemente?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <strong>{deleteTarget?.titulo}</strong> será excluída definitivamente do banco de
+                  dados junto com todas as atribuições e registros de presença. Esta ação não pode
+                  ser desfeita.
+                </AlertDialogDescription>
+              </>
+            ) : deleteTarget?.status === "publicada" || deleteTarget?.status === "arquivada" ? (
+              <>
+                <AlertDialogTitle>Arquivar escala?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <strong>{deleteTarget?.titulo}</strong> será movida para o Histórico. As
+                  atribuições e presenças ficam preservadas e você pode consultá-las a qualquer
+                  momento.
+                </AlertDialogDescription>
+              </>
+            ) : (
+              <>
+                <AlertDialogTitle>Excluir escala?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <strong>{deleteTarget?.titulo}</strong> e todas as atribuições de membros serão
+                  removidas permanentemente.
+                </AlertDialogDescription>
+              </>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              onClick={() => {
+                if (!deleteTarget) return;
+                if ((deleteTarget as any)._forceHardDelete) {
+                  hardDeleteMutation.mutate(deleteTarget.id);
+                } else {
+                  deleteMutation.mutate(deleteTarget);
+                }
+              }}
             >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Remover
+              {(deleteMutation.isPending || hardDeleteMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+              {(deleteTarget as any)?._forceHardDelete
+                ? "Excluir permanentemente"
+                : deleteTarget?.status === "publicada" || deleteTarget?.status === "arquivada"
+                  ? "Arquivar"
+                  : "Excluir"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -3002,6 +3081,105 @@ function SwapMembroModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── HistoricoView ─────────────────────────────────────────────────────────────
+
+function HistoricoView({
+  escalas, escalaCounts, onOpenDetail, onHardDelete,
+}: {
+  escalas: Escala[];
+  escalaCounts: Record<string, EscalaPreview>;
+  onOpenDetail: (e: Escala) => void;
+  onHardDelete: (e: Escala) => void;
+}) {
+  const sorted = [...escalas].sort(
+    (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
+  );
+
+  // Agrupa por mês/ano
+  const grupos = useMemo(() => {
+    const map = new Map<string, Escala[]>();
+    for (const e of sorted) {
+      const key = format(new Date(e.data + "T00:00:00"), "MMMM 'de' yyyy", { locale: ptBR });
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(e);
+    }
+    return [...map.entries()];
+  }, [sorted]);
+
+  if (escalas.length === 0) {
+    return (
+      <div className="mt-12 flex flex-col items-center gap-3 text-center text-muted-foreground">
+        <Archive className="h-10 w-10 opacity-30" />
+        <p className="text-sm">Nenhuma escala arquivada ainda.</p>
+        <p className="text-xs max-w-xs">
+          Escalas publicadas que você remover serão movidas para cá e ficam preservadas para
+          consulta.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-6">
+      {grupos.map(([mes, items]) => (
+        <div key={mes}>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 capitalize">
+            {mes}
+          </p>
+          <div className="space-y-2">
+            {items.map((e) => {
+              const counts = escalaCounts[e.id];
+              return (
+                <div
+                  key={e.id}
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 hover:bg-muted/30 transition-colors"
+                >
+                  {/* Data */}
+                  <div className="flex flex-col items-center justify-center w-10 h-10 rounded-xl bg-muted/50 shrink-0">
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground leading-none">
+                      {format(new Date(e.data + "T00:00:00"), "MMM", { locale: ptBR })}
+                    </span>
+                    <span className="text-base font-bold leading-none">
+                      {format(new Date(e.data + "T00:00:00"), "d")}
+                    </span>
+                  </div>
+
+                  {/* Título + meta */}
+                  <button
+                    className="flex-1 min-w-0 text-left"
+                    onClick={() => onOpenDetail(e)}
+                  >
+                    <p className="text-sm font-medium truncate">{e.titulo}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {e.hora_inicio
+                        ? format(new Date(`2000-01-01T${e.hora_inicio}`), "HH:mm")
+                        : "—"}
+                      {counts && (
+                        <span className="ml-2">
+                          · {counts.filled}/{counts.needed} membro{counts.needed !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </p>
+                  </button>
+
+                  {/* Ação excluir definitivo */}
+                  <button
+                    title="Excluir permanentemente"
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                    onClick={() => onHardDelete(e)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
