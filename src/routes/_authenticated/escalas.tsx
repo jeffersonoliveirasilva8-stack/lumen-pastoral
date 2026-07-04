@@ -4936,6 +4936,21 @@ function EscalaDetail({
         </div>
       </SheetHeader>
 
+      {/* Barra de mudanças pendentes de membros — visível dentro do Sheet */}
+      {hasPendingMemberChanges && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-400/60 bg-amber-50 dark:bg-amber-950/30 px-4 py-2.5">
+          <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 flex-1">
+            {hasPendingMemberChanges ? "Mudanças não salvas nos membros" : ""}
+          </span>
+          <Button
+            size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+            onClick={onApplyPendingMemberChanges}
+          >
+            Confirmar
+          </Button>
+        </div>
+      )}
+
       {/* Edit form — shown when editMode is true */}
       {editMode ? (
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
