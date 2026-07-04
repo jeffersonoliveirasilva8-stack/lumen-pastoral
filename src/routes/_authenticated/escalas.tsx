@@ -5342,6 +5342,20 @@ function EscalaDetail({
                                     </Command>
                                   </PopoverContent>
                                 </Popover>
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs gap-1"
+                                  disabled={!selectedMembro}
+                                  onClick={() => {
+                                    if (selectedMembro) {
+                                      onAtribuir(selectedMembro, f.ministerio_id);
+                                      setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
+                                    }
+                                  }}
+                                >
+                                  <UserPlus className="h-3 w-3" />
+                                  Adicionar
+                                </Button>
                               </div>
                             ) : (
                               <p className="pl-5 text-xs text-muted-foreground">
