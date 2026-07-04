@@ -384,6 +384,7 @@ function EscalasPage() {
   async function applyPendingMemberChanges() {
     try {
       for (const id of pendingRemoves) {
+        if (id.startsWith("pending-add-")) continue;
         await removerAtribuicaoMutation.mutateAsync(id);
       }
       for (const add of pendingAdds) {
@@ -2085,6 +2086,11 @@ function EscalasPage() {
                 }
               }}
               onRemoverAtribuicao={(id) => {
+                if (id.startsWith("pending-add-")) {
+                  const idx = parseInt(id.replace("pending-add-", ""), 10);
+                  setPendingAdds((prev) => prev.filter((_, i) => i !== idx));
+                  return;
+                }
                 if (detailEscala.status === "rascunho") {
                   removerAtribuicaoMutation.mutate(id);
                 } else {
@@ -2093,7 +2099,14 @@ function EscalasPage() {
               }}
               hasPendingMemberChanges={hasPendingMemberChanges}
               onApplyPendingMemberChanges={applyPendingMemberChanges}
-              onRemoverPublicada={(args) => removerPublicadaMutation.mutate(args)}
+              onRemoverPublicada={(args) => {
+                if (args.atribId.startsWith("pending-add-")) {
+                  const idx = parseInt(args.atribId.replace("pending-add-", ""), 10);
+                  setPendingAdds((prev) => prev.filter((_, i) => i !== idx));
+                  return;
+                }
+                removerPublicadaMutation.mutate(args);
+              }}
               onStatusChange={(status) => updateStatusMutation.mutate({ id: detailEscala.id, status })}
               onNotificarVaga={async ({ escalaId, ministerioId, ministerioNome }) => {
                 await handleNotificarVaga({ escalaId, ministerioId, ministerioNome });
