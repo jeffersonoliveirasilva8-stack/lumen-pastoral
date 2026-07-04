@@ -306,7 +306,7 @@ function SenhaForm({ onShowOtp }: { onShowOtp: () => void }) {
       const route = await getPostLoginRoute(supabase);
       if (route === "/membro/login") {
         await supabase.auth.signOut();
-        toast.error("Sua conta ainda não foi vinculada ao portal. Entre em contato com o coordenador da sua paróquia.");
+        toast.error("Acesso não encontrado. Verifique com o coordenador se seu cadastro está ativo.");
         return;
       }
       navigate({ to: route, replace: true });

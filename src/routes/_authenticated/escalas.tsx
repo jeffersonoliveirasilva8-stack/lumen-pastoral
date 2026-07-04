@@ -18,6 +18,7 @@ import {
   type AssignmentHistoryEntry,
   type FuncaoRestricao,
   type InsightFuncao,
+  type ConfigParoquia,
 } from "@/lib/escala-engine";
 import {
   useEscalaPreview,
@@ -82,6 +83,35 @@ async function _pdfUrlToBase64(url: string): Promise<{ data: string; format: str
       reader.readAsDataURL(blob);
     });
   } catch { return null; }
+}
+
+type ParoquiaConfigRaw = {
+  regras_escala: any;
+  usa_tochas: boolean;
+  usa_turibulo?: boolean;
+  usa_naveta?: boolean;
+  usa_baculifero?: boolean;
+  usa_mitrifero?: boolean;
+} | null | undefined;
+
+function buildEngineConfig(cfg: ParoquiaConfigRaw): ConfigParoquia {
+  const regras = (cfg?.regras_escala ?? {}) as Record<string, unknown>;
+  return {
+    usa_tochas:                cfg?.usa_tochas                                              ?? false,
+    usa_turibulo:              cfg?.usa_turibulo                                            ?? true,
+    usa_naveta:                cfg?.usa_naveta                                              ?? true,
+    usa_baculifero:            cfg?.usa_baculifero                                          ?? true,
+    usa_mitrifero:             cfg?.usa_mitrifero                                           ?? true,
+    limite_semanal:            (regras.limite_semanal             as number  | undefined)   ?? undefined,
+    limite_mensal:             (regras.limite_mensal              as number  | undefined)   ?? undefined,
+    impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+    distribuicao_masc_pct:     (regras.distribuicao_masc_pct      as number  | undefined)   ?? undefined,
+    intervalo_minimo_dias:     (regras.intervalo_minimo_dias       as number  | undefined)   ?? undefined,
+    variedade_ministerio:      (regras.variedade_ministerio        as boolean | undefined)   ?? false,
+    bonus_preferencial_solene: (regras.bonus_preferencial_solene   as number  | undefined)   ?? undefined,
+    prioridade_bonus_alto:     (regras.prioridade_bonus_alto       as number  | undefined)   ?? undefined,
+    prioridade_bonus_medio:    (regras.prioridade_bonus_medio      as number  | undefined)   ?? undefined,
+  };
 }
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
@@ -545,13 +575,13 @@ function EscalasPage() {
     },
   });
 
-  const { data: paroquiaConfig } = useQuery<{ regras_escala: any; usa_tochas: boolean; nome: string | null; pdf_cabecalho_url: string | null; pdf_rodape_url: string | null } | null>({
+  const { data: paroquiaConfig } = useQuery<ParoquiaConfigRaw & { nome: string | null; pdf_cabecalho_url: string | null; pdf_rodape_url: string | null }>({
     queryKey: ["paroquia-config", profile?.paroquia_id],
     enabled: !!profile?.paroquia_id,
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("paroquias")
-        .select("regras_escala, usa_tochas, nome, pdf_cabecalho_url, pdf_rodape_url")
+        .select("regras_escala, usa_tochas, usa_turibulo, usa_naveta, usa_baculifero, usa_mitrifero, nome, pdf_cabecalho_url, pdf_rodape_url")
         .eq("id", profile!.paroquia_id!)
         .maybeSingle();
       return data ?? null;
@@ -847,6 +877,51 @@ function EscalasPage() {
     },
   });
 
+  async function handleNotificarVaga({ escalaId, ministerioId, ministerioNome }: { escalaId: string; ministerioId: string; ministerioNome: string }) {
+    const paroquiaId = profile?.paroquia_id;
+    if (!paroquiaId) return;
+    const escalaRef = escalas.find((e) => e.id === escalaId) ?? detailEscala;
+    const { data: memMinData } = await supabase
+      .from("membro_ministerios").select("membro_id").eq("ministerio_id", ministerioId);
+    const elegiveisIds = (memMinData ?? []).map((m: { membro_id: string }) => m.membro_id);
+    if (elegiveisIds.length === 0) return;
+    const { data: jaAtribData } = await supabase
+      .from("escala_membros").select("membro_id")
+      .eq("escala_id", escalaId).eq("ministerio_id", ministerioId);
+    const jaAtrib = new Set((jaAtribData ?? []).map((a: { membro_id: string }) => a.membro_id));
+    const destinatariosIds = elegiveisIds.filter((id: string) => !jaAtrib.has(id));
+    if (destinatariosIds.length === 0) return;
+    const { data: membrosData } = await supabase
+      .from("membros").select("id, nome, email").in("id", destinatariosIds).eq("ativo", true);
+    const membrosList = membrosData ?? [];
+    const notifs = (membrosList as { id: string; nome: string; email: string | null }[]).map((m) => ({
+      paroquia_id: paroquiaId,
+      membro_id: m.id,
+      titulo: `Vaga disponível: ${ministerioNome}`,
+      mensagem: `Uma vaga em ${ministerioNome} ficou disponível na escala "${escalaRef?.titulo ?? ""}". Se você puder servir, entre em contato com a coordenação.`,
+      tipo: "info" as const,
+      lida: false,
+      apenas_admin: false,
+      link_referencia: "/escalas",
+    }));
+    await (supabase as any).from("notificacoes").insert(notifs);
+    for (const m of membrosList as { id: string; nome: string; email: string | null }[]) {
+      if (!m.email) continue;
+      await supabase.functions.invoke("send-email", {
+        body: {
+          template: "vaga_disponivel",
+          to: m.email,
+          nome: m.nome,
+          paroquia: paroquiaNome ?? "",
+          ministerioNome,
+          escalaTitulo: escalaRef?.titulo ?? "",
+          escalaData: escalaRef?.data ?? "",
+          escalaHora: escalaRef?.hora_inicio?.slice(0, 5) ?? "",
+        },
+      });
+    }
+  }
+
   const removerPublicadaMutation = useMutation({
     mutationFn: async (args: {
       atribId: string;
@@ -854,6 +929,10 @@ function EscalasPage() {
       motivo: string;
       abrirVaga: boolean;
       penalidade: "nenhuma" | "justificou" | "faltou";
+      notificarVaga: boolean;
+      escalaId: string;
+      ministerioId: string;
+      ministerioNome: string;
     }) => {
       const { error, data } = await (supabase as any).rpc("admin_remover_membro_escala", {
         p_escala_membro_id: args.atribId,
@@ -864,19 +943,24 @@ function EscalasPage() {
       if (error) throw error;
       return data as { acao: string; substituicao_id?: string };
     },
-    onSuccess: (data) => {
+    onSuccess: (data, args) => {
       refetchAtribuicoes();
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       qc.invalidateQueries({ queryKey: ["membros-ativos", profile?.paroquia_id] });
       if (data?.acao === "vaga_aberta") {
         toast.success("Vaga aberta para substituição.");
-        qc.invalidateQueries({ queryKey: ["substituicoes", profile?.paroquia_id] });
+        qc.invalidateQueries({ queryKey: ["admin-substituicoes"] });
+        // Notificação só é enviada após confirmação da criação da substituição
+        if (args.notificarVaga) {
+          handleNotificarVaga({
+            escalaId:      args.escalaId,
+            ministerioId:  args.ministerioId,
+            ministerioNome: args.ministerioNome,
+          });
+        }
       } else {
         toast.success("Membro removido da escala.");
-        if (data?.acao !== "removido") {
-          // fallback
-        }
       }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
@@ -1160,19 +1244,18 @@ function EscalasPage() {
         ordem_prioridade:     f.ministerios?.ordem_prioridade,
       }));
 
-      const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
-      const engineConfig = {
-        usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
-        limite_semanal:           (regras.limite_semanal           as number  | undefined) ?? undefined,
-        limite_mensal:            (regras.limite_mensal            as number  | undefined) ?? undefined,
-        impedir_repeticao_seguida:(regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-        distribuicao_masc_pct:    (regras.distribuicao_masc_pct    as number  | undefined) ?? undefined,
-        intervalo_minimo_dias:    (regras.intervalo_minimo_dias     as number  | undefined) ?? undefined,
-        variedade_ministerio:     (regras.variedade_ministerio      as boolean | undefined) ?? false,
-        prioridade_bonus_alto:    (regras.prioridade_bonus_alto     as number  | undefined) ?? undefined,
-        prioridade_bonus_medio:   (regras.prioridade_bonus_medio    as number  | undefined) ?? undefined,
-        bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
-      };
+      const engineConfig = buildEngineConfig(paroquiaConfig);
+
+      const escalaDia = new Date(escala.data + "T12:00:00").getDay();
+      const escalaHora = (escala.hora_inicio ?? "").slice(0, 5);
+      const missasMatchReorg = missasPadrao.filter((mp) => {
+        if (mp.dia_semana !== escalaDia) return false;
+        if (escalaHora && mp.hora_inicio) return mp.hora_inicio.slice(0, 5) === escalaHora;
+        return true;
+      });
+      const missaRestricaoIndisp = missasMatchReorg.flatMap((mp) =>
+        (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
+      );
 
       const membrosComAtuacoes = membros.map((m) => ({
         ...m,
@@ -1197,7 +1280,7 @@ function EscalasPage() {
         membroMinisterios,
         {
           history: assignmentHistory.filter((h) => h.date !== escala.data),
-          indisponibilidades: [...indisponibilidades, ...reorgMissaRestricaoIndisp],
+          indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
           restricoes: funcaoRestricoes,
           incompatibilidades: membroIncompat,
           config: engineConfig,
@@ -2013,60 +2096,7 @@ function EscalasPage() {
               onRemoverPublicada={(args) => removerPublicadaMutation.mutate(args)}
               onStatusChange={(status) => updateStatusMutation.mutate({ id: detailEscala.id, status })}
               onNotificarVaga={async ({ escalaId, ministerioId, ministerioNome }) => {
-                const paroquiaId = profile?.paroquia_id;
-                if (!paroquiaId) return;
-                // Busca dados da escala para o e-mail
-                const escalaRef = escalas.find((e) => e.id === escalaId) ?? detailEscala;
-                // Busca membros elegíveis: no ministério e não já na escala nesta função
-                const { data: memMinData } = await supabase
-                  .from("membro_ministerios")
-                  .select("membro_id")
-                  .eq("ministerio_id", ministerioId);
-                const elegiveisIds = (memMinData ?? []).map((m: { membro_id: string }) => m.membro_id);
-                if (elegiveisIds.length === 0) return;
-                const { data: jaAtribData } = await supabase
-                  .from("escala_membros")
-                  .select("membro_id")
-                  .eq("escala_id", escalaId)
-                  .eq("ministerio_id", ministerioId);
-                const jaAtrib = new Set((jaAtribData ?? []).map((a: { membro_id: string }) => a.membro_id));
-                const destinatariosIds = elegiveisIds.filter((id: string) => !jaAtrib.has(id));
-                if (destinatariosIds.length === 0) return;
-                // Busca dados dos membros (nome + e-mail)
-                const { data: membrosData } = await supabase
-                  .from("membros")
-                  .select("id, nome, email")
-                  .in("id", destinatariosIds)
-                  .eq("ativo", true);
-                const membrosList = membrosData ?? [];
-                // Notificações in-app
-                const notifs = membrosList.map((m: { id: string; nome: string; email: string | null }) => ({
-                  paroquia_id: paroquiaId,
-                  membro_id: m.id,
-                  titulo: `Vaga disponível: ${ministerioNome}`,
-                  mensagem: `Uma vaga em ${ministerioNome} ficou disponível na escala "${escalaRef?.titulo ?? ""}". Se você puder servir, entre em contato com a coordenação.`,
-                  tipo: "info" as const,
-                  lida: false,
-                  apenas_admin: false,
-                  link_referencia: "/escalas",
-                }));
-                await (supabase as any).from("notificacoes").insert(notifs);
-                // E-mails individuais
-                for (const m of membrosList as { id: string; nome: string; email: string | null }[]) {
-                  if (!m.email) continue;
-                  await supabase.functions.invoke("send-email", {
-                    body: {
-                      template: "vaga_disponivel",
-                      to: m.email,
-                      nome: m.nome,
-                      paroquia: paroquiaNome ?? "",
-                      ministerioNome,
-                      escalaTitulo: escalaRef?.titulo ?? "",
-                      escalaData: escalaRef?.data ?? "",
-                      escalaHora: escalaRef?.hora_inicio?.slice(0, 5) ?? "",
-                    },
-                  });
-                }
+                await handleNotificarVaga({ escalaId, ministerioId, ministerioNome });
               }}
             />
           )}
@@ -2847,7 +2877,7 @@ function SwapMembroModal({
   indisponibilidades: IndispRow[];
   membroMinisterios: Record<string, string[]>;
   funcaoRestricoes: FuncaoRestricao[];
-  paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
+  paroquiaConfig: ParoquiaConfigRaw;
   assignmentHistory: AssignmentHistoryEntry[];
   onSwap: (args: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
   onClose: () => void;
@@ -3197,7 +3227,7 @@ function ListaView({
   escalaCounts: Record<string, EscalaPreview>;
   membros: Membro[];
   assignmentHistory: AssignmentHistoryEntry[];
-  paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
+  paroquiaConfig: ParoquiaConfigRaw;
   indisponibilidades: IndispRow[];
   membroMinisterios: Record<string, string[]>;
   funcaoRestricoes: FuncaoRestricao[];
@@ -4125,7 +4155,7 @@ function EscalaDetail({
   incompatibilidades: { membro_a_id: string; membro_b_id: string }[];
   missasPadrao: { id: string; dia_semana: number; hora_inicio: string | null }[];
   membroMissaRestricoes: Record<string, string[]>;
-  paroquiaConfig: { regras_escala: any; usa_tochas: boolean } | null | undefined;
+  paroquiaConfig: ParoquiaConfigRaw;
   paroquiaNome: string;
   preferenciaisSolene?: { ministerio_id: string; membro_id: string }[];
   initialEditMode: boolean;
@@ -4138,7 +4168,7 @@ function EscalaDetail({
   onRemoveFuncao: (id: string) => void;
   onAtribuir: (memberId: string, ministerioId: string) => void;
   onRemoverAtribuicao: (id: string) => void;
-  onRemoverPublicada: (args: { atribId: string; membroId: string; motivo: string; abrirVaga: boolean; penalidade: "nenhuma" | "justificou" | "faltou" }) => void;
+  onRemoverPublicada: (args: { atribId: string; membroId: string; motivo: string; abrirVaga: boolean; penalidade: "nenhuma" | "justificou" | "faltou"; notificarVaga: boolean; escalaId: string; ministerioId: string; ministerioNome: string }) => void;
   onStatusChange: (status: string) => void;
   onNotificarVaga: (args: { escalaId: string; ministerioId: string; ministerioNome: string }) => void;
   hasPendingMemberChanges: boolean;
@@ -4591,19 +4621,7 @@ function EscalaDetail({
       return;
     }
 
-    const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
-    const config = {
-      usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
-      limite_semanal:           (regras.limite_semanal           as number  | undefined) ?? undefined,
-      limite_mensal:            (regras.limite_mensal            as number  | undefined) ?? undefined,
-      impedir_repeticao_seguida:(regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-      distribuicao_masc_pct:    (regras.distribuicao_masc_pct    as number  | undefined) ?? undefined,
-      intervalo_minimo_dias:    (regras.intervalo_minimo_dias     as number  | undefined) ?? undefined,
-      variedade_ministerio:     (regras.variedade_ministerio      as boolean | undefined) ?? false,
-      prioridade_bonus_alto:    (regras.prioridade_bonus_alto     as number  | undefined) ?? undefined,
-      prioridade_bonus_medio:   (regras.prioridade_bonus_medio    as number  | undefined) ?? undefined,
-      bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
-    };
+    const config = buildEngineConfig(paroquiaConfig);
 
     // Encontra missas_padrao que correspondem a esta escala (mesmo dia da semana + hora)
     const escalaDia = new Date(escala.data + "T12:00:00").getDay();
@@ -4733,19 +4751,18 @@ function EscalaDetail({
     }
     setSlotLoading((prev) => ({ ...prev, [minId]: true }));
 
-    const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
-    const config = {
-      usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
-      limite_semanal:           (regras.limite_semanal           as number  | undefined) ?? undefined,
-      limite_mensal:            (regras.limite_mensal            as number  | undefined) ?? undefined,
-      impedir_repeticao_seguida:(regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-      distribuicao_masc_pct:    (regras.distribuicao_masc_pct    as number  | undefined) ?? undefined,
-      intervalo_minimo_dias:    (regras.intervalo_minimo_dias     as number  | undefined) ?? undefined,
-      variedade_ministerio:     (regras.variedade_ministerio      as boolean | undefined) ?? false,
-      prioridade_bonus_alto:    (regras.prioridade_bonus_alto     as number  | undefined) ?? undefined,
-      prioridade_bonus_medio:   (regras.prioridade_bonus_medio    as number  | undefined) ?? undefined,
-      bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
-    };
+    const config = buildEngineConfig(paroquiaConfig);
+
+    const escalaDia = new Date(escala.data + "T12:00:00").getDay();
+    const escalaHora = (escala.hora_inicio ?? "").slice(0, 5);
+    const missasMatchSugerir = missasPadrao.filter((mp) => {
+      if (mp.dia_semana !== escalaDia) return false;
+      if (escalaHora && mp.hora_inicio) return mp.hora_inicio.slice(0, 5) === escalaHora;
+      return true;
+    });
+    const missaRestricaoIndispSugerir = missasMatchSugerir.flatMap((mp) =>
+      (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
+    );
 
     const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
     const resultado = generateEscalaWithAlertas(
@@ -4763,7 +4780,7 @@ function EscalaDetail({
       {
         history: assignmentHistory,
         existingAssignments: atribuicoes.map((a) => ({ membro_id: a.membro_id, ministerio_id: a.ministerio_id })),
-        indisponibilidades,
+        indisponibilidades: [...indisponibilidades, ...missaRestricaoIndispSugerir],
         restricoes: funcaoRestricoes,
         incompatibilidades: incompatibilidades,
         config,
@@ -4825,28 +4842,15 @@ function EscalaDetail({
     });
 
     // ── Rodar motor com debug=true ────────────────────────────────────────
-    const debugRegras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
-    const debugConfig = {
-      usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
-      limite_semanal:           (debugRegras.limite_semanal           as number  | undefined) ?? undefined,
-      limite_mensal:            (debugRegras.limite_mensal            as number  | undefined) ?? undefined,
-      impedir_repeticao_seguida:(debugRegras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-      distribuicao_masc_pct:    (debugRegras.distribuicao_masc_pct    as number  | undefined) ?? undefined,
-      intervalo_minimo_dias:    (debugRegras.intervalo_minimo_dias     as number  | undefined) ?? undefined,
-      variedade_ministerio:     (debugRegras.variedade_ministerio      as boolean | undefined) ?? false,
-      prioridade_bonus_alto:    (debugRegras.prioridade_bonus_alto     as number  | undefined) ?? undefined,
-      prioridade_bonus_medio:   (debugRegras.prioridade_bonus_medio    as number  | undefined) ?? undefined,
-      bonus_preferencial_solene:(debugRegras.bonus_preferencial_solene as number  | undefined) ?? undefined,
-    };
-
-    const debugDia  = new Date(escala.data + "T12:00:00").getDay();
-    const debugHora = (escala.hora_inicio ?? "").slice(0, 5);
-    const debugMissasMatch = missasPadrao.filter((mp) => {
-      if (mp.dia_semana !== debugDia) return false;
-      if (debugHora && mp.hora_inicio) return mp.hora_inicio.slice(0, 5) === debugHora;
+    const configDebug = buildEngineConfig(paroquiaConfig);
+    const escalaDiaDebug = new Date(escala.data + "T12:00:00").getDay();
+    const escalaHoraDebug = (escala.hora_inicio ?? "").slice(0, 5);
+    const missasMatchDebug = missasPadrao.filter((mp) => {
+      if (mp.dia_semana !== escalaDiaDebug) return false;
+      if (escalaHoraDebug && mp.hora_inicio) return mp.hora_inicio.slice(0, 5) === escalaHoraDebug;
       return true;
     });
-    const debugMissaRestricaoIndisp = debugMissasMatch.flatMap((mp) =>
+    const missaRestricaoIndispDebug = missasMatchDebug.flatMap((mp) =>
       (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
     );
 
@@ -4864,10 +4868,12 @@ function EscalaDetail({
       membroMinisterios,
       {
         history: assignmentHistory,
-        indisponibilidades: [...indisponibilidades, ...debugMissaRestricaoIndisp],
+        indisponibilidades: [...indisponibilidades, ...missaRestricaoIndispDebug],
         restricoes: funcaoRestricoes,
-        incompatibilidades: incompatibilidades,
-        config: debugConfig,
+        config: configDebug,
+        solene: escala.solene,
+        tem_adoracao: escala.tem_adoracao,
+        tem_bispo: escala.tem_bispo,
         preferenciaisSolene: preferenciaisSolene ?? [],
         debug: true,
       },
@@ -5336,6 +5342,20 @@ function EscalaDetail({
                                     </Command>
                                   </PopoverContent>
                                 </Popover>
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs gap-1"
+                                  disabled={!selectedMembro}
+                                  onClick={() => {
+                                    if (selectedMembro) {
+                                      onAtribuir(selectedMembro, f.ministerio_id);
+                                      setAddMembroMap((prev) => ({ ...prev, [f.ministerio_id]: "" }));
+                                    }
+                                  }}
+                                >
+                                  <UserPlus className="h-3 w-3" />
+                                  Adicionar
+                                </Button>
                               </div>
                             ) : (
                               <p className="pl-5 text-xs text-muted-foreground">
@@ -6107,19 +6127,16 @@ function EscalaDetail({
                   if (!removerPendente) return;
                   if (escala.status === "publicada") {
                     onRemoverPublicada({
-                      atribId: removerPendente.atribId,
-                      membroId: removerPendente.membroId,
-                      motivo: motivoRemocao,
-                      abrirVaga: abrirVagaChecked,
+                      atribId:       removerPendente.atribId,
+                      membroId:      removerPendente.membroId,
+                      motivo:        motivoRemocao,
+                      abrirVaga:     abrirVagaChecked,
                       penalidade,
+                      notificarVaga: abrirVagaChecked && notificarVaga,
+                      escalaId:      escala.id,
+                      ministerioId:  removerPendente.ministerioId,
+                      ministerioNome: removerPendente.ministerioNome,
                     });
-                    if (abrirVagaChecked && notificarVaga) {
-                      onNotificarVaga({
-                        escalaId: escala.id,
-                        ministerioId: removerPendente.ministerioId,
-                        ministerioNome: removerPendente.ministerioNome,
-                      });
-                    }
                   } else {
                     removerLocalMutation.mutate(removerPendente.atribId);
                     if (notificarVaga) {
