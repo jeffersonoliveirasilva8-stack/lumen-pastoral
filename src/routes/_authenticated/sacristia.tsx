@@ -5,9 +5,12 @@ import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   CheckCircle2, XCircle, Clock, MapPin, Users, Loader2, FileText,
-  AlertCircle, TrendingUp, Search, X, CheckCheck, History, Ban,
+  AlertCircle, TrendingUp, Search, X, CheckCheck, History, Ban, ArrowLeftRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -64,6 +67,12 @@ function SacristiaPage() {
   const [salvandoTodos, setSalvandoTodos] = useState(false);
   const [periodoHistorico, setPeriodoHistorico] = useState<90 | 365 | 730>(90);
   const autoSwitchedRef = useRef(false);
+  const expiracaoExecutadaRef = useRef(false);
+
+  // Retroativo: controla dialog de "outro membro serviu no lugar"
+  const [outroServiuTarget, setOutroServiuTarget] = useState<MembroEscala | null>(null);
+  const [outroServiuBusca, setOutroServiuBusca] = useState("");
+  const [outroServiuId, setOutroServiuId] = useState<string | null>(null);
 
   // Para auxiliares: descobre o membro_id do usuário logado para filtrar escalas
   const { data: meupMembroId } = useQuery<string | null>({
@@ -286,6 +295,57 @@ function SacristiaPage() {
       setSalvandoTodos(false);
     }
   }
+
+  // Busca todos os membros da paróquia para o picker de substituto retroativo
+  const { data: todosMembros = [] } = useQuery<{ id: string; nome: string }[]>({
+    queryKey: ["sacristia-membros-paroquia", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    staleTime: 120_000,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("membros")
+        .select("id, nome")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .eq("ativo", true)
+        .order("nome");
+      return (data ?? []) as { id: string; nome: string }[];
+    },
+  });
+
+  // Expira substituições abertas de escalas já realizadas (roda uma vez por sessão)
+  useEffect(() => {
+    if (!profile?.paroquia_id || expiracaoExecutadaRef.current) return;
+    expiracaoExecutadaRef.current = true;
+    anyDb.rpc("expirar_substituicoes_vencidas", { p_paroquia_id: profile.paroquia_id })
+      .then(({ data }: any) => {
+        if (data?.expiradas > 0) {
+          qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
+          qc.invalidateQueries({ queryKey: ["substituicoes"] });
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.paroquia_id]);
+
+  const registrarSubstitutoMutation = useMutation({
+    mutationFn: async ({ escalaMembroId, substitutoId }: { escalaMembroId: string; substitutoId: string }) => {
+      const { data, error } = await anyDb.rpc("registrar_substituto_retroativo", {
+        p_escala_membro_id: escalaMembroId,
+        p_substituto_id:    substitutoId,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error ?? "Erro desconhecido");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros"] });
+      qc.invalidateQueries({ queryKey: ["escala-historico"] });
+      toast.success("Presença retroativa registrada. Pontos atualizados.");
+      setOutroServiuTarget(null);
+      setOutroServiuId(null);
+      setOutroServiuBusca("");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
 
   const cancelarEscalaMutation = useMutation({
     mutationFn: async (escalaId: string) => {
@@ -678,6 +738,21 @@ function SacristiaPage() {
                                   >
                                     <XCircle className="h-4 w-4" />
                                   </button>
+                                  {/* Outro membro serviu no lugar — só em escalas passadas */}
+                                  {tab !== "em_andamento" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOutroServiuTarget(m);
+                                        setOutroServiuId(null);
+                                        setOutroServiuBusca("");
+                                      }}
+                                      title="Outro membro serviu no lugar"
+                                      className="h-8 w-8 rounded-lg flex items-center justify-center transition bg-muted text-muted-foreground hover:bg-violet-100 hover:text-violet-700"
+                                    >
+                                      <ArrowLeftRight className="h-4 w-4" />
+                                    </button>
+                                  )}
                                 </div>
                                 </div>
                                 {statusFinal === "justificou" && tab === "concluidas" ? (
@@ -727,6 +802,98 @@ function SacristiaPage() {
           })}
         </div>
       )}
+
+      {/* ── Dialog: outro membro serviu no lugar ────────────────────────────── */}
+      <Dialog
+        open={!!outroServiuTarget}
+        onOpenChange={(o) => { if (!o) { setOutroServiuTarget(null); setOutroServiuId(null); setOutroServiuBusca(""); } }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <ArrowLeftRight className="h-4 w-4 text-violet-600" />
+              Outro membro serviu no lugar
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              <strong>{outroServiuTarget?.membro.nome}</strong> será marcado(a) como{" "}
+              <span className="text-red-600 font-medium">falta</span>. Selecione quem foi
+              no lugar para receber os pontos de presença.
+            </p>
+
+            {/* Campo de busca */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Buscar membro..."
+                value={outroServiuBusca}
+                onChange={(e) => { setOutroServiuBusca(e.target.value); setOutroServiuId(null); }}
+                className="pl-8 h-8 text-sm"
+                autoFocus
+              />
+            </div>
+
+            {/* Lista filtrada */}
+            <div className="max-h-48 overflow-y-auto rounded-lg border divide-y">
+              {todosMembros
+                .filter((m) =>
+                  m.id !== outroServiuTarget?.membro_id &&
+                  m.nome.toLowerCase().includes(outroServiuBusca.toLowerCase())
+                )
+                .slice(0, 20)
+                .map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setOutroServiuId(m.id)}
+                    className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                      outroServiuId === m.id
+                        ? "bg-violet-50 text-violet-700 font-medium"
+                        : "hover:bg-muted/50"
+                    }`}
+                  >
+                    {m.nome}
+                  </button>
+                ))}
+              {todosMembros.filter((m) =>
+                m.id !== outroServiuTarget?.membro_id &&
+                m.nome.toLowerCase().includes(outroServiuBusca.toLowerCase())
+              ).length === 0 && (
+                <p className="px-3 py-4 text-sm text-center text-muted-foreground">
+                  Nenhum membro encontrado.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setOutroServiuTarget(null); setOutroServiuId(null); setOutroServiuBusca(""); }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              disabled={!outroServiuId || registrarSubstitutoMutation.isPending}
+              onClick={() => {
+                if (!outroServiuTarget || !outroServiuId) return;
+                registrarSubstitutoMutation.mutate({
+                  escalaMembroId: outroServiuTarget.id,
+                  substitutoId:   outroServiuId,
+                });
+              }}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              {registrarSubstitutoMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
