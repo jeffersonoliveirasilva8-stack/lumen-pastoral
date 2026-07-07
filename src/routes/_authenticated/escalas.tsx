@@ -1006,10 +1006,12 @@ function EscalasPage() {
       // (in-app notifications são feitas pelo trigger _trigger_escala_publicada_membros)
       if (vars.status === "publicada" && escalaRef) {
         // Busca email direto do join para não depender do estado local (que pode ter email=null)
+        // .neq("ativo", false) exclui linhas soft-deleted (membros removidos antes da publicação)
         const { data: atrib } = await (supabase as any)
           .from("escala_membros")
           .select("membro_id, ministerio_id, membros!membro_id(id, nome, email)")
-          .eq("escala_id", vars.id);
+          .eq("escala_id", vars.id)
+          .neq("ativo", false);
         for (let i = 0; i < (atrib ?? []).length; i++) {
           const a = (atrib ?? [])[i];
           const emailTo   = a.membros?.email ?? membros.find((m: Membro) => m.id === a.membro_id)?.email;
@@ -1037,7 +1039,8 @@ function EscalasPage() {
         const { data: atrib } = await (supabase as any)
           .from("escala_membros")
           .select("membro_id, ministerio_id")
-          .eq("escala_id", vars.id);
+          .eq("escala_id", vars.id)
+          .neq("ativo", false);
         const atribList = atrib ?? [];
         // Notificações in-app
         const notifs = atribList.map((a: { membro_id: string }) => ({
@@ -1096,7 +1099,8 @@ function EscalasPage() {
         const { data: atrib } = await (supabase as any)
           .from("escala_membros")
           .select("membro_id, ministerio_id, escala_id")
-          .in("escala_id", ids);
+          .in("escala_id", ids)
+          .neq("ativo", false);
         const allAtrib = atrib ?? [];
 
         // Notificações in-app ao cancelar em lote
