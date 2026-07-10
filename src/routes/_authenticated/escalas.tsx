@@ -827,12 +827,15 @@ function EscalasPage() {
 
   const atribuirMutation = useMutation({
     mutationFn: async ({ membro_id, ministerio_id }: { membro_id: string; ministerio_id: string }) => {
-      const { error } = await (supabase as any).from("escala_membros").insert({
+      // upsert: se já existe linha soft-deleted (ativo=false), reativa em vez de duplicar
+      const { error } = await (supabase as any).from("escala_membros").upsert({
         escala_id: detailEscala!.id,
         membro_id,
         ministerio_id,
         status: "pendente",
-      });
+        ativo: true,
+        removido_em: null,
+      }, { onConflict: "escala_id,membro_id,ministerio_id" });
       if (error) throw error;
     },
     onSuccess: (_data, { membro_id, ministerio_id }) => {
@@ -1199,7 +1202,7 @@ function EscalasPage() {
         .update({ ativo: false, removido_em: new Date().toISOString() })
         .eq("id", removeId);
       if (updErr) throw updErr;
-      const { error: insErr } = await (supabase as any).from("escala_membros").insert({ escala_id: escalaId, membro_id: membroId, ministerio_id: ministerioId, status: "pendente" });
+      const { error: insErr } = await (supabase as any).from("escala_membros").upsert({ escala_id: escalaId, membro_id: membroId, ministerio_id: ministerioId, status: "pendente", ativo: true, removido_em: null }, { onConflict: "escala_id,membro_id,ministerio_id" });
       if (insErr) throw insErr;
     },
     onSuccess: () => {
@@ -4294,12 +4297,14 @@ function EscalaDetail({
   // Definidas aqui para ter acesso direto a escala.id sem passar por closure do pai
   const atribuirLocalMutation = useMutation({
     mutationFn: async ({ membro_id, ministerio_id }: { membro_id: string; ministerio_id: string }) => {
-      const { error } = await (supabase as any).from("escala_membros").insert({
+      const { error } = await (supabase as any).from("escala_membros").upsert({
         escala_id: escala.id,
         membro_id,
         ministerio_id,
         status: "pendente",
-      });
+        ativo: true,
+        removido_em: null,
+      }, { onConflict: "escala_id,membro_id,ministerio_id" });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -4374,7 +4379,10 @@ function EscalaDetail({
           .eq("id", escala.id);
       }
 
-      const { error: insertErr } = await anyDb.from("escala_membros").insert(rows);
+      const { error: insertErr } = await anyDb.from("escala_membros").upsert(
+        rows.map((r: any) => ({ ...r, ativo: true, removido_em: null })),
+        { onConflict: "escala_id,membro_id,ministerio_id" }
+      );
       if (insertErr) throw insertErr;
 
       return rows.length;
@@ -4396,13 +4404,16 @@ function EscalaDetail({
   const applySuggestionsMutation = useMutation({
     mutationFn: async ({ escalaId, assignments }: { escalaId: string; assignments: { membro_id: string; ministerio_id: string }[] }) => {
       if (assignments.length === 0) return 0;
-      const { data: inserted, error } = await (supabase as any).from("escala_membros").insert(
+      const { data: inserted, error } = await (supabase as any).from("escala_membros").upsert(
         assignments.map((assignment) => ({
           escala_id: escalaId,
           membro_id: assignment.membro_id,
           ministerio_id: assignment.ministerio_id,
           status: "pendente",
-        }))
+          ativo: true,
+          removido_em: null,
+        })),
+        { onConflict: "escala_id,membro_id,ministerio_id" }
       ).select("id");
       if (error) throw error;
       return (inserted as any[])?.length ?? assignments.length;

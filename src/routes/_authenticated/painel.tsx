@@ -1082,12 +1082,14 @@ function DashboardPage() {
       if (!substituicaoTarget) return;
       const { atribuicaoId, escalaId, ministerioId } = substituicaoTarget;
       await supabase.from("escala_membros").delete().eq("id", atribuicaoId);
-      await (supabase as any).from("escala_membros").insert({
+      await (supabase as any).from("escala_membros").upsert({
         escala_id: escalaId,
         membro_id: novoMembroId,
         ministerio_id: ministerioId,
         status: "pendente",
-      });
+        ativo: true,
+        removido_em: null,
+      }, { onConflict: "escala_id,membro_id,ministerio_id" });
     },
     onSuccess: () => {
       qcDash.invalidateQueries({ queryKey: ["insights-conflitos"] });
@@ -1110,7 +1112,7 @@ function DashboardPage() {
       ]);
       const totalVagas = ((vagasRes.data ?? []) as any[]).reduce((s: number, v: any) => s + ((v.quantidade as number) ?? 1), 0);
       if ((escaladosRes.data ?? []).length >= totalVagas) throw new Error("Esta vaga já foi preenchida por outro servidor.");
-      const { error } = await supabase.from("escala_membros").insert({ escala_id: escalaId, membro_id: profile.id, ministerio_id: ministerioId, status: "pendente" });
+      const { error } = await (supabase as any).from("escala_membros").upsert({ escala_id: escalaId, membro_id: profile.id, ministerio_id: ministerioId, status: "pendente", ativo: true, removido_em: null }, { onConflict: "escala_id,membro_id,ministerio_id" });
       if (error) throw error;
     },
     onSuccess: () => {

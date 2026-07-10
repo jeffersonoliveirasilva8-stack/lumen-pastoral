@@ -731,8 +731,9 @@ export function AssistenteGeracaoEscalas({
             );
 
             if (sugestoes.length > 0) {
-              const { error: bErr } = await (supabase as any).from("escala_membros").insert(
-                sugestoes.map((s) => ({ escala_id: newEscala.id, membro_id: s.membro_id, ministerio_id: s.ministerio_id, status: "pendente" }))
+              const { error: bErr } = await (supabase as any).from("escala_membros").upsert(
+                sugestoes.map((s) => ({ escala_id: newEscala.id, membro_id: s.membro_id, ministerio_id: s.ministerio_id, status: "pendente", ativo: true, removido_em: null })),
+                { onConflict: "escala_id,membro_id,ministerio_id" }
               );
               if (!bErr) {
                 totalSugestoes += sugestoes.length;
