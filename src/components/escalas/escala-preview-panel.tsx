@@ -43,7 +43,7 @@ type Props = {
   hashDivergiu: boolean;
   lastGeneratedAt: Date | null;
   isSalvando: boolean;
-  onTrocar: (ministerio_id: string, novo: { membro_id: string; membro_nome: string }) => void;
+  onTrocar: (ministerio_id: string, membro_id_original: string, novo: { membro_id: string; membro_nome: string }) => void;
   onRemover: (ministerio_id: string, membro_id: string) => void;
   onSalvarRascunho: () => void;
   onLimpar: () => void;
@@ -171,7 +171,7 @@ export function EscalaPreviewPanel({
                       key={`${item.ministerio_id}-${item.membro_id}`}
                       item={item}
                       candidatos={membrosDisponiveis(funcao.ministerio_id)}
-                      onTrocar={(novo) => onTrocar(funcao.ministerio_id, novo)}
+                      onTrocar={(novo) => onTrocar(funcao.ministerio_id, item.membro_id, novo)}
                       onRemover={() => onRemover(funcao.ministerio_id, item.membro_id)}
                     />
                   )) : (

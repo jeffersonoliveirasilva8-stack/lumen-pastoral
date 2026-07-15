@@ -210,6 +210,7 @@ export function useEscalaPreview(params: {
 
   const trocarMembro = useCallback((
     ministerio_id: string,
+    membro_id_original: string,
     novo: { membro_id: string; membro_nome: string },
   ) => {
     // Captura o snapshot antes de entrar no setter para lookup do score do novo membro.
@@ -221,7 +222,7 @@ export function useEscalaPreview(params: {
 
     setSuggestedAssignments((prev) =>
       prev.map((a) =>
-        a.ministerio_id === ministerio_id
+        a.ministerio_id === ministerio_id && a.membro_id === membro_id_original
           ? {
               ...a,
               membro_id:        novo.membro_id,

@@ -354,7 +354,7 @@ function EscalasPage() {
         .from("escala_membros")
         .select("id, membro_id, ministerio_id, status, membros!membro_id(id, nome, telefone)")
         .eq("escala_id", detailEscala!.id)
-        .neq("ativo", false);
+        .neq("ativo" as any, false);
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
         membro: r.membros,
@@ -406,7 +406,7 @@ function EscalasPage() {
         .from("escala_membros")
         .select("id, membro_id, ministerio_id, removido_em, membros!membro_id(id, nome)")
         .eq("escala_id", detailEscala!.id)
-        .eq("ativo", false);
+        .eq("ativo" as any, false);
       return ((data ?? []) as any[]).map((r) => ({ ...r, membro: r.membros }));
     },
   });
@@ -4357,9 +4357,6 @@ function EscalaDetail({
         }
       }
 
-      // DELETE + INSERT (sem soft-delete nesta versão — adicionado Sprint 4+)
-      await anyDb.from("escala_membros").delete().eq("escala_id", escala.id);
-
       const rows = assignments.map((a) => ({
         escala_id:          escala.id,
         membro_id:          a.membro_id,
@@ -4379,11 +4376,24 @@ function EscalaDetail({
           .eq("id", escala.id);
       }
 
+      // Upsert primeiro — garante que os novos dados existam antes de remover os antigos.
+      // Se a deleção falhar, os dados novos já estão salvos (menos catastrófico que o inverso).
       const { error: insertErr } = await anyDb.from("escala_membros").upsert(
         rows.map((r: any) => ({ ...r, ativo: true, removido_em: null })),
         { onConflict: "escala_id,membro_id,ministerio_id" }
       );
       if (insertErr) throw insertErr;
+
+      // Remove linhas que não fazem parte da nova alocação
+      const novosIds = rows.map((r) => r.membro_id);
+      if (novosIds.length > 0) {
+        await anyDb.from("escala_membros")
+          .delete()
+          .eq("escala_id", escala.id)
+          .not("membro_id", "in", `(${novosIds.join(",")})`);
+      } else {
+        await anyDb.from("escala_membros").delete().eq("escala_id", escala.id);
+      }
 
       return rows.length;
     },
@@ -5591,7 +5601,7 @@ function EscalaDetail({
                 hashDivergiu={preview.hashDivergiu}
                 lastGeneratedAt={preview.lastGeneratedAt}
                 isSalvando={salvarRascunhoMutation.isPending}
-                onTrocar={(minId, novo) => preview.trocarMembro(minId, novo)}
+                onTrocar={(minId, memId, novo) => preview.trocarMembro(minId, memId, novo)}
                 onRemover={(minId, memId) => preview.removerDoPreview(minId, memId)}
                 onSalvarRascunho={() => salvarRascunhoMutation.mutate(suggestedAssignments)}
                 onLimpar={handleClearSuggestions}

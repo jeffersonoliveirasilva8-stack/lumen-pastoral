@@ -616,7 +616,7 @@ export function alocarMembros(
       }
       if (config?.intervalo_minimo_dias && config.intervalo_minimo_dias > 0) {
         const limite = somarDias(contexto.data, -config.intervalo_minimo_dias);
-        if (historicoRecente.some((h) => h.membro_id === m.id && h.data > limite && h.data < contexto.data)) {
+        if (historicoRecente.some((h) => h.membro_id === m.id && h.data >= limite && h.data < contexto.data)) {
           excluidos.indisponibilidade++;
           if (!ja_alocados.has(m.id)) pool5.push(m);
           continue;

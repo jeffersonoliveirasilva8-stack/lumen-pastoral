@@ -129,11 +129,12 @@ function PortalMembroHome() {
     queryKey: ["portal-home-escalas", membro?.id],
     enabled: !!membro?.id,
     queryFn: async () => {
-      // Query 1 — todas as linhas deste membro em escala_membros (filtro direto na raiz)
+      // Query 1 — linhas ativas deste membro em escala_membros (exclui soft-deleted)
       const { data: memRows, error: e1 } = await anyDb
         .from("escala_membros")
         .select("id, escala_id, status, ministerios(nome, cor)")
-        .eq("membro_id", membro!.id);
+        .eq("membro_id", membro!.id)
+        .or("ativo.is.null,ativo.eq.true" as any);
       if (e1) throw e1;
       if (!memRows?.length) return [];
 

@@ -1734,7 +1734,7 @@ function IndisponibilidadeTab({
   onRemove: (id: string) => void;
   saving: boolean;
 }) {
-  const [modo, setModo] = useState<"unica" | "periodo">("unica");
+  const [modo, setModo] = useState<"unica" | "multipla" | "periodo">("unica");
   const [newData, setNewData] = useState("");
   const [newMotivo, setNewMotivo] = useState("");
   const [newTipo, setNewTipo] = useState<"dia" | "horario">("dia");
@@ -1744,6 +1744,10 @@ function IndisponibilidadeTab({
   const [rangeInicio, setRangeInicio] = useState("");
   const [rangeFim, setRangeFim] = useState("");
   const [rangeMotivo, setRangeMotivo] = useState("");
+  // Datas avulsas (múltipla seleção aleatória)
+  const [multiDatas, setMultiDatas] = useState<string[]>([]);
+  const [multiMotivo, setMultiMotivo] = useState("");
+  const [calViewDate, setCalViewDate] = useState<Date>(() => new Date());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const minDate = diasAntecedencia > 0
@@ -1765,6 +1769,7 @@ function IndisponibilidadeTab({
 
   const canAdd = !!newData && !!newMotivo.trim() && (newTipo === "dia" || !!newHoraInicio);
   const canAddRange = !!rangeInicio && !!rangeFim && rangeFim >= rangeInicio && !!rangeMotivo.trim() && datasNoRange.length > 0;
+  const canAddMulti = multiDatas.length > 0 && !!multiMotivo.trim();
 
   function handleAdd() {
     if (!canAdd) return;
@@ -1792,6 +1797,37 @@ function IndisponibilidadeTab({
     onAddRange(datasNovos, rangeMotivo.trim());
     setRangeInicio(""); setRangeFim(""); setRangeMotivo("");
   }
+
+  function handleAddMulti() {
+    if (!canAddMulti) return;
+    const datasNovos = multiDatas.filter((d) => !indisps.some((i) => i.data === d));
+    if (datasNovos.length === 0) {
+      toast.error("Todas as datas selecionadas já estão bloqueadas.");
+      return;
+    }
+    onAddRange(datasNovos.sort(), multiMotivo.trim());
+    setMultiDatas([]); setMultiMotivo("");
+  }
+
+  function toggleMultiData(dateStr: string) {
+    setMultiDatas((prev) =>
+      prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr]
+    );
+  }
+
+  // Gera dias do mês para o calendário avulso
+  const calDays = useMemo(() => {
+    const year = calViewDate.getFullYear();
+    const month = calViewDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay(); // 0=Dom
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days: (string | null)[] = Array(firstDay).fill(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      days.push(iso);
+    }
+    return days;
+  }, [calViewDate]);
 
   // Agrupa por mês (key = "2026-06")
   const byMonth: Record<string, IndispItem[]> = {};
@@ -1836,19 +1872,19 @@ function IndisponibilidadeTab({
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Nova indisponibilidade</p>
 
           {/* Seletor de modo */}
-          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-muted">
-            {(["unica", "periodo"] as const).map((m) => (
+          <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-muted">
+            {(["unica", "multipla", "periodo"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setModo(m)}
-                className={`py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`py-2 rounded-lg text-xs font-medium transition-all ${
                   modo === m
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {m === "unica" ? "📅 Data única" : "🗓️ Período"}
+                {m === "unica" ? "📅 Data única" : m === "multipla" ? "📌 Avulsas" : "🗓️ Período"}
               </button>
             ))}
           </div>
@@ -1935,6 +1971,112 @@ function IndisponibilidadeTab({
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                 <span className="ml-1">Registrar</span>
+              </Button>
+            </div>
+          </>
+        ) : modo === "multipla" ? (
+          <>
+            {/* Modo datas avulsas: calendário de clique múltiplo */}
+            <div className="space-y-3">
+              {/* Navegação de mês */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setCalViewDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                  className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  ‹
+                </button>
+                <span className="text-sm font-semibold capitalize">
+                  {format(calViewDate, "MMMM 'de' yyyy", { locale: ptBR })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCalViewDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                  className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  ›
+                </button>
+              </div>
+
+              {/* Header dias da semana */}
+              <div className="grid grid-cols-7 text-center">
+                {["D","S","T","Q","Q","S","S"].map((d, i) => (
+                  <span key={i} className="text-[10px] font-bold text-muted-foreground/50 pb-1">{d}</span>
+                ))}
+              </div>
+
+              {/* Grade de dias */}
+              <div className="grid grid-cols-7 gap-0.5">
+                {calDays.map((dateStr, idx) => {
+                  if (!dateStr) return <span key={idx} />;
+                  const isBefore = dateStr < minDate;
+                  const alreadyBlocked = indisps.some((i) => i.data === dateStr);
+                  const isSelected = multiDatas.includes(dateStr);
+                  const disabled = isBefore || alreadyBlocked;
+                  return (
+                    <button
+                      key={dateStr}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => toggleMultiData(dateStr)}
+                      title={alreadyBlocked ? "Já bloqueada" : isBefore ? "Antecedência mínima" : dateStr}
+                      className={`aspect-square w-full text-xs rounded-lg font-medium transition-colors ${
+                        isSelected
+                          ? "bg-primary text-primary-foreground"
+                          : alreadyBlocked
+                          ? "bg-muted/40 text-muted-foreground/30 line-through cursor-not-allowed"
+                          : isBefore
+                          ? "text-muted-foreground/30 cursor-not-allowed"
+                          : "hover:bg-primary/15 hover:text-primary text-foreground"
+                      }`}
+                    >
+                      {parseInt(dateStr.slice(8), 10)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Resumo da seleção */}
+              {multiDatas.length > 0 && (
+                <div className="flex items-center gap-2 rounded-xl bg-primary/5 border border-primary/20 px-3.5 py-2.5">
+                  <CalendarOff className="h-4 w-4 text-primary shrink-0" />
+                  <p className="text-sm text-primary font-medium">
+                    {multiDatas.length} dia{multiDatas.length !== 1 ? "s" : ""} selecionado{multiDatas.length !== 1 ? "s" : ""}
+                    <button
+                      type="button"
+                      onClick={() => setMultiDatas([])}
+                      className="ml-2 text-xs text-primary/50 hover:text-primary underline"
+                    >
+                      limpar
+                    </button>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Motivo + Botão */}
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 space-y-1">
+                <label className="text-xs text-muted-foreground/70">
+                  Motivo <span className="text-destructive">*</span>
+                </label>
+                <input
+                  placeholder="Ex: compromissos pessoais, trabalho…"
+                  value={multiMotivo}
+                  onChange={(e) => setMultiMotivo(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddMulti()}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
+                />
+              </div>
+              <Button
+                size="sm"
+                disabled={!canAddMulti || saving}
+                onClick={handleAddMulti}
+                className="h-[42px] px-4 shrink-0"
+              >
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                <span className="ml-1">Bloquear</span>
               </Button>
             </div>
           </>
