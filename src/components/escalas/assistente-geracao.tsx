@@ -434,6 +434,17 @@ export function AssistenteGeracaoEscalas({
     },
   });
 
+  const { data: funcoesExcecaoData = [] } = useQuery({
+    queryKey: ["missa-padrao-funcoes-excecao", mpIds.join(",")],
+    enabled: open && mpIds.length > 0,
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("missa_padrao_funcoes_excecao")
+        .select("missa_padrao_id, ministerio_id, quantidade, data")
+        .in("missa_padrao_id", mpIds);
+      return (data ?? []) as { missa_padrao_id: string; ministerio_id: string; quantidade: number; data: string }[];
+    },
+  });
+
   // ── Mapas auxiliares ──────────────────────────────────────────────────────
   const ministeriosMap = useMemo(() => {
     const m: Record<string, Ministerio> = {};
@@ -522,7 +533,27 @@ export function AssistenteGeracaoEscalas({
             tem_adoracao: missa.tem_adoracao,
             tem_bispo: missa.tem_bispo,
             missaPadraoId: missa.id,
-            funcoes: (missaFuncoesMap[missa.id] ?? []).map((f) => ({ ...f })),
+            funcoes: (() => {
+              const base = (missaFuncoesMap[missa.id] ?? []).map((f) => ({ ...f }));
+              // Merge funções específicas para esta data
+              const extras = funcoesExcecaoData.filter(
+                (e) => e.missa_padrao_id === missa.id && e.data === dateStr
+              );
+              for (const extra of extras) {
+                const existing = base.find((f) => f.ministerio_id === extra.ministerio_id);
+                if (existing) {
+                  existing.quantidade += extra.quantidade;
+                } else {
+                  base.push({
+                    ministerio_id: extra.ministerio_id,
+                    ministerio_nome: ministeriosMap[extra.ministerio_id]?.nome ?? "?",
+                    ministerio_cor: ministeriosMap[extra.ministerio_id]?.cor ?? "#999",
+                    quantidade: extra.quantidade,
+                  });
+                }
+              }
+              return base;
+            })(),
           });
         }
         cur.setDate(cur.getDate() + 1);

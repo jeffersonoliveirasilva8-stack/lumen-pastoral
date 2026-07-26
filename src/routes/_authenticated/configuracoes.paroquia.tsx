@@ -2243,12 +2243,18 @@ function TipoMissaDialog({
 
 // ── Tab: Missas Padrão ────────────────────────────────────────────────────────
 
+type FuncaoExcecao = { id: string; ministerio_id: string; quantidade: number; data: string };
+
 function MissasTab({ paroquiaId }: { paroquiaId: string }) {
   const qc = useQueryClient();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMode, setSheetMode] = useState<"create" | "edit" | "duplicate">("create");
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<MissaPadrao, "id" | "ordem">>(EMPTY_MISSA);
+  // estado para nova função-exceção
+  const [novaExcData, setNovaExcData] = useState("");
+  const [novaExcMin, setNovaExcMin] = useState("");
+  const [novaExcQtd, setNovaExcQtd] = useState(1);
 
   const { data: missas = [], isLoading } = useQuery<MissaPadrao[]>({
     queryKey: ["missas_padrao", paroquiaId],
@@ -2287,6 +2293,52 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
         .order("ordem");
       return ((data ?? []) as unknown) as TipoMissa[];
     },
+  });
+
+  const { data: ministeriosList = [] } = useQuery<{ id: string; nome: string; cor: string }[]>({
+    queryKey: ["ministerios_lista", paroquiaId],
+    queryFn: async () => {
+      const { data } = await supabase.from("ministerios").select("id, nome, cor")
+        .eq("paroquia_id", paroquiaId).eq("ativo", true).order("nome");
+      return (data ?? []) as { id: string; nome: string; cor: string }[];
+    },
+  });
+
+  const { data: funcoesExcecao = [] } = useQuery<FuncaoExcecao[]>({
+    queryKey: ["missa_padrao_funcoes_excecao", editId],
+    enabled: !!editId,
+    queryFn: async () => {
+      const { data } = await anyDb.from("missa_padrao_funcoes_excecao")
+        .select("id, ministerio_id, quantidade, data")
+        .eq("missa_padrao_id", editId)
+        .order("data").order("created_at");
+      return (data ?? []) as FuncaoExcecao[];
+    },
+  });
+
+  const addExcecaoMutation = useMutation({
+    mutationFn: async (payload: { missa_padrao_id: string; ministerio_id: string; quantidade: number; data: string }) => {
+      const { error } = await anyDb.from("missa_padrao_funcoes_excecao").insert(payload);
+      if (error) throw new Error(logDbError("INSERT missa_padrao_funcoes_excecao", error));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["missa_padrao_funcoes_excecao", editId] });
+      setNovaExcData(""); setNovaExcMin(""); setNovaExcQtd(1);
+      toast.success("Função adicionada.");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  const delExcecaoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await anyDb.from("missa_padrao_funcoes_excecao").delete().eq("id", id);
+      if (error) throw new Error(logDbError("DELETE missa_padrao_funcoes_excecao", error));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["missa_padrao_funcoes_excecao", editId] });
+      toast.success("Função removida.");
+    },
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
 
   const saveMutation = useMutation({
@@ -2457,6 +2509,100 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
               tiposMissa={tiposMissa}
             />
           </div>
+
+          {/* Funções específicas por data — só disponível ao editar uma missa existente */}
+          {sheetMode === "edit" && editId && (
+            <div className="mt-6 border-t border-border pt-5 pb-4 space-y-4">
+              <div>
+                <p className="text-sm font-semibold">Funções por data específica</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Adicione ministérios extras que só serão necessários em datas pontuais, além das funções do tipo de missa.
+                </p>
+              </div>
+
+              {/* Lista das exceções já cadastradas */}
+              {funcoesExcecao.length > 0 && (
+                <div className="space-y-2">
+                  {funcoesExcecao.map((exc) => {
+                    const min = ministeriosList.find((m) => m.id === exc.ministerio_id);
+                    return (
+                      <div key={exc.id} className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                        {min?.cor && (
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: min.cor }} />
+                        )}
+                        <span className="text-xs font-medium flex-1 min-w-0 truncate">
+                          {new Date(exc.data + "T00:00:00").toLocaleDateString("pt-BR")} — {min?.nome ?? exc.ministerio_id}
+                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0">{exc.quantidade} vaga{exc.quantidade !== 1 ? "s" : ""}</span>
+                        <button
+                          type="button"
+                          onClick={() => delExcecaoMutation.mutate(exc.id)}
+                          disabled={delExcecaoMutation.isPending}
+                          className="p-1 rounded hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition shrink-0"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Formulário para adicionar nova exceção */}
+              <div className="rounded-xl border border-dashed border-border p-3 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Adicionar função</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground font-medium block mb-1">Data</label>
+                    <input
+                      type="date"
+                      value={novaExcData}
+                      onChange={(e) => setNovaExcData(e.target.value)}
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground font-medium block mb-1">Vagas</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={novaExcQtd}
+                      onChange={(e) => setNovaExcQtd(Math.max(1, Number(e.target.value)))}
+                      className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground font-medium block mb-1">Ministério</label>
+                  <select
+                    value={novaExcMin}
+                    onChange={(e) => setNovaExcMin(e.target.value)}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+                  >
+                    <option value="">Selecione um ministério…</option>
+                    {ministeriosList.map((m) => (
+                      <option key={m.id} value={m.id}>{m.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={!novaExcData || !novaExcMin || addExcecaoMutation.isPending}
+                  onClick={() => addExcecaoMutation.mutate({
+                    missa_padrao_id: editId,
+                    ministerio_id: novaExcMin,
+                    quantidade: novaExcQtd,
+                    data: novaExcData,
+                  })}
+                >
+                  {addExcecaoMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                  Adicionar função
+                </Button>
+              </div>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </div>
