@@ -226,13 +226,18 @@ function SacristiaPage() {
     }));
   }
 
-  // Inicializa presencaMap e justificativaMap com dados já gravados ao carregar membrosEscala
+  // Inicializa presencaMap e justificativaMap com dados já gravados ao carregar membrosEscala.
+  // 'confirmado' (auto-confirmação pelo membro) é pré-selecionado como 'presente':
+  // o membro confirmou que estaria lá — secretário só precisa corrigir se faltou.
   useEffect(() => {
     const initial: Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente"> = {};
     const justInitial: Record<string, string> = {};
     membrosEscala.forEach((m) => {
       if (STATUS_FINAIS.includes(m.status)) {
         initial[m.id] = m.status as "presente" | "faltou" | "atrasado" | "justificou" | "pendente";
+      } else if (m.status === "confirmado") {
+        // Membro confirmou pelo portal → pré-marca como presente; secretário pode corrigir
+        initial[m.id] = "presente";
       }
       if (m.justificativa) {
         justInitial[m.id] = m.justificativa;
@@ -684,7 +689,14 @@ function SacristiaPage() {
                               >
                                 <div className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className="font-medium text-sm truncate">{m.membro.nome}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="font-medium text-sm truncate">{m.membro.nome}</p>
+                                    {m.status === "confirmado" && (
+                                      <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                                        ✓ confirmou
+                                      </span>
+                                    )}
+                                  </div>
                                   {m.membro.telefone && (
                                     <p className="text-[11px] text-muted-foreground">{m.membro.telefone}</p>
                                   )}
