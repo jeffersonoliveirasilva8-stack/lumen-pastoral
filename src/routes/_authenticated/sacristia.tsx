@@ -572,12 +572,9 @@ function SacristiaPage() {
             const isHoje = escala.data === hojeStr;
             const d = new Date(escala.data + "T00:00:00");
 
-            // Separa confirmados (auto-presença) dos que precisam de ação
-            const confirmadosPortal = membros.filter((m: MembroEscala) => m.status === "confirmado");
             const buscaNorm = busca.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-            // Secretário só vê membros que NÃO confirmaram pelo portal
-            const membrosParaRegistrar = membros.filter((m: MembroEscala) => m.status !== "confirmado");
-            const membrosVisiveis = membrosParaRegistrar.filter((m: MembroEscala) => {
+            // Todos os membros ficam na lista interativa — confirmados ficam com badge e pré-selecionados como presente
+            const membrosVisiveis = membros.filter((m: MembroEscala) => {
               if (filtroMinisterio && m.ministerio.id !== filtroMinisterio) return false;
               if (buscaNorm) {
                 const nomeNorm = m.membro.nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -591,7 +588,7 @@ function SacristiaPage() {
               if (g) g.membros.push(m);
               else grupos.push({ ministerio: m.ministerio, membros: [m] });
             });
-            if ((busca || filtroMinisterio) && membrosVisiveis.length === 0 && confirmadosPortal.length === 0) return null;
+            if ((busca || filtroMinisterio) && membrosVisiveis.length === 0) return null;
 
             return (
               <div key={escala.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
@@ -664,28 +661,10 @@ function SacristiaPage() {
                     <p className="text-sm text-muted-foreground text-center py-2">Nenhum membro atribuído.</p>
                   ) : (
                     <>
-                      {/* Banner: membros que já confirmaram pelo portal (ocultos da lista de ação) */}
-                      {confirmadosPortal.length > 0 && (
-                        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 px-3.5 py-2.5">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                              {confirmadosPortal.length} {confirmadosPortal.length === 1 ? "membro confirmou" : "membros confirmaram"} pelo portal
-                            </p>
-                            <p className="text-[11px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5 truncate">
-                              {confirmadosPortal.map((m) => m.membro.nome).join(", ")}
-                            </p>
-                          </div>
-                          <span className="ml-auto shrink-0 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                            Auto-presente
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Membros que precisam de ação do secretário */}
-                      {grupos.length === 0 && confirmadosPortal.length > 0 ? (
+                      {/* Lista de membros — todos aparecem, confirmados com badge */}
+                      {grupos.length === 0 ? (
                         <p className="text-sm text-muted-foreground text-center py-1">
-                          Todos os membros já confirmaram pelo portal.
+                          Nenhum membro para exibir.
                         </p>
                       ) : (
                         grupos.map((grupo) => (
@@ -717,7 +696,14 @@ function SacristiaPage() {
                                   >
                                     <div className="flex items-center justify-between gap-3">
                                       <div className="min-w-0">
-                                        <p className="font-medium text-sm truncate">{m.membro.nome}</p>
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <p className="font-medium text-sm truncate">{m.membro.nome}</p>
+                                          {m.status === "confirmado" && (
+                                            <span className="shrink-0 text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                                              confirmou ✓
+                                            </span>
+                                          )}
+                                        </div>
                                         {m.membro.telefone && (
                                           <p className="text-[11px] text-muted-foreground">{m.membro.telefone}</p>
                                         )}
@@ -771,7 +757,7 @@ function SacristiaPage() {
                                         >
                                           <XCircle className="h-4 w-4" />
                                         </button>
-                                        {tab !== "em_andamento" && (
+                                        {tab !== "concluidas" && (
                                           <button
                                             type="button"
                                             onClick={() => {
