@@ -572,9 +572,12 @@ function SacristiaPage() {
             const isHoje = escala.data === hojeStr;
             const d = new Date(escala.data + "T00:00:00");
 
-            // Agrupa por ministério com filtros aplicados
+            // Separa confirmados (auto-presença) dos que precisam de ação
+            const confirmadosPortal = membros.filter((m: MembroEscala) => m.status === "confirmado");
             const buscaNorm = busca.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-            const membrosVisiveis = membros.filter((m: MembroEscala) => {
+            // Secretário só vê membros que NÃO confirmaram pelo portal
+            const membrosParaRegistrar = membros.filter((m: MembroEscala) => m.status !== "confirmado");
+            const membrosVisiveis = membrosParaRegistrar.filter((m: MembroEscala) => {
               if (filtroMinisterio && m.ministerio.id !== filtroMinisterio) return false;
               if (buscaNorm) {
                 const nomeNorm = m.membro.nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -588,7 +591,7 @@ function SacristiaPage() {
               if (g) g.membros.push(m);
               else grupos.push({ ministerio: m.ministerio, membros: [m] });
             });
-            if ((busca || filtroMinisterio) && membrosVisiveis.length === 0) return null;
+            if ((busca || filtroMinisterio) && membrosVisiveis.length === 0 && confirmadosPortal.length === 0) return null;
 
             return (
               <div key={escala.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
@@ -660,151 +663,172 @@ function SacristiaPage() {
                   {membros.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-2">Nenhum membro atribuído.</p>
                   ) : (
-                    grupos.map((grupo) => (
-                      <div key={grupo.ministerio.id}>
-                        <p
-                          className="text-[10px] font-bold uppercase tracking-[0.2em] mb-2"
-                          style={{ color: grupo.ministerio.cor }}
-                        >
-                          {grupo.ministerio.nome}
-                        </p>
-                        <div className="space-y-2">
-                          {grupo.membros.map((m) => {
-                            const status = presencaMap[m.id] ?? m.status;
-                            const statusFinal = STATUS_FINAIS.includes(status) ? status : "pendente";
-                            return (
-                              <div
-                                key={m.id}
-                                className={`rounded-xl px-3 py-2.5 border transition-all ${
-                                  statusFinal === "presente"
-                                    ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30"
-                                    : statusFinal === "faltou"
-                                    ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
-                                    : statusFinal === "atrasado"
-                                    ? "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/30"
-                                    : statusFinal === "justificou"
-                                    ? "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30"
-                                    : "border-border bg-background"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <p className="font-medium text-sm truncate">{m.membro.nome}</p>
-                                    {m.status === "confirmado" && (
-                                      <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                                        ✓ confirmou
-                                      </span>
-                                    )}
-                                  </div>
-                                  {m.membro.telefone && (
-                                    <p className="text-[11px] text-muted-foreground">{m.membro.telefone}</p>
-                                  )}
-                                </div>
-                                <div className="flex gap-1.5 shrink-0">
-                                  <button
-                                    type="button"
-                                    onClick={() => togglePresenca(m.id, "presente")}
-                                    title="Marcar presente"
-                                    className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
-                                      statusFinal === "presente"
-                                        ? "bg-emerald-500 text-white"
-                                        : "bg-muted text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
-                                    }`}
-                                  >
-                                    <CheckCircle2 className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => togglePresenca(m.id, "atrasado")}
-                                    title="Marcar atrasado"
-                                    className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
-                                      statusFinal === "atrasado"
-                                        ? "bg-orange-500 text-white"
-                                        : "bg-muted text-muted-foreground hover:bg-orange-100 hover:text-orange-700"
-                                    }`}
-                                  >
-                                    <Clock className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => togglePresenca(m.id, "justificou")}
-                                    title="Justificativa"
-                                    className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
-                                      statusFinal === "justificou"
-                                        ? "bg-blue-500 text-white"
-                                        : "bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
-                                    }`}
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => togglePresenca(m.id, "faltou")}
-                                    title="Marcar falta"
-                                    className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
-                                      statusFinal === "faltou"
-                                        ? "bg-red-500 text-white"
-                                        : "bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-700"
-                                    }`}
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                  </button>
-                                  {/* Outro membro serviu no lugar — só em escalas passadas */}
-                                  {tab !== "em_andamento" && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setOutroServiuTarget(m);
-                                        setOutroServiuId(null);
-                                        setOutroServiuBusca("");
-                                      }}
-                                      title="Outro membro serviu no lugar"
-                                      className="h-8 w-8 rounded-lg flex items-center justify-center transition bg-muted text-muted-foreground hover:bg-violet-100 hover:text-violet-700"
-                                    >
-                                      <ArrowLeftRight className="h-4 w-4" />
-                                    </button>
-                                  )}
-                                </div>
-                                </div>
-                                {statusFinal === "justificou" && tab === "concluidas" ? (
-                                  <p className="mt-1.5 text-xs text-blue-600 dark:text-blue-400 italic">
-                                    {justificativaMap[m.id] ?? m.justificativa ?? "Sem motivo informado"}
-                                  </p>
-                                ) : statusFinal === "justificou" ? (
-                                  <Input
-                                    placeholder="Informe o motivo da justificativa..."
-                                    value={justificativaMap[m.id] ?? m.justificativa ?? ""}
-                                    onChange={(ev) => setJustificativaMap((prev) => ({ ...prev, [m.id]: ev.target.value }))}
-                                    className="mt-2 h-7 text-xs border-blue-200 focus-visible:ring-blue-300"
-                                  />
-                                ) : null}
-                              </div>
-                            );
-                          })}
+                    <>
+                      {/* Banner: membros que já confirmaram pelo portal (ocultos da lista de ação) */}
+                      {confirmadosPortal.length > 0 && (
+                        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 px-3.5 py-2.5">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                              {confirmadosPortal.length} {confirmadosPortal.length === 1 ? "membro confirmou" : "membros confirmaram"} pelo portal
+                            </p>
+                            <p className="text-[11px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5 truncate">
+                              {confirmadosPortal.map((m) => m.membro.nome).join(", ")}
+                            </p>
+                          </div>
+                          <span className="ml-auto shrink-0 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                            Auto-presente
+                          </span>
                         </div>
-                      </div>
-                    ))
+                      )}
+
+                      {/* Membros que precisam de ação do secretário */}
+                      {grupos.length === 0 && confirmadosPortal.length > 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-1">
+                          Todos os membros já confirmaram pelo portal.
+                        </p>
+                      ) : (
+                        grupos.map((grupo) => (
+                          <div key={grupo.ministerio.id}>
+                            <p
+                              className="text-[10px] font-bold uppercase tracking-[0.2em] mb-2"
+                              style={{ color: grupo.ministerio.cor }}
+                            >
+                              {grupo.ministerio.nome}
+                            </p>
+                            <div className="space-y-2">
+                              {grupo.membros.map((m) => {
+                                const status = presencaMap[m.id] ?? m.status;
+                                const statusFinal = STATUS_FINAIS.includes(status) ? status : "pendente";
+                                return (
+                                  <div
+                                    key={m.id}
+                                    className={`rounded-xl px-3 py-2.5 border transition-all ${
+                                      statusFinal === "presente"
+                                        ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30"
+                                        : statusFinal === "faltou"
+                                        ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30"
+                                        : statusFinal === "atrasado"
+                                        ? "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/30"
+                                        : statusFinal === "justificou"
+                                        ? "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30"
+                                        : "border-border bg-background"
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-sm truncate">{m.membro.nome}</p>
+                                        {m.membro.telefone && (
+                                          <p className="text-[11px] text-muted-foreground">{m.membro.telefone}</p>
+                                        )}
+                                      </div>
+                                      <div className="flex gap-1.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => togglePresenca(m.id, "presente")}
+                                          title="Marcar presente"
+                                          className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
+                                            statusFinal === "presente"
+                                              ? "bg-emerald-500 text-white"
+                                              : "bg-muted text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
+                                          }`}
+                                        >
+                                          <CheckCircle2 className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => togglePresenca(m.id, "atrasado")}
+                                          title="Marcar atrasado"
+                                          className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
+                                            statusFinal === "atrasado"
+                                              ? "bg-orange-500 text-white"
+                                              : "bg-muted text-muted-foreground hover:bg-orange-100 hover:text-orange-700"
+                                          }`}
+                                        >
+                                          <Clock className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => togglePresenca(m.id, "justificou")}
+                                          title="Justificativa"
+                                          className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
+                                            statusFinal === "justificou"
+                                              ? "bg-blue-500 text-white"
+                                              : "bg-muted text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+                                          }`}
+                                        >
+                                          <FileText className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => togglePresenca(m.id, "faltou")}
+                                          title="Marcar falta"
+                                          className={`h-8 w-8 rounded-lg flex items-center justify-center transition ${
+                                            statusFinal === "faltou"
+                                              ? "bg-red-500 text-white"
+                                              : "bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-700"
+                                          }`}
+                                        >
+                                          <XCircle className="h-4 w-4" />
+                                        </button>
+                                        {tab !== "em_andamento" && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setOutroServiuTarget(m);
+                                              setOutroServiuId(null);
+                                              setOutroServiuBusca("");
+                                            }}
+                                            title="Outro membro serviu no lugar"
+                                            className="h-8 w-8 rounded-lg flex items-center justify-center transition bg-muted text-muted-foreground hover:bg-violet-100 hover:text-violet-700"
+                                          >
+                                            <ArrowLeftRight className="h-4 w-4" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {statusFinal === "justificou" && tab === "concluidas" ? (
+                                      <p className="mt-1.5 text-xs text-blue-600 dark:text-blue-400 italic">
+                                        {justificativaMap[m.id] ?? m.justificativa ?? "Sem motivo informado"}
+                                      </p>
+                                    ) : statusFinal === "justificou" ? (
+                                      <Input
+                                        placeholder="Informe o motivo da justificativa..."
+                                        value={justificativaMap[m.id] ?? m.justificativa ?? ""}
+                                        onChange={(ev) => setJustificativaMap((prev) => ({ ...prev, [m.id]: ev.target.value }))}
+                                        className="mt-2 h-7 text-xs border-blue-200 focus-visible:ring-blue-300"
+                                      />
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </>
                   )}
 
                   {membros.length > 0 && tab !== "concluidas" && (
                     <div className="flex gap-2 mt-2">
+                      {grupos.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 shrink-0"
+                          onClick={() => marcarTodosPresentes(escala.id)}
+                        >
+                          <CheckCheck className="h-3.5 w-3.5" />
+                          Todos presentes
+                        </Button>
+                      )}
                       <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 shrink-0"
-                        onClick={() => marcarTodosPresentes(escala.id)}
-                      >
-                        <CheckCheck className="h-3.5 w-3.5" />
-                        Todos presentes
-                      </Button>
-                      <Button
-                        className="flex-1"
+                        className="flex-1 gap-2"
                         disabled={isSaving}
                         onClick={() => salvarPresencasMutation.mutate(escala.id)}
                       >
-                        {isSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                        Salvar presenças
+                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+                        Enviar registro de presenças
                       </Button>
                     </div>
                   )}
