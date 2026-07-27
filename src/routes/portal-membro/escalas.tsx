@@ -590,13 +590,12 @@ function PortalMembroEscalas() {
     onError: (e: Error) => toast.error("Erro ao salvar presenças: " + e.message),
   });
 
-  // Mantido para compatibilidade com EscalasTab (confirmação do próprio membro)
   const updateMembroStatusMutation = useMutation({
-    mutationFn: async (args: { escala_membro_id: string; status: string }) => {
-      const { error } = await anyDb
-        .from("escala_membros")
-        .update({ status: args.status })
-        .eq("id", args.escala_membro_id);
+    mutationFn: async (args: { escala_id: string; escala_membro_id: string; status: string }) => {
+      const { error } = await anyDb.rpc("salvar_presencas_escala", {
+        p_escala_id: args.escala_id,
+        p_updates: [{ id: args.escala_membro_id, status: args.status }],
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -781,7 +780,7 @@ function PortalMembroEscalas() {
                             responderMutation.mutate({ escala_membro_id, status, justificativa, escala: esc, ministerioNome })
                           }
                           onUpdateMemberStatus={(id, status) =>
-                            updateMembroStatusMutation.mutate({ escala_membro_id: id, status })
+                            updateMembroStatusMutation.mutate({ escala_id: esc.id, escala_membro_id: id, status })
                           }
                           saving={responderMutation.isPending}
                           savingStatus={updateMembroStatusMutation.isPending}
