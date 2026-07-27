@@ -4285,8 +4285,14 @@ function EscalaDetail({
     const map: Record<string, PresencaStatus> = {};
     const finals: PresencaStatus[] = ["presente", "faltou", "atrasado", "justificou"];
     atribuicoes.forEach((a) => {
-      const s = a.status as PresencaStatus;
-      map[a.id] = (finals as string[]).includes(s) ? s : "pendente";
+      const s = a.status as string;
+      if ((finals as string[]).includes(s)) {
+        map[a.id] = s as PresencaStatus;
+      } else if (s === "confirmado") {
+        map[a.id] = "presente"; // confirmado no portal → pré-seleciona presente
+      } else {
+        map[a.id] = "pendente";
+      }
     });
     setPresencaMap(map);
   }, [atribuicoes]);
