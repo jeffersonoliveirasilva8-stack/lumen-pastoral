@@ -669,11 +669,16 @@ export function AssistenteGeracaoEscalas({
 
       const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
       const engineConfig = {
-        usa_tochas:              paroquiaConfig?.usa_tochas ?? false,
-        limite_semanal:          regras.limite_semanal   as number | undefined,
-        limite_mensal:           regras.limite_mensal    as number | undefined,
-        impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-        distribuicao_masc_pct:   regras.distribuicao_masc_pct as number | undefined, // P1.1
+        usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
+        limite_semanal:           regras.limite_semanal           as number  | undefined,
+        limite_mensal:            regras.limite_mensal            as number  | undefined,
+        impedir_repeticao_seguida:(regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+        intervalo_minimo_dias:    regras.intervalo_minimo_dias    as number  | undefined,
+        distribuicao_masc_pct:    regras.distribuicao_masc_pct   as number  | undefined,
+        variedade_ministerio:     (regras.variedade_ministerio    as boolean | undefined) ?? false,
+        prioridade_bonus_alto:    regras.prioridade_bonus_alto    as number  | undefined,
+        prioridade_bonus_medio:   regras.prioridade_bonus_medio   as number  | undefined,
+        bonus_preferencial_solene:regras.bonus_preferencial_solene as number | undefined,
       };
 
       for (let i = 0; i < preVisualizacao.length; i++) {

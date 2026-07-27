@@ -64,6 +64,7 @@ type RegrasEscala = {
   limite_semanal: number | null;
   limite_mensal: number | null;
   impedir_repeticao_consecutiva: boolean;
+  intervalo_minimo_dias: number | null;
   // Modo de confirmação
   confirmacao_escala_ativa: boolean;
   // Antecedência mínima para registrar indisponibilidade (dias)
@@ -249,6 +250,7 @@ const RECORRENCIAS: { value: Recorrencia["tipo"]; label: string }[] = [
 const DEFAULT_REGRAS: RegrasEscala = {
   limite_semanal: null, limite_mensal: null,
   impedir_repeticao_consecutiva: false,
+  intervalo_minimo_dias: null,
   confirmacao_escala_ativa: false,
   dias_antecedencia_indisp: 3,
   distribuicao_masc_pct: 50,
@@ -3350,6 +3352,13 @@ function RegrasEscalaTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved: (
             <input type="number" min={0} placeholder="Sem limite" value={regras.limite_mensal ?? ""}
               onChange={(e) => r("limite_mensal", e.target.value === "" ? null : Number(e.target.value))}
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-muted-foreground">Intervalo mínimo entre serviços (dias)</label>
+            <p className="text-[11px] text-muted-foreground/70 mb-1">O motor evita reescalar o membro antes deste prazo. Em falta de candidatos, escala mesmo assim com aviso.</p>
+            <input type="number" min={0} placeholder="Sem intervalo mínimo" value={regras.intervalo_minimo_dias ?? ""}
+              onChange={(e) => r("intervalo_minimo_dias", e.target.value === "" ? null : Number(e.target.value))}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring" />
           </div>
         </div>
       </div>
