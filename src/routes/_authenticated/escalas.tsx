@@ -449,23 +449,25 @@ function EscalasPage() {
     enabled: !!profile?.paroquia_id,
     queryFn: async () => {
       const sixMonthsAgo = format(subMonths(new Date(), 6), "yyyy-MM-dd");
-      const { data, error } = await supabase
-        .from("escalas")
-        .select("id, data, escala_membros(membro_id, ministerio_id, ativo)")
+      const hoje = format(new Date(), "yyyy-MM-dd");
+      // Usa historico_participacoes (presenças reais) em vez de escala_membros:
+      // - exclui faltas e pendentes (não contam como "serviu")
+      // - não inclui datas futuras (evita distorção no dias_sem_servir)
+      const { data, error } = await (supabase as any)
+        .from("historico_participacoes")
+        .select("membro_id, ministerio_id, data")
         .eq("paroquia_id", profile!.paroquia_id!)
-        .gte("data", sixMonthsAgo);
+        .in("presenca", ["presente", "atrasado"])
+        .gte("data", sixMonthsAgo)
+        .lte("data", hoje);
 
       if (error || !data) return [];
 
-      return (data as any[]).flatMap((escala) =>
-        (escala.escala_membros ?? [])
-          .filter((entry: any) => entry.ativo !== false)
-          .map((entry: any) => ({
-          memberId: entry.membro_id,
-          ministerioId: entry.ministerio_id,
-          date: escala.data,
-        }))
-      );
+      return (data as any[]).map((row: any) => ({
+        memberId:     row.membro_id,
+        ministerioId: row.ministerio_id,
+        date:         row.data,
+      }));
     },
   });
 
