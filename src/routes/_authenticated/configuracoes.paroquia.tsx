@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Trash2, GripVertical, Church, Pencil,
@@ -1830,6 +1830,31 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
     },
   });
 
+  const tiposIds = tipos.map((t) => t.id);
+
+  const { data: tiposFuncoesAll = [] } = useQuery<{ tipo_missa_id: string; tipo_vinculo: string; quantidade_min: number; ministerio: { id: string; nome: string; cor: string } | null }[]>({
+    queryKey: ["tipos-funcoes-preview", tiposIds.join(",")],
+    enabled: tiposIds.length > 0,
+    queryFn: async () => {
+      const { data } = await anyDb.from("tipo_missa_funcoes")
+        .select("tipo_missa_id, tipo_vinculo, quantidade_min, ministerio:ministerios(id, nome, cor)")
+        .in("tipo_missa_id", tiposIds)
+        .order("prioridade");
+      return (data ?? []) as any[];
+    },
+  });
+
+  const { data: missasUsoPorTipo = {} } = useQuery<Record<string, number>>({
+    queryKey: ["missas-por-tipo", paroquiaId],
+    queryFn: async () => {
+      const { data } = await anyDb.from("missas_padrao")
+        .select("tipo_missa_id").eq("paroquia_id", paroquiaId).eq("ativo", true);
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((r: any) => { if (r.tipo_missa_id) map[r.tipo_missa_id] = (map[r.tipo_missa_id] ?? 0) + 1; });
+      return map;
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await anyDb.from("tipos_missa").delete().eq("id", id);
@@ -1870,7 +1895,13 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {tipos.map((t) => (
+          {tipos.map((t) => {
+            const funcoes = tiposFuncoesAll.filter((f) => f.tipo_missa_id === t.id);
+            const obrigatorias = funcoes.filter((f) => f.tipo_vinculo === "obrigatoria");
+            const opcionais = funcoes.filter((f) => f.tipo_vinculo === "opcional");
+            const usoCount = missasUsoPorTipo[t.id] ?? 0;
+            const semFuncoes = funcoes.length === 0;
+            return (
             <div key={t.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <div className="flex items-start gap-3">
                 <div className="h-10 w-10 shrink-0 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: t.cor }}>
@@ -1880,6 +1911,11 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm truncate">{t.nome}</span>
                     {!t.ativo && <Badge variant="outline" className="text-xs text-muted-foreground">Inativo</Badge>}
+                    {usoCount > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        {usoCount} {usoCount === 1 ? "missa" : "missas"}
+                      </span>
+                    )}
                   </div>
                   {t.descricao && <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.descricao}</p>}
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -1889,6 +1925,28 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
                     {t.usa_mitrifero && <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">Mitrífero</span>}
                     <span className="text-xs text-muted-foreground">Prio. {t.prioridade_liturgica}</span>
                   </div>
+                  {/* Preview de funções */}
+                  {semFuncoes ? (
+                    <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <span>⚠️</span> Nenhuma função definida
+                    </p>
+                  ) : (
+                    <div className="mt-2 space-y-1">
+                      {obrigatorias.slice(0, 4).map((f) => (
+                        <div key={f.ministerio?.id ?? f.tipo_missa_id} className="flex items-center gap-1.5">
+                          {f.ministerio?.cor && <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: f.ministerio.cor }} />}
+                          <span className="text-[11px] text-foreground truncate">{f.ministerio?.nome ?? "?"}</span>
+                          <span className="text-[11px] text-muted-foreground shrink-0">×{f.quantidade_min}</span>
+                        </div>
+                      ))}
+                      {obrigatorias.length > 4 && (
+                        <p className="text-[11px] text-muted-foreground">+{obrigatorias.length - 4} obrigatória{obrigatorias.length - 4 !== 1 ? "s" : ""}</p>
+                      )}
+                      {opcionais.length > 0 && (
+                        <p className="text-[11px] text-muted-foreground italic">{opcionais.length} opcional{opcionais.length !== 1 ? "is" : ""}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditTarget(t); setDialogOpen(true); }}>
@@ -1900,7 +1958,8 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -2303,6 +2362,36 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
     },
   });
 
+  // Funcoes de todos os tipos de missa usados pelas missas (para exibir chips nos cards)
+  const tiposMissaIdsUsados = useMemo(
+    () => [...new Set(missas.map((m) => m.tipo_missa_id).filter(Boolean))] as string[],
+    [missas]
+  );
+  const { data: tipoFuncoesGlobal = [] } = useQuery<{ tipo_missa_id: string; ministerio: { id: string; nome: string; cor: string } | null; quantidade_min: number }[]>({
+    queryKey: ["tipo-funcoes-global", tiposMissaIdsUsados.join(",")],
+    enabled: tiposMissaIdsUsados.length > 0,
+    queryFn: async () => {
+      const { data } = await anyDb.from("tipo_missa_funcoes")
+        .select("tipo_missa_id, quantidade_min, ministerio:ministerios(id, nome, cor)")
+        .in("tipo_missa_id", tiposMissaIdsUsados)
+        .eq("tipo_vinculo", "obrigatoria")
+        .order("prioridade");
+      return (data ?? []) as any[];
+    },
+  });
+
+  // Funcoes extras de todas as missas (para exibir nos cards)
+  const { data: extrasGlobal = [] } = useQuery<{ missa_padrao_id: string; ministerio: { id: string; nome: string; cor: string } | null; quantidade: number }[]>({
+    queryKey: ["extras-global", missas.map((m) => m.id).join(",")],
+    enabled: missas.length > 0,
+    queryFn: async () => {
+      const { data } = await anyDb.from("missa_padrao_funcoes_extras")
+        .select("missa_padrao_id, quantidade, ministerio:ministerios(id, nome, cor)")
+        .in("missa_padrao_id", missas.map((m) => m.id));
+      return (data ?? []) as any[];
+    },
+  });
+
   const { data: funcoesExtras = [] } = useQuery<FuncaoExtra[]>({
     queryKey: ["missa_padrao_funcoes_extras", editId],
     enabled: !!editId,
@@ -2472,16 +2561,45 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
                     onDragEnd={(e) => handleDragEnd(e, dm)}
                   >
                     <SortableContext items={dm.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-                      {dm.map((m) => (
-                        <SortableMissaRow
-                          key={m.id}
-                          m={m}
-                          onEdit={openEdit}
-                          onDuplicate={duplicate}
-                          onDelete={(id: string) => deleteMutation.mutate(id)}
-                          deleting={deleteMutation.isPending}
-                        />
-                      ))}
+                      {dm.map((m) => {
+                        const tipoFuncoes = tipoFuncoesGlobal
+                          .filter((f) => f.tipo_missa_id === m.tipo_missa_id)
+                          .map((f) => ({
+                            ministerio_id: (f.ministerio as any)?.id ?? "",
+                            ministerio_nome: (f.ministerio as any)?.nome ?? "?",
+                            ministerio_cor: (f.ministerio as any)?.cor ?? null,
+                            quantidade: f.quantidade_min ?? 1,
+                            origem: "tipo" as const,
+                          }));
+                        const extras = extrasGlobal
+                          .filter((e) => e.missa_padrao_id === m.id)
+                          .map((e) => ({
+                            ministerio_id: (e.ministerio as any)?.id ?? "",
+                            ministerio_nome: (e.ministerio as any)?.nome ?? "?",
+                            ministerio_cor: (e.ministerio as any)?.cor ?? null,
+                            quantidade: e.quantidade,
+                            origem: "extra" as const,
+                          }));
+                        const merged: MissaRowFuncao[] = [...tipoFuncoes];
+                        for (const ex of extras) {
+                          const existing = merged.find((f) => f.ministerio_id === ex.ministerio_id);
+                          if (existing) { existing.quantidade += ex.quantidade; }
+                          else { merged.push(ex); }
+                        }
+                        const semFuncoes = !!m.tipo_missa_id && tipoFuncoes.length === 0 && extras.length === 0;
+                        return (
+                          <SortableMissaRow
+                            key={m.id}
+                            m={m}
+                            onEdit={openEdit}
+                            onDuplicate={duplicate}
+                            onDelete={(id: string) => deleteMutation.mutate(id)}
+                            deleting={deleteMutation.isPending}
+                            funcoes={merged}
+                            semFuncoes={semFuncoes}
+                          />
+                        );
+                      })}
                     </SortableContext>
                   </DndContext>
                 </div>
@@ -2600,14 +2718,18 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
 
 // ── SortableMissaRow ──────────────────────────────────────────────────────────
 
+type MissaRowFuncao = { ministerio_id: string; ministerio_nome: string; ministerio_cor: string | null; quantidade: number; origem: "tipo" | "extra" };
+
 function SortableMissaRow({
-  m, onEdit, onDuplicate, onDelete, deleting,
+  m, onEdit, onDuplicate, onDelete, deleting, funcoes, semFuncoes,
 }: {
   m: MissaPadrao;
   onEdit: (m: MissaPadrao) => void;
   onDuplicate: (m: MissaPadrao) => void;
   onDelete: (id: string) => void;
   deleting: boolean;
+  funcoes: MissaRowFuncao[];
+  semFuncoes: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: m.id });
   const style = {
@@ -2643,6 +2765,23 @@ function SortableMissaRow({
           {m.hora_inicio ? m.hora_inicio.slice(0, 5) : ""}
           {m.local ? ` · ${m.local}` : ""}
         </p>
+        {semFuncoes ? (
+          <p className="text-[10px] text-amber-600 mt-1">⚠️ Sem funções definidas</p>
+        ) : funcoes.length > 0 ? (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {funcoes.map((f) => (
+              <span
+                key={f.ministerio_id}
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border leading-none"
+                style={f.ministerio_cor ? { borderColor: `${f.ministerio_cor}55`, background: `${f.ministerio_cor}18`, color: f.ministerio_cor } : undefined}
+              >
+                {f.ministerio_nome}
+                {f.quantidade > 1 && <span className="opacity-70">×{f.quantidade}</span>}
+                {f.origem === "extra" && <span className="opacity-60">+</span>}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <Button variant="ghost" size="icon" className="h-8 w-8" title="Duplicar" onClick={() => onDuplicate(m)}>
