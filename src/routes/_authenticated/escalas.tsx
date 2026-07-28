@@ -1788,6 +1788,7 @@ function EscalasPage() {
     { label: "Histórico",          onClick: () => setView("historico"),          isActive: view === "historico" },
     { label: "Sacristia",          to: "/sacristia",                             isActive: false },
     { label: "Indisponibilidades", onClick: () => setView("indisponibilidades"), isActive: view === "indisponibilidades" },
+    { label: "Relatórios",         to: "/relatorios-equilibrio",                 isActive: false },
   ]);
 
   return (
