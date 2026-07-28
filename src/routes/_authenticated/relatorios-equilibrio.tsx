@@ -191,6 +191,7 @@ function RelatoriosEquilibrioPage() {
   useSetPageTabs([
     { label: "Equilíbrio", to: "/relatorios-equilibrio", isActive: true  },
     { label: "Escalas",    to: "/relatorios-escalas",    isActive: false },
+    { label: "Membros",    to: "/relatorios-membros",    isActive: false },
   ]);
 
   return (

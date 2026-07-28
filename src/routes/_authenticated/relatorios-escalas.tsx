@@ -83,6 +83,7 @@ function RelatoriosEscalasPage() {
   useSetPageTabs([
     { label: "Equilíbrio", to: "/relatorios-equilibrio", isActive: false },
     { label: "Escalas",    to: "/relatorios-escalas",    isActive: true  },
+    { label: "Membros",    to: "/relatorios-membros",    isActive: false },
   ]);
 
   const { data: escalas = [], isLoading } = useQuery<EscalaRow[]>({
