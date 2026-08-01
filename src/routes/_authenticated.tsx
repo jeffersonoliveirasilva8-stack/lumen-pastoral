@@ -8,7 +8,7 @@ import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
   Flame, BookOpen, Bell, UserCircle, Church, Leaf,
   PanelLeftClose, PanelLeftOpen, X, Trophy, HelpCircle,
-  ArrowLeftRight, AlertCircle, CheckCircle2,
+  ArrowLeftRight, AlertCircle, CheckCircle2, Shield,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -283,7 +283,7 @@ function AuthLayout() {
     { to: "/notificacoes",   label: "Notificações",  icon: Bell,       color: "bg-rose-500",  badge: notifsNaoLidas },
     { to: "/minha-conta",    label: "Minha Conta",   icon: UserCircle, color: "bg-slate-500" },
     { to: "/ajuda",          label: "Ajuda",         icon: HelpCircle, color: "bg-sky-600" },
-    ...(isSuperAdmin ? [{ to: "/admin/paroquias", label: "Paróquias", icon: Church, color: "bg-stone-600" }] : []),
+    ...(isSuperAdmin ? [{ to: "/superadmin/dashboard", label: "Super Admin", icon: Shield, color: "bg-blue-700" }] : []),
   ];
 
   // No mobile o bottom nav exibe 4 itens (2 + FAB + 2).
