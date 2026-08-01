@@ -1,6 +1,8 @@
 import { createFileRoute, Outlet, useNavigate, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { TrialBanner } from "@/components/billing/TrialBanner";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { format } from "date-fns";
 import {
   Loader2, LogOut, LayoutDashboard, Settings, Calendar, Users,
@@ -200,6 +202,29 @@ function AuthLayout() {
       navigate({ to: "/onboarding" });
     }
   }, [loading, user, profile, pathname, hasAdminAccess, navigate]);
+
+  // Subscription status guard
+  const { data: subscriptionStatus } = useQuery({
+    queryKey: ["sub-status-guard", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id && hasAdminAccess && !roles.includes("super_admin"),
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("subscriptions")
+        .select("sub_status")
+        .eq("paroquia_id", profile!.paroquia_id)
+        .maybeSingle();
+      return (data as { sub_status: string } | null)?.sub_status ?? null;
+    },
+  });
+
+  useEffect(() => {
+    if (!subscriptionStatus) return;
+    if (["blocked", "suspended", "canceled"].includes(subscriptionStatus) && pathname !== "/trial-expirado" && pathname !== "/assinatura") {
+      navigate({ to: "/trial-expirado" });
+    }
+  }, [subscriptionStatus, pathname, navigate]);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
@@ -486,7 +511,10 @@ function AuthLayout() {
           </div>
         </header>
 
+        <TrialBanner />
         <LayoutTabBar />
+
+        <GlobalSearch />
 
         <main className="flex-1 overflow-x-hidden min-w-0 w-full lg:overflow-y-auto">
           <div className="mx-auto max-w-7xl px-4 pt-6 pb-32 sm:px-6 lg:px-8 lg:pb-10 min-w-0 w-full">

@@ -79,6 +79,8 @@ export function useAuth() {
     await fetchProfile(user.id);
   }
 
+  const isSuperAdmin = roles.some((r) => r === "super_admin");
+
   // Nível 1 — Coordenador pleno: admin_paroquial / super_admin → acesso total
   const isAdmin = roles.some((r) => r === "admin_paroquial" || r === "super_admin");
 
@@ -104,5 +106,5 @@ export function useAuth() {
   // Qualquer papel com acesso ao painel admin
   const hasAdminAccess = isAdmin || isCoordenador || isLider;
 
-  return { user, profile, loading, roles, isServidor, isAdmin, isCoordenador, isLider, isAuxiliar, isAdministrador, hasAdminAccess, refreshProfile };
+  return { user, profile, loading, roles, isServidor, isAdmin, isSuperAdmin, isCoordenador, isLider, isAuxiliar, isAdministrador, hasAdminAccess, refreshProfile };
 }

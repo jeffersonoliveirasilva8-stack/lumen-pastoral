@@ -9,15 +9,25 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TrialExpiradoRouteImport } from './routes/trial-expirado'
+import { Route as SuperadminRouteImport } from './routes/superadmin'
 import { Route as ResetSenhaRouteImport } from './routes/reset-senha'
 import { Route as PortalMembroRouteImport } from './routes/portal-membro'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
+import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as AcessoNegadoRouteImport } from './routes/acesso-negado'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SuperadminWebhooksRouteImport } from './routes/superadmin/webhooks'
+import { Route as SuperadminUsuariosRouteImport } from './routes/superadmin/usuarios'
+import { Route as SuperadminPlanosRouteImport } from './routes/superadmin/planos'
+import { Route as SuperadminParoquiasRouteImport } from './routes/superadmin/paroquias'
+import { Route as SuperadminFinanceiroRouteImport } from './routes/superadmin/financeiro'
+import { Route as SuperadminDashboardRouteImport } from './routes/superadmin/dashboard'
+import { Route as SuperadminAuditoriaRouteImport } from './routes/superadmin/auditoria'
 import { Route as PortalTokenRouteImport } from './routes/portal.$token'
 import { Route as PortalMembroSubstituicoesRouteImport } from './routes/portal-membro/substituicoes'
 import { Route as PortalMembroRankingRouteImport } from './routes/portal-membro/ranking'
@@ -38,6 +48,7 @@ import { Route as MembroAtivarContaRouteImport } from './routes/membro/ativar-co
 import { Route as MembroTokenRouteImport } from './routes/membro.$token'
 import { Route as InscricaoSlugRouteImport } from './routes/inscricao.$slug'
 import { Route as EscalaTokenRouteImport } from './routes/escala.$token'
+import { Route as CheckoutSucessoRouteImport } from './routes/checkout.sucesso'
 import { Route as AuthMfaChallengeRouteImport } from './routes/auth.mfa-challenge'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthAdminMfaRouteImport } from './routes/auth.admin-mfa'
@@ -63,12 +74,24 @@ import { Route as AuthenticatedConfiguracoesEscalasRouteImport } from './routes/
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
+import { Route as AuthenticatedAssinaturaRouteImport } from './routes/_authenticated/assinatura'
 import { Route as AuthenticatedAjudaRouteImport } from './routes/_authenticated/ajuda'
+import { Route as SuperadminParoquiasIdRouteImport } from './routes/superadmin/paroquias.$id'
 import { Route as AuthenticatedConfiguracoesParoquiaRouteImport } from './routes/_authenticated/configuracoes.paroquia'
 import { Route as AuthenticatedConfiguracoesAdministradoresRouteImport } from './routes/_authenticated/configuracoes.administradores'
 import { Route as AuthenticatedAdminParoquiasRouteImport } from './routes/_authenticated/admin.paroquias'
 import { Route as AuthenticatedAdminLiturgiaRouteImport } from './routes/_authenticated/admin.liturgia'
 
+const TrialExpiradoRoute = TrialExpiradoRouteImport.update({
+  id: '/trial-expirado',
+  path: '/trial-expirado',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SuperadminRoute = SuperadminRouteImport.update({
+  id: '/superadmin',
+  path: '/superadmin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetSenhaRoute = ResetSenhaRouteImport.update({
   id: '/reset-senha',
   path: '/reset-senha',
@@ -94,6 +117,11 @@ const EsqueciSenhaRoute = EsqueciSenhaRouteImport.update({
   path: '/esqueci-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CadastroRoute = CadastroRouteImport.update({
   id: '/cadastro',
   path: '/cadastro',
@@ -112,6 +140,41 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SuperadminWebhooksRoute = SuperadminWebhooksRouteImport.update({
+  id: '/webhooks',
+  path: '/webhooks',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminUsuariosRoute = SuperadminUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminPlanosRoute = SuperadminPlanosRouteImport.update({
+  id: '/planos',
+  path: '/planos',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminParoquiasRoute = SuperadminParoquiasRouteImport.update({
+  id: '/paroquias',
+  path: '/paroquias',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminFinanceiroRoute = SuperadminFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminDashboardRoute = SuperadminDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminAuditoriaRoute = SuperadminAuditoriaRouteImport.update({
+  id: '/auditoria',
+  path: '/auditoria',
+  getParentRoute: () => SuperadminRoute,
 } as any)
 const PortalTokenRoute = PortalTokenRouteImport.update({
   id: '/portal/$token',
@@ -215,6 +278,11 @@ const EscalaTokenRoute = EscalaTokenRouteImport.update({
   id: '/escala/$token',
   path: '/escala/$token',
   getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutSucessoRoute = CheckoutSucessoRouteImport.update({
+  id: '/sucesso',
+  path: '/sucesso',
+  getParentRoute: () => CheckoutRoute,
 } as any)
 const AuthMfaChallengeRoute = AuthMfaChallengeRouteImport.update({
   id: '/auth/mfa-challenge',
@@ -354,10 +422,20 @@ const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
   path: '/auditoria',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAssinaturaRoute = AuthenticatedAssinaturaRouteImport.update({
+  id: '/assinatura',
+  path: '/assinatura',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedAjudaRoute = AuthenticatedAjudaRouteImport.update({
   id: '/ajuda',
   path: '/ajuda',
   getParentRoute: () => AuthenticatedRoute,
+} as any)
+const SuperadminParoquiasIdRoute = SuperadminParoquiasIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => SuperadminParoquiasRoute,
 } as any)
 const AuthenticatedConfiguracoesParoquiaRoute =
   AuthenticatedConfiguracoesParoquiaRouteImport.update({
@@ -388,12 +466,16 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acesso-negado': typeof AcessoNegadoRoute
   '/cadastro': typeof CadastroRoute
+  '/checkout': typeof CheckoutRouteWithChildren
   '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/portal-membro': typeof PortalMembroRouteWithChildren
   '/reset-senha': typeof ResetSenhaRoute
+  '/superadmin': typeof SuperadminRouteWithChildren
+  '/trial-expirado': typeof TrialExpiradoRoute
   '/ajuda': typeof AuthenticatedAjudaRoute
+  '/assinatura': typeof AuthenticatedAssinaturaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -419,6 +501,7 @@ export interface FileRoutesByFullPath {
   '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
+  '/checkout/sucesso': typeof CheckoutSucessoRoute
   '/escala/$token': typeof EscalaTokenRoute
   '/inscricao/$slug': typeof InscricaoSlugRoute
   '/membro/$token': typeof MembroTokenRoute
@@ -439,21 +522,33 @@ export interface FileRoutesByFullPath {
   '/portal-membro/ranking': typeof PortalMembroRankingRoute
   '/portal-membro/substituicoes': typeof PortalMembroSubstituicoesRoute
   '/portal/$token': typeof PortalTokenRoute
+  '/superadmin/auditoria': typeof SuperadminAuditoriaRoute
+  '/superadmin/dashboard': typeof SuperadminDashboardRoute
+  '/superadmin/financeiro': typeof SuperadminFinanceiroRoute
+  '/superadmin/paroquias': typeof SuperadminParoquiasRouteWithChildren
+  '/superadmin/planos': typeof SuperadminPlanosRoute
+  '/superadmin/usuarios': typeof SuperadminUsuariosRoute
+  '/superadmin/webhooks': typeof SuperadminWebhooksRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
   '/configuracoes/administradores': typeof AuthenticatedConfiguracoesAdministradoresRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
+  '/superadmin/paroquias/$id': typeof SuperadminParoquiasIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acesso-negado': typeof AcessoNegadoRoute
   '/cadastro': typeof CadastroRoute
+  '/checkout': typeof CheckoutRouteWithChildren
   '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/portal-membro': typeof PortalMembroRouteWithChildren
   '/reset-senha': typeof ResetSenhaRoute
+  '/superadmin': typeof SuperadminRouteWithChildren
+  '/trial-expirado': typeof TrialExpiradoRoute
   '/ajuda': typeof AuthenticatedAjudaRoute
+  '/assinatura': typeof AuthenticatedAssinaturaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -479,6 +574,7 @@ export interface FileRoutesByTo {
   '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
+  '/checkout/sucesso': typeof CheckoutSucessoRoute
   '/escala/$token': typeof EscalaTokenRoute
   '/inscricao/$slug': typeof InscricaoSlugRoute
   '/membro/$token': typeof MembroTokenRoute
@@ -499,10 +595,18 @@ export interface FileRoutesByTo {
   '/portal-membro/ranking': typeof PortalMembroRankingRoute
   '/portal-membro/substituicoes': typeof PortalMembroSubstituicoesRoute
   '/portal/$token': typeof PortalTokenRoute
+  '/superadmin/auditoria': typeof SuperadminAuditoriaRoute
+  '/superadmin/dashboard': typeof SuperadminDashboardRoute
+  '/superadmin/financeiro': typeof SuperadminFinanceiroRoute
+  '/superadmin/paroquias': typeof SuperadminParoquiasRouteWithChildren
+  '/superadmin/planos': typeof SuperadminPlanosRoute
+  '/superadmin/usuarios': typeof SuperadminUsuariosRoute
+  '/superadmin/webhooks': typeof SuperadminWebhooksRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
   '/configuracoes/administradores': typeof AuthenticatedConfiguracoesAdministradoresRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
+  '/superadmin/paroquias/$id': typeof SuperadminParoquiasIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -510,12 +614,16 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/acesso-negado': typeof AcessoNegadoRoute
   '/cadastro': typeof CadastroRoute
+  '/checkout': typeof CheckoutRouteWithChildren
   '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/portal-membro': typeof PortalMembroRouteWithChildren
   '/reset-senha': typeof ResetSenhaRoute
+  '/superadmin': typeof SuperadminRouteWithChildren
+  '/trial-expirado': typeof TrialExpiradoRoute
   '/_authenticated/ajuda': typeof AuthenticatedAjudaRoute
+  '/_authenticated/assinatura': typeof AuthenticatedAssinaturaRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/calendario': typeof AuthenticatedCalendarioRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -541,6 +649,7 @@ export interface FileRoutesById {
   '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
+  '/checkout/sucesso': typeof CheckoutSucessoRoute
   '/escala/$token': typeof EscalaTokenRoute
   '/inscricao/$slug': typeof InscricaoSlugRoute
   '/membro/$token': typeof MembroTokenRoute
@@ -561,10 +670,18 @@ export interface FileRoutesById {
   '/portal-membro/ranking': typeof PortalMembroRankingRoute
   '/portal-membro/substituicoes': typeof PortalMembroSubstituicoesRoute
   '/portal/$token': typeof PortalTokenRoute
+  '/superadmin/auditoria': typeof SuperadminAuditoriaRoute
+  '/superadmin/dashboard': typeof SuperadminDashboardRoute
+  '/superadmin/financeiro': typeof SuperadminFinanceiroRoute
+  '/superadmin/paroquias': typeof SuperadminParoquiasRouteWithChildren
+  '/superadmin/planos': typeof SuperadminPlanosRoute
+  '/superadmin/usuarios': typeof SuperadminUsuariosRoute
+  '/superadmin/webhooks': typeof SuperadminWebhooksRoute
   '/_authenticated/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/_authenticated/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
   '/_authenticated/configuracoes/administradores': typeof AuthenticatedConfiguracoesAdministradoresRoute
   '/_authenticated/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
+  '/superadmin/paroquias/$id': typeof SuperadminParoquiasIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -572,12 +689,16 @@ export interface FileRouteTypes {
     | '/'
     | '/acesso-negado'
     | '/cadastro'
+    | '/checkout'
     | '/esqueci-senha'
     | '/login'
     | '/onboarding'
     | '/portal-membro'
     | '/reset-senha'
+    | '/superadmin'
+    | '/trial-expirado'
     | '/ajuda'
+    | '/assinatura'
     | '/auditoria'
     | '/calendario'
     | '/configuracoes'
@@ -603,6 +724,7 @@ export interface FileRouteTypes {
     | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
+    | '/checkout/sucesso'
     | '/escala/$token'
     | '/inscricao/$slug'
     | '/membro/$token'
@@ -623,21 +745,33 @@ export interface FileRouteTypes {
     | '/portal-membro/ranking'
     | '/portal-membro/substituicoes'
     | '/portal/$token'
+    | '/superadmin/auditoria'
+    | '/superadmin/dashboard'
+    | '/superadmin/financeiro'
+    | '/superadmin/paroquias'
+    | '/superadmin/planos'
+    | '/superadmin/usuarios'
+    | '/superadmin/webhooks'
     | '/admin/liturgia'
     | '/admin/paroquias'
     | '/configuracoes/administradores'
     | '/configuracoes/paroquia'
+    | '/superadmin/paroquias/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/acesso-negado'
     | '/cadastro'
+    | '/checkout'
     | '/esqueci-senha'
     | '/login'
     | '/onboarding'
     | '/portal-membro'
     | '/reset-senha'
+    | '/superadmin'
+    | '/trial-expirado'
     | '/ajuda'
+    | '/assinatura'
     | '/auditoria'
     | '/calendario'
     | '/configuracoes'
@@ -663,6 +797,7 @@ export interface FileRouteTypes {
     | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
+    | '/checkout/sucesso'
     | '/escala/$token'
     | '/inscricao/$slug'
     | '/membro/$token'
@@ -683,22 +818,34 @@ export interface FileRouteTypes {
     | '/portal-membro/ranking'
     | '/portal-membro/substituicoes'
     | '/portal/$token'
+    | '/superadmin/auditoria'
+    | '/superadmin/dashboard'
+    | '/superadmin/financeiro'
+    | '/superadmin/paroquias'
+    | '/superadmin/planos'
+    | '/superadmin/usuarios'
+    | '/superadmin/webhooks'
     | '/admin/liturgia'
     | '/admin/paroquias'
     | '/configuracoes/administradores'
     | '/configuracoes/paroquia'
+    | '/superadmin/paroquias/$id'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/acesso-negado'
     | '/cadastro'
+    | '/checkout'
     | '/esqueci-senha'
     | '/login'
     | '/onboarding'
     | '/portal-membro'
     | '/reset-senha'
+    | '/superadmin'
+    | '/trial-expirado'
     | '/_authenticated/ajuda'
+    | '/_authenticated/assinatura'
     | '/_authenticated/auditoria'
     | '/_authenticated/calendario'
     | '/_authenticated/configuracoes'
@@ -724,6 +871,7 @@ export interface FileRouteTypes {
     | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
+    | '/checkout/sucesso'
     | '/escala/$token'
     | '/inscricao/$slug'
     | '/membro/$token'
@@ -744,10 +892,18 @@ export interface FileRouteTypes {
     | '/portal-membro/ranking'
     | '/portal-membro/substituicoes'
     | '/portal/$token'
+    | '/superadmin/auditoria'
+    | '/superadmin/dashboard'
+    | '/superadmin/financeiro'
+    | '/superadmin/paroquias'
+    | '/superadmin/planos'
+    | '/superadmin/usuarios'
+    | '/superadmin/webhooks'
     | '/_authenticated/admin/liturgia'
     | '/_authenticated/admin/paroquias'
     | '/_authenticated/configuracoes/administradores'
     | '/_authenticated/configuracoes/paroquia'
+    | '/superadmin/paroquias/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -755,11 +911,14 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AcessoNegadoRoute: typeof AcessoNegadoRoute
   CadastroRoute: typeof CadastroRoute
+  CheckoutRoute: typeof CheckoutRouteWithChildren
   EsqueciSenhaRoute: typeof EsqueciSenhaRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   PortalMembroRoute: typeof PortalMembroRouteWithChildren
   ResetSenhaRoute: typeof ResetSenhaRoute
+  SuperadminRoute: typeof SuperadminRouteWithChildren
+  TrialExpiradoRoute: typeof TrialExpiradoRoute
   AuthAdminMfaRoute: typeof AuthAdminMfaRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthMfaChallengeRoute: typeof AuthMfaChallengeRoute
@@ -775,6 +934,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/trial-expirado': {
+      id: '/trial-expirado'
+      path: '/trial-expirado'
+      fullPath: '/trial-expirado'
+      preLoaderRoute: typeof TrialExpiradoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/superadmin': {
+      id: '/superadmin'
+      path: '/superadmin'
+      fullPath: '/superadmin'
+      preLoaderRoute: typeof SuperadminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-senha': {
       id: '/reset-senha'
       path: '/reset-senha'
@@ -810,6 +983,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EsqueciSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cadastro': {
       id: '/cadastro'
       path: '/cadastro'
@@ -837,6 +1017,55 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/superadmin/webhooks': {
+      id: '/superadmin/webhooks'
+      path: '/webhooks'
+      fullPath: '/superadmin/webhooks'
+      preLoaderRoute: typeof SuperadminWebhooksRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/usuarios': {
+      id: '/superadmin/usuarios'
+      path: '/usuarios'
+      fullPath: '/superadmin/usuarios'
+      preLoaderRoute: typeof SuperadminUsuariosRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/planos': {
+      id: '/superadmin/planos'
+      path: '/planos'
+      fullPath: '/superadmin/planos'
+      preLoaderRoute: typeof SuperadminPlanosRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/paroquias': {
+      id: '/superadmin/paroquias'
+      path: '/paroquias'
+      fullPath: '/superadmin/paroquias'
+      preLoaderRoute: typeof SuperadminParoquiasRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/financeiro': {
+      id: '/superadmin/financeiro'
+      path: '/financeiro'
+      fullPath: '/superadmin/financeiro'
+      preLoaderRoute: typeof SuperadminFinanceiroRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/dashboard': {
+      id: '/superadmin/dashboard'
+      path: '/dashboard'
+      fullPath: '/superadmin/dashboard'
+      preLoaderRoute: typeof SuperadminDashboardRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/auditoria': {
+      id: '/superadmin/auditoria'
+      path: '/auditoria'
+      fullPath: '/superadmin/auditoria'
+      preLoaderRoute: typeof SuperadminAuditoriaRouteImport
+      parentRoute: typeof SuperadminRoute
     }
     '/portal/$token': {
       id: '/portal/$token'
@@ -977,6 +1206,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/escala/$token'
       preLoaderRoute: typeof EscalaTokenRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/checkout/sucesso': {
+      id: '/checkout/sucesso'
+      path: '/sucesso'
+      fullPath: '/checkout/sucesso'
+      preLoaderRoute: typeof CheckoutSucessoRouteImport
+      parentRoute: typeof CheckoutRoute
     }
     '/auth/mfa-challenge': {
       id: '/auth/mfa-challenge'
@@ -1153,12 +1389,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAuditoriaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/assinatura': {
+      id: '/_authenticated/assinatura'
+      path: '/assinatura'
+      fullPath: '/assinatura'
+      preLoaderRoute: typeof AuthenticatedAssinaturaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ajuda': {
       id: '/_authenticated/ajuda'
       path: '/ajuda'
       fullPath: '/ajuda'
       preLoaderRoute: typeof AuthenticatedAjudaRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/superadmin/paroquias/$id': {
+      id: '/superadmin/paroquias/$id'
+      path: '/$id'
+      fullPath: '/superadmin/paroquias/$id'
+      preLoaderRoute: typeof SuperadminParoquiasIdRouteImport
+      parentRoute: typeof SuperadminParoquiasRoute
     }
     '/_authenticated/configuracoes/paroquia': {
       id: '/_authenticated/configuracoes/paroquia'
@@ -1211,6 +1461,7 @@ const AuthenticatedConfiguracoesRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAjudaRoute: typeof AuthenticatedAjudaRoute
+  AuthenticatedAssinaturaRoute: typeof AuthenticatedAssinaturaRoute
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCalendarioRoute: typeof AuthenticatedCalendarioRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRouteWithChildren
@@ -1239,6 +1490,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAjudaRoute: AuthenticatedAjudaRoute,
+  AuthenticatedAssinaturaRoute: AuthenticatedAssinaturaRoute,
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedCalendarioRoute: AuthenticatedCalendarioRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRouteWithChildren,
@@ -1270,6 +1522,18 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
+)
+
+interface CheckoutRouteChildren {
+  CheckoutSucessoRoute: typeof CheckoutSucessoRoute
+}
+
+const CheckoutRouteChildren: CheckoutRouteChildren = {
+  CheckoutSucessoRoute: CheckoutSucessoRoute,
+}
+
+const CheckoutRouteWithChildren = CheckoutRoute._addFileChildren(
+  CheckoutRouteChildren,
 )
 
 interface PortalMembroRouteChildren {
@@ -1306,16 +1570,54 @@ const PortalMembroRouteWithChildren = PortalMembroRoute._addFileChildren(
   PortalMembroRouteChildren,
 )
 
+interface SuperadminParoquiasRouteChildren {
+  SuperadminParoquiasIdRoute: typeof SuperadminParoquiasIdRoute
+}
+
+const SuperadminParoquiasRouteChildren: SuperadminParoquiasRouteChildren = {
+  SuperadminParoquiasIdRoute: SuperadminParoquiasIdRoute,
+}
+
+const SuperadminParoquiasRouteWithChildren =
+  SuperadminParoquiasRoute._addFileChildren(SuperadminParoquiasRouteChildren)
+
+interface SuperadminRouteChildren {
+  SuperadminAuditoriaRoute: typeof SuperadminAuditoriaRoute
+  SuperadminDashboardRoute: typeof SuperadminDashboardRoute
+  SuperadminFinanceiroRoute: typeof SuperadminFinanceiroRoute
+  SuperadminParoquiasRoute: typeof SuperadminParoquiasRouteWithChildren
+  SuperadminPlanosRoute: typeof SuperadminPlanosRoute
+  SuperadminUsuariosRoute: typeof SuperadminUsuariosRoute
+  SuperadminWebhooksRoute: typeof SuperadminWebhooksRoute
+}
+
+const SuperadminRouteChildren: SuperadminRouteChildren = {
+  SuperadminAuditoriaRoute: SuperadminAuditoriaRoute,
+  SuperadminDashboardRoute: SuperadminDashboardRoute,
+  SuperadminFinanceiroRoute: SuperadminFinanceiroRoute,
+  SuperadminParoquiasRoute: SuperadminParoquiasRouteWithChildren,
+  SuperadminPlanosRoute: SuperadminPlanosRoute,
+  SuperadminUsuariosRoute: SuperadminUsuariosRoute,
+  SuperadminWebhooksRoute: SuperadminWebhooksRoute,
+}
+
+const SuperadminRouteWithChildren = SuperadminRoute._addFileChildren(
+  SuperadminRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AcessoNegadoRoute: AcessoNegadoRoute,
   CadastroRoute: CadastroRoute,
+  CheckoutRoute: CheckoutRouteWithChildren,
   EsqueciSenhaRoute: EsqueciSenhaRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   PortalMembroRoute: PortalMembroRouteWithChildren,
   ResetSenhaRoute: ResetSenhaRoute,
+  SuperadminRoute: SuperadminRouteWithChildren,
+  TrialExpiradoRoute: TrialExpiradoRoute,
   AuthAdminMfaRoute: AuthAdminMfaRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthMfaChallengeRoute: AuthMfaChallengeRoute,
