@@ -42,7 +42,7 @@ function AssinaturaPage() {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("subscriptions")
-        .select("*, plans(name, slug, price_brl, max_members, max_admins)")
+        .select("*, plans(nome, slug, preco_mensal, max_membros, max_coordenadores)")
         .eq("paroquia_id", profile!.paroquia_id)
         .maybeSingle();
       return data as any;
@@ -70,8 +70,8 @@ function AssinaturaPage() {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("plans")
-        .select("id, name, slug, price_brl, description")
-        .order("price_brl", { ascending: true });
+        .select("id, nome, slug, preco_mensal, descricao")
+        .order("preco_mensal", { ascending: true });
       return (data ?? []) as any[];
     },
   });
@@ -94,17 +94,17 @@ function AssinaturaPage() {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("plan_change_history")
-        .select("*, old_plan:plans!old_plan_id(name), new_plan:plans!new_plan_id(name)")
+        .select("*, old_plan:plans!old_plan_id(nome), new_plan:plans!new_plan_id(nome)")
         .eq("paroquia_id", profile!.paroquia_id)
-        .order("changed_at", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(20);
       return (data ?? []) as any[];
     },
   });
 
   const sub = subscription;
-  const subBadge = sub ? (STATUS_BADGE[sub.sub_status] ?? STATUS_BADGE.active) : null;
-  const periodEnd = sub?.current_period_end ?? sub?.trial_ends_at;
+  const subBadge = sub ? (STATUS_BADGE[sub.status] ?? STATUS_BADGE.active) : null;
+  const periodEnd = sub?.current_period_end ?? sub?.trial_until;
 
   function whatsappLink(planName: string) {
     const msg = encodeURIComponent(`Olá! Gostaria de assinar o plano ${planName} do Lumen Pastoral.`);
@@ -130,26 +130,26 @@ function AssinaturaPage() {
         ) : sub ? (
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
             <div>
-              <p className="text-xl font-bold">{sub.plans?.name ?? "Gratuito"}</p>
+              <p className="text-xl font-bold">{sub.plans?.nome ?? "Gratuito"}</p>
               {subBadge && (
                 <Badge variant={subBadge.variant} className="mt-1">{subBadge.label}</Badge>
               )}
               {periodEnd && (
                 <p className="text-xs text-muted-foreground mt-2">
-                  {sub.sub_status === "trial" ? "Teste até " : "Renovação em "}
+                  {sub.status === "trial" ? "Teste até " : "Renovação em "}
                   {format(parseISO(periodEnd), "dd/MM/yyyy", { locale: ptBR })}
                 </p>
               )}
             </div>
             <div className="text-right">
               <p className="text-2xl font-bold">
-                {sub.plans?.price_brl === 0
+                {sub.plans?.preco_mensal === 0
                   ? "Grátis"
-                  : sub.plans?.price_brl
-                  ? `R$ ${Number(sub.plans.price_brl).toFixed(2).replace(".", ",")}`
+                  : sub.plans?.preco_mensal
+                  ? `R$ ${Number(sub.plans.preco_mensal).toFixed(2).replace(".", ",")}`
                   : "—"}
               </p>
-              {sub.plans?.price_brl > 0 && (
+              {sub.plans?.preco_mensal > 0 && (
                 <p className="text-xs text-muted-foreground">/mês</p>
               )}
             </div>
@@ -175,19 +175,19 @@ function AssinaturaPage() {
               >
                 <div>
                   <div className="flex items-center justify-between">
-                    <p className="font-bold text-base">{plan.name}</p>
+                    <p className="font-bold text-base">{plan.nome}</p>
                     {isCurrent && (
                       <span className="text-[10px] font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">Atual</span>
                     )}
                   </div>
                   <p className="text-xl font-bold mt-1">
-                    {plan.price_brl === 0
+                    {plan.preco_mensal === 0
                       ? "Grátis"
-                      : `R$ ${Number(plan.price_brl).toFixed(2).replace(".", ",")}`}
-                    {plan.price_brl > 0 && <span className="text-xs font-normal text-muted-foreground">/mês</span>}
+                      : `R$ ${Number(plan.preco_mensal).toFixed(2).replace(".", ",")}`}
+                    {plan.preco_mensal > 0 && <span className="text-xs font-normal text-muted-foreground">/mês</span>}
                   </p>
-                  {plan.description && (
-                    <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
+                  {plan.descricao && (
+                    <p className="text-xs text-muted-foreground mt-1">{plan.descricao}</p>
                   )}
                 </div>
 
@@ -203,7 +203,7 @@ function AssinaturaPage() {
                 )}
 
                 <a
-                  href={whatsappLink(plan.name)}
+                  href={whatsappLink(plan.nome)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
@@ -307,8 +307,8 @@ function AssinaturaPage() {
                     <td className="px-4 py-3 text-foreground/80">
                       {format(parseISO(h.changed_at), "dd/MM/yyyy", { locale: ptBR })}
                     </td>
-                    <td className="px-4 py-3">{h.old_plan?.name ?? "—"}</td>
-                    <td className="px-4 py-3 font-medium">{h.new_plan?.name ?? "—"}</td>
+                    <td className="px-4 py-3">{h.old_plan?.nome ?? "—"}</td>
+                    <td className="px-4 py-3 font-medium">{h.new_plan?.nome ?? "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{h.reason ?? "—"}</td>
                   </tr>
                 ))}

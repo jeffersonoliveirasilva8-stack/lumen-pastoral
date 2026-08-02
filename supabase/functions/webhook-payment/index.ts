@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
         gateway,
         event_type: eventType,
         idempotency_key: idempotencyKey,
-        raw_payload: body,
+        payload: body,
         processed: false,
       },
       { onConflict: 'idempotency_key', ignoreDuplicates: true },
@@ -123,28 +123,28 @@ Deno.serve(async (req: Request) => {
           // Busca plano para saber billing_cycle
           const { data: plan } = await supabase
             .from('plans')
-            .select('id, billing_cycle')
+            .select('id')
             .eq('slug', plan_slug)
             .single()
 
+          // busca billing_cycle da subscription existente (se houver)
+          const { data: existingSub } = await supabase
+            .from('subscriptions')
+            .select('id, billing_cycle')
+            .eq('paroquia_id', paroquia_id)
+            .maybeSingle()
+
           const now = new Date()
           const periodEnd = new Date(now)
-          if (plan?.billing_cycle === 'monthly') {
-            periodEnd.setMonth(periodEnd.getMonth() + 1)
-          } else {
+          if (existingSub?.billing_cycle === 'yearly') {
             periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+          } else {
+            periodEnd.setMonth(periodEnd.getMonth() + 1)
           }
 
-          // Atualiza subscription
-          const { data: sub } = await supabase
-            .from('subscriptions')
-            .select('id')
-            .eq('paroquia_id', paroquia_id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
+          const dueDate = now.toISOString().split('T')[0]
 
-          if (sub) {
+          if (existingSub) {
             await supabase.from('subscriptions').update({
               status: 'active',
               plan_id: plan?.id,
@@ -152,16 +152,16 @@ Deno.serve(async (req: Request) => {
               current_period_end: periodEnd.toISOString(),
               gateway,
               gateway_subscription_id: String(payment.id),
-            }).eq('id', sub.id)
+            }).eq('id', existingSub.id)
 
-            // Cria invoice
             await supabase.from('invoices').insert({
-              subscription_id: sub.id,
+              subscription_id: existingSub.id,
               paroquia_id,
               amount_brl: payment.transaction_amount,
               status: 'paid',
-              gateway,
-              gateway_payment_id: String(payment.id),
+              due_date: dueDate,
+              gateway_invoice_id: String(payment.id),
+              payment_method: 'credit_card',
               paid_at: now.toISOString(),
             })
           } else {
@@ -182,8 +182,9 @@ Deno.serve(async (req: Request) => {
                 paroquia_id,
                 amount_brl: payment.transaction_amount,
                 status: 'paid',
-                gateway,
-                gateway_payment_id: String(payment.id),
+                due_date: dueDate,
+                gateway_invoice_id: String(payment.id),
+                payment_method: 'credit_card',
                 paid_at: now.toISOString(),
               })
             }

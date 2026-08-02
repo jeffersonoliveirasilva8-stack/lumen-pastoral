@@ -15,16 +15,16 @@ export function TrialBanner() {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("subscriptions")
-        .select("sub_status, trial_ends_at, current_period_end")
+        .select("status, trial_until, current_period_end")
         .eq("paroquia_id", profile!.paroquia_id)
         .maybeSingle();
-      return data as { sub_status: string; trial_ends_at: string | null; current_period_end: string | null } | null;
+      return data as { status: string; trial_until: string | null; current_period_end: string | null } | null;
     },
   });
 
-  if (!data || data.sub_status !== "trial") return null;
+  if (!data || data.status !== "trial") return null;
 
-  const endsAt = data.trial_ends_at ?? data.current_period_end;
+  const endsAt = data.trial_until ?? data.current_period_end;
   if (!endsAt) return null;
 
   const daysLeft = differenceInDays(parseISO(endsAt), new Date());

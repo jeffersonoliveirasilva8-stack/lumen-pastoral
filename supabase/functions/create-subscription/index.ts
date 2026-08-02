@@ -81,9 +81,9 @@ Deno.serve(async (req: Request) => {
     // Busca plano por slug
     const { data: plan, error: planError } = await supabase
       .from('plans')
-      .select('id, name, price_brl, billing_cycle')
+      .select('id, nome, preco_mensal')
       .eq('slug', plan_slug)
-      .eq('active', true)
+      .eq('ativo', true)
       .single()
 
     if (planError || !plan) {
@@ -98,9 +98,9 @@ Deno.serve(async (req: Request) => {
 
     const appUrl = Deno.env.get('APP_URL') ?? 'https://lumenpastoral.com.br'
     const preference = await createMercadoPagoPreference({
-      plan_name: plan.name,
+      plan_name: plan.nome,
       plan_slug,
-      price_brl: plan.price_brl,
+      price_brl: plan.preco_mensal,
       payer_email,
       external_reference,
       notification_url,

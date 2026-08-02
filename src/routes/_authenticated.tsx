@@ -212,10 +212,10 @@ function AuthLayout() {
     queryFn: async () => {
       const { data } = await anyDb
         .from("subscriptions")
-        .select("sub_status")
+        .select("status")
         .eq("paroquia_id", profile!.paroquia_id)
         .maybeSingle();
-      return (data as { sub_status: string } | null)?.sub_status ?? null;
+      return (data as { status: string } | null)?.status ?? null;
     },
   });
 

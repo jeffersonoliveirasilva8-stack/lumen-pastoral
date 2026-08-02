@@ -18,7 +18,7 @@ async function auditLog(
 ) {
   await supabase.from('platform_audit_logs').insert({
     action,
-    details,
+    new_value: details,
     created_at: new Date().toISOString(),
   })
 }
@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
       .from('subscriptions')
       .select('id, paroquia_id')
       .eq('status', 'trial')
-      .lt('trial_ends_at', now.toISOString())
+      .lt('trial_until', now.toISOString())
 
     for (const sub of expiredTrials ?? []) {
       await supabase.from('subscriptions').update({ status: 'past_due' }).eq('id', sub.id)

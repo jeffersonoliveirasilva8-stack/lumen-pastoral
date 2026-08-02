@@ -49,7 +49,7 @@ async function recordAndSendAlert(
     paroquia_id,
     alert_type,
     sent_date: today,
-    metadata: { email, message },
+    sent_to_email: email,
   })
 
   // Implementação real de e-mail é futura — log por ora
@@ -80,15 +80,15 @@ Deno.serve(async (req: Request) => {
         .from('subscriptions')
         .select('paroquia_id, paroquias(nome, email_contato)')
         .eq('status', 'trial')
-        .gte('trial_ends_at', dateStart.toISOString())
-        .lte('trial_ends_at', dateEnd.toISOString())
+        .gte('trial_until', dateStart.toISOString())
+        .lte('trial_until', dateEnd.toISOString())
 
       for (const sub of subs ?? []) {
         const paroquia = Array.isArray(sub.paroquias) ? sub.paroquias[0] : sub.paroquias
-        const email = paroquia?.email_contato
+        const email = paroquia?.contato_email
         if (!email) continue
 
-        const alertType = `trial_expiring_${daysLeft}d`
+        const alertType = `trial_${daysLeft}d`
         const alreadySent = await wasAlertSentToday(supabase, sub.paroquia_id, alertType)
         if (alreadySent) continue
 
@@ -122,7 +122,7 @@ Deno.serve(async (req: Request) => {
 
       for (const sub of subs ?? []) {
         const paroquia = Array.isArray(sub.paroquias) ? sub.paroquias[0] : sub.paroquias
-        const email = paroquia?.email_contato
+        const email = paroquia?.contato_email
         if (!email) continue
 
         const alertType = `past_due_${daysAgo}d`

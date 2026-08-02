@@ -29,7 +29,7 @@ function CheckoutPage() {
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("plans")
-        .select("id, name, slug, price_brl, description")
+        .select("id, nome, slug, preco_mensal, descricao")
         .eq("slug", planSlug)
         .maybeSingle();
       return data as any;
@@ -44,8 +44,9 @@ function CheckoutPage() {
 
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase.functions.invoke("create-subscription", {
-        body: { plan_slug: planData.slug, paroquia_id: profile.paroquia_id },
+        body: { plan_slug: planData.slug, paroquia_id: profile.paroquia_id, payer_email: user?.email ?? profile.email ?? "" },
       });
 
       if (error) throw error;
@@ -91,15 +92,15 @@ function CheckoutPage() {
           ) : planData ? (
             <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3">
               <div>
-                <p className="font-semibold">{planData.name}</p>
-                {planData.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{planData.description}</p>
+                <p className="font-semibold">{planData.nome}</p>
+                {planData.descricao && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{planData.descricao}</p>
                 )}
               </div>
               <p className="font-bold text-lg">
-                {planData.price_brl === 0
+                {planData.preco_mensal === 0
                   ? "Grátis"
-                  : `R$ ${Number(planData.price_brl).toFixed(2).replace(".", ",")}/mês`}
+                  : `R$ ${Number(planData.preco_mensal).toFixed(2).replace(".", ",")}/mês`}
               </p>
             </div>
           ) : (
