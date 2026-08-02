@@ -1,4 +1,5 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
+import { SubscriptionGate } from "@/components/billing/SubscriptionGate";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import {
@@ -22,7 +23,7 @@ import {
 const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/planejamento")({
-  component: PlanejamentoPastoralPage,
+  component: () => <SubscriptionGate feature="agenda"><PlanejamentoPastoralPage /></SubscriptionGate>,
   head: () => ({ meta: [{ title: "Planejamento Pastoral — Lumen Pastoral" }] }),
 });
 

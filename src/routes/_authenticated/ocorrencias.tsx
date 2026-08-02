@@ -1,4 +1,5 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
+import { SubscriptionGate } from "@/components/billing/SubscriptionGate";
 import { useSetPageTabs } from "@/contexts/page-tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -21,7 +22,7 @@ import {
 const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/ocorrencias")({
-  component: OcorrenciasPage,
+  component: () => <SubscriptionGate feature="ocorrencias"><OcorrenciasPage /></SubscriptionGate>,
   head: () => ({ meta: [{ title: "Ocorrências — Lumen Pastoral" }] }),
 });
 

@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Calendar, ShieldCheck, Users, ChevronRight, CheckCircle,
   Flame, Bell, Star, BookOpen, LayoutDashboard, Trophy,
-  ArrowRight, Zap, Lock, Globe,
+  ArrowRight, Zap, Lock, Globe, CheckCircle2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -507,6 +509,9 @@ function Landing() {
         </div>
       </section>
 
+      {/* ── Pricing ── */}
+      <PricingSection />
+
       {/* ── CTA final ── */}
       <section className="mx-auto max-w-6xl px-6 pb-20">
         <div className="rounded-3xl bg-gradient-sacro p-10 sm:p-14 text-center relative overflow-hidden">
@@ -569,5 +574,143 @@ function Landing() {
       </footer>
 
     </div>
+  );
+}
+
+// ── Pricing Section (dados do banco) ─────────────────────────────────────
+const FEATURE_LANDING_LABELS: Record<string, string> = {
+  motor_inteligente: "Motor de escalas inteligente",
+  substituicoes: "Gestão de substituições",
+  portal_membro: "Portal do servidor",
+  liturgia: "Calendário litúrgico integrado",
+  sacristia: "Sacristia digital",
+  agenda: "Agenda e planejamento",
+  dashboard_avancado: "Dashboard avançado",
+  auditoria: "Log de auditoria",
+  relatorios: "Relatórios detalhados",
+  exportacao_pdf: "Exportação PDF",
+  exportacao_excel: "Exportação Excel",
+  notificacoes: "Notificações push",
+  emails: "E-mails automáticos",
+  ranking: "Ranking de participação",
+  ocorrencias: "Ocorrências e suporte",
+  api: "Acesso à API",
+};
+
+function PricingSection() {
+  const { data: plans = [], isLoading } = useQuery({
+    queryKey: ["landing-plans"],
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("plans")
+        .select("*, plan_features(*)")
+        .eq("ativo", true)
+        .order("ordem");
+      return (data ?? []) as any[];
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <section className="mx-auto max-w-5xl px-6 py-20">
+        <div className="h-64 animate-pulse rounded-2xl bg-muted" />
+      </section>
+    );
+  }
+
+  if (plans.length === 0) return null;
+
+  const fmtBrl = (n: number | null) =>
+    n === null || n === 0 ? "Gratuito" : `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
+
+  return (
+    <section className="mx-auto max-w-5xl px-6 py-20" id="planos">
+      <div className="text-center mb-12">
+        <p className="text-xs font-bold uppercase tracking-[0.25em] text-gold mb-3">Planos</p>
+        <h2 className="font-serif text-3xl sm:text-4xl text-foreground">Escolha o plano ideal</h2>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Todos os planos incluem {plans[0]?.trial_dias ?? 30} dias de teste gratuito. Sem cartão.
+        </p>
+      </div>
+
+      <div className={`grid gap-5 ${plans.length <= 2 ? "sm:grid-cols-2" : plans.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-4"}`}>
+        {plans.map((plan: any) => {
+          const features = (plan.plan_features ?? []).filter((f: any) => f.enabled);
+          const isHighlighted = plan.destaque;
+          return (
+            <div
+              key={plan.id}
+              className={`relative rounded-2xl border p-6 flex flex-col gap-5 transition ${
+                isHighlighted
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/30 shadow-altar"
+                  : "border-border bg-card"
+              }`}
+            >
+              {isHighlighted && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-0.5 text-[10px] font-bold text-primary-foreground">
+                    <Star className="h-2.5 w-2.5 fill-current" /> Recomendado
+                  </span>
+                </div>
+              )}
+
+              <div>
+                <p className="font-bold text-base text-foreground">{plan.nome}</p>
+                {plan.descricao && (
+                  <p className="text-xs text-muted-foreground mt-1">{plan.descricao}</p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-3xl font-bold text-foreground">
+                  {fmtBrl(plan.preco_mensal)}
+                  {plan.preco_mensal > 0 && (
+                    <span className="text-sm font-normal text-muted-foreground">/mês</span>
+                  )}
+                </p>
+                {plan.preco_anual > 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    ou {fmtBrl(plan.preco_anual)}/ano
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {plan.trial_dias} dias de teste · {plan.max_membros ? `Até ${plan.max_membros} membros` : "Membros ilimitados"}
+                </p>
+              </div>
+
+              <ul className="space-y-2 flex-1">
+                {features.slice(0, 8).map((f: any) => (
+                  <li key={f.feature_key} className="flex items-center gap-2 text-xs text-foreground/80">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    {FEATURE_LANDING_LABELS[f.feature_key] ?? f.feature_key}
+                    {f.limit_value && (
+                      <span className="text-muted-foreground">({f.limit_value}/mês)</span>
+                    )}
+                  </li>
+                ))}
+                {features.length > 8 && (
+                  <li className="text-xs text-muted-foreground pl-5.5">
+                    +{features.length - 8} funcionalidades…
+                  </li>
+                )}
+              </ul>
+
+              <Link
+                to="/cadastro"
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                  isHighlighted
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                    : "border border-border bg-muted/40 text-foreground hover:bg-muted"
+                }`}
+              >
+                Começar grátis
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

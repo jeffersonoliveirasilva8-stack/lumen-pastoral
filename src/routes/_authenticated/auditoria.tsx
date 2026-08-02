@@ -1,4 +1,5 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
+import { SubscriptionGate } from "@/components/billing/SubscriptionGate";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Loader2, Activity, Search } from "lucide-react";
@@ -17,7 +18,7 @@ import { useSetPageTabs } from "@/contexts/page-tabs";
 const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/auditoria")({
-  component: AtividadePage,
+  component: () => <SubscriptionGate feature="auditoria"><AtividadePage /></SubscriptionGate>,
   head: () => ({ meta: [{ title: "Atividade do Sistema — Lumen Pastoral" }] }),
 });
 

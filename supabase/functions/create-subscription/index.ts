@@ -104,8 +104,8 @@ Deno.serve(async (req: Request) => {
       payer_email,
       external_reference,
       notification_url,
-      back_url_success: `${appUrl}/assinatura/sucesso`,
-      back_url_failure: `${appUrl}/assinatura/falha`,
+      back_url_success: `${appUrl}/checkout/sucesso`,
+      back_url_failure: `${appUrl}/checkout/falha?plan=${plan_slug}`,
     })
 
     return new Response(

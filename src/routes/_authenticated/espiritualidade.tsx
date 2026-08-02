@@ -1,4 +1,5 @@
 ﻿import { createFileRoute, Link } from "@tanstack/react-router";
+import { SubscriptionGate } from "@/components/billing/SubscriptionGate";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,7 +17,7 @@ import { useHomiliaRecente } from "@/hooks/use-homilia";
 import type { LiturgiaRow } from "@/hooks/use-liturgia";
 
 export const Route = createFileRoute("/_authenticated/espiritualidade")({
-  component: EspiritualidadePage,
+  component: () => <SubscriptionGate feature="liturgia"><EspiritualidadePage /></SubscriptionGate>,
   head: () => ({ meta: [{ title: "Liturgia e Homilia — Painel Pastoral" }] }),
 });
 

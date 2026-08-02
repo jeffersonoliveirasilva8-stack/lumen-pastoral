@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { SubscriptionGate } from "@/components/billing/SubscriptionGate";
 import { useSetPageTabs } from "@/contexts/page-tabs";
 import { ListSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery } from "@tanstack/react-query";
@@ -18,7 +19,7 @@ import {
 const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/ranking")({
-  component: AdminRanking,
+  component: () => <SubscriptionGate feature="ranking"><AdminRanking /></SubscriptionGate>,
   head: () => ({ meta: [{ title: "Ranking — Painel Pastoral" }] }),
 });
 
