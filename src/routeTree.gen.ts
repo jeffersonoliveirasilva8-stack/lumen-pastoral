@@ -27,6 +27,7 @@ import { Route as SuperadminPlanosRouteImport } from './routes/superadmin/planos
 import { Route as SuperadminParoquiasRouteImport } from './routes/superadmin/paroquias'
 import { Route as SuperadminFinanceiroRouteImport } from './routes/superadmin/financeiro'
 import { Route as SuperadminDashboardRouteImport } from './routes/superadmin/dashboard'
+import { Route as SuperadminCredenciaisRouteImport } from './routes/superadmin/credenciais'
 import { Route as SuperadminAuditoriaRouteImport } from './routes/superadmin/auditoria'
 import { Route as PortalTokenRouteImport } from './routes/portal.$token'
 import { Route as PortalMembroSubstituicoesRouteImport } from './routes/portal-membro/substituicoes'
@@ -49,6 +50,7 @@ import { Route as MembroTokenRouteImport } from './routes/membro.$token'
 import { Route as InscricaoSlugRouteImport } from './routes/inscricao.$slug'
 import { Route as EscalaTokenRouteImport } from './routes/escala.$token'
 import { Route as CheckoutSucessoRouteImport } from './routes/checkout.sucesso'
+import { Route as CheckoutFalhaRouteImport } from './routes/checkout.falha'
 import { Route as AuthMfaChallengeRouteImport } from './routes/auth.mfa-challenge'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthAdminMfaRouteImport } from './routes/auth.admin-mfa'
@@ -171,6 +173,11 @@ const SuperadminDashboardRoute = SuperadminDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => SuperadminRoute,
 } as any)
+const SuperadminCredenciaisRoute = SuperadminCredenciaisRouteImport.update({
+  id: '/credenciais',
+  path: '/credenciais',
+  getParentRoute: () => SuperadminRoute,
+} as any)
 const SuperadminAuditoriaRoute = SuperadminAuditoriaRouteImport.update({
   id: '/auditoria',
   path: '/auditoria',
@@ -282,6 +289,11 @@ const EscalaTokenRoute = EscalaTokenRouteImport.update({
 const CheckoutSucessoRoute = CheckoutSucessoRouteImport.update({
   id: '/sucesso',
   path: '/sucesso',
+  getParentRoute: () => CheckoutRoute,
+} as any)
+const CheckoutFalhaRoute = CheckoutFalhaRouteImport.update({
+  id: '/falha',
+  path: '/falha',
   getParentRoute: () => CheckoutRoute,
 } as any)
 const AuthMfaChallengeRoute = AuthMfaChallengeRouteImport.update({
@@ -501,6 +513,7 @@ export interface FileRoutesByFullPath {
   '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
+  '/checkout/falha': typeof CheckoutFalhaRoute
   '/checkout/sucesso': typeof CheckoutSucessoRoute
   '/escala/$token': typeof EscalaTokenRoute
   '/inscricao/$slug': typeof InscricaoSlugRoute
@@ -523,6 +536,7 @@ export interface FileRoutesByFullPath {
   '/portal-membro/substituicoes': typeof PortalMembroSubstituicoesRoute
   '/portal/$token': typeof PortalTokenRoute
   '/superadmin/auditoria': typeof SuperadminAuditoriaRoute
+  '/superadmin/credenciais': typeof SuperadminCredenciaisRoute
   '/superadmin/dashboard': typeof SuperadminDashboardRoute
   '/superadmin/financeiro': typeof SuperadminFinanceiroRoute
   '/superadmin/paroquias': typeof SuperadminParoquiasRouteWithChildren
@@ -574,6 +588,7 @@ export interface FileRoutesByTo {
   '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
+  '/checkout/falha': typeof CheckoutFalhaRoute
   '/checkout/sucesso': typeof CheckoutSucessoRoute
   '/escala/$token': typeof EscalaTokenRoute
   '/inscricao/$slug': typeof InscricaoSlugRoute
@@ -596,6 +611,7 @@ export interface FileRoutesByTo {
   '/portal-membro/substituicoes': typeof PortalMembroSubstituicoesRoute
   '/portal/$token': typeof PortalTokenRoute
   '/superadmin/auditoria': typeof SuperadminAuditoriaRoute
+  '/superadmin/credenciais': typeof SuperadminCredenciaisRoute
   '/superadmin/dashboard': typeof SuperadminDashboardRoute
   '/superadmin/financeiro': typeof SuperadminFinanceiroRoute
   '/superadmin/paroquias': typeof SuperadminParoquiasRouteWithChildren
@@ -649,6 +665,7 @@ export interface FileRoutesById {
   '/auth/admin-mfa': typeof AuthAdminMfaRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/mfa-challenge': typeof AuthMfaChallengeRoute
+  '/checkout/falha': typeof CheckoutFalhaRoute
   '/checkout/sucesso': typeof CheckoutSucessoRoute
   '/escala/$token': typeof EscalaTokenRoute
   '/inscricao/$slug': typeof InscricaoSlugRoute
@@ -671,6 +688,7 @@ export interface FileRoutesById {
   '/portal-membro/substituicoes': typeof PortalMembroSubstituicoesRoute
   '/portal/$token': typeof PortalTokenRoute
   '/superadmin/auditoria': typeof SuperadminAuditoriaRoute
+  '/superadmin/credenciais': typeof SuperadminCredenciaisRoute
   '/superadmin/dashboard': typeof SuperadminDashboardRoute
   '/superadmin/financeiro': typeof SuperadminFinanceiroRoute
   '/superadmin/paroquias': typeof SuperadminParoquiasRouteWithChildren
@@ -724,6 +742,7 @@ export interface FileRouteTypes {
     | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
+    | '/checkout/falha'
     | '/checkout/sucesso'
     | '/escala/$token'
     | '/inscricao/$slug'
@@ -746,6 +765,7 @@ export interface FileRouteTypes {
     | '/portal-membro/substituicoes'
     | '/portal/$token'
     | '/superadmin/auditoria'
+    | '/superadmin/credenciais'
     | '/superadmin/dashboard'
     | '/superadmin/financeiro'
     | '/superadmin/paroquias'
@@ -797,6 +817,7 @@ export interface FileRouteTypes {
     | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
+    | '/checkout/falha'
     | '/checkout/sucesso'
     | '/escala/$token'
     | '/inscricao/$slug'
@@ -819,6 +840,7 @@ export interface FileRouteTypes {
     | '/portal-membro/substituicoes'
     | '/portal/$token'
     | '/superadmin/auditoria'
+    | '/superadmin/credenciais'
     | '/superadmin/dashboard'
     | '/superadmin/financeiro'
     | '/superadmin/paroquias'
@@ -871,6 +893,7 @@ export interface FileRouteTypes {
     | '/auth/admin-mfa'
     | '/auth/callback'
     | '/auth/mfa-challenge'
+    | '/checkout/falha'
     | '/checkout/sucesso'
     | '/escala/$token'
     | '/inscricao/$slug'
@@ -893,6 +916,7 @@ export interface FileRouteTypes {
     | '/portal-membro/substituicoes'
     | '/portal/$token'
     | '/superadmin/auditoria'
+    | '/superadmin/credenciais'
     | '/superadmin/dashboard'
     | '/superadmin/financeiro'
     | '/superadmin/paroquias'
@@ -1060,6 +1084,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SuperadminDashboardRouteImport
       parentRoute: typeof SuperadminRoute
     }
+    '/superadmin/credenciais': {
+      id: '/superadmin/credenciais'
+      path: '/credenciais'
+      fullPath: '/superadmin/credenciais'
+      preLoaderRoute: typeof SuperadminCredenciaisRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
     '/superadmin/auditoria': {
       id: '/superadmin/auditoria'
       path: '/auditoria'
@@ -1212,6 +1243,13 @@ declare module '@tanstack/react-router' {
       path: '/sucesso'
       fullPath: '/checkout/sucesso'
       preLoaderRoute: typeof CheckoutSucessoRouteImport
+      parentRoute: typeof CheckoutRoute
+    }
+    '/checkout/falha': {
+      id: '/checkout/falha'
+      path: '/falha'
+      fullPath: '/checkout/falha'
+      preLoaderRoute: typeof CheckoutFalhaRouteImport
       parentRoute: typeof CheckoutRoute
     }
     '/auth/mfa-challenge': {
@@ -1525,10 +1563,12 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 )
 
 interface CheckoutRouteChildren {
+  CheckoutFalhaRoute: typeof CheckoutFalhaRoute
   CheckoutSucessoRoute: typeof CheckoutSucessoRoute
 }
 
 const CheckoutRouteChildren: CheckoutRouteChildren = {
+  CheckoutFalhaRoute: CheckoutFalhaRoute,
   CheckoutSucessoRoute: CheckoutSucessoRoute,
 }
 
@@ -1583,6 +1623,7 @@ const SuperadminParoquiasRouteWithChildren =
 
 interface SuperadminRouteChildren {
   SuperadminAuditoriaRoute: typeof SuperadminAuditoriaRoute
+  SuperadminCredenciaisRoute: typeof SuperadminCredenciaisRoute
   SuperadminDashboardRoute: typeof SuperadminDashboardRoute
   SuperadminFinanceiroRoute: typeof SuperadminFinanceiroRoute
   SuperadminParoquiasRoute: typeof SuperadminParoquiasRouteWithChildren
@@ -1593,6 +1634,7 @@ interface SuperadminRouteChildren {
 
 const SuperadminRouteChildren: SuperadminRouteChildren = {
   SuperadminAuditoriaRoute: SuperadminAuditoriaRoute,
+  SuperadminCredenciaisRoute: SuperadminCredenciaisRoute,
   SuperadminDashboardRoute: SuperadminDashboardRoute,
   SuperadminFinanceiroRoute: SuperadminFinanceiroRoute,
   SuperadminParoquiasRoute: SuperadminParoquiasRouteWithChildren,
