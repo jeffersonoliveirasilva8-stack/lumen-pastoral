@@ -145,7 +145,8 @@ function SuperAdminPlanos() {
         await (supabase as any).from("plans").update(payload).eq("id", editPlan.id);
         planId = editPlan.id;
       } else {
-        const { data } = await (supabase as any).from("plans").insert(payload).select("id").single();
+        const { data, error } = await (supabase as any).from("plans").insert(payload).select("id").single();
+        if (error) throw new Error(error.message);
         planId = data.id;
       }
 
