@@ -226,7 +226,7 @@ function DashboardPage() {
       const vinte = format(addDays(new Date(), -20), "yyyy-MM-dd");
       const { data: escalasRecentes } = await supabase.from("escalas").select("id").eq("paroquia_id", pid!).gte("data", vinte);
       const escalaIds = (escalasRecentes ?? []).map((e) => e.id);
-      if (escalaIds.length === 0) return todos.slice(0, 5);
+      if (escalaIds.length === 0) return [];
       const { data: escalados } = await supabase.from("escala_membros").select("membro_id").in("escala_id", escalaIds);
       const escaladosSet = new Set((escalados ?? []).map((r) => r.membro_id));
       return todos.filter((m) => !escaladosSet.has(m.id)).slice(0, 5);

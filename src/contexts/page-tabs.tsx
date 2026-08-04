@@ -18,18 +18,28 @@ export function usePageTabs() {
   return useContext(Ctx).tabs;
 }
 
+// Geração global: cada vez que qualquer página chama setTabs, incrementa.
+// O cleanup da página anterior checa se a geração ainda é dela antes de limpar.
+let activeGen = 0;
+
 /** Chame direto no corpo do componente (sem JSX). Limpa automaticamente ao desmontar. */
 export function useSetPageTabs(tabs: ModuleTab[]) {
   const { setTabs } = useContext(Ctx);
   const sig = useRef("");
+  const myGen = useRef(0);
 
   useLayoutEffect(() => {
     const next = JSON.stringify(tabs.map((t) => ({ l: t.label, a: t.isActive, b: t.badge })));
     if (sig.current !== next) {
       sig.current = next;
+      myGen.current = ++activeGen;
       setTabs(tabs);
     }
   });
 
-  useLayoutEffect(() => () => { sig.current = ""; setTabs([]); }, [setTabs]);
+  useLayoutEffect(() => () => {
+    sig.current = "";
+    // Só limpa se nenhuma outra página já definiu as tabs após esta
+    if (myGen.current === activeGen) setTabs([]);
+  }, [setTabs]);
 }

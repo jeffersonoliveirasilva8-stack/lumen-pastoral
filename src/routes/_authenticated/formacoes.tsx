@@ -38,7 +38,7 @@ const anyDb = supabase as any;
 
 export const Route = createFileRoute("/_authenticated/formacoes")({
   component: AgendaPastoralPage,
-  head: () => ({ meta: [{ title: "Agenda Pastoral â€” Lumen Pastoral" }] }),
+  head: () => ({ meta: [{ title: “Agenda Pastoral — Lumen Pastoral” }] }),
 });
 
 // â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

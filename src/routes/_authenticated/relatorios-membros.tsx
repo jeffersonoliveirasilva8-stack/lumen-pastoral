@@ -31,6 +31,7 @@ type MembroStat = {
   nome: string;
   score: number;
   ministerios: string[];           // nomes dos ministérios vinculados
+  atuacoes: string[];              // nomes das atuações pastorais
   convocados: number;              // escalas onde foi atribuído
   presentes: number;               // presente + atrasado
   faltas: number;                  // faltou + ausente
@@ -103,6 +104,7 @@ function RelatoriosMembrosPage() {
   const [periodoDias, setPeriodoDias] = useState(90);
   const [busca, setBusca] = useState("");
   const [filtroMin, setFiltroMin] = useState<string>("todos");
+  const [filtroAtucao, setFiltroAtucao] = useState<string>("todos");
   const [filtroRisco, setFiltroRisco] = useState(false);
   const [filtroInativos, setFiltroInativos] = useState(false);
   const [ordenar, setOrdenar] = useState<"nome" | "taxa" | "faltas" | "dias" | "convocados">("taxa");
@@ -125,7 +127,7 @@ function RelatoriosMembrosPage() {
     queryFn: async () => {
       const { data } = await anyDb
         .from("membros")
-        .select("id, nome, score, membro_ministerios(ministerios(id, nome))")
+        .select("id, nome, score, membro_ministerios(ministerios(id, nome)), membro_atuacoes(atuacoes_pastorais(id, nome))")
         .eq("paroquia_id", profile!.paroquia_id)
         .eq("ativo", true)
         .order("nome");
@@ -162,6 +164,18 @@ function RelatoriosMembrosPage() {
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [membrosRaw]);
 
+  // ── Lista de atuações únicas (para filtro) ────────────────────────────────
+  const atuacoesLista = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of membrosRaw) {
+      for (const ma of (m.membro_atuacoes ?? [])) {
+        const at = ma.atuacoes_pastorais;
+        if (at) map.set(at.id, at.nome);
+      }
+    }
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [membrosRaw]);
+
   const isLoading = loadingMembros || loadingHist;
 
   // ── Computa stats por membro ──────────────────────────────────────────────
@@ -169,6 +183,10 @@ function RelatoriosMembrosPage() {
     return membrosRaw.map((m: any) => {
       const ministerios = (m.membro_ministerios ?? [])
         .map((mm: any) => mm.ministerios?.nome)
+        .filter(Boolean) as string[];
+
+      const atuacoes = (m.membro_atuacoes ?? [])
+        .map((ma: any) => ma.atuacoes_pastorais?.nome)
         .filter(Boolean) as string[];
 
       const hist = historico.filter((h) => h.membro_id === m.id);
@@ -210,7 +228,7 @@ function RelatoriosMembrosPage() {
       const inativo = presentes === 0 && convocados === 0;
 
       return {
-        id: m.id, nome: m.nome, score: m.score ?? 0, ministerios,
+        id: m.id, nome: m.nome, score: m.score ?? 0, ministerios, atuacoes,
         convocados, presentes, faltas, justificou, pendentes, taxaPresenca,
         diasSemServir, tendencia, risco, inativo,
       };
@@ -230,10 +248,16 @@ function RelatoriosMembrosPage() {
         return (mb?.membro_ministerios ?? []).some((mm: any) => mm.ministerios?.id === filtroMin);
       });
     }
+    if (filtroAtucao !== "todos") {
+      list = list.filter((m) => {
+        const mb = membrosRaw.find((r: any) => r.id === m.id);
+        return (mb?.membro_atuacoes ?? []).some((ma: any) => ma.atuacoes_pastorais?.id === filtroAtucao);
+      });
+    }
     if (filtroRisco)   list = list.filter((m) => m.risco);
     if (filtroInativos) list = list.filter((m) => m.inativo || m.presentes === 0);
     return list;
-  }, [stats, busca, filtroMin, filtroRisco, filtroInativos, membrosRaw]);
+  }, [stats, busca, filtroMin, filtroAtucao, filtroRisco, filtroInativos, membrosRaw]);
 
   // ── Ordenação ─────────────────────────────────────────────────────────────
   const ordenados = useMemo(() => {
@@ -349,6 +373,18 @@ function RelatoriosMembrosPage() {
           >
             <option value="todos">Todos os ministérios</option>
             {ministeriosLista.map(([id, nome]) => (
+              <option key={id} value={id}>{nome}</option>
+            ))}
+          </select>
+        )}
+        {atuacoesLista.length > 0 && (
+          <select
+            value={filtroAtucao}
+            onChange={(e) => setFiltroAtucao(e.target.value)}
+            className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
+          >
+            <option value="todos">Todas as atuações</option>
+            {atuacoesLista.map(([id, nome]) => (
               <option key={id} value={id}>{nome}</option>
             ))}
           </select>
