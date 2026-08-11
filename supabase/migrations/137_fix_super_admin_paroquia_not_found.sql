@@ -29,6 +29,7 @@ DECLARE
   v_solene       BOOLEAN;
   v_tem_bispo    BOOLEAN;
   v_tipo_evento  TEXT;
+  v_pontos_sub   INTEGER;
 BEGIN
   IF v_auth_id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'not_authenticated');
@@ -108,7 +109,7 @@ BEGIN
      )
    WHERE id = v_em.membro_id;
 
-  -- Substituto: 'presente'
+  -- Substituto: 'presente' em escala_membros
   INSERT INTO public.escala_membros
     (escala_id, membro_id, ministerio_id, status, ativo, removido_em, origem)
   VALUES
@@ -118,6 +119,33 @@ BEGIN
         ativo       = true,
         removido_em = NULL,
         origem      = 'manual';
+
+  -- Registra historico e pontos do substituto manualmente:
+  -- O trigger on_escala_membro_status_final só dispara em UPDATE OF status,
+  -- não em INSERT — por isso o upsert é explícito aqui.
+  v_pontos_sub := public._get_pontos_status(v_paroquia_id, 'presente', v_solene, v_tem_bispo);
+
+  INSERT INTO public.historico_participacoes
+    (paroquia_id, membro_id, escala_id, ministerio_id, tipo_evento, origem, presenca, data, pontos)
+  VALUES
+    (v_paroquia_id, p_substituto_id, v_em.escala_id, v_em.ministerio_id,
+     v_tipo_evento, 'escala', 'presente', v_escala_data, v_pontos_sub)
+  ON CONFLICT (membro_id, escala_id, ministerio_id)
+    WHERE tipo_evento IN ('escala', 'solene', 'bispo')
+      AND escala_id    IS NOT NULL
+      AND ministerio_id IS NOT NULL
+  DO UPDATE SET presenca    = 'presente',
+                tipo_evento = EXCLUDED.tipo_evento,
+                pontos      = EXCLUDED.pontos;
+
+  -- Recalcula score do substituto
+  UPDATE public.membros
+     SET score = (
+       SELECT COALESCE(SUM(hp.pontos), 0)
+       FROM public.historico_participacoes hp
+       WHERE hp.membro_id = p_substituto_id
+     )
+   WHERE id = p_substituto_id;
 
   RETURN jsonb_build_object('success', true);
 END;
