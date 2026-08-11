@@ -38,7 +38,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.user_roles ur
     WHERE ur.user_id = v_auth_id
-      AND ur.role IN ('coordenador','admin_paroquial','vice_coordenador','super_admin','lider')
+      AND ur.role::TEXT IN ('coordenador','admin_paroquial','super_admin','lider')
   ) THEN
     RETURN jsonb_build_object('success', false, 'error', 'sem_permissao');
   END IF;
@@ -63,7 +63,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.user_roles ur
     WHERE ur.user_id = v_auth_id
-      AND ur.role IN ('coordenador','admin_paroquial','vice_coordenador','super_admin','lider')
+      AND ur.role::TEXT IN ('coordenador','admin_paroquial','super_admin','lider')
       AND (ur.paroquia_id = v_paroquia_id OR ur.paroquia_id IS NULL)
   ) THEN
     RETURN jsonb_build_object('success', false, 'error', 'sem_permissao');
@@ -151,7 +151,7 @@ BEGIN
   SELECT ur.role::TEXT, ur.paroquia_id INTO v_role, v_paroquia
   FROM public.user_roles ur
   WHERE ur.user_id = v_auth_id
-    AND ur.role IN ('coordenador','admin_paroquial','vice_coordenador','super_admin','lider')
+    AND ur.role::TEXT IN ('coordenador','admin_paroquial','super_admin','lider')
   ORDER BY ur.paroquia_id NULLS LAST
   LIMIT 1;
 
