@@ -175,6 +175,7 @@ const CAP_PARTICIPACOES_30D = 5;
 const PENALIDADE_MESMO_DIA    = 50;
 const PENALIDADE_DIA_ANTERIOR = 30;
 const PENALIDADE_DOIS_DIAS    = 15;
+const PENALIDADE_MESMA_SEMANA = 12; // 3–7 dias atrás: forte desestímulo a repetir na mesma semana
 
 // Termos litúrgicos universais para funções acessórias (não são específicos de nenhuma paróquia).
 // Usados apenas em getFuncoesAdicionais — nunca para decisões de alocação.
@@ -339,9 +340,13 @@ function calcularScore(
   const serviuHoje      = histMembro.some((h) => h.data === dataEvento);
   const serviuOntem     = histMembro.some((h) => h.data === ontem);
   const serviuAnteontem = histMembro.some((h) => h.data === anteontem);
-  if (serviuHoje)       penalidade += PENALIDADE_MESMO_DIA;
+  const semanaAtras     = somarDias(dataEvento, -7);
+  const serviuNaSemana  = !serviuHoje && !serviuOntem && !serviuAnteontem &&
+    histMembro.some((h) => h.data > semanaAtras && h.data < dataEvento);
+  if (serviuHoje)            penalidade += PENALIDADE_MESMO_DIA;
   else if (serviuOntem)      penalidade += PENALIDADE_DIA_ANTERIOR;
   else if (serviuAnteontem)  penalidade += PENALIDADE_DOIS_DIAS;
+  else if (serviuNaSemana)   penalidade += PENALIDADE_MESMA_SEMANA;
 
   // Bonus prioridade_escala (ambos os modos)
   // Apenas "alta" e "media" são tiers genéricos reconhecidos — sem dependência de nomes de cargo.
@@ -492,7 +497,7 @@ function computeLimitePools(
     return { acimaLimiteSemanal, acimaLimiteMensal };
   }
 
-  const semanaInicio = somarDias(dataEvento, -6);
+  const semanaInicio = somarDias(dataEvento, -7);
   const mesInicio    = somarDias(dataEvento, -30); // janela móvel 30d (não mês calendário)
 
   for (const m of membros) {
