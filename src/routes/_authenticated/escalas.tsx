@@ -449,25 +449,51 @@ function EscalasPage() {
     enabled: !!profile?.paroquia_id,
     queryFn: async () => {
       const sixMonthsAgo = format(subMonths(new Date(), 6), "yyyy-MM-dd");
-      const hoje = format(new Date(), "yyyy-MM-dd");
-      // Usa historico_participacoes (presenças reais) em vez de escala_membros:
-      // - exclui faltas e pendentes (não contam como "serviu")
-      // - não inclui datas futuras (evita distorção no dias_sem_servir)
-      const { data, error } = await (supabase as any)
+      const twoWeeksAhead = format(addDays(new Date(), 14), "yyyy-MM-dd");
+
+      // 1. Presenças confirmadas (historico_participacoes)
+      const { data: hist } = await (supabase as any)
         .from("historico_participacoes")
         .select("membro_id, ministerio_id, data")
         .eq("paroquia_id", profile!.paroquia_id!)
         .in("presenca", ["presente", "atrasado"])
         .gte("data", sixMonthsAgo)
-        .lte("data", hoje);
+        .lte("data", twoWeeksAhead);
 
-      if (error || !data) return [];
+      // 2. Atribuições em escala_membros (passadas não confirmadas + futuras próximas)
+      // Necessário para o motor ver: (a) escalas da semana passada sem presença registrada
+      // e (b) escalas futuras já criadas para a mesma semana (evita dupla-escalação).
+      const { data: emData } = await (supabase as any)
+        .from("escala_membros")
+        .select("membro_id, ministerio_id, escalas!inner(data, paroquia_id)")
+        .eq("escalas.paroquia_id", profile!.paroquia_id!)
+        .gte("escalas.data", sixMonthsAgo)
+        .lte("escalas.data", twoWeeksAhead)
+        .in("status", ["pendente", "confirmado", "presente", "atrasado", "justificou"])
+        .eq("ativo", true);
 
-      return (data as any[]).map((row: any) => ({
+      const fromHist: AssignmentHistoryEntry[] = (hist ?? []).map((row: any) => ({
         memberId:     row.membro_id,
         ministerioId: row.ministerio_id,
         date:         row.data,
       }));
+
+      const fromEm: AssignmentHistoryEntry[] = (emData ?? [])
+        .filter((row: any) => row.escalas?.data)
+        .map((row: any) => ({
+          memberId:     row.membro_id,
+          ministerioId: row.ministerio_id,
+          date:         row.escalas.data,
+        }));
+
+      // Deduplica por memberId+ministerioId+date
+      const seen = new Set<string>();
+      const merged: AssignmentHistoryEntry[] = [];
+      for (const entry of [...fromHist, ...fromEm]) {
+        const key = `${entry.memberId}|${entry.ministerioId}|${entry.date}`;
+        if (!seen.has(key)) { seen.add(key); merged.push(entry); }
+      }
+      return merged;
     },
   });
 
