@@ -425,11 +425,13 @@ function calcularScore(
     const totalHist = histAnterior.length;
     const frequenciaHistorica = stats.maxTotal > 0 ? (1 - totalHist / stats.maxTotal) * 100 : 100;
 
-    // 5. Aleatoriedade controlada (5%) — desempate e variedade
+    // 5. Aleatoriedade controlada (20%) — garante rotação real entre gerações.
+    // Com 5% o gap determinístico entre membros nunca era superado (mesma escala toda vez).
+    // 20% permite que membros próximos no ranking alternem sem comprometer a equidade.
     const aleatoriedade = Math.random() * 100;
 
-    raw = 0.40 * participacaoRecente + 0.30 * tempoSemServir + 0.10 * rankingBonus +
-          0.05 * frequenciaHistorica + 0.05 * aleatoriedade;
+    raw = 0.35 * participacaoRecente + 0.30 * tempoSemServir + 0.10 * rankingBonus +
+          0.05 * frequenciaHistorica + 0.20 * aleatoriedade;
 
     breakdown.participacao_recente = Math.round(participacaoRecente);
     breakdown.tempo_sem_servir     = Math.round(tempoSemServir);
