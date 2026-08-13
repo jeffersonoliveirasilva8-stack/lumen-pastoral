@@ -6192,19 +6192,10 @@ function EscalaDetail({
                 )}
               </div>
             ) : (
-              /* Escala em rascunho: dialog simples */
-              <div className="flex items-center gap-2 pb-2">
-                <input
-                  id="notif-vaga-check"
-                  type="checkbox"
-                  checked={notificarVaga}
-                  onChange={(e) => setNotificarVaga(e.target.checked)}
-                  className="h-4 w-4 rounded border-input accent-primary"
-                />
-                <label htmlFor="notif-vaga-check" className="text-sm cursor-pointer">
-                  Notificar membros disponíveis para <strong>{removerPendente.ministerioNome}</strong>
-                </label>
-              </div>
+              /* Escala em rascunho: remoção direta, sem notificações */
+              <p className="text-sm text-muted-foreground pb-1">
+                Rascunhos não enviam e-mails nem notificações. O membro será simplesmente removido da lista.
+              </p>
             )}
 
             <AlertDialogFooter>
@@ -6226,14 +6217,8 @@ function EscalaDetail({
                       ministerioNome: removerPendente.ministerioNome,
                     });
                   } else {
+                    // Rascunho: remove silenciosamente, sem notificações
                     removerLocalMutation.mutate(removerPendente.atribId);
-                    if (notificarVaga) {
-                      onNotificarVaga({
-                        escalaId: escala.id,
-                        ministerioId: removerPendente.ministerioId,
-                        ministerioNome: removerPendente.ministerioNome,
-                      });
-                    }
                   }
                   setRemoverPendente(null);
                   setMotivoRemocao("");
