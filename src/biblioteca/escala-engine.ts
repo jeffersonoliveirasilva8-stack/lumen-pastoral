@@ -19,6 +19,10 @@ export type MembroEngine = {
   atuacao_ids?: string[];
   sexo?: "M" | "F" | null;
   prioridade_escala?: string;
+  /** Taxa de presença nas convocações (0–1). Usada no scoring de solenidades. */
+  taxa_presenca?: number;
+  /** Número de formações/compromissos pastorais com presença confirmada nos últimos 6 meses. */
+  formacao_participacoes?: number;
 };
 
 export type IndisponibilidadeEngine = {
@@ -113,6 +117,8 @@ export type ScoreBreakdown = {
   rotacao_funcao: number;
   experiencia_funcao: number;
   score_merito: number;
+  taxa_presenca_score: number;
+  formacao_score: number;
   bonus_preferencial: number;
   // Comuns
   penalidade: number;
@@ -131,6 +137,10 @@ export type InsightCandidato = {
   breakdown: ScoreBreakdown;
   escolhido: boolean;
   motivo_exclusao?: string;
+  taxa_presenca_pct?: number;          // 0–100
+  formacao_participacoes?: number;
+  serviu_solene_anterior?: boolean;
+  ultima_solenidade?: string | null;    // data "yyyy-mm-dd" da última solenidade servida
 };
 
 export type InsightFuncao = {
@@ -147,10 +157,12 @@ export type InsightFuncao = {
     atuacao: number;
     ja_alocado: number;
     acima_limite: number;
+    solenidade_recente: number; // de-priorizado (serviu na última solenidade)
   };
   top_candidatos: InsightCandidato[];
   escolhidos: InsightCandidato[];
   motivo_vazio?: string;
+  ultima_data_solene?: string | null; // data da última solenidade para esta função
 };
 
 export type ResultadoAlocacao = {
@@ -164,6 +176,8 @@ export type HistoricoRecente = {
   membro_id: string;
   ministerio_id: string;
   data: string;
+  /** 'solene' | 'bispo' preenchido pela trigger — permite rodízio exclusivo entre solenidades */
+  tipo_evento?: string;
 };
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -171,6 +185,7 @@ export type HistoricoRecente = {
 const CAP_DIAS_SEM_SERVIR   = 60;
 const CAP_DIAS_ROTACAO_FUNC = 180;  // 6 meses = rodízio máximo para funções principais
 const CAP_PARTICIPACOES_30D = 5;
+const CAP_FORMACOES_6M      = 10;   // 10 formações em 6 meses = participação plena
 
 const PENALIDADE_MESMO_DIA    = 50;
 const PENALIDADE_DIA_ANTERIOR = 30;
@@ -360,19 +375,21 @@ function calcularScore(
   }
 
   const breakdown: ScoreBreakdown = {
-    tempo_sem_servir:   0,
+    tempo_sem_servir:    0,
     participacao_recente: 0,
     frequencia_historica: 0,
-    ranking_bonus:      0,
-    aleatoriedade:      0,
-    rotacao_funcao:     0,
-    experiencia_funcao: 0,
-    score_merito:       0,
-    bonus_preferencial: 0,
-    penalidade:         Math.round(penalidade),
-    prioridade_bonus:   Math.round(prioridadeBonus),
-    total:              0,
-    modo:               modoSolenePrincipal ? "solene_principal" : "comum",
+    ranking_bonus:       0,
+    aleatoriedade:       0,
+    rotacao_funcao:      0,
+    experiencia_funcao:  0,
+    score_merito:        0,
+    taxa_presenca_score: 0,
+    formacao_score:      0,
+    bonus_preferencial:  0,
+    penalidade:          Math.round(penalidade),
+    prioridade_bonus:    Math.round(prioridadeBonus),
+    total:               0,
+    modo:                modoSolenePrincipal ? "solene_principal" : "comum",
   };
 
   let raw: number;
@@ -395,21 +412,31 @@ function calcularScore(
     // 3. Score de mérito (25%) — maior score = melhor em solenidades
     const scoreMerito = stats.maxDbScore > 0 ? (membro.score / stats.maxDbScore) * 100 : 0;
 
-    // 4. Participação geral recente (10%) — menos recente = melhor (rodízio)
-    const participacaoGeral = Math.max(0, (1 - count30d / CAP_PARTICIPACOES_30D) * 100);
+    // 4. Taxa de presença nas convocações (15%) — confirmou presença com consistência
+    const taxaPresenca = membro.taxa_presenca ?? 0; // 0–1
+    const taxaPresencaScore = taxaPresenca * 100;
 
-    // 5. Bônus preferencial solene (fixo, configurável)
+    // 5. Participação em formações (15%) — comprometimento pastoral
+    const formacoes = membro.formacao_participacoes ?? 0;
+    const formacaoScore = Math.min(formacoes, CAP_FORMACOES_6M) / CAP_FORMACOES_6M * 100;
+
+    // 6. Bônus preferencial solene (fixo, configurável)
     const bonusPreferencial = ehPreferencialSolene ? (config?.bonus_preferencial_solene ?? 20) : 0;
 
-    raw = 0.35 * rotacaoFuncao + 0.30 * experienciaFuncao + 0.25 * scoreMerito + 0.10 * participacaoGeral;
+    // Pesos: 25% rodízio + 20% experiência + 25% mérito + 15% presença + 15% formação
+    raw = 0.25 * rotacaoFuncao + 0.20 * experienciaFuncao + 0.25 * scoreMerito
+        + 0.15 * taxaPresencaScore + 0.15 * formacaoScore;
 
-    breakdown.rotacao_funcao    = Math.round(rotacaoFuncao);
+    breakdown.rotacao_funcao     = Math.round(rotacaoFuncao);
     breakdown.experiencia_funcao = Math.round(experienciaFuncao);
-    breakdown.score_merito      = Math.round(scoreMerito);
-    breakdown.participacao_recente = Math.round(participacaoGeral);
+    breakdown.score_merito       = Math.round(scoreMerito);
+    breakdown.taxa_presenca_score = Math.round(taxaPresencaScore);
+    breakdown.formacao_score     = Math.round(formacaoScore);
     breakdown.bonus_preferencial = Math.round(bonusPreferencial);
 
-    breakdown.total = Math.max(0, Math.min(100, Math.round(raw - penalidade + bonusPreferencial + prioridadeBonus)));
+    // No modo mérito, o rodízio da função específica já está embutido nos 25% de rotacaoFuncao.
+    // Penalidade semanal não se aplica — seleção por mérito.
+    breakdown.total = Math.max(0, Math.min(100, Math.round(raw + bonusPreferencial + prioridadeBonus)));
 
   } else {
     // ── Modo COMUM: equilíbrio de oportunidades ─────────────────────────────
@@ -595,7 +622,7 @@ export function alocarMembros(
     );
 
     // Contadores de exclusão
-    const excluidos = { sem_vinculo: 0, indisponibilidade: 0, dia_semana: 0, funcao_nao_pode: 0, atuacao: 0, ja_alocado: 0, acima_limite: 0 };
+    const excluidos = { sem_vinculo: 0, indisponibilidade: 0, dia_semana: 0, funcao_nao_pode: 0, atuacao: 0, ja_alocado: 0, acima_limite: 0, solenidade_recente: 0 };
 
     // ── Separação em pools progressivos ─────────────────────────────────────
     // Pool 1: apto + abaixo de ambos os limites + não alocado
@@ -605,18 +632,39 @@ export function alocarMembros(
     // Pool 5: excluído por intervalo_minimo_dias — usado só se pools 1-4 não bastam
 
     const pool1: MembroEngine[] = [];
+    const pool1b: MembroEngine[] = []; // serviu na última solenidade desta função (rodízio de solenidades)
     const pool2: MembroEngine[] = [];
     const pool3: MembroEngine[] = [];
     const pool4: MembroEngine[] = []; // multi-função (duplicidade)
     const pool5: MembroEngine[] = []; // intervalo mínimo violado (alerta ao coordenador)
+
+    // Última solenidade da pastoral (qualquer função) — base para rodízio entre solenidades.
+    // Usa tipo_evento='solene' para distinguir de escalas comuns.
+    // Intencionalmente NÃO filtra por ministerio_id: quem serviu em qualquer função na última
+    // solenidade entra em pool1b para ESTA função também, distribuindo oportunidades.
+    const ultimaDataSolene = modoSolenePrincipal
+      ? (historicoRecente
+          .filter((h) => h.tipo_evento === "solene" && h.data < contexto.data)
+          .map((h) => h.data)
+          .sort()
+          .at(-1) ?? null)
+      : null;
+    // Membros que serviram em QUALQUER função na última solenidade
+    const serviramNaUltimaSolene = ultimaDataSolene
+      ? new Set(historicoRecente
+          .filter((h) => h.data === ultimaDataSolene && h.tipo_evento === "solene")
+          .map((h) => h.membro_id))
+      : new Set<string>();
 
     for (const m of membros) {
       if (!m.ministerio_ids.includes(funcao.ministerio_id)) { excluidos.sem_vinculo++; continue; }
       if (m.funcoes_nao_pode_ids?.includes(funcao.ministerio_id)) { excluidos.funcao_nao_pode++; continue; }
       if (incompatMap?.has(m.id) && [...ja_alocados].some((id) => incompatMap.get(m.id)!.has(id))) { excluidos.funcao_nao_pode++; continue; }
       if (funcao.atuacoes_exigidas?.length && !funcao.atuacoes_exigidas.some((a) => (m.atuacao_ids ?? []).includes(a))) { excluidos.atuacao++; continue; }
-      // Restrição por dia da semana — sempre bloqueia (é a configuração estrutural do membro).
-      if (m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data))) { excluidos.dia_semana++; continue; }
+      // Restrição por dia da semana — bloqueia apenas em escalas comuns; solenidades ignoram
+      // esta restrição pois são eventos extraordinários (o membro avalia a indisponibilidade
+      // específica via indisponibilidades avulsas).
+      if (!ehSolene && m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data))) { excluidos.dia_semana++; continue; }
       // Indisponibilidade de data específica registrada manualmente — controlada pelo toggle ignorarIndisponibilidades.
       if (!ignorarIndisponibilidades && estaIndisponivel(m.id, contexto.data, indisponibilidades)) { excluidos.indisponibilidade++; continue; }
       if (config?.impedir_repeticao_seguida) {
@@ -649,6 +697,10 @@ export function alocarMembros(
       } else if (acimaSemanal) {
         excluidos.acima_limite++;
         pool2.push(m);
+      } else if (modoSolenePrincipal && serviramNaUltimaSolene.has(m.id)) {
+        // De-priorizado: serviu na última solenidade desta função — preferir quem não serviu
+        excluidos.solenidade_recente++;
+        pool1b.push(m);
       } else {
         pool1.push(m);
       }
@@ -720,11 +772,12 @@ export function alocarMembros(
     }
 
     // Pontua todos os pools UMA vez — evita double Math.random() entre seleção e insights
-    const scored1 = scorePool(pool1, false);
-    const scored2 = scorePool(pool2, false);
-    const scored3 = scorePool(pool3, true);
-    const scored4 = scorePool(pool4, true);
-    const scored5 = scorePool(pool5, true); // intervalo mínimo violado
+    const scored1  = scorePool(pool1, false);
+    const scored1b = scorePool(pool1b, false); // solenidade recente (rodízio)
+    const scored2  = scorePool(pool2, false);
+    const scored3  = scorePool(pool3, true);
+    const scored4  = scorePool(pool4, true);
+    const scored5  = scorePool(pool5, true); // intervalo mínimo violado
 
     // Contadores por função (para alerta de proporção e atualização do global)
     const totalVagasFuncao = vagas;
@@ -733,7 +786,7 @@ export function alocarMembros(
 
     // Seleção progressiva: ordena por gênero com contadores GLOBAIS (inclui funções já
     // processadas) para evitar que funções de 1 vaga sempre priorizem o mesmo gênero.
-    for (const [poolIdx, scored] of [[0, scored1], [1, scored2], [2, scored3], [3, scored4], [4, scored5]] as const) {
+    for (const [poolIdx, scored] of [[0, scored1], [1, scored1b], [2, scored2], [3, scored3], [4, scored4], [5, scored5]] as const) {
       if (vagas <= 0) break;
       const ordenados = ordenarPorGenero(
         scored as ReturnType<typeof scorePool>,
@@ -752,8 +805,14 @@ export function alocarMembros(
         if (!conflito) {
           aprovados.push(c);
           aprovadosIds.add(c.membro.id);
+          // Pool 1b: membro serviu na última solenidade desta função (fallback de rodízio)
+          if (poolIdx === 1 && modoSolenePrincipal) {
+            alertas.push(
+              `ℹ "${funcao.ministerio_nome}": ${c.membro.nome} escalado mesmo tendo servido na última solenidade (rodízio esgotado).`,
+            );
+          }
           // Pool 5: emite alerta individualizado por membro alocado com intervalo violado
-          if (poolIdx === 4) {
+          if (poolIdx === 5) {
             alertas.push(
               `⚠ "${funcao.ministerio_nome}": ${c.membro.nome} escalado mesmo dentro do intervalo mínimo de ${config?.intervalo_minimo_dias} dias por falta de outros candidatos disponíveis.`,
             );
@@ -801,19 +860,51 @@ export function alocarMembros(
 
     // ── Diagnóstico / insights ────────────────────────────────────────────────
     // Reutiliza scores pré-calculados — sem novo Math.random()
-    const todosScored = [...scored1, ...scored2, ...scored3]
+    const todosScored = [...scored1, ...scored1b, ...scored2, ...scored3]
       .sort((a, b) => b.breakdown.total - a.breakdown.total);
-    const topCandidatos: InsightCandidato[] = todosScored.slice(0, 8).map((c) => ({
-      membro_id:           c.membro.id,
-      nome:                c.membro.nome,
-      score_final:         c.breakdown.total,
-      dias_sem_servir:     c.diasSemServir,
-      participacoes_30d:   c.count30d,
-      participacoes_total: c.totalHist,
-      breakdown:           c.breakdown,
-      escolhido:           selecionadosIds.has(c.membro.id),
-      motivo_exclusao:     !selecionadosIds.has(c.membro.id) ? "Score inferior" : undefined,
-    }));
+
+    const buildInsightCandidato = (c: ReturnType<typeof scorePool>[number], escolhido: boolean): InsightCandidato => {
+      // Determina motivo de exclusão específico
+      let motivo_exclusao: string | undefined;
+      if (!escolhido) {
+        if (pool1b.some((m) => m.id === c.membro.id)) {
+          motivo_exclusao = "Serviu na solenidade anterior (rodízio de oportunidades)";
+        } else if (pool2.some((m) => m.id === c.membro.id)) {
+          motivo_exclusao = "Acima do limite semanal (score inferior)";
+        } else if (pool3.some((m) => m.id === c.membro.id)) {
+          motivo_exclusao = "Acima do limite mensal (fallback)";
+        } else {
+          motivo_exclusao = "Score inferior";
+        }
+      }
+
+      // Última solenidade do membro em QUALQUER função — igual ao critério do pool1b.
+      const ultimaSolene = historicoRecente
+        .filter((h) => h.membro_id === c.membro.id && h.tipo_evento === "solene" && h.data < contexto.data)
+        .map((h) => h.data)
+        .sort()
+        .at(-1) ?? null;
+
+      return {
+        membro_id:             c.membro.id,
+        nome:                  c.membro.nome,
+        score_final:           c.breakdown.total,
+        dias_sem_servir:       c.diasSemServir,
+        participacoes_30d:     c.count30d,
+        participacoes_total:   c.totalHist,
+        breakdown:             c.breakdown,
+        escolhido,
+        motivo_exclusao,
+        taxa_presenca_pct:     c.membro.taxa_presenca !== undefined ? Math.round(c.membro.taxa_presenca * 100) : undefined,
+        formacao_participacoes: c.membro.formacao_participacoes,
+        serviu_solene_anterior: serviramNaUltimaSolene.has(c.membro.id),
+        ultima_solenidade:     ultimaSolene,
+      };
+    };
+
+    const topCandidatos: InsightCandidato[] = todosScored.slice(0, 8).map((c) =>
+      buildInsightCandidato(c, selecionadosIds.has(c.membro.id)),
+    );
 
     const faltando = vagas; // vagas restantes após todos os pools
     let motivoVazio: string | undefined;
@@ -849,6 +940,7 @@ export function alocarMembros(
       top_candidatos:       topCandidatos,
       escolhidos:           topCandidatos.filter((c) => c.escolhido),
       motivo_vazio:         motivoVazio,
+      ultima_data_solene:   ultimaDataSolene,
     });
   }
 

@@ -127,6 +127,8 @@ type Membro = {
   restricoes_dia_semana: number[];
   sexo: "M" | "F" | null;
   prioridade_escala: string;
+  taxa_presenca?: number;
+  formacao_participacoes?: number;
 };
 
 type Escala = {
@@ -463,7 +465,7 @@ function EscalasPage() {
       // 1. Presenças confirmadas (historico_participacoes)
       const { data: hist } = await (supabase as any)
         .from("historico_participacoes")
-        .select("membro_id, ministerio_id, data")
+        .select("membro_id, ministerio_id, data, tipo_evento")
         .eq("paroquia_id", profile!.paroquia_id!)
         .in("presenca", ["presente", "atrasado"])
         .gte("data", sixMonthsAgo)
@@ -485,6 +487,7 @@ function EscalasPage() {
         memberId:     row.membro_id,
         ministerioId: row.ministerio_id,
         date:         row.data,
+        tipoEvento:   row.tipo_evento ?? null,
       }));
 
       const fromEm: AssignmentHistoryEntry[] = (emData ?? [])
@@ -505,6 +508,62 @@ function EscalasPage() {
       return merged;
     },
   });
+
+  // Participações em formações por membro (últimos 6 meses) — para scoring de solenidades.
+  // presencas_eventos não tem paroquia_id nem data; filtramos via formacoes_eventos (join).
+  const { data: formacaoParticipacoes = {} } = useQuery<Record<string, number>>({
+    queryKey: ["formacao-participacoes", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const sixMonthsAgo = format(subMonths(new Date(), 6), "yyyy-MM-dd") + "T00:00:00";
+      // Join: formacoes_eventos → presencas_eventos. Filtramos por paroquia e data_inicio no lado pai.
+      const { data, error } = await supabase
+        .from("formacoes_eventos")
+        .select("presencas_eventos!inner(membro_id)")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .gte("data_inicio", sixMonthsAgo)
+        .eq("presencas_eventos.presente", true);
+      if (error) { console.warn("[formacaoParticipacoes]", error.message); return {}; }
+      const map: Record<string, number> = {};
+      for (const evento of (data ?? [])) {
+        for (const pe of (evento.presencas_eventos as { membro_id: string }[])) {
+          map[pe.membro_id] = (map[pe.membro_id] ?? 0) + 1;
+        }
+      }
+      return map;
+    },
+  });
+
+  // Membros enriquecidos com taxa_presenca (calculada de assignmentHistory) e formacao_participacoes
+  const membrosEnriquecidos = useMemo<Membro[]>(() => {
+    if (assignmentHistory.length === 0) return membros;
+    const hoje = format(new Date(), "yyyy-MM-dd");
+    // taxa_presenca = confirmações ÷ convocações já realizadas (data <= hoje).
+    // Registros de historico_participacoes têm tipoEvento definido (string | null).
+    // Registros de escala_membros (futuras) têm tipoEvento = undefined — excluídos do denominador.
+    const confirmadasMap = new Map<string, number>();
+    const realizadasMap  = new Map<string, number>();
+    for (const h of assignmentHistory) {
+      if ((h.date ?? "") > hoje) continue; // ignora escalas futuras no denominador
+      // Toda convocação passada conta como "realizada" (denominador)
+      realizadasMap.set(h.memberId, (realizadasMap.get(h.memberId) ?? 0) + 1);
+      // Apenas registros de historico_participacoes têm tipoEvento definido (string | null);
+      // registros de escala_membros sem confirmação têm tipoEvento = undefined.
+      if (h.tipoEvento !== undefined) {
+        confirmadasMap.set(h.memberId, (confirmadasMap.get(h.memberId) ?? 0) + 1);
+      }
+    }
+    return membros.map((m) => {
+      const confirmadas = confirmadasMap.get(m.id) ?? 0;
+      const realizadas  = realizadasMap.get(m.id)  ?? 0;
+      return {
+        ...m,
+        taxa_presenca: realizadas > 0 ? confirmadas / realizadas : undefined,
+        formacao_participacoes: formacaoParticipacoes[m.id],
+      };
+    });
+  }, [membros, assignmentHistory, formacaoParticipacoes]);
 
   const { data: comunidades = [] } = useQuery<{ id: string; nome: string }[]>({
     queryKey: ["comunidades", profile?.paroquia_id],
@@ -713,7 +772,7 @@ function EscalasPage() {
             bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
           };
 
-          const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+          const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
 
           const saveDia  = new Date(payload.data + "T12:00:00").getDay();
           const saveHora = (payload.hora_inicio ?? "").slice(0, 5);
@@ -759,9 +818,15 @@ function EscalasPage() {
         }
       }
 
-      // Cria evento de formação automático quando todos_paramentados = true
-      if (nova?.id && form.todos_paramentados) {
+      // Cria evento de presença automático para solenidades (e também para todos_paramentados).
+      // Para solenidades: lista TODOS os membros ativos da pastoral em presencas_eventos,
+      // permitindo marcar presença de quem NÃO estava escalado.
+      const ehNovaEscalaSolene = nova?.id && (form.solene || form.todos_paramentados);
+      if (ehNovaEscalaSolene) {
         const dataHora = `${form.data}T${form.hora_inicio || "00:00"}:00`;
+        const obsEvento = form.todos_paramentados
+          ? "Todos paramentados — confirmação de presença automática via escala."
+          : "Solenidade — registro de presença da celebração.";
         const { data: eventoInsert } = await anyDb
           .from("formacoes_eventos")
           .insert({
@@ -769,23 +834,19 @@ function EscalasPage() {
             titulo: form.titulo.trim(),
             tipo: "formacao",
             data_inicio: dataHora,
-            observacoes: "Todos paramentados — confirmação de presença automática via escala.",
+            observacoes: obsEvento,
             criado_por: profile!.id,
           })
           .select("id")
           .single();
 
         if (eventoInsert?.id) {
-          // Busca membros já inseridos nesta escala
-          const { data: emRows } = await anyDb
-            .from("escala_membros")
-            .select("membro_id")
-            .eq("escala_id", nova.id);
-
-          const membroIds = [...new Set((emRows ?? []).map((r: any) => r.membro_id as string))];
-          if (membroIds.length > 0) {
+          // Para solenidades: inclui TODOS os membros ativos (não só escalados),
+          // assim o coordenador pode marcar presença de quem apareceu sem estar na escala.
+          const todosMembrosIds = membrosEnriquecidos.map((m) => m.id);
+          if (todosMembrosIds.length > 0) {
             await anyDb.from("presencas_eventos").insert(
-              membroIds.map((mid) => ({
+              todosMembrosIds.map((mid) => ({
                 evento_id: eventoInsert.id,
                 membro_id: mid,
                 presente: null,
@@ -1343,7 +1404,7 @@ function EscalasPage() {
         (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
       );
 
-      const membrosComAtuacoes = membros.map((m) => ({
+      const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({
         ...m,
         atuacao_ids: membroAtuacoes[m.id] ?? [],
       }));
@@ -2056,7 +2117,7 @@ function EscalasPage() {
           onClose={() => setAssistenteOpen(false)}
           paroquiaId={profile.paroquia_id!}
           profileId={profile.id}
-          membros={membros}
+          membros={membrosEnriquecidos}
           ministerios={ministerios}
           missasPadrao={missasPadrao}
           membroMinisterios={membroMinisterios}
@@ -2143,7 +2204,7 @@ function EscalasPage() {
             <EscalaDetail
               escala={detailEscala}
               ministerios={ministerios}
-              membros={membros}
+              membros={membrosEnriquecidos}
               funcoes={funcoes}
               atribuicoes={atribuicoesComPending}
               removidos={removidos}
@@ -4420,6 +4481,7 @@ function EscalaDetail({
   // Candidatos sugeridos por função (para o botão "Sugerir" por slot)
   type CandidatoSlot = import("@/lib/escala-engine").InsightCandidato & { motivo_indisp?: string };
   const [slotCandidatos, setSlotCandidatos] = useState<Record<string, CandidatoSlot[]>>({});
+  const [slotExcluidos, setSlotExcluidos] = useState<Record<string, InsightFuncao["excluidos"] | null>>({});
   const [slotLoading, setSlotLoading] = useState<Record<string, boolean>>({});
 
   // ── Presença pós-missa ──────────────────────────────────────────────────────
@@ -4827,7 +4889,7 @@ function EscalaDetail({
       (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
     );
 
-    const membrosComAtuacoes = membros.map((m) => ({
+    const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({
       ...m,
       atuacao_ids: membroAtuacoes[m.id] ?? [],
     }));
@@ -4941,6 +5003,7 @@ function EscalaDetail({
     // Toggle: se já aberto, fecha
     if (slotCandidatos[minId]) {
       setSlotCandidatos((prev) => { const n = { ...prev }; delete n[minId]; return n; });
+      setSlotExcluidos((prev) => { const n = { ...prev }; delete n[minId]; return n; });
       return;
     }
     setSlotLoading((prev) => ({ ...prev, [minId]: true }));
@@ -4958,7 +5021,7 @@ function EscalaDetail({
       (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
     );
 
-    const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+    const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
     const resultado = generateEscalaWithAlertas(
       { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
       [{
@@ -4990,6 +5053,7 @@ function EscalaDetail({
     const todos = insight ? [...insight.escolhidos, ...insight.top_candidatos.filter((c) => !c.escolhido)].slice(0, 7) : [];
 
     setSlotCandidatos((prev) => ({ ...prev, [minId]: todos }));
+    setSlotExcluidos((prev) => ({ ...prev, [minId]: insight?.excluidos ?? null }));
     setSlotLoading((prev) => ({ ...prev, [minId]: false }));
   }
 
@@ -5048,7 +5112,7 @@ function EscalaDetail({
       (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
     );
 
-    const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+    const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
     const funcoesPedidoDebug = funcoes.map((f) => ({
       ...f,
       relevancia:            f.ministerio?.relevancia,
@@ -5615,8 +5679,9 @@ function EscalaDetail({
                             {slotCandidatos[f.ministerio_id].length === 0 ? (
                               <p className="text-xs text-muted-foreground py-1">Nenhum candidato disponível para esta função.</p>
                             ) : (
-                              slotCandidatos[f.ministerio_id].map((c) => {
+                              slotCandidatos[f.ministerio_id].map((c, rankIdx) => {
                                 const jaAtrib = atribuicoes.some((a) => a.membro_id === c.membro_id && a.ministerio_id === f.ministerio_id);
+                                const rankLabel = `${rankIdx + 1}º`;
                                 return (
                                   <div
                                     key={c.membro_id}
@@ -5628,10 +5693,14 @@ function EscalaDetail({
                                   >
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0 w-5 text-right">{rankLabel}</span>
                                         {c.escolhido && <Star className="h-3 w-3 text-primary shrink-0" />}
                                         <span className="text-xs font-semibold truncate">{nomeExibicao(c.nome)}</span>
+                                        {c.serviu_solene_anterior && (
+                                          <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded px-1">rodízio</span>
+                                        )}
                                       </div>
-                                      <div className="flex items-center gap-2 mt-0.5">
+                                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                         <span className="text-[10px] text-muted-foreground">
                                           {c.dias_sem_servir >= 365 ? "Nunca serviu" : `${c.dias_sem_servir}d sem servir`}
                                         </span>
@@ -5640,12 +5709,39 @@ function EscalaDetail({
                                             · {c.participacoes_30d}× no mês
                                           </span>
                                         )}
+                                        {/* Campos extras para modo solenidade */}
+                                        {c.breakdown.modo === "solene_principal" && c.taxa_presenca_pct !== undefined && (
+                                          <span className="text-[10px] text-muted-foreground">
+                                            · presença {c.taxa_presenca_pct}%
+                                          </span>
+                                        )}
+                                        {c.breakdown.modo === "solene_principal" && c.formacao_participacoes !== undefined && c.formacao_participacoes > 0 && (
+                                          <span className="text-[10px] text-muted-foreground">
+                                            · {c.formacao_participacoes} formação(ões)
+                                          </span>
+                                        )}
+                                        {c.breakdown.modo === "solene_principal" && c.ultima_solenidade && (
+                                          <span className="text-[10px] text-muted-foreground">
+                                            · última sol. {c.ultima_solenidade}
+                                          </span>
+                                        )}
                                         {c.motivo_exclusao && (
                                           <span className="text-[10px] text-amber-600 dark:text-amber-400">
                                             · {c.motivo_exclusao}
                                           </span>
                                         )}
                                       </div>
+                                      {/* Breakdown detalhado em modo solenidade */}
+                                      {c.breakdown.modo === "solene_principal" && (
+                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                          <span className="text-[9px] text-muted-foreground/70">rot:{c.breakdown.rotacao_funcao}</span>
+                                          <span className="text-[9px] text-muted-foreground/70">exp:{c.breakdown.experiencia_funcao}</span>
+                                          <span className="text-[9px] text-muted-foreground/70">mérito:{c.breakdown.score_merito}</span>
+                                          <span className="text-[9px] text-muted-foreground/70">pres:{c.breakdown.taxa_presenca_score}</span>
+                                          <span className="text-[9px] text-muted-foreground/70">form:{c.breakdown.formacao_score}</span>
+                                          {c.breakdown.bonus_preferencial > 0 && <span className="text-[9px] text-green-600">+{c.breakdown.bonus_preferencial}pref</span>}
+                                        </div>
+                                      )}
                                     </div>
                                     {/* Mini score bar */}
                                     <div className="flex items-center gap-1.5 shrink-0">
@@ -5668,6 +5764,7 @@ function EscalaDetail({
                                               onAtribuir(c.membro_id, f.ministerio_id);
                                             }
                                             setSlotCandidatos((prev) => { const n = { ...prev }; delete n[f.ministerio_id]; return n; });
+                                            setSlotExcluidos((prev) => { const n = { ...prev }; delete n[f.ministerio_id]; return n; });
                                           }}
                                         >
                                           <UserPlus className="h-3 w-3 mr-0.5" /> Add
@@ -5678,6 +5775,29 @@ function EscalaDetail({
                                 );
                               })
                             )}
+                          {/* ── Excluídos antes do scoring ── */}
+                          {slotExcluidos[f.ministerio_id] && (() => {
+                            const ex = slotExcluidos[f.ministerio_id]!;
+                            const linhas: string[] = [];
+                            if (ex.sem_vinculo > 0)        linhas.push(`${ex.sem_vinculo} sem vínculo com a função`);
+                            if (ex.indisponibilidade > 0)   linhas.push(`${ex.indisponibilidade} com indisponibilidade`);
+                            if (ex.dia_semana > 0)          linhas.push(`${ex.dia_semana} com restrição de dia`);
+                            if (ex.funcao_nao_pode > 0)     linhas.push(`${ex.funcao_nao_pode} com restrição de função`);
+                            if (ex.atuacao > 0)             linhas.push(`${ex.atuacao} sem atuação exigida`);
+                            if (ex.ja_alocado > 0)          linhas.push(`${ex.ja_alocado} já alocados`);
+                            if (ex.solenidade_recente > 0)  linhas.push(`${ex.solenidade_recente} de-priorizados por rodízio`);
+                            if (linhas.length === 0) return null;
+                            return (
+                              <div className="mt-2 pt-1.5 border-t border-border/30">
+                                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">Excluídos antes do ranking</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {linhas.map((l) => (
+                                    <span key={l} className="text-[9px] bg-muted/60 text-muted-foreground rounded px-1.5 py-0.5">{l}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
                           </div>
                         </div>
                       )}

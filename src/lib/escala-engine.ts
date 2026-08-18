@@ -27,6 +27,10 @@ export type EscalaMembroInput = {
   sexo?: "M" | "F" | null;
   atuacao_ids?: string[];
   prioridade_escala?: string;
+  /** Taxa de presença nas convocações (0–1). Usada no scoring de solenidades. */
+  taxa_presenca?: number;
+  /** Formações com presença confirmada nos últimos 6 meses. Usada no scoring de solenidades. */
+  formacao_participacoes?: number;
 };
 
 export type EscalaFuncaoPedido = {
@@ -49,6 +53,8 @@ export type AssignmentHistoryEntry = {
   memberId: string;
   ministerioId: string;
   date?: string | null;
+  /** 'solene' | 'bispo' — preenchido pela trigger no DB. Permite rodízio exclusivo entre solenidades. */
+  tipoEvento?: string | null;
 };
 
 export type FuncaoRestricao = {
@@ -180,6 +186,8 @@ function _buildAndAllocate(
         sexo: (m.sexo === "M" || m.sexo === "F") ? m.sexo : null,
         atuacao_ids: m.atuacao_ids ?? [],
         prioridade_escala: m.prioridade_escala,
+        taxa_presenca: m.taxa_presenca,
+        formacao_participacoes: m.formacao_participacoes,
       };
     });
 
@@ -210,7 +218,12 @@ function _buildAndAllocate(
 
   const historicoRecente: HistoricoRecente[] = (options?.history ?? [])
     .filter((h) => h.date != null)
-    .map((h) => ({ membro_id: h.memberId, ministerio_id: h.ministerioId, data: h.date!.slice(0, 10) }));
+    .map((h) => ({
+      membro_id:    h.memberId,
+      ministerio_id: h.ministerioId,
+      data:         h.date!.slice(0, 10),
+      tipo_evento:  h.tipoEvento ?? undefined,
+    }));
 
   logDebug(`Histórico: ${historicoRecente.length} registros`, debug);
 
