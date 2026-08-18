@@ -396,7 +396,7 @@ function calcularScore(
 
   if (modoSolenePrincipal) {
     // ── Modo SOLENE_PRINCIPAL: mérito + rodízio ─────────────────────────────
-    // 1. Rodízio nesta função específica (35%) — dias desde última vez aqui
+    // 1. Rodízio nesta função específica (25%) — dias desde última vez aqui
     const histNaFuncao = histAnterior.filter((h) => h.ministerio_id === funcao.ministerio_id);
     const ultimaNaFuncao = histNaFuncao.length > 0
       ? histNaFuncao.reduce((max, h) => h.data > max ? h.data : max, histNaFuncao[0].data)
@@ -404,7 +404,7 @@ function calcularScore(
     const diasSemFuncao = ultimaNaFuncao ? dateDiffDays(ultimaNaFuncao, dataEvento) : 365;
     const rotacaoFuncao = Math.min(diasSemFuncao, CAP_DIAS_ROTACAO_FUNC) / CAP_DIAS_ROTACAO_FUNC * 100;
 
-    // 2. Experiência nesta função (30%) — mais vezes = mais qualificado
+    // 2. Experiência nesta função (20%) — mais vezes = mais qualificado
     const totalNaFuncao   = histNaFuncao.length;
     const maxNaFuncao     = stats.maxPorFuncao[funcao.ministerio_id] ?? 1;
     const experienciaFuncao = maxNaFuncao > 0 ? (totalNaFuncao / maxNaFuncao) * 100 : 0;
@@ -434,9 +434,9 @@ function calcularScore(
     breakdown.formacao_score     = Math.round(formacaoScore);
     breakdown.bonus_preferencial = Math.round(bonusPreferencial);
 
-    // No modo mérito, o rodízio da função específica já está embutido nos 25% de rotacaoFuncao.
-    // Penalidade semanal não se aplica — seleção por mérito.
-    // Sem cap em 100: bonusPreferencial e prioridadeBonus precisam superar membros de score próximo.
+    // Solenidade: sem penalidade (seleção por mérito puro) e sem cap em 100
+    // para que bonusPreferencial e prioridadeBonus sejam efetivos acima de scores base altos.
+    breakdown.penalidade = 0; // não aplicada — zera para não mislead o breakdown
     breakdown.total = Math.max(0, Math.round(raw + bonusPreferencial + prioridadeBonus));
 
   } else {
@@ -468,7 +468,7 @@ function calcularScore(
     breakdown.frequencia_historica = Math.round(frequenciaHistorica);
     breakdown.aleatoriedade        = Math.round(aleatoriedade);
 
-    breakdown.total = Math.max(0, Math.min(100, Math.round(raw - penalidade + prioridadeBonus)));
+    breakdown.total = Math.max(0, Math.round(raw - penalidade + prioridadeBonus));
   }
 
   return breakdown;
