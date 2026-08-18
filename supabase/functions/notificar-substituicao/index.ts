@@ -212,7 +212,7 @@ async function sendOne(resendKey: string, from: string, to: string, subject: str
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
-// acao = "vaga_disponivel" (padrão) | "aprovada" | "rejeitada"
+// acao = "vaga_disponivel" (padrão) | "aprovada" | "rejeitada" | "voluntario_rejeitado"
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -234,30 +234,36 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Valida que o chamador é interno (banco via pg_net com token de uso único).
-    // O token é gerado pela RPC SECURITY DEFINER, inserido em notificacao_tokens
-    // (expira em 5 min) e consumido aqui via DELETE — não pode ser reutilizado.
-    // Usamos X-One-Time-Token em vez de Authorization para evitar que o gateway
-    // do Supabase rejeite o UUID como JWT inválido (verify_jwt = false no config.toml).
-    const bearerToken = req.headers.get("X-One-Time-Token") ?? "";
-    if (!bearerToken) return json({ ok: false, error: "Unauthorized" }, 401);
-
-    const body = await req.json() as { substituicao_id: string; acao?: string };
-    const { substituicao_id, acao = "vaga_disponivel" } = body;
+    const body = await req.json() as { substituicao_id: string; acao?: string; substituto_id?: string };
+    const { substituicao_id, acao = "vaga_disponivel", substituto_id: bodySubstitutoId } = body;
     if (!substituicao_id) return json({ ok: false, error: "Missing field: substituicao_id" }, 400);
 
-    // Consome o token (DELETE atômico): se não existir, expirou ou não casa com
-    // o substituicao_id do body, retorna 0 linhas e rejeitamos com 401.
-    const { data: tokenRows } = await (admin as any)
-      .from("notificacao_tokens")
-      .delete()
-      .eq("token", bearerToken)
-      .eq("substituicao_id", substituicao_id)
-      .gt("expires_at", new Date().toISOString())
-      .select("token");
+    // Autenticação dupla:
+    // - vaga_disponivel: requer X-One-Time-Token (chamada interna via pg_net)
+    // - aprovada / rejeitada / voluntario_rejeitado: aceita JWT de usuário autenticado
+    const oneTimeToken = req.headers.get("X-One-Time-Token") ?? "";
+    const jwtToken     = (req.headers.get("Authorization") ?? "").replace("Bearer ", "");
 
-    if (!tokenRows || tokenRows.length === 0)
-      return json({ ok: false, error: "Unauthorized" }, 401);
+    const isTransactional = ["aprovada", "rejeitada", "voluntario_rejeitado"].includes(acao);
+
+    if (isTransactional) {
+      // Valida JWT — precisa de usuário autenticado com role de coordenação
+      if (!jwtToken) return json({ ok: false, error: "Unauthorized" }, 401);
+      const { data: { user }, error: authErr } = await admin.auth.getUser(jwtToken);
+      if (authErr || !user) return json({ ok: false, error: "Unauthorized" }, 401);
+    } else {
+      // vaga_disponivel: valida one-time token gerado pelo banco via pg_net
+      if (!oneTimeToken) return json({ ok: false, error: "Unauthorized" }, 401);
+      const { data: tokenRows } = await (admin as any)
+        .from("notificacao_tokens")
+        .delete()
+        .eq("token", oneTimeToken)
+        .eq("substituicao_id", substituicao_id)
+        .gt("expires_at", new Date().toISOString())
+        .select("token");
+      if (!tokenRows || tokenRows.length === 0)
+        return json({ ok: false, error: "Unauthorized" }, 401);
+    }
 
     // ── Carrega substituição completa ─────────────────────────────────────────
     const { data: subst, error: se } = await (admin as any)
@@ -296,8 +302,8 @@ Deno.serve(async (req) => {
     const ministerioNome = minRow?.nome ?? "—";
 
     // ── Ações de aprovação / rejeição ─────────────────────────────────────────
-    if (acao === "aprovada" || acao === "rejeitada") {
-      // Busca e-mail do solicitante
+    if (acao === "aprovada" || acao === "rejeitada" || acao === "voluntario_rejeitado") {
+      // Busca dados do solicitante
       const { data: authSolicitante } = await (admin as any).auth.admin.getUserById(solicitanteId);
       const emailSolicitante = authSolicitante?.user?.email ?? null;
       const nomeSolicitante  = (await (admin as any).from("membros").select("nome").eq("id", solicitanteId).maybeSingle())?.data?.nome ?? "Membro";
@@ -305,7 +311,7 @@ Deno.serve(async (req) => {
       let enviados = 0;
 
       if (acao === "aprovada") {
-        // E-mail ao solicitante (você foi substituído — confirmação)
+        // E-mail ao solicitante (sua substituição foi aprovada)
         if (emailSolicitante) {
           const ok = await sendOne(resendKey, emailFrom, emailSolicitante,
             `${paroquiaNome} — Sua substituição foi aprovada`,
@@ -326,8 +332,26 @@ Deno.serve(async (req) => {
             if (ok) enviados++;
           }
         }
+      } else if (acao === "voluntario_rejeitado") {
+        // Rejeição de voluntário: e-mail vai para o voluntário (substituto),
+        // não para o solicitante. O substituto_id vem no body pois o banco
+        // já limpou o campo ao voltar o status para 'solicitada'.
+        const rejeitadoId = bodySubstitutoId ?? substitutoId;
+        if (rejeitadoId) {
+          const { data: authRejeitado } = await (admin as any).auth.admin.getUserById(rejeitadoId);
+          const emailRejeitado = authRejeitado?.user?.email ?? null;
+          const { data: nomeRej } = await (admin as any).from("membros").select("nome").eq("id", rejeitadoId).maybeSingle();
+          const nomeRejeitado = nomeRej?.nome ?? "Membro";
+          if (emailRejeitado) {
+            const ok = await sendOne(resendKey, emailFrom, emailRejeitado,
+              `${paroquiaNome} — Candidatura à substituição não aprovada`,
+              emailRejeitada(nomeRejeitado, paroquiaNome, ministerioNome, escalaTitulo, escalaData,
+                subst.motivo_rejeicao ?? "", siteUrl));
+            if (ok) enviados++;
+          }
+        }
       } else {
-        // rejeitada — e-mail apenas ao solicitante
+        // rejeitada (solicitação inteira): e-mail ao solicitante
         if (emailSolicitante) {
           const ok = await sendOne(resendKey, emailFrom, emailSolicitante,
             `${paroquiaNome} — Substituição não aprovada`,

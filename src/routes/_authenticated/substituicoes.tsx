@@ -171,11 +171,20 @@ function AdminSubstituicoes() {
       if (!data?.success) throw new Error(data?.error ?? "Erro ao rejeitar");
       return data;
     },
-    onSuccess: (_data, { substId }) => {
+    onSuccess: (data, { substId }) => {
       qc.invalidateQueries({ queryKey: ["admin-substituicoes"] });
-      toast.success("Substituição rejeitada. Membro notificado.");
+      // acao retornada pelo banco: 'voluntario_rejeitado' (volta p/ solicitada)
+      // ou 'rejeitada' (encerra a solicitação)
+      const acao = data?.acao ?? "rejeitada";
+      const substituto_id = data?.substituto_id ?? null;
+      const msg = acao === "voluntario_rejeitado"
+        ? "Candidatura rejeitada. Substituição reaberta para novos voluntários."
+        : "Substituição rejeitada. Solicitante notificado.";
+      toast.success(msg);
       anyDb.functions
-        .invoke("notificar-substituicao", { body: { substituicao_id: substId, acao: "rejeitada" } })
+        .invoke("notificar-substituicao", {
+          body: { substituicao_id: substId, acao, substituto_id },
+        })
         .catch(() => {});
       setRejectId(null);
       setRejectMotivo("");

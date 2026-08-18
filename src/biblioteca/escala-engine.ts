@@ -175,7 +175,7 @@ const CAP_PARTICIPACOES_30D = 5;
 const PENALIDADE_MESMO_DIA    = 50;
 const PENALIDADE_DIA_ANTERIOR = 30;
 const PENALIDADE_DOIS_DIAS    = 15;
-const PENALIDADE_MESMA_SEMANA = 12; // 3–7 dias atrás: forte desestímulo a repetir na mesma semana
+const PENALIDADE_MESMA_SEMANA = 25; // 3–7 dias atrás (inclusive): evita repetição semanal
 
 // Termos litúrgicos universais para funções acessórias (não são específicos de nenhuma paróquia).
 // Usados apenas em getFuncoesAdicionais — nunca para decisões de alocação.
@@ -340,7 +340,8 @@ function calcularScore(
   const serviuHoje      = histMembro.some((h) => h.data === dataEvento);
   const serviuOntem     = histMembro.some((h) => h.data === ontem);
   const serviuAnteontem = histMembro.some((h) => h.data === anteontem);
-  const semanaAtras     = somarDias(dataEvento, -7);
+  // Janela de 8 dias para capturar o mesmo dia-da-semana (domingos são exatamente 7 dias entre si)
+  const semanaAtras     = somarDias(dataEvento, -8);
   const serviuNaSemana  = !serviuHoje && !serviuOntem && !serviuAnteontem &&
     histMembro.some((h) => h.data > semanaAtras && h.data < dataEvento);
   if (serviuHoje)            penalidade += PENALIDADE_MESMO_DIA;

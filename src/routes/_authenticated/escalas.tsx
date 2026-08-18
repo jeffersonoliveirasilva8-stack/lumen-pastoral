@@ -143,6 +143,8 @@ type Escala = {
   solene: boolean;
   tem_adoracao: boolean;
   tem_bispo: boolean;
+  modo_selecao: "equidade" | "merito";
+  todos_paramentados: boolean;
   token_publico: string;
   motor_gerado_em: string | null;
   published_at: string | null;
@@ -178,6 +180,8 @@ type EscalaForm = {
   solene: boolean;
   tem_adoracao: boolean;
   tem_bispo: boolean;
+  modo_selecao: "equidade" | "merito";
+  todos_paramentados: boolean;
 };
 
 const EMPTY_FORM: EscalaForm = {
@@ -192,6 +196,8 @@ const EMPTY_FORM: EscalaForm = {
   solene: false,
   tem_adoracao: false,
   tem_bispo: false,
+  modo_selecao: "equidade",
+  todos_paramentados: false,
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
@@ -256,12 +262,12 @@ function EscalasPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("escalas")
-        .select("id, titulo, data, hora_inicio, hora_fim, local, tipo, tipo_missa_id, status, observacoes, solene, tem_adoracao, tem_bispo, token_publico, motor_gerado_em, published_at, published_by, updated_at")
+        .select("id, titulo, data, hora_inicio, hora_fim, local, tipo, tipo_missa_id, status, observacoes, solene, tem_adoracao, tem_bispo, modo_selecao, todos_paramentados, token_publico, motor_gerado_em, published_at, published_by, updated_at")
         .eq("paroquia_id", profile!.paroquia_id!)
         .order("data")
         .order("hora_inicio");
       if (error) throw error;
-      return (data ?? []) as Escala[];
+      return (data ?? []) as unknown as Escala[];
     },
   });
 
@@ -633,6 +639,8 @@ function EscalasPage() {
         solene: form.solene,
         tem_adoracao: form.tem_adoracao,
         tem_bispo: form.tem_bispo,
+        modo_selecao: form.modo_selecao,
+        todos_paramentados: form.todos_paramentados,
       };
       const anyDb = supabase as any;
       if (editId) {
@@ -727,6 +735,7 @@ function EscalasPage() {
               config,
               solene: payload.solene,
               preferenciaisSolene,
+              modo_selecao: form.modo_selecao,
             }
           );
 
@@ -741,6 +750,42 @@ function EscalasPage() {
               }))
             );
             autoSugestoes = resultado.sugestoes.length;
+          }
+        }
+      }
+
+      // Cria evento de formação automático quando todos_paramentados = true
+      if (nova?.id && form.todos_paramentados) {
+        const dataHora = `${form.data}T${form.hora_inicio || "00:00"}:00`;
+        const { data: eventoInsert } = await anyDb
+          .from("formacoes_eventos")
+          .insert({
+            paroquia_id: profile!.paroquia_id!,
+            titulo: form.titulo.trim(),
+            tipo: "formacao",
+            data_inicio: dataHora,
+            observacoes: "Todos paramentados — confirmação de presença automática via escala.",
+            criado_por: profile!.id,
+          })
+          .select("id")
+          .single();
+
+        if (eventoInsert?.id) {
+          // Busca membros já inseridos nesta escala
+          const { data: emRows } = await anyDb
+            .from("escala_membros")
+            .select("membro_id")
+            .eq("escala_id", nova.id);
+
+          const membroIds = [...new Set((emRows ?? []).map((r: any) => r.membro_id as string))];
+          if (membroIds.length > 0) {
+            await anyDb.from("presencas_eventos").insert(
+              membroIds.map((mid) => ({
+                evento_id: eventoInsert.id,
+                membro_id: mid,
+                presente: null,
+              }))
+            );
           }
         }
       }
@@ -1324,6 +1369,7 @@ function EscalasPage() {
           tem_adoracao: escala.tem_adoracao,
           tem_bispo: escala.tem_bispo,
           preferenciaisSolene,
+          modo_selecao: escala.modo_selecao ?? "equidade",
         }
       );
 
@@ -2360,6 +2406,56 @@ function EscalaFormContent({
           placeholder="Informações adicionais..."
           rows={2}
         />
+      </div>
+
+      {/* Configurações de escalação */}
+      <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-3">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Configurações de escalação</p>
+
+        {/* Modo de seleção */}
+        <div className="space-y-1.5">
+          <Label className="text-sm">Critério de seleção dos membros</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, modo_selecao: "equidade" })}
+              className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                form.modo_selecao === "equidade"
+                  ? "border-primary bg-primary/10 text-primary font-semibold"
+                  : "border-border bg-background text-muted-foreground hover:border-primary/50"
+              }`}
+            >
+              <div className="font-semibold">⚖️ Equidade</div>
+              <div className="mt-0.5 opacity-80">Distribui oportunidades entre todos</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, modo_selecao: "merito" })}
+              className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                form.modo_selecao === "merito"
+                  ? "border-primary bg-primary/10 text-primary font-semibold"
+                  : "border-border bg-background text-muted-foreground hover:border-primary/50"
+              }`}
+            >
+              <div className="font-semibold">🏆 Mérito</div>
+              <div className="mt-0.5 opacity-80">Prioriza maior pontuação e presença</div>
+            </button>
+          </div>
+        </div>
+
+        {/* Todos paramentados */}
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.todos_paramentados}
+            onChange={(e) => setForm({ ...form, todos_paramentados: e.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 accent-primary"
+          />
+          <div>
+            <span className="text-sm font-medium">👘 Todos paramentados</span>
+            <p className="text-xs text-muted-foreground mt-0.5">Cria automaticamente um evento de formação com todos os escalados para confirmar presença</p>
+          </div>
+        </label>
       </div>
 
       <DialogFooter>
@@ -4255,6 +4351,8 @@ function EscalaDetail({
       solene: escala.solene,
       tem_adoracao: escala.tem_adoracao,
       tem_bispo: escala.tem_bispo,
+      modo_selecao: escala.modo_selecao ?? "equidade",
+      todos_paramentados: escala.todos_paramentados ?? false,
     });
   }, [editMode, escala]);
 
@@ -4739,6 +4837,7 @@ function EscalaDetail({
         tem_adoracao: escala.tem_adoracao,
         tem_bispo: escala.tem_bispo,
         preferenciaisSolene,
+        modo_selecao: (escala as any).modo_selecao ?? "equidade",
       }
     );
 
@@ -5225,6 +5324,16 @@ function EscalaDetail({
 
         {/* Group by categoria */}
         {(() => {
+          // Pré-computa ranking e convocações para os membros desta escala
+          const membrosSorted = [...membros].sort((x, y) => y.score - x.score);
+          const rankMap = new Map(membrosSorted.map((m, i) => [m.id, i + 1]));
+          const convocMap = new Map<string, number>();
+          for (const h of assignmentHistory) {
+            if (h.date && h.date < escala.data) {
+              convocMap.set(h.memberId, (convocMap.get(h.memberId) ?? 0) + 1);
+            }
+          }
+
           const grouped: { categoria: string | null; fs: typeof funcoes }[] = [];
           funcoes.forEach((f) => {
             const cat = f.ministerio.categoria ?? null;
@@ -5317,34 +5426,53 @@ function EscalaDetail({
                           st === "ausente"     ? { label: "Ausente",     cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400" } :
                           st === "recusado"    ? { label: "Recusou",     cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400" } :
                           null;
+                        const memScore = membros.find((m) => m.id === a.membro_id)?.score ?? 0;
+                        const memRank  = rankMap.get(a.membro_id) ?? membros.length;
+                        const memConvoc = convocMap.get(a.membro_id) ?? 0;
                         return (
-                          <div key={a.id} className="flex items-center justify-between pl-5 text-sm gap-2">
-                            <span className="truncate">{a.membro.nome}</span>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {badge && (
-                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
-                                  {badge.label}
-                                </span>
-                              )}
-                              <button
-                                className="text-muted-foreground hover:text-destructive"
-                                title="Remover desta escala"
-                                onClick={() => {
-                                  setNotificarVaga(true);
-                                  setAbrirVagaChecked(true);
-                                  setPenalidade("nenhuma");
-                                  setMotivoRemocao("");
-                                  setRemoverPendente({
-                                    atribId: a.id,
-                                    membroId: a.membro_id,
-                                    membroNome: a.membro.nome,
-                                    ministerioId: f.ministerio_id,
-                                    ministerioNome: f.ministerio.nome,
-                                  });
-                                }}
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
+                          <div key={a.id} className="pl-5 py-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-sm font-medium">{a.membro.nome}</span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {badge && (
+                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
+                                    {badge.label}
+                                  </span>
+                                )}
+                                <button
+                                  className="text-muted-foreground hover:text-destructive"
+                                  title="Remover desta escala"
+                                  onClick={() => {
+                                    setNotificarVaga(true);
+                                    setAbrirVagaChecked(true);
+                                    setPenalidade("nenhuma");
+                                    setMotivoRemocao("");
+                                    setRemoverPendente({
+                                      atribId: a.id,
+                                      membroId: a.membro_id,
+                                      membroNome: a.membro.nome,
+                                      ministerioId: f.ministerio_id,
+                                      ministerioNome: f.ministerio.nome,
+                                    });
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                            {/* Stats do membro */}
+                            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
+                              <span title="Pontuação acumulada">
+                                ⭐ {memScore}pts
+                              </span>
+                              <span className="text-border">·</span>
+                              <span title={`${memRank}º no ranking da paróquia`}>
+                                #{memRank}
+                              </span>
+                              <span className="text-border">·</span>
+                              <span title="Convocações nos últimos 6 meses">
+                                {memConvoc} convocações (6m)
+                              </span>
                             </div>
                           </div>
                         );

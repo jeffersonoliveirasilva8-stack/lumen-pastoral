@@ -506,7 +506,7 @@ function PortalMembroHome() {
                       <span>·</span>
                       <span>{format(evDate, "HH:mm")}</span>
                       <span>·</span>
-                      <span>+{ev.pontuacao} pts</span>
+                      <span className="text-violet-500/70">+{ev.pontuacao} pts ao participar</span>
                     </div>
                   </div>
                   {confirmado ? (
@@ -729,7 +729,7 @@ function PortalMembroHome() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{ev.titulo}</p>
                     <p className="text-xs text-muted-foreground">
-                      {format(parseISO(ev.data_inicio), "HH:mm")} · +{ev.pontuacao} pts
+                      {format(parseISO(ev.data_inicio), "HH:mm")} · +{ev.pontuacao} pts ao participar
                     </p>
                   </div>
                   <div className="shrink-0">

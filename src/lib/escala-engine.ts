@@ -84,6 +84,8 @@ type AllocOptions = {
   tem_bispo?: boolean;
   paramentacao_obrigatoria?: boolean;
   preferenciaisSolene?: PreferencialSolene[];
+  /** 'merito': prioriza score + taxa de presença (força modo solene_principal em todas as funções) */
+  modo_selecao?: "equidade" | "merito";
   debug?: boolean;
 };
 
@@ -179,12 +181,15 @@ function _buildAndAllocate(
       };
     });
 
+  const isMerito = options?.modo_selecao === "merito";
+
   const funcoesEngine: FuncaoNecessaria[] = funcoes.map((f) => ({
     ministerio_id:        f.ministerio_id,
     ministerio_nome:      f.ministerio.nome,
     quantidade:           f.quantidade,
     atuacoes_exigidas:    f.atuacoes_exigidas,
-    relevancia:           f.relevancia,
+    // No modo mérito, todas as funções usam scoring por mérito (solene_principal)
+    relevancia:           isMerito ? "principal" : f.relevancia,
     duplicidade_permitida: f.duplicidade_permitida,
     ordem_prioridade:     f.ordem_prioridade,
   }));
@@ -192,7 +197,8 @@ function _buildAndAllocate(
   const contexto: ContextoEscala = {
     data:                     evento.data,
     tipo:                     evento.tipo,
-    solene:                   options?.solene                   ?? false,
+    // No modo mérito, força solene=true para ativar scoring por mérito em todas as funções
+    solene:                   isMerito ? true : (options?.solene ?? false),
     tem_adoracao:             options?.tem_adoracao             ?? false,
     tem_bispo:                options?.tem_bispo                ?? false,
     paramentacao_obrigatoria: options?.paramentacao_obrigatoria ?? false,

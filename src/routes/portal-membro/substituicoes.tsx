@@ -152,6 +152,21 @@ function PortalMembroSubstituicoes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-substituicoes", membro!.id] });
       toast.success("Solicitação enviada para aprovação.");
+      // Notifica coordenador via WhatsApp
+      const esc = escalasDisponiveis.find((e) => e.escala_membro_id === selectedEscala);
+      if (esc) {
+        anyDb.functions.invoke("notificar-whatsapp", {
+          body: {
+            evento: "nova_substituicao",
+            dados: {
+              escala:     esc.escala_titulo,
+              ministerio: esc.ministerio_nome,
+              solicitante: membro?.nome ?? "Membro",
+              motivo:     motivo.trim() || "Não informado",
+            },
+          },
+        }).catch(() => {});
+      }
       setShowForm(false);
       setSelectedEscala("");
       setMotivo("");
@@ -181,9 +196,24 @@ function PortalMembroSubstituicoes() {
       if (!data?.success) throw new Error(data?.error ?? "Erro ao se voluntariar");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, substituicaoId) => {
       qc.invalidateQueries({ queryKey: ["pm-substituicoes", membro!.id] });
       toast.success("Você se voluntariou! Aguardando aprovação da coordenação.");
+      // Notifica coordenador via WhatsApp
+      const subst = abertasParaVoluntariar.find((s) => s.id === substituicaoId);
+      if (subst) {
+        anyDb.functions.invoke("notificar-whatsapp", {
+          body: {
+            evento: "novo_voluntario",
+            dados: {
+              escala:      subst.escala_titulo,
+              ministerio:  subst.ministerio_nome,
+              solicitante: subst.solicitante_nome,
+              voluntario:  membro?.nome ?? "Membro",
+            },
+          },
+        }).catch(() => {});
+      }
     },
     onError: (e: Error) => {
       const msg = e.message === "confirmacao_desativada"
@@ -192,6 +222,8 @@ function PortalMembroSubstituicoes() {
         ? "Você não pode se voluntariar para sua própria substituição."
         : e.message === "substituicao_nao_disponivel"
         ? "Esta substituição não está mais disponível."
+        : e.message === "ja_escalado_nesta_escala"
+        ? "Você já está escalado nesta celebração e não pode se voluntariar para substituir outro membro."
         : e.message;
       toast.error(msg);
     },
@@ -523,7 +555,7 @@ function SubstCard({
           </div>
         )}
 
-        {subst.status === "rejeitada" && subst.motivo_rejeicao && (
+        {subst.status === "rejeitada" && subst.motivo_rejeicao && isSolicitante && (
           <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
             Motivo: {subst.motivo_rejeicao}
           </p>

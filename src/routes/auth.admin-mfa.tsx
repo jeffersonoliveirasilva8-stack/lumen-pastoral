@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Loader2, ShieldCheck, Mail, RefreshCw } from "lucide-react";
+import { Loader2, ShieldCheck, Mail, RefreshCw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,6 +25,7 @@ function AdminMfaPage() {
   const [userEmail, setUserEmail] = useState("");
   const [userName, setUserName] = useState("");
   const [paroquiaNome, setParoquiaNome] = useState("Pastoral");
+  const [fallbackCode, setFallbackCode] = useState<string | null>(null);
   const processed = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -75,7 +76,7 @@ function AdminMfaPage() {
   async function sendCode(toEmail: string, toNome: string) {
     setLoading(true);
     try {
-      const { error } = await supabase.functions.invoke("send-email", {
+      const { data, error } = await supabase.functions.invoke("send-email", {
         body: {
           template: "mfa_admin_code",
           to:       toEmail || userEmail,
@@ -84,8 +85,23 @@ function AdminMfaPage() {
         },
       });
       if (error) {
-        toast.error("Erro ao enviar código. Tente novamente.");
+        // Tenta extrair mensagem de erro do corpo da resposta
+        let msg = "Erro ao enviar código. Tente novamente.";
+        try {
+          const body = typeof error.message === "string" ? JSON.parse(error.message) : error;
+          if (body?.error) msg = body.error;
+        } catch { /* usa msg padrão */ }
+        toast.error(msg);
         return;
+      }
+      if (data && !data.ok) {
+        toast.error(data.error ?? "Erro ao enviar código. Tente novamente.");
+        return;
+      }
+      // Fallback: e-mail falhou mas código foi gerado — exibe na tela
+      if (data?.fallback_code) {
+        setFallbackCode(data.fallback_code);
+        setCode(data.fallback_code);
       }
       setCooldown(RESEND_COOLDOWN);
     } catch {
@@ -191,6 +207,22 @@ function AdminMfaPage() {
             <strong className="text-foreground">{userEmail || "seu e-mail"}</strong>.
           </p>
         </div>
+
+        {/* Aviso de fallback quando e-mail não pôde ser enviado */}
+        {fallbackCode && (
+          <div className="mb-5 rounded-xl border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <div className="text-xs text-amber-800 dark:text-amber-200 space-y-1">
+                <p className="font-semibold">E-mail indisponível no momento</p>
+                <p>O serviço de e-mail está temporariamente suspenso. Seu código foi gerado e preenchido automaticamente abaixo.</p>
+              </div>
+            </div>
+            <div className="mt-3 text-center font-mono text-2xl font-bold tracking-[0.4em] text-amber-700 dark:text-amber-300">
+              {fallbackCode}
+            </div>
+          </div>
+        )}
 
         {/* Formulário */}
         <form onSubmit={handleVerify} className="space-y-4">

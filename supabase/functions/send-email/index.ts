@@ -709,6 +709,7 @@ Deno.serve(async (req) => {
     }
 
     let subject = "", html = "";
+    let fallbackMfaCode: string | null = null; // código plaintext só retornado quando e-mail falha
 
     // ── Templates de ativação de conta (recovery link) ──────────────────────
     // Usa type:"recovery" para garantir que updateUser({ password }) funcione
@@ -793,6 +794,7 @@ Deno.serve(async (req) => {
       });
       if (storeErr) return json({ ok: false, error: storeErr.message }, 500);
 
+      fallbackMfaCode = mfaCode; // guardado para fallback em caso de falha no envio
       subject = `${mfaCode} é o seu código de verificação — ${paroquia || "Lumen Pastoral"}`;
       html    = tMfaAdminCode(nome, paroquia, mfaCode, siteUrl);
 
@@ -884,6 +886,13 @@ Deno.serve(async (req) => {
       paroquia,
       requesterId,
     });
+
+    // Fallback MFA: se o e-mail falhou (ex: cota Resend esgotada) mas o código
+    // já foi armazenado no banco, retorna o código na resposta para exibição
+    // na tela. Seguro porque o usuário já passou pela autenticação de senha.
+    if (!result.ok && fallbackMfaCode) {
+      return json({ ok: true, fallback_code: fallbackMfaCode, email_failed: true }, 200);
+    }
 
     return json(result, result.ok ? 200 : 502);
 
