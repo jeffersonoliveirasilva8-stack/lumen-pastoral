@@ -2458,8 +2458,8 @@ function EscalaFormContent({
             className="h-4 w-4 rounded border-gray-300 accent-primary"
           />
           <div>
-            <span className="text-sm font-medium">📅 Considerar indisponibilidades</span>
-            <p className="text-xs text-muted-foreground mt-0.5">Bloqueia membros que registraram indisponibilidade para esta data específica</p>
+            <span className="text-sm font-medium">📅 Considerar indisponibilidades manuais</span>
+            <p className="text-xs text-muted-foreground mt-0.5">Bloqueia membros que registraram indisponibilidade para esta data específica. Restrições por dia da semana são sempre aplicadas.</p>
           </div>
         </label>
 
