@@ -612,8 +612,9 @@ export function alocarMembros(
       continue;
     }
 
-    const ehPrincipal       = (funcao.relevancia ?? "normal") === "principal";
-    const modoSolenePrincipal = ehSolene && ehPrincipal;
+    // modo_selecao='merito' ativa scoring solene para todas as funções,
+    // independente do campo relevancia do ministério.
+    const modoSolenePrincipal = ehSolene;
 
     const preferenciaisDaFuncao = new Set(
       preferenciaisEfetivos

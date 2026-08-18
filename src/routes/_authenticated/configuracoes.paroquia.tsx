@@ -144,6 +144,7 @@ type TipoMissa = {
   usa_baculifero: boolean;
   usa_mitrifero: boolean;
   prioridade_liturgica: number;
+  solene: boolean;
   ativo: boolean;
   ordem: number;
 };
@@ -1824,7 +1825,7 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("tipos_missa")
-        .select("id, nome, descricao, cor, icone, usa_turibulo, usa_naveta, usa_baculifero, usa_mitrifero, prioridade_liturgica, ativo, ordem")
+        .select("id, nome, descricao, cor, icone, usa_turibulo, usa_naveta, usa_baculifero, usa_mitrifero, prioridade_liturgica, solene, ativo, ordem")
         .eq("paroquia_id", paroquiaId)
         .order("ordem").order("nome");
       if (error) throw error;
@@ -1921,6 +1922,7 @@ function TiposMissaTab({ paroquiaId }: { paroquiaId: string }) {
                   </div>
                   {t.descricao && <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.descricao}</p>}
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {t.solene && <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 font-medium">✦ Solene</span>}
                     {t.usa_turibulo && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Turíbulo</span>}
                     {t.usa_naveta && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Naveta</span>}
                     {t.usa_baculifero && <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">Baculífero</span>}
@@ -2021,6 +2023,7 @@ function TipoMissaDialog({
   const [usaNaveta, setUsaNaveta] = useState(false);
   const [usaBaculifero, setUsaBaculifero] = useState(false);
   const [usaMitrifero, setUsaMitrifero] = useState(false);
+  const [ehSolene, setEhSolene] = useState(false);
   const [prioridade, setPrioridade] = useState(1);
 
   useEffect(() => {
@@ -2028,11 +2031,12 @@ function TipoMissaDialog({
       setNome(initial.nome); setDescricao(initial.descricao ?? ""); setCor(initial.cor);
       setIcone(initial.icone ?? ""); setUsaTuribulo(initial.usa_turibulo);
       setUsaNaveta(initial.usa_naveta); setUsaBaculifero(initial.usa_baculifero);
-      setUsaMitrifero(initial.usa_mitrifero); setPrioridade(initial.prioridade_liturgica);
+      setUsaMitrifero(initial.usa_mitrifero); setEhSolene(initial.solene ?? false);
+      setPrioridade(initial.prioridade_liturgica);
     } else {
       setNome(""); setDescricao(""); setCor(CORES[0]); setIcone("");
       setUsaTuribulo(false); setUsaNaveta(false); setUsaBaculifero(false);
-      setUsaMitrifero(false); setPrioridade(1);
+      setUsaMitrifero(false); setEhSolene(false); setPrioridade(1);
     }
   }, [initial, open]);
 
@@ -2091,6 +2095,7 @@ function TipoMissaDialog({
         nome: nome.trim(), descricao: descricao || null, cor, icone: icone || null,
         usa_turibulo: usaTuribulo, usa_naveta: usaNaveta,
         usa_baculifero: usaBaculifero, usa_mitrifero: usaMitrifero,
+        solene: ehSolene,
         prioridade_liturgica: prioridade, ativo: true,
       };
 
@@ -2192,6 +2197,17 @@ function TipoMissaDialog({
                 <Label>Prioridade litúrgica (1 = mais alta)</Label>
                 <Input type="number" min={1} max={10} value={prioridade}
                   onChange={(e) => setPrioridade(Math.max(1, Number(e.target.value)))} className="w-28" />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tipo de celebração</p>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label className="font-normal">Missa Solene</Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Ativa scoring por mérito (formação + presença + rodízio) ao gerar escalas</p>
+                </div>
+                <Switch checked={ehSolene} onCheckedChange={setEhSolene} />
               </div>
             </div>
 
@@ -2347,7 +2363,7 @@ function MissasTab({ paroquiaId }: { paroquiaId: string }) {
     queryFn: async () => {
       const { data } = await anyDb
         .from("tipos_missa")
-        .select("id, nome, descricao, cor, icone, usa_turibulo, usa_naveta, usa_baculifero, usa_mitrifero, prioridade_liturgica, ativo, ordem")
+        .select("id, nome, descricao, cor, icone, usa_turibulo, usa_naveta, usa_baculifero, usa_mitrifero, prioridade_liturgica, solene, ativo, ordem")
         .eq("paroquia_id", paroquiaId)
         .eq("ativo", true)
         .order("ordem");

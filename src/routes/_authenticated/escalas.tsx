@@ -579,17 +579,17 @@ function EscalasPage() {
     },
   });
 
-  const { data: tiposMissa = [] } = useQuery<{ id: string; nome: string; cor: string; icone: string | null }[]>({
+  const { data: tiposMissa = [] } = useQuery<{ id: string; nome: string; cor: string; icone: string | null; solene: boolean }[]>({
     queryKey: ["tipos_missa", profile?.paroquia_id],
     enabled: !!profile?.paroquia_id,
     queryFn: async () => {
       const { data } = await (supabase as any)
         .from("tipos_missa")
-        .select("id, nome, cor, icone")
+        .select("id, nome, cor, icone, solene")
         .eq("paroquia_id", profile!.paroquia_id!)
         .eq("ativo", true)
         .order("ordem");
-      return (data ?? []) as { id: string; nome: string; cor: string; icone: string | null }[];
+      return (data ?? []) as { id: string; nome: string; cor: string; icone: string | null; solene: boolean }[];
     },
   });
 
@@ -772,7 +772,7 @@ function EscalasPage() {
             bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
           };
 
-          const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+          const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
 
           const saveDia  = new Date(payload.data + "T12:00:00").getDay();
           const saveHora = (payload.hora_inicio ?? "").slice(0, 5);
@@ -2357,7 +2357,7 @@ function EscalaFormContent({
   onSave: () => void;
   onClose: () => void;
   comunidades: { id: string; nome: string }[];
-  tiposMissa: { id: string; nome: string; cor: string; icone: string | null }[];
+  tiposMissa: { id: string; nome: string; cor: string; icone: string | null; solene: boolean }[];
 }) {
   // Local: detect if it's a comunidade name or free text
   const comunidadeNomes = comunidades.map((c) => c.nome);
@@ -2411,7 +2411,14 @@ function EscalaFormContent({
           value={form.tipo_missa_id}
           onChange={(e) => {
             const val = e.target.value;
-            setForm({ ...form, tipo_missa_id: val, tipo: "tipo_missa" });
+            const tm = tiposMissa.find((t) => t.id === val);
+            const isSolene = tm?.solene ?? false;
+            setForm({
+              ...form,
+              tipo_missa_id: val,
+              tipo: "tipo_missa",
+              ...(isSolene ? { solene: true, modo_selecao: "merito" } : {}),
+            });
           }}
           className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-ring"
         >
@@ -4386,7 +4393,7 @@ function EscalaDetail({
   preferenciaisSolene?: { ministerio_id: string; membro_id: string }[];
   initialEditMode: boolean;
   comunidades: { id: string; nome: string }[];
-  tiposMissa: { id: string; nome: string; cor: string; icone: string | null }[];
+  tiposMissa: { id: string; nome: string; cor: string; icone: string | null; solene: boolean }[];
   isSaving: boolean;
   onSave: (form: EscalaForm, onSuccess: () => void) => void;
   onDelete: (e: Escala) => void;
@@ -4889,7 +4896,7 @@ function EscalaDetail({
       (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
     );
 
-    const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({
+    const membrosComAtuacoes = membros.map((m) => ({
       ...m,
       atuacao_ids: membroAtuacoes[m.id] ?? [],
     }));
@@ -5021,7 +5028,7 @@ function EscalaDetail({
       (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
     );
 
-    const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+    const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
     const resultado = generateEscalaWithAlertas(
       { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
       [{
@@ -5112,7 +5119,7 @@ function EscalaDetail({
       (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
     );
 
-    const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+    const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
     const funcoesPedidoDebug = funcoes.map((f) => ({
       ...f,
       relevancia:            f.ministerio?.relevancia,
