@@ -145,6 +145,7 @@ type Escala = {
   tem_bispo: boolean;
   modo_selecao: "equidade" | "merito";
   todos_paramentados: boolean;
+  ignorar_indisponibilidades: boolean;
   token_publico: string;
   motor_gerado_em: string | null;
   published_at: string | null;
@@ -182,6 +183,7 @@ type EscalaForm = {
   tem_bispo: boolean;
   modo_selecao: "equidade" | "merito";
   todos_paramentados: boolean;
+  ignorar_indisponibilidades: boolean;
 };
 
 const EMPTY_FORM: EscalaForm = {
@@ -198,6 +200,7 @@ const EMPTY_FORM: EscalaForm = {
   tem_bispo: false,
   modo_selecao: "equidade",
   todos_paramentados: false,
+  ignorar_indisponibilidades: false,
 };
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
@@ -262,7 +265,7 @@ function EscalasPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("escalas")
-        .select("id, titulo, data, hora_inicio, hora_fim, local, tipo, tipo_missa_id, status, observacoes, solene, tem_adoracao, tem_bispo, modo_selecao, todos_paramentados, token_publico, motor_gerado_em, published_at, published_by, updated_at")
+        .select("id, titulo, data, hora_inicio, hora_fim, local, tipo, tipo_missa_id, status, observacoes, solene, tem_adoracao, tem_bispo, modo_selecao, todos_paramentados, ignorar_indisponibilidades, token_publico, motor_gerado_em, published_at, published_by, updated_at")
         .eq("paroquia_id", profile!.paroquia_id!)
         .order("data")
         .order("hora_inicio");
@@ -641,6 +644,7 @@ function EscalasPage() {
         tem_bispo: form.tem_bispo,
         modo_selecao: form.modo_selecao,
         todos_paramentados: form.todos_paramentados,
+        ignorar_indisponibilidades: form.ignorar_indisponibilidades,
       };
       const anyDb = supabase as any;
       if (editId) {
@@ -736,6 +740,7 @@ function EscalasPage() {
               solene: payload.solene,
               preferenciaisSolene,
               modo_selecao: form.modo_selecao,
+              ignorar_indisponibilidades: form.ignorar_indisponibilidades,
             }
           );
 
@@ -1370,6 +1375,7 @@ function EscalasPage() {
           tem_bispo: escala.tem_bispo,
           preferenciaisSolene,
           modo_selecao: escala.modo_selecao ?? "equidade",
+          ignorar_indisponibilidades: escala.ignorar_indisponibilidades ?? false,
         }
       );
 
@@ -2442,6 +2448,20 @@ function EscalaFormContent({
             </button>
           </div>
         </div>
+
+        {/* Considerar indisponibilidades */}
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!form.ignorar_indisponibilidades}
+            onChange={(e) => setForm({ ...form, ignorar_indisponibilidades: !e.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 accent-primary"
+          />
+          <div>
+            <span className="text-sm font-medium">📅 Considerar indisponibilidades</span>
+            <p className="text-xs text-muted-foreground mt-0.5">Bloqueia membros que registraram indisponibilidade para esta data específica</p>
+          </div>
+        </label>
 
         {/* Todos paramentados */}
         <label className="flex items-center gap-3 cursor-pointer">
@@ -4353,6 +4373,7 @@ function EscalaDetail({
       tem_bispo: escala.tem_bispo,
       modo_selecao: escala.modo_selecao ?? "equidade",
       todos_paramentados: escala.todos_paramentados ?? false,
+      ignorar_indisponibilidades: escala.ignorar_indisponibilidades ?? false,
     });
   }, [editMode, escala]);
 
@@ -4837,7 +4858,8 @@ function EscalaDetail({
         tem_adoracao: escala.tem_adoracao,
         tem_bispo: escala.tem_bispo,
         preferenciaisSolene,
-        modo_selecao: (escala as any).modo_selecao ?? "equidade",
+        modo_selecao: escala.modo_selecao ?? "equidade",
+        ignorar_indisponibilidades: escala.ignorar_indisponibilidades ?? false,
       }
     );
 

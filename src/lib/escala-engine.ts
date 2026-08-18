@@ -86,6 +86,8 @@ type AllocOptions = {
   preferenciaisSolene?: PreferencialSolene[];
   /** 'merito': prioriza score + taxa de presença (força modo solene_principal em todas as funções) */
   modo_selecao?: "equidade" | "merito";
+  /** quando true, ignora indisponibilidades de data específica ao gerar (não recomendado por padrão) */
+  ignorar_indisponibilidades?: boolean;
   debug?: boolean;
 };
 
@@ -258,6 +260,7 @@ function _buildAndAllocate(
   const resultado = alocarMembros(
     funcoesEngine, membrosEngine, indisponibilidades, contexto,
     historicoRecente, config, options?.preferenciaisSolene ?? [], incompatMap,
+    options?.ignorar_indisponibilidades ?? false,
   );
 
   if (debug) {
