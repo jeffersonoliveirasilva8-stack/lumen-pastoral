@@ -792,7 +792,8 @@ function EscalasPage() {
             membroMinisterios,
             {
               history: assignmentHistory,
-              indisponibilidades: [...indisponibilidades, ...saveMissaRestricaoIndisp],
+              // Solenidades: ignora "missas que não consegue servir" — só indisponibilidades manuais bloqueiam.
+              indisponibilidades: [...indisponibilidades, ...(payload.solene ? [] : saveMissaRestricaoIndisp)],
               restricoes: funcaoRestricoes,
               incompatibilidades: membroIncompat,
               config,
@@ -1427,7 +1428,7 @@ function EscalasPage() {
         membroMinisterios,
         {
           history: assignmentHistory.filter((h) => h.date !== escala.data),
-          indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
+          indisponibilidades: [...indisponibilidades, ...(escala.solene ? [] : missaRestricaoIndisp)],
           restricoes: funcaoRestricoes,
           incompatibilidades: membroIncompat,
           config: engineConfig,
@@ -4919,7 +4920,7 @@ function EscalaDetail({
           membro_id: entry.membro_id,
           ministerio_id: entry.ministerio_id,
         })),
-        indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
+        indisponibilidades: [...indisponibilidades, ...(escala.solene ? [] : missaRestricaoIndisp)],
         restricoes: funcaoRestricoes,
         incompatibilidades: incompatibilidades,
         config,
@@ -5044,7 +5045,7 @@ function EscalaDetail({
       {
         history: assignmentHistory,
         existingAssignments: atribuicoes.map((a) => ({ membro_id: a.membro_id, ministerio_id: a.ministerio_id })),
-        indisponibilidades: [...indisponibilidades, ...missaRestricaoIndispSugerir],
+        indisponibilidades: [...indisponibilidades, ...(escala.solene ? [] : missaRestricaoIndispSugerir)],
         restricoes: funcaoRestricoes,
         incompatibilidades: incompatibilidades,
         config,
@@ -5133,7 +5134,7 @@ function EscalaDetail({
       membroMinisterios,
       {
         history: assignmentHistory,
-        indisponibilidades: [...indisponibilidades, ...missaRestricaoIndispDebug],
+        indisponibilidades: [...indisponibilidades, ...(escala.solene ? [] : missaRestricaoIndispDebug)],
         restricoes: funcaoRestricoes,
         config: configDebug,
         solene: escala.solene,

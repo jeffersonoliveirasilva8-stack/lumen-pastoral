@@ -436,7 +436,8 @@ function calcularScore(
 
     // No modo mérito, o rodízio da função específica já está embutido nos 25% de rotacaoFuncao.
     // Penalidade semanal não se aplica — seleção por mérito.
-    breakdown.total = Math.max(0, Math.min(100, Math.round(raw + bonusPreferencial + prioridadeBonus)));
+    // Sem cap em 100: bonusPreferencial e prioridadeBonus precisam superar membros de score próximo.
+    breakdown.total = Math.max(0, Math.round(raw + bonusPreferencial + prioridadeBonus));
 
   } else {
     // ── Modo COMUM: equilíbrio de oportunidades ─────────────────────────────
