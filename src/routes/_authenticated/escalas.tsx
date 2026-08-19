@@ -685,6 +685,31 @@ function EscalasPage() {
     },
   });
 
+  // Configuração de escalas da paróquia (rodizio_reset_em para corte de rodízio de solenidades)
+  const { data: configEscalas, refetch: refetchConfigEscalas } = useQuery<{ rodizio_reset_em: string | null } | null>({
+    queryKey: ["config-escalas-rodizio", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("paroquia_config_escalas")
+        .select("rodizio_reset_em")
+        .eq("paroquia_id", profile!.paroquia_id!)
+        .maybeSingle();
+      return data ?? null;
+    },
+  });
+
+  // Data de corte do rodízio de solenidades: max(2026-08-18, rodizio_reset_em)
+  const DATA_CORTE_RODIZIO_BASE = "2026-08-18";
+  const dataCorteRodizio = (() => {
+    const resetEm = configEscalas?.rodizio_reset_em
+      ? configEscalas.rodizio_reset_em.slice(0, 10)
+      : null;
+    if (!resetEm) return DATA_CORTE_RODIZIO_BASE;
+    return resetEm > DATA_CORTE_RODIZIO_BASE ? resetEm : DATA_CORTE_RODIZIO_BASE;
+  })();
+
   // ── Mutations ──────────────────────────────────────────────────────────────
 
   const saveMutation = useMutation({
@@ -801,6 +826,7 @@ function EscalasPage() {
               preferenciaisSolene,
               modo_selecao: form.modo_selecao,
               ignorar_indisponibilidades: form.ignorar_indisponibilidades,
+              data_corte_rodizio: dataCorteRodizio,
             }
           );
 
@@ -815,44 +841,6 @@ function EscalasPage() {
               }))
             );
             autoSugestoes = resultado.sugestoes.length;
-          }
-        }
-      }
-
-      // Cria evento de presença automático para solenidades (e também para todos_paramentados).
-      // Para solenidades: lista TODOS os membros ativos da pastoral em presencas_eventos,
-      // permitindo marcar presença de quem NÃO estava escalado.
-      const ehNovaEscalaSolene = nova?.id && (form.solene || form.todos_paramentados);
-      if (ehNovaEscalaSolene) {
-        const dataHora = `${form.data}T${form.hora_inicio || "00:00"}:00`;
-        const obsEvento = form.todos_paramentados
-          ? "Todos paramentados — confirmação de presença automática via escala."
-          : "Solenidade — registro de presença da celebração.";
-        const { data: eventoInsert } = await anyDb
-          .from("formacoes_eventos")
-          .insert({
-            paroquia_id: profile!.paroquia_id!,
-            titulo: form.titulo.trim(),
-            tipo: "formacao",
-            data_inicio: dataHora,
-            observacoes: obsEvento,
-            criado_por: profile!.id,
-          })
-          .select("id")
-          .single();
-
-        if (eventoInsert?.id) {
-          // Para solenidades: inclui TODOS os membros ativos (não só escalados),
-          // assim o coordenador pode marcar presença de quem apareceu sem estar na escala.
-          const todosMembrosIds = membrosEnriquecidos.map((m) => m.id);
-          if (todosMembrosIds.length > 0) {
-            await anyDb.from("presencas_eventos").insert(
-              todosMembrosIds.map((mid) => ({
-                evento_id: eventoInsert.id,
-                membro_id: mid,
-                presente: null,
-              }))
-            );
           }
         }
       }
@@ -1144,6 +1132,47 @@ function EscalasPage() {
       toast.success("Status da escala atualizado.");
 
       const escalaRef = escalas.find((e) => e.id === vars.id) ?? detailEscala;
+
+      // Ao publicar escala solene: cria evento de presença em formacoes_eventos (apenas uma vez).
+      if (vars.status === "publicada" && escalaRef && (escalaRef.solene || escalaRef.todos_paramentados)) {
+        // Verifica se já existe evento vinculado a esta escala
+        const { data: eventoExistente } = await (supabase as any)
+          .from("formacoes_eventos")
+          .select("id")
+          .eq("escala_id", vars.id)
+          .maybeSingle();
+        if (!eventoExistente) {
+          const dataHora = `${escalaRef.data}T${escalaRef.hora_inicio || "00:00"}:00`;
+          const obsEvento = escalaRef.todos_paramentados
+            ? "Todos paramentados — confirmação de presença automática via escala."
+            : "Solenidade — registro de presença da celebração.";
+          const { data: eventoInsert } = await (supabase as any)
+            .from("formacoes_eventos")
+            .insert({
+              paroquia_id: profile!.paroquia_id!,
+              titulo: escalaRef.titulo,
+              tipo: "formacao",
+              data_inicio: dataHora,
+              observacoes: obsEvento,
+              criado_por: profile!.id,
+              escala_id: vars.id,
+            })
+            .select("id")
+            .single();
+          if (eventoInsert?.id) {
+            const todosMembrosIds = membros.map((m: Membro) => m.id);
+            if (todosMembrosIds.length > 0) {
+              await (supabase as any).from("presencas_eventos").insert(
+                todosMembrosIds.map((mid: string) => ({
+                  evento_id: eventoInsert.id,
+                  membro_id: mid,
+                  presente: null,
+                }))
+              );
+            }
+          }
+        }
+      }
 
       // Ao publicar, envia e-mails a todos os membros já atribuídos
       // (in-app notifications são feitas pelo trigger _trigger_escala_publicada_membros)
@@ -1438,6 +1467,7 @@ function EscalasPage() {
           preferenciaisSolene,
           modo_selecao: escala.modo_selecao ?? "equidade",
           ignorar_indisponibilidades: escala.ignorar_indisponibilidades ?? false,
+          data_corte_rodizio: dataCorteRodizio,
         }
       );
 
@@ -4930,6 +4960,7 @@ function EscalaDetail({
         preferenciaisSolene,
         modo_selecao: escala.modo_selecao ?? "equidade",
         ignorar_indisponibilidades: escala.ignorar_indisponibilidades ?? false,
+        data_corte_rodizio: dataCorteRodizio,
       }
     );
 
@@ -5053,6 +5084,7 @@ function EscalaDetail({
         tem_adoracao: escala.tem_adoracao,
         tem_bispo: escala.tem_bispo,
         preferenciaisSolene: preferenciaisSolene ?? [],
+        data_corte_rodizio: dataCorteRodizio,
       }
     );
 
@@ -5141,6 +5173,7 @@ function EscalaDetail({
         tem_adoracao: escala.tem_adoracao,
         tem_bispo: escala.tem_bispo,
         preferenciaisSolene: preferenciaisSolene ?? [],
+        data_corte_rodizio: dataCorteRodizio,
         debug: true,
       },
     );

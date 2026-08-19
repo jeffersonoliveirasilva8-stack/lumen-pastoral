@@ -3729,8 +3729,10 @@ function PontuacaoConfigTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved
   const [saving, setSaving] = useState(false);
   const [reprocessLoading, setReprocessLoading] = useState(false);
   const [recalcLoading, setRecalcLoading] = useState(false);
+  const [resetRodizioOpen, setResetRodizioOpen] = useState(false);
+  const [resetRodizioLoading, setResetRodizioLoading] = useState(false);
 
-  const { data: configDb, isLoading } = useQuery({
+  const { data: configDb, isLoading, refetch: refetchConfig } = useQuery({
     queryKey: ["config-escalas-pont", paroquia.id],
     queryFn: async () => {
       const { data, error } = await anyDb
@@ -3907,6 +3909,85 @@ function PontuacaoConfigTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved
             Recalcular scores (soma)
           </Button>
         </div>
+      </Card>
+
+      {/* ── Rodízio de solenidades ─────────────────────────────────────── */}
+      <Card className="space-y-4">
+        <div>
+          <p className="text-sm font-medium">Rodízio de Solenidades</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Controla a data de corte para o rodízio de solenidades. Solenidades anteriores ao corte não influenciam quem pode servir na próxima.
+          </p>
+        </div>
+        {configDb?.rodizio_reset_em && (
+          <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 px-3 py-2.5">
+            <span className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5 text-xs font-bold select-none">✓</span>
+            <p className="text-xs text-emerald-700 dark:text-emerald-400">
+              Último reset em <strong>{new Date(configDb.rodizio_reset_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</strong>.
+              O rodízio considera apenas solenidades publicadas a partir dessa data (e de 18/08/2026, o que for maior).
+            </p>
+          </div>
+        )}
+        {!configDb?.rodizio_reset_em && (
+          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2.5">
+            <span className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 text-xs font-bold select-none">i</span>
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Nenhum reset manual foi realizado. O rodízio considera solenidades a partir de <strong>18/08/2026</strong> (data de corte padrão do sistema).
+              Solenidades anteriores a essa data não afetam a elegibilidade de nenhum membro.
+            </p>
+          </div>
+        )}
+        <AlertDialog open={resetRodizioOpen} onOpenChange={setResetRodizioOpen}>
+          <Button
+            variant="outline" size="sm" className="rounded-xl text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700"
+            disabled={resetRodizioLoading}
+            onClick={() => setResetRodizioOpen(true)}
+          >
+            {resetRodizioLoading
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
+            Zerar rodízio de solenidades
+          </Button>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Zerar rodízio de solenidades?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Após o reset, <strong>todos os membros voltam a ser elegíveis</strong> para a próxima solenidade, independentemente de terem servido recentemente.
+                <br /><br />
+                O histórico real de escalas e presenças <strong>não será apagado</strong> — apenas a lógica de rodízio passa a considerar somente solenidades publicadas a partir de agora.
+                <br /><br />
+                Esta ação ficará registrada no log de auditoria.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-amber-600 hover:bg-amber-700"
+                onClick={async () => {
+                  setResetRodizioLoading(true);
+                  try {
+                    const { data, error } = await anyDb.rpc("resetar_rodizio_solene", {
+                      p_paroquia_id: paroquia.id,
+                      p_motivo: "Reset manual pela coordenação via painel de configurações.",
+                    });
+                    if (error) throw error;
+                    if (!data?.success) throw new Error(data?.error);
+                    toast.success("Rodízio de solenidades zerado com sucesso.");
+                    refetchConfig();
+                    qc.invalidateQueries({ queryKey: ["config-escalas-rodizio", paroquia.id] });
+                  } catch (e: unknown) {
+                    toast.error("Erro ao zerar rodízio: " + (e as Error).message);
+                  } finally {
+                    setResetRodizioLoading(false);
+                    setResetRodizioOpen(false);
+                  }
+                }}
+              >
+                Sim, zerar rodízio
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </Card>
     </div>
   );

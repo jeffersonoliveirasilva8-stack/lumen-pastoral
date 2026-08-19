@@ -94,6 +94,8 @@ type AllocOptions = {
   modo_selecao?: "equidade" | "merito";
   /** quando true, ignora indisponibilidades de data específica ao gerar (não recomendado por padrão) */
   ignorar_indisponibilidades?: boolean;
+  /** Data de corte YYYY-MM-DD para rodízio de solenidades — solenidades anteriores são ignoradas */
+  data_corte_rodizio?: string;
   debug?: boolean;
 };
 
@@ -212,6 +214,7 @@ function _buildAndAllocate(
     tem_adoracao:             options?.tem_adoracao             ?? false,
     tem_bispo:                options?.tem_bispo                ?? false,
     paramentacao_obrigatoria: options?.paramentacao_obrigatoria ?? false,
+    data_corte_rodizio:       options?.data_corte_rodizio,
   };
 
   const config: ConfigParoquia = options?.config ?? { usa_tochas: false };

@@ -54,6 +54,8 @@ export type ContextoEscala = {
   tem_adoracao: boolean;
   tem_bispo: boolean;
   paramentacao_obrigatoria?: boolean;
+  /** Data de corte para rodízio de solenidades (YYYY-MM-DD). Solenidades anteriores a esta data são ignoradas. */
+  data_corte_rodizio?: string;
 };
 
 export type ConfigParoquia = {
@@ -642,19 +644,29 @@ export function alocarMembros(
 
     // Última solenidade da pastoral (qualquer função) — base para rodízio entre solenidades.
     // Usa tipo_evento='solene' para distinguir de escalas comuns.
+    // Respeita data_corte_rodizio: solenidades anteriores ao corte são ignoradas no rodízio.
     // Intencionalmente NÃO filtra por ministerio_id: quem serviu em qualquer função na última
     // solenidade entra em pool1b para ESTA função também, distribuindo oportunidades.
+    const dataCorteRodizio = contexto.data_corte_rodizio ?? null;
     const ultimaDataSolene = modoSolenePrincipal
       ? (historicoRecente
-          .filter((h) => h.tipo_evento === "solene" && h.data < contexto.data)
+          .filter((h) =>
+            h.tipo_evento === "solene" &&
+            h.data < contexto.data &&
+            (dataCorteRodizio === null || h.data >= dataCorteRodizio)
+          )
           .map((h) => h.data)
           .sort()
           .at(-1) ?? null)
       : null;
-    // Membros que serviram em QUALQUER função na última solenidade
+    // Membros que serviram em QUALQUER função na última solenidade (respeitando o corte)
     const serviramNaUltimaSolene = ultimaDataSolene
       ? new Set(historicoRecente
-          .filter((h) => h.data === ultimaDataSolene && h.tipo_evento === "solene")
+          .filter((h) =>
+            h.data === ultimaDataSolene &&
+            h.tipo_evento === "solene" &&
+            (dataCorteRodizio === null || h.data >= dataCorteRodizio)
+          )
           .map((h) => h.membro_id))
       : new Set<string>();
 
@@ -880,9 +892,14 @@ export function alocarMembros(
         }
       }
 
-      // Última solenidade do membro em QUALQUER função — igual ao critério do pool1b.
+      // Última solenidade do membro em QUALQUER função — igual ao critério do pool1b (respeita data_corte_rodizio).
       const ultimaSolene = historicoRecente
-        .filter((h) => h.membro_id === c.membro.id && h.tipo_evento === "solene" && h.data < contexto.data)
+        .filter((h) =>
+          h.membro_id === c.membro.id &&
+          h.tipo_evento === "solene" &&
+          h.data < contexto.data &&
+          (dataCorteRodizio === null || h.data >= dataCorteRodizio)
+        )
         .map((h) => h.data)
         .sort()
         .at(-1) ?? null;
