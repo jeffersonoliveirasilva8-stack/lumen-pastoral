@@ -81,10 +81,10 @@ function labelTipo(tipo: string) {
 }
 
 function RouteComponent() {
-  const { profile } = useAuth();
+  const { profile, roles } = useAuth();
   const qc = useQueryClient();
   const pid = profile?.paroquia_id;
-  const isAdmin = profile?.role && ["admin_paroquial", "super_admin", "coordenador"].includes(profile.role);
+  const isAdmin = roles.some((r) => ["admin_paroquial", "super_admin", "coordenador"].includes(r));
 
   const [mes, setMes] = useState(() => startOfMonth(new Date()));
   const [formOpen, setFormOpen] = useState(false);

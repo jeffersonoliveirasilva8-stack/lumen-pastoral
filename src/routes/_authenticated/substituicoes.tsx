@@ -35,15 +35,17 @@ type Substituicao = {
   motivo_rejeicao: string | null;
   aprovado_em: string | null;
   created_at: string;
-  escala_id: string;        // retornado pela migration 070
+  escala_id: string;
   escala_titulo: string;
   escala_data: string;
-  ministerio_id: string;    // retornado pela migration 070
+  ministerio_id: string;
   ministerio_nome: string;
   ministerio_cor: string;
   solicitante_nome: string;
   substituto_nome: string | null;
   aprovador_nome: string | null;
+  aberta_para_membros: boolean;
+  solene: boolean;
 };
 
 type Substituto = {
@@ -190,6 +192,28 @@ function AdminSubstituicoes() {
       setRejectMotivo("");
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+
+  const liberarVagaMutation = useMutation({
+    mutationFn: async (substId: string) => {
+      const { data, error } = await anyDb.rpc("coord_liberar_vaga_substituicao", {
+        p_substituicao_id: substId,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error ?? "Erro ao liberar vaga");
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-substituicoes"] });
+      toast.success("Vaga liberada para os membros do ministério.");
+    },
+    onError: (e: Error) => {
+      const msg = e.message === "sem_permissao"    ? "Sem permissão para liberar vagas."
+                : e.message === "nao_encontrada"   ? "Substituição não encontrada."
+                : e.message === "status_invalido"  ? "Esta substituição não pode ser modificada."
+                : "Erro ao liberar vaga.";
+      toast.error(msg);
+    },
   });
 
   const filtered = substituicoes.filter((s) => {
@@ -362,11 +386,13 @@ function AdminSubstituicoes() {
               onAprovar={() => aprovarMutation.mutate(s.id)}
               onRejeitar={() => setRejectId(s.id)}
               onReenviar={() => reenviarMutation.mutate(s.id)}
+              onLiberarVaga={() => liberarVagaMutation.mutate(s.id)}
               onBuscarSubstitutos={(escalaId, ministerioId) =>
                 setSubstitutosModal({ substId: s.id, escalaId, ministerioId })
               }
               saving={aprovarMutation.isPending || rejeitarMutation.isPending}
               reenviando={reenviarMutation.isPending}
+              liberando={liberarVagaMutation.isPending}
             />
           ))}
         </div>
@@ -466,15 +492,17 @@ function AdminSubstituicoes() {
 // ── SubstAdminCard ────────────────────────────────────────────
 
 function SubstAdminCard({
-  subst, onAprovar, onRejeitar, onReenviar, onBuscarSubstitutos, saving, reenviando,
+  subst, onAprovar, onRejeitar, onReenviar, onLiberarVaga, onBuscarSubstitutos, saving, reenviando, liberando,
 }: {
   subst: Substituicao;
   onAprovar: () => void;
   onRejeitar: () => void;
   onReenviar: () => void;
+  onLiberarVaga: () => void;
   onBuscarSubstitutos: (escalaId: string, ministerioId: string) => void;
   saving: boolean;
   reenviando: boolean;
+  liberando: boolean;
 }) {
   const [expanded, setExpanded] = useState(subst.status === "com_voluntario");
   const dateObj = new Date(subst.escala_data + "T12:00:00");
@@ -573,9 +601,43 @@ function SubstAdminCard({
             </div>
           )}
 
+          {/* Banner: solenidade aguardando coord */}
+          {subst.solene && subst.status === "solicitada" && !subst.aberta_para_membros && (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Solenidade — vaga aguardando coordenação</p>
+                <p className="text-[11px] text-amber-600/70 dark:text-amber-400/70 mt-0.5">
+                  Os membros ainda não foram notificados. Libere a vaga manualmente quando estiver pronto.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Banner: solenidade aberta para membros */}
+          {subst.solene && subst.status === "solicitada" && subst.aberta_para_membros && (
+            <p className="text-[11px] text-green-700 dark:text-green-400 flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" />
+              Vaga liberada — membros elegíveis foram notificados.
+            </p>
+          )}
+
           {/* Ações */}
           {canAct && (
             <div className="flex flex-wrap gap-2 pt-1">
+              {/* Liberar vaga para membros (apenas solenidades não abertas) */}
+              {subst.solene && subst.status === "solicitada" && !subst.aberta_para_membros && (
+                <Button
+                  size="sm"
+                  className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+                  disabled={liberando}
+                  onClick={onLiberarVaga}
+                  title="Notifica os membros elegíveis do ministério sobre esta vaga"
+                >
+                  {liberando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Users className="h-3.5 w-3.5" />}
+                  Liberar vaga para membros
+                </Button>
+              )}
               {subst.status === "com_voluntario" && (
                 <Button
                   size="sm"

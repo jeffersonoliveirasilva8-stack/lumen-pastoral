@@ -70,6 +70,16 @@ function buildMessage(evento: string, dados: Record<string, string>): string {
         `🕐 ${hora}`
       );
 
+    case "recusa_escala":
+      return (
+        `🚫 *Membro recusou a escala*\n` +
+        `📋 Escala: ${dados.escala ?? "—"}\n` +
+        `⛪ Função: ${dados.ministerio ?? "—"}\n` +
+        `👤 Membro: ${dados.membro ?? "—"}\n` +
+        `💬 Motivo: ${dados.motivo ?? "Não informado"}\n` +
+        `🕐 ${hora} — Acesse o painel para gerenciar a substituição.`
+      );
+
     case "teste":
       return `✅ *Lumen Pastoral*\nNotificações WhatsApp ativadas com sucesso! 🎉\n🕐 ${hora}`;
 

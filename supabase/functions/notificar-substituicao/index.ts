@@ -211,8 +211,54 @@ async function sendOne(resendKey: string, from: string, to: string, subject: str
   return res.ok;
 }
 
+function emailRecusaCoord(
+  nomeCoord: string, paroquia: string, nomeMembro: string,
+  ministerioNome: string, escalaTitulo: string, escalaData: string,
+  motivo: string, siteUrl: string,
+): string {
+  const sc = htmlSafe(nomeCoord); const sp = htmlSafe(paroquia);
+  const sm = htmlSafe(nomeMembro); const sf = htmlSafe(ministerioNome);
+  const st = htmlSafe(escalaTitulo); const sd = fmtData(escalaData);
+  const smot = htmlSafe(motivo || "Não informado");
+  const url = `${siteUrl}/substituicoes`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<title>Recusa de escala</title>
+<style>body{margin:0;padding:0;background:#f0efe9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#333}
+.wrap{max-width:560px;margin:32px auto;padding:0 12px 40px}.card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.hd{background:#1a1a2e;padding:24px 32px 20px;text-align:center}.hd-par{font-size:20px;font-weight:700;color:#f5c842;letter-spacing:-.3px;margin:0;line-height:1.25}
+.hd-sub{font-size:11px;color:rgba(255,255,255,.5);margin:5px 0 0;letter-spacing:.12em;text-transform:uppercase}
+.bd{padding:32px 36px}h1{font-size:20px;font-weight:700;color:#111;margin:0 0 16px;line-height:1.3}
+p{font-size:15px;color:#555;line-height:1.7;margin:0 0 16px}.hi{color:#111;font-weight:600}
+.bw{text-align:center;margin:26px 0}a.btn{display:inline-block;background:#1a1a2e;color:#fff!important;text-decoration:none!important;font-weight:600;font-size:15px;padding:13px 32px;border-radius:8px}
+table{width:100%;border-collapse:collapse;margin:16px 0}td{padding:6px 0;font-size:13px}
+.lb{color:#888;width:100px}.vl{font-weight:600;color:#111}
+.mot{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;font-size:13px;color:#7f1d1d;margin:16px 0}
+.badge{display:inline-block;background:#dc2626;color:#fff;font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;margin-bottom:14px}
+.ft{text-align:center;padding:16px 12px 8px;font-size:11.5px;color:#aaa;line-height:1.8}
+@media only screen and (max-width:540px){.bd{padding:22px 20px!important}.hd{padding:20px!important}}</style>
+</head><body><div class="wrap"><div class="card">
+<div class="hd"><p class="hd-par">${sp}</p><p class="hd-sub">Coordena&ccedil;&atilde;o &middot; Lumen Pastoral</p></div>
+<div class="bd"><span class="badge">&#9888; Recusa de escala</span>
+<h1>Membro recusou a escala</h1>
+<p>Ol&aacute;, <span class="hi">${sc}</span>. Um membro recusou a participa&ccedil;&atilde;o em uma escala e uma substitui&ccedil;&atilde;o foi aberta.</p>
+<table>
+<tr><td class="lb">Membro</td><td class="vl">${sm}</td></tr>
+<tr><td class="lb">Escala</td><td class="vl">${st}</td></tr>
+<tr><td class="lb">Data</td><td class="vl">${sd}</td></tr>
+<tr><td class="lb">Fun&ccedil;&atilde;o</td><td class="vl">${sf}</td></tr>
+</table>
+<p style="font-size:13px;color:#555;font-weight:600">Motivo informado pelo membro:</p>
+<div class="mot">${smot}</div>
+<p style="font-size:14px;color:#555">A vaga est&aacute; aguardando gerenciamento pela coordena&ccedil;&atilde;o. Acesse o painel para escolher um substituto ou liberar a vaga para os membros.</p>
+<div class="bw"><a href="${url}" class="btn">Gerenciar substitui&ccedil;&atilde;o &rarr;</a></div>
+</div></div>
+<div class="ft">${sp} &mdash; Lumen Pastoral<br/>E-mail autom&aacute;tico &mdash; n&atilde;o responda.</div>
+</div></body></html>`;
+}
+
 // ─── Handler ─────────────────────────────────────────────────────────────────
-// acao = "vaga_disponivel" (padrão) | "aprovada" | "rejeitada" | "voluntario_rejeitado"
+// acao = "vaga_disponivel" (padrão) | "aprovada" | "rejeitada" | "voluntario_rejeitado" | "recusa_coord"
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -234,8 +280,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const body = await req.json() as { substituicao_id: string; acao?: string; substituto_id?: string };
-    const { substituicao_id, acao = "vaga_disponivel", substituto_id: bodySubstitutoId } = body;
+    const body = await req.json() as { substituicao_id: string; acao?: string; substituto_id?: string; coord_id?: string };
+    const { substituicao_id, acao = "vaga_disponivel", substituto_id: bodySubstitutoId, coord_id: bodyCoordId } = body;
     if (!substituicao_id) return json({ ok: false, error: "Missing field: substituicao_id" }, 400);
 
     // Autenticação dupla:
@@ -244,7 +290,7 @@ Deno.serve(async (req) => {
     const oneTimeToken = req.headers.get("X-One-Time-Token") ?? "";
     const jwtToken     = (req.headers.get("Authorization") ?? "").replace("Bearer ", "");
 
-    const isTransactional = ["aprovada", "rejeitada", "voluntario_rejeitado"].includes(acao);
+    const isTransactional = ["aprovada", "rejeitada", "voluntario_rejeitado", "recusa_coord"].includes(acao);
 
     if (isTransactional) {
       // Valida JWT — precisa de usuário autenticado com role de coordenação
@@ -361,6 +407,50 @@ Deno.serve(async (req) => {
         }
       }
 
+      return json({ ok: true, acao, enviados });
+    }
+
+    // ── Ação: recusa_coord — e-mail para coordenadores sobre recusa de solenidade ──
+    if (acao === "recusa_coord") {
+      // Busca todos os admins/coordenadores da paróquia
+      const { data: coordRows } = await (admin as any)
+        .from("user_roles")
+        .select("user_id, membros!user_id(id, nome)")
+        .eq("paroquia_id", paroquiaId)
+        .in("role", ["admin_paroquial", "coordenador"]);
+
+      const { data: motRec } = await (admin as any)
+        .from("substituicoes")
+        .select("motivo_solicitacao")
+        .eq("id", substituicao_id)
+        .maybeSingle();
+      const motivoRecusa = motRec?.motivo_solicitacao ?? "";
+
+      // Nome do membro que recusou
+      const { data: solicitanteRow } = await (admin as any)
+        .from("membros")
+        .select("nome")
+        .eq("id", subst.solicitante_id)
+        .maybeSingle();
+      const nomeSolicitante = solicitanteRow?.nome ?? "Membro";
+
+      let enviados = 0;
+      for (let i = 0; i < (coordRows ?? []).length; i++) {
+        const cr = (coordRows ?? [])[i];
+        const coordId = cr.user_id;
+        const coordNome = cr.membros?.nome ?? "Coordenação";
+        const { data: authCoord } = await (admin as any).auth.admin.getUserById(coordId);
+        const emailCoord = authCoord?.user?.email ?? null;
+        if (!emailCoord) continue;
+        if (i > 0) await sleep(DELAY_MS);
+        const ok = await sendOne(
+          resendKey, emailFrom, emailCoord,
+          `${paroquiaNome} — Recusa de escala: ${ministerioNome}`,
+          emailRecusaCoord(coordNome, paroquiaNome, nomeSolicitante, ministerioNome,
+            escalaTitulo, escalaData, motivoRecusa, siteUrl),
+        );
+        if (ok) enviados++;
+      }
       return json({ ok: true, acao, enviados });
     }
 

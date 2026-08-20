@@ -1142,7 +1142,16 @@ function EscalasPage() {
           .eq("escala_id", vars.id)
           .maybeSingle();
         if (!eventoExistente) {
-          const dataHora = `${escalaRef.data}T${escalaRef.hora_inicio || "00:00"}:00`;
+          // Evento de sacristia começa 1 hora antes da celebração
+          let horaEvento = escalaRef.hora_inicio || "00:00";
+          if (escalaRef.hora_inicio) {
+            const [hStr, mStr] = escalaRef.hora_inicio.split(":");
+            const totalMin = parseInt(hStr, 10) * 60 + parseInt(mStr, 10) - 60;
+            const hEv = Math.max(0, Math.floor(totalMin / 60));
+            const mEv = ((totalMin % 60) + 60) % 60;
+            horaEvento = `${String(hEv).padStart(2, "0")}:${String(mEv).padStart(2, "0")}`;
+          }
+          const dataHora = `${escalaRef.data}T${horaEvento}:00`;
           const obsEvento = escalaRef.todos_paramentados
             ? "Todos paramentados — confirmação de presença automática via escala."
             : "Solenidade — registro de presença da celebração.";
@@ -4449,6 +4458,16 @@ function EscalaDetail({
   const [penalidade, setPenalidade] = useState<"nenhuma" | "justificou" | "faltou">("nenhuma");
   const [notificarVaga, setNotificarVaga] = useState(true);
   const [confirmarCancelamento, setConfirmarCancelamento] = useState(false);
+
+  // Data de corte do rodízio: max(2026-08-18, rodizio_reset_em)
+  const DATA_CORTE_RODIZIO_BASE = "2026-08-18";
+  const dataCorteRodizio = (() => {
+    const resetEm = (paroquiaConfig as any)?.rodizio_reset_em
+      ? String((paroquiaConfig as any).rodizio_reset_em).slice(0, 10)
+      : null;
+    if (!resetEm) return DATA_CORTE_RODIZIO_BASE;
+    return resetEm > DATA_CORTE_RODIZIO_BASE ? resetEm : DATA_CORTE_RODIZIO_BASE;
+  })();
   const [membroBuscaOpen, setMembroBuscaOpen] = useState<Record<string, boolean>>({});
   const [removidosOpen, setRemovidosOpen] = useState<Record<string, boolean>>({});
 
@@ -4722,6 +4741,15 @@ function EscalaDetail({
 
   const marcarPresencasMutation = useMutation({
     mutationFn: async () => {
+      // Bloqueia confirmação de presença para celebrações futuras
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const dataEscala = new Date(escala.data + "T00:00:00");
+      if (dataEscala > hoje) {
+        throw new Error(
+          `Esta celebração ainda não aconteceu (${escala.data}). Presenças só podem ser registradas após a data da celebração.`
+        );
+      }
       const updates = atribuicoes.map((a) => ({
         id: a.id,
         status: presencaMap[a.id] ?? "pendente",
@@ -6179,15 +6207,30 @@ function EscalaDetail({
                 );
               })}
               <div className="pt-3 border-t border-border mt-2">
-                <Button
-                  size="sm"
-                  className="w-full"
-                  disabled={marcarPresencasMutation.isPending}
-                  onClick={() => marcarPresencasMutation.mutate()}
-                >
-                  {marcarPresencasMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-                  Salvar presenças
-                </Button>
+                {(() => {
+                  const hoje = new Date(); hoje.setHours(0,0,0,0);
+                  const dataEsc = new Date(escala.data + "T00:00:00");
+                  const ehFutura = dataEsc > hoje;
+                  return (
+                    <>
+                      {ehFutura && (
+                        <p className="text-xs text-amber-600 mb-2 text-center">
+                          Celebração ainda não aconteceu — presenças não geram pontos até {escala.data}.
+                        </p>
+                      )}
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={marcarPresencasMutation.isPending || ehFutura}
+                        title={ehFutura ? "Aguarde a data da celebração para registrar presenças" : undefined}
+                        onClick={() => marcarPresencasMutation.mutate()}
+                      >
+                        {marcarPresencasMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+                        Salvar presenças
+                      </Button>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}

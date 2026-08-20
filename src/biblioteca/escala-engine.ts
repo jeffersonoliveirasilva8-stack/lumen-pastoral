@@ -366,14 +366,24 @@ function calcularScore(
   else if (serviuAnteontem)  penalidade += PENALIDADE_DOIS_DIAS;
   else if (serviuNaSemana)   penalidade += PENALIDADE_MESMA_SEMANA;
 
-  // Bonus prioridade_escala (ambos os modos)
-  // Apenas "alta" e "media" são tiers genéricos reconhecidos — sem dependência de nomes de cargo.
+  // Penalidade progressiva de recência em modo COMUM (equidade).
+  // Cobre a janela 9-30 dias, criando uma ponte suave entre a penalidade semanal
+  // (25 pts ao dia 8) e a ausência de penalidade após 30 dias.
+  // Sem isso, membros que serviram há 9-30 dias competiam sem penalidade contra
+  // membros que estavam há mais tempo sem servir, causando monopolização.
+  if (!modoSolenePrincipal && diasSemServir > 8 && diasSemServir <= 30) {
+    // Decai linearmente: 25 pts no dia 9 → ~0 pts no dia 30
+    penalidade += Math.round(PENALIDADE_MESMA_SEMANA * (30 - diasSemServir) / 22);
+  }
+
+  // Bônus de prioridade_escala: aplicado APENAS em modo SOLENE/PRINCIPAL (seleção por mérito).
+  // Em modo COMUM (equidade), todos os membros têm oportunidade igual independente de cargo.
+  // Incluí-lo em equidade criava monopolização sistemática pelos membros de prioridade "alta".
   let prioridadeBonus = 0;
-  const prio = membro.prioridade_escala;
-  if (prio === "alta") {
-    prioridadeBonus = config?.prioridade_bonus_alto ?? 15;
-  } else if (prio === "media") {
-    prioridadeBonus = config?.prioridade_bonus_medio ?? 8;
+  if (modoSolenePrincipal) {
+    const prio = membro.prioridade_escala;
+    if (prio === "alta") prioridadeBonus = config?.prioridade_bonus_alto ?? 15;
+    else if (prio === "media") prioridadeBonus = config?.prioridade_bonus_medio ?? 8;
   }
 
   const breakdown: ScoreBreakdown = {
@@ -461,8 +471,12 @@ function calcularScore(
     // 20% permite que membros próximos no ranking alternem sem comprometer a equidade.
     const aleatoriedade = Math.random() * 100;
 
+    // Pesos equidade: 35% recência 30d + 30% tempo sem servir + 10% ranking inverso +
+    // 10% frequência histórica (redistribuição longo prazo) + 15% aleatoriedade (rotação real).
+    // Frequência histórica aumentada de 5→10% para penalizar quem serve muito no total.
+    // Aleatoriedade reduzida de 20→15% pois a penalidade progressiva já garante rotação.
     raw = 0.35 * participacaoRecente + 0.30 * tempoSemServir + 0.10 * rankingBonus +
-          0.05 * frequenciaHistorica + 0.20 * aleatoriedade;
+          0.10 * frequenciaHistorica + 0.15 * aleatoriedade;
 
     breakdown.participacao_recente = Math.round(participacaoRecente);
     breakdown.tempo_sem_servir     = Math.round(tempoSemServir);

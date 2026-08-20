@@ -474,6 +474,24 @@ function PortalMembroEscalas() {
         });
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error ?? "Erro ao registrar recusa");
+        // Notifica coordenação por e-mail + WhatsApp se for solenidade
+        if (data?.solene && data?.substituicao_id) {
+          const substId = data.substituicao_id;
+          anyDb.functions.invoke("notificar-substituicao", {
+            body: { substituicao_id: substId, acao: "recusa_coord" },
+          }).catch(() => {});
+          anyDb.functions.invoke("notificar-whatsapp", {
+            body: {
+              evento: "recusa_escala",
+              dados: {
+                escala: args.escala?.titulo ?? "",
+                ministerio: args.ministerioNome ?? "",
+                membro: membro?.nome ?? "",
+                motivo: args.justificativa ?? "",
+              },
+            },
+          }).catch(() => {});
+        }
       } else {
         const { error } = await anyDb
           .from("escala_membros")
