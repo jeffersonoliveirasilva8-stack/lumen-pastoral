@@ -217,6 +217,7 @@ type FuncaoPreview = {
   nome: string;
   cor: string;
   categoria?: string | null;
+  ordem?: number | null;
   quantidade: number;
   membros: { id: string; nome: string; status: string }[];
 };
@@ -1619,7 +1620,7 @@ function EscalasPage() {
       const [funcRes, membRes] = await Promise.all([
         (supabase as any)
           .from("escala_funcoes")
-          .select("escala_id, quantidade, ministerio_id, ministerios(id, nome, cor, categoria)")
+          .select("escala_id, quantidade, ministerio_id, ministerios(id, nome, cor, categoria, ordem)")
           .in("escala_id", escalaIds),
         (supabase as any)
           .from("escala_membros")
@@ -1636,6 +1637,7 @@ function EscalasPage() {
           nome: f.ministerios?.nome ?? "—",
           cor: f.ministerios?.cor ?? "#888",
           categoria: f.ministerios?.categoria ?? null,
+          ordem: f.ministerios?.ordem ?? null,
           quantidade: f.quantidade,
           membros: [],
         });
@@ -1875,16 +1877,18 @@ function EscalasPage() {
         doc.text("Nenhuma funcao definida para esta escala.", W / 2, y + 6.5, { align: "center" });
         y += 10;
       } else {
-        // Group by categoria
+        // Group by categoria, sorted by ordem within each group
         const groups: { cat: string | null; funcoes: typeof funcoes }[] = [];
         funcoes.forEach((f) => {
-          if (f.categoria) {
-            const g = groups.find((x) => x.cat === f.categoria);
-            if (g) g.funcoes.push(f); else groups.push({ cat: f.categoria, funcoes: [f] });
-          } else {
-            const g = groups.find((x) => x.cat === null);
-            if (g) g.funcoes.push(f); else groups.push({ cat: null, funcoes: [f] });
-          }
+          const cat = f.categoria ?? null;
+          const g = groups.find((x) => x.cat === cat);
+          if (g) g.funcoes.push(f); else groups.push({ cat, funcoes: [f] });
+        });
+        groups.forEach((g) => g.funcoes.sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999)));
+        groups.sort((a, b) => {
+          if (a.cat === null) return 1;
+          if (b.cat === null) return -1;
+          return a.cat.localeCompare(b.cat, "pt-BR");
         });
 
         const tableBody: any[][] = [];
@@ -2614,6 +2618,10 @@ function groupFuncoesByCategoria(funcoes: FuncaoPreview[]) {
     const g = groups.find((x) => x.categoria === cat);
     if (g) g.funcoes.push(f);
     else groups.push({ categoria: cat, funcoes: [f] });
+  });
+  // Ordena funções dentro de cada grupo pelo campo ordem
+  groups.forEach((g) => {
+    g.funcoes.sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999));
   });
   return groups.sort((a, b) => {
     if (a.categoria === null) return 1;
