@@ -184,7 +184,7 @@ export type HistoricoRecente = {
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-const CAP_DIAS_SEM_SERVIR   = 60;
+const CAP_DIAS_SEM_SERVIR   = 120;
 const CAP_DIAS_ROTACAO_FUNC = 180;  // 6 meses = rodízio máximo para funções principais
 const CAP_PARTICIPACOES_30D = 5;
 const CAP_FORMACOES_6M      = 10;   // 10 formações em 6 meses = participação plena
@@ -290,6 +290,9 @@ type GrupoStats = {
   maxRecente: number;
   maxDbScore: number;
   maxPorFuncao: Record<string, number>; // ministerio_id → count máximo do grupo
+  // Equidade de oportunidade: max(hist / nMinistérios) — normaliza pelo tamanho do "portfólio"
+  // de cada membro, evitando que quem tem mais vínculos seja penalizado por ter mais exposição.
+  maxRatioOportunidade: number;
 };
 
 function computeGrupoStats(
@@ -298,7 +301,7 @@ function computeGrupoStats(
   data30dAtras: string,
   dataEvento: string,
 ): GrupoStats {
-  let maxTotal = 0, maxRecente = 0, maxDbScore = 0;
+  let maxTotal = 0, maxRecente = 0, maxDbScore = 0, maxRatioOportunidade = 0;
   const maxPorFuncao: Record<string, number> = {};
 
   for (const m of membros) {
@@ -306,6 +309,11 @@ function computeGrupoStats(
     maxTotal   = Math.max(maxTotal, hist.length);
     maxRecente = Math.max(maxRecente, hist.filter((h) => h.data >= data30dAtras).length);
     maxDbScore = Math.max(maxDbScore, m.score);
+    // Ratio de oportunidade: convocações ÷ nº de ministérios vinculados.
+    // Normaliza pela "superfície" do membro — quem tem mais funções tem mais chances naturais,
+    // então 10 escalas em 5 ministérios (ratio=2) é mais justo que 10 em 1 (ratio=10).
+    const nMin = Math.max(m.ministerio_ids.length, 1);
+    maxRatioOportunidade = Math.max(maxRatioOportunidade, hist.length / nMin);
 
     // Máximo por função (para normalizar experiência em modo solene_principal)
     for (const h of hist) {
@@ -321,7 +329,7 @@ function computeGrupoStats(
     }
   }
 
-  return { maxTotal, maxRecente, maxDbScore, maxPorFuncao };
+  return { maxTotal, maxRecente, maxDbScore, maxPorFuncao, maxRatioOportunidade };
 }
 
 // ── calcularScore ─────────────────────────────────────────────────────────────
@@ -462,27 +470,28 @@ function calcularScore(
     // 3. Score de equidade (10%) — menor score = maior prioridade (redistribuição)
     const rankingBonus = stats.maxDbScore > 0 ? (1 - membro.score / stats.maxDbScore) * 100 : 0;
 
-    // 4. Frequência histórica total (5%) — menos = maior prioridade
-    const totalHist = histAnterior.length;
-    const frequenciaHistorica = stats.maxTotal > 0 ? (1 - totalHist / stats.maxTotal) * 100 : 100;
+    // 4. Equidade de oportunidade (10%) — ratio normalizado por ministérios: menos = maior prioridade.
+    // Usa conv/nMinistérios em vez de conv bruto: membro com 10 escalas em 5 funções
+    // (ratio=2) tem prioridade maior que membro com 10 escalas em 1 função (ratio=10),
+    // refletindo que o primeiro serviu proporcionalmente menos à sua disponibilidade.
+    const nMinisterios = Math.max(membro.ministerio_ids.length, 1);
+    const ratioMembro  = histAnterior.length / nMinisterios;
+    const frequenciaHistorica = stats.maxRatioOportunidade > 0
+      ? (1 - ratioMembro / stats.maxRatioOportunidade) * 100
+      : 100;
 
-    // 5. Aleatoriedade controlada (20%) — garante rotação real entre gerações.
-    // Com 5% o gap determinístico entre membros nunca era superado (mesma escala toda vez).
-    // 20% permite que membros próximos no ranking alternem sem comprometer a equidade.
-    const aleatoriedade = Math.random() * 100;
-
-    // Pesos equidade: 35% recência 30d + 30% tempo sem servir + 10% ranking inverso +
-    // 10% frequência histórica (redistribuição longo prazo) + 15% aleatoriedade (rotação real).
-    // Frequência histórica aumentada de 5→10% para penalizar quem serve muito no total.
-    // Aleatoriedade reduzida de 20→15% pois a penalidade progressiva já garante rotação.
-    raw = 0.35 * participacaoRecente + 0.30 * tempoSemServir + 0.10 * rankingBonus +
-          0.10 * frequenciaHistorica + 0.15 * aleatoriedade;
+    // Pesos equidade: 40% recência 30d + 35% tempo sem servir + 15% ranking inverso +
+    // 10% frequência histórica (redistribuição longo prazo).
+    // Aleatoriedade removida: era irreprodutível e causava concentração em membros
+    // com score alto por acúmulo de sorte, violando o princípio de equidade de oportunidades.
+    raw = 0.40 * participacaoRecente + 0.35 * tempoSemServir + 0.15 * rankingBonus +
+          0.10 * frequenciaHistorica;
 
     breakdown.participacao_recente = Math.round(participacaoRecente);
     breakdown.tempo_sem_servir     = Math.round(tempoSemServir);
     breakdown.ranking_bonus        = Math.round(rankingBonus);
     breakdown.frequencia_historica = Math.round(frequenciaHistorica);
-    breakdown.aleatoriedade        = Math.round(aleatoriedade);
+    breakdown.aleatoriedade        = 0;
 
     breakdown.total = Math.max(0, Math.round(raw - penalidade + prioridadeBonus));
   }
@@ -629,9 +638,10 @@ export function alocarMembros(
       continue;
     }
 
-    // modo_selecao='merito' ativa scoring solene para todas as funções,
-    // independente do campo relevancia do ministério.
-    const modoSolenePrincipal = ehSolene;
+    // modoSolenePrincipal ativa scoring de mérito (S4) apenas para funções com
+    // relevancia='principal' — funções acessórias usam equidade (S2) mesmo em solenidades.
+    // modo_selecao='merito' não bypassa esse critério; relevancia do ministério é decisivo.
+    const modoSolenePrincipal = ehSolene && funcao.relevancia === "principal";
 
     const preferenciaisDaFuncao = new Set(
       preferenciaisEfetivos
@@ -689,10 +699,10 @@ export function alocarMembros(
       if (m.funcoes_nao_pode_ids?.includes(funcao.ministerio_id)) { excluidos.funcao_nao_pode++; continue; }
       if (incompatMap?.has(m.id) && [...ja_alocados].some((id) => incompatMap.get(m.id)!.has(id))) { excluidos.funcao_nao_pode++; continue; }
       if (funcao.atuacoes_exigidas?.length && !funcao.atuacoes_exigidas.some((a) => (m.atuacao_ids ?? []).includes(a))) { excluidos.atuacao++; continue; }
-      // Restrição por dia da semana — bloqueia apenas em escalas comuns; solenidades ignoram
-      // esta restrição pois são eventos extraordinários (o membro avalia a indisponibilidade
-      // específica via indisponibilidades avulsas).
-      if (!ehSolene && m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data))) { excluidos.dia_semana++; continue; }
+      // Restrição por dia da semana — aplicada em todos os eventos (comuns e solenidades).
+      // Se o membro não pode no dia da semana, ele não será convocado; caso queira participar
+      // de uma solenidade específica, o coordenador remove a restrição ou usa indisponibilidade avulsa.
+      if (m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data))) { excluidos.dia_semana++; continue; }
       // Indisponibilidade de data específica registrada manualmente — controlada pelo toggle ignorarIndisponibilidades.
       if (!ignorarIndisponibilidades && estaIndisponivel(m.id, contexto.data, indisponibilidades)) { excluidos.indisponibilidade++; continue; }
       if (config?.impedir_repeticao_seguida) {
@@ -729,6 +739,16 @@ export function alocarMembros(
         // De-priorizado: serviu na última solenidade desta função — preferir quem não serviu
         excluidos.solenidade_recente++;
         pool1b.push(m);
+      } else if (
+        !ehSolene &&
+        typeof m.taxa_presenca === "number" &&
+        m.taxa_presenca < 0.60
+      ) {
+        // Presença abaixo de 60% → Pool2 apenas em missas comuns (de-priorizado, não excluído).
+        // Em solenidades, presença entra como componente de score (taxa_presenca_score), não como filtro.
+        // Threshold 60%: pastoral — reconhece que faltas justificadas são legítimas, mas
+        // impede que o pool principal seja saturado por quem aceita convocações e não comparece.
+        pool2.push(m);
       } else {
         pool1.push(m);
       }
