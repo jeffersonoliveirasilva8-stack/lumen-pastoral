@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   generateEscalaWithAlertas,
   type AssignmentHistoryEntry,
+  type EscalaAssignmentSuggestion,
   type FuncaoRestricao,
   type InsightFuncao,
   type ConfigParoquia,
@@ -714,7 +715,7 @@ function EscalasPage() {
   // ── Mutations ──────────────────────────────────────────────────────────────
 
   const saveMutation = useMutation({
-    mutationFn: async ({ form, editId }: { form: EscalaForm; editId: string | null }): Promise<{ autoSugestoes: number }> => {
+    mutationFn: async ({ form, editId }: { form: EscalaForm; editId: string | null }): Promise<{ autoSugestoes: number; sugestoes: EscalaAssignmentSuggestion[]; escalaData: string }> => {
       const payload = {
         titulo: form.titulo.trim(),
         data: form.data,
@@ -735,7 +736,7 @@ function EscalasPage() {
       if (editId) {
         const { error } = await anyDb.from("escalas").update(payload).eq("id", editId);
         if (error) throw error;
-        return { autoSugestoes: 0 };
+        return { autoSugestoes: 0, sugestoes: [], escalaData: payload.data };
       }
 
       const { data: nova, error } = await anyDb
@@ -746,6 +747,7 @@ function EscalasPage() {
       if (error) throw error;
 
       let autoSugestoes = 0;
+      let sugestoesGeradas: EscalaAssignmentSuggestion[] = [];
 
       // Auto-inject funções do tipo de missa e distribuir membros
       if (nova?.id && payload.tipo_missa_id) {
@@ -842,13 +844,28 @@ function EscalasPage() {
               }))
             );
             autoSugestoes = resultado.sugestoes.length;
+            sugestoesGeradas = resultado.sugestoes;
           }
         }
       }
 
-      return { autoSugestoes };
+      return { autoSugestoes, sugestoes: sugestoesGeradas, escalaData: payload.data };
     },
-    onSuccess: ({ autoSugestoes }, { form, editId }) => {
+    onSuccess: ({ autoSugestoes, sugestoes, escalaData }, { form, editId }) => {
+      // Atualiza cache imediatamente com as novas alocações, sem aguardar refetch
+      if (sugestoes.length > 0 && profile?.paroquia_id) {
+        qc.setQueryData<AssignmentHistoryEntry[]>(
+          ["escala-historico", profile.paroquia_id],
+          (prev = []) => {
+            const seen = new Set(prev.map((e) => `${e.memberId}|${e.ministerioId}|${e.date}`));
+            const toAdd = sugestoes
+              .filter((s) => !seen.has(`${s.membro_id}|${s.ministerio_id}|${escalaData}`))
+              .map((s): AssignmentHistoryEntry => ({ memberId: s.membro_id, ministerioId: s.ministerio_id, date: escalaData }));
+            return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+          }
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["escala-historico"] });
       qc.invalidateQueries({ queryKey: ["escalas"] });
       // Sincroniza com portal do membro
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
@@ -1495,9 +1512,25 @@ function EscalasPage() {
           throw reorganizarErr;
         }
       }
-      return { count: resultado.sugestoes.length, alertas: resultado.alertas, detalhes: resultado.detalhesPorFuncao };
+      return { count: resultado.sugestoes.length, alertas: resultado.alertas, detalhes: resultado.detalhesPorFuncao, sugestoes: resultado.sugestoes, escalaData: escala.data };
     },
-    onSuccess: ({ count, alertas, detalhes }) => {
+    onSuccess: ({ count, alertas, detalhes, sugestoes, escalaData }) => {
+      // Remove entradas antigas da data reorganizada e insere apenas as novas.
+      // Necessário porque a reorganização faz DELETE+INSERT: sem esse filtro, o
+      // cache acumularia as alocações deletadas junto das novas até o refetch.
+      if (profile?.paroquia_id) {
+        qc.setQueryData<AssignmentHistoryEntry[]>(
+          ["escala-historico", profile.paroquia_id],
+          (prev = []) => {
+            const semData = prev.filter((e) => e.date !== escalaData);
+            const toAdd = sugestoes.map((s): AssignmentHistoryEntry => ({
+              memberId: s.membro_id, ministerioId: s.ministerio_id, date: escalaData,
+            }));
+            return [...semData, ...toAdd];
+          }
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["escala-historico"] });
       qc.invalidateQueries({ queryKey: ["escalas-counts"] });
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
