@@ -123,6 +123,7 @@ export type ScoreBreakdown = {
   formacao_score: number;
   bonus_preferencial: number;
   // Comuns
+  urgencia_pastoral: number;  // bônus aplicado quando diasSemServir >= LIMIAR_URGENCIA_DIAS
   penalidade: number;
   prioridade_bonus: number;
   total: number;
@@ -184,7 +185,10 @@ export type HistoricoRecente = {
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-const CAP_DIAS_SEM_SERVIR   = 120;
+// Com 65 acólitos e ~24 slots/semana, o ciclo esperado é ~2,7 semanas.
+// Cap em 28 dias torna a fórmula sensível exatamente na janela 1–4 semanas
+// em vez de diluir a diferença num range de 120 dias sem significado pastoral.
+const CAP_DIAS_SEM_SERVIR   = 28;
 const CAP_DIAS_ROTACAO_FUNC = 180;  // 6 meses = rodízio máximo para funções principais
 const CAP_PARTICIPACOES_30D = 5;
 const CAP_FORMACOES_6M      = 10;   // 10 formações em 6 meses = participação plena
@@ -193,6 +197,12 @@ const PENALIDADE_MESMO_DIA    = 50;
 const PENALIDADE_DIA_ANTERIOR = 30;
 const PENALIDADE_DOIS_DIAS    = 15;
 const PENALIDADE_MESMA_SEMANA = 25; // 3–7 dias atrás (inclusive): evita repetição semanal
+
+// Bônus pastoral: garante que membros há 14+ dias sem servir sejam priorizados
+// sobre quem serviu mais recentemente, independentemente do score de ranking.
+// Cria uma separação clara de tier: recente (<14d) x atrasado (≥14d).
+const BONUS_URGENCIA_PASTORAL = 30;
+const LIMIAR_URGENCIA_DIAS    = 14;
 
 // Termos litúrgicos universais para funções acessórias (não são específicos de nenhuma paróquia).
 // Usados apenas em getFuncoesAdicionais — nunca para decisões de alocação.
@@ -332,6 +342,15 @@ function computeGrupoStats(
   return { maxTotal, maxRecente, maxDbScore, maxPorFuncao, maxRatioOportunidade };
 }
 
+// ── simpleHash ────────────────────────────────────────────────────────────────
+// Tiebreaker determinístico por data: garante que membros com score idêntico
+// sejam ordenados diferentemente a cada data, quebrando padrões semanais fixos.
+function simpleHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
+  return h;
+}
+
 // ── calcularScore ─────────────────────────────────────────────────────────────
 // Dois modos:
 //   COMUM         → equilíbrio de oportunidades (qualquer função em escala normal)
@@ -406,6 +425,7 @@ function calcularScore(
     taxa_presenca_score: 0,
     formacao_score:      0,
     bonus_preferencial:  0,
+    urgencia_pastoral:   0,
     penalidade:          Math.round(penalidade),
     prioridade_bonus:    Math.round(prioridadeBonus),
     total:               0,
@@ -493,7 +513,12 @@ function calcularScore(
     breakdown.frequencia_historica = Math.round(frequenciaHistorica);
     breakdown.aleatoriedade        = 0;
 
-    breakdown.total = Math.max(0, Math.round(raw - penalidade + prioridadeBonus));
+    // Bônus de urgência pastoral: aplicado apenas quando diasSemServir >= 14 dias.
+    // Cria separação de tier clara: membros "atrasados" sempre pontam acima dos recentes.
+    const urgenciaPastoral = diasSemServir >= LIMIAR_URGENCIA_DIAS ? BONUS_URGENCIA_PASTORAL : 0;
+    breakdown.urgencia_pastoral = urgenciaPastoral;
+
+    breakdown.total = Math.max(0, Math.round(raw - penalidade + prioridadeBonus + urgenciaPastoral));
   }
 
   return breakdown;
@@ -782,7 +807,14 @@ export function alocarMembros(
         }
 
         return { membro: m, breakdown, diasSemServir, count30d, totalHist, forcado };
-      }).sort((a, b) => b.breakdown.total - a.breakdown.total);
+      }).sort((a, b) => {
+        const diff = b.breakdown.total - a.breakdown.total;
+        if (diff !== 0) return diff;
+        // Tiebreaker determinístico por data: membros com score idêntico rodam
+        // em ordem diferente a cada data, evitando que o mesmo membro sempre
+        // ganhe por posição fixa no array (ordem de entrega do banco).
+        return simpleHash(a.membro.id + contexto.data) - simpleHash(b.membro.id + contexto.data);
+      });
     }
 
     // Ordena o pool por prioridade de gênero (alvos GLOBAIS) sem fatiar.
