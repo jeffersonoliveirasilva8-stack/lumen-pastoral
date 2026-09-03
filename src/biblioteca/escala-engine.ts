@@ -123,7 +123,6 @@ export type ScoreBreakdown = {
   formacao_score: number;
   bonus_preferencial: number;
   // Comuns
-  urgencia_pastoral: number;  // bônus aplicado quando diasSemServir >= LIMIAR_URGENCIA_DIAS
   penalidade: number;
   prioridade_bonus: number;
   total: number;
@@ -198,11 +197,6 @@ const PENALIDADE_DIA_ANTERIOR = 30;
 const PENALIDADE_DOIS_DIAS    = 15;
 const PENALIDADE_MESMA_SEMANA = 25; // 3–7 dias atrás (inclusive): evita repetição semanal
 
-// Bônus pastoral: garante que membros há 14+ dias sem servir sejam priorizados
-// sobre quem serviu mais recentemente, independentemente do score de ranking.
-// Cria uma separação clara de tier: recente (<14d) x atrasado (≥14d).
-const BONUS_URGENCIA_PASTORAL = 30;
-const LIMIAR_URGENCIA_DIAS    = 14;
 
 // Termos litúrgicos universais para funções acessórias (não são específicos de nenhuma paróquia).
 // Usados apenas em getFuncoesAdicionais — nunca para decisões de alocação.
@@ -425,7 +419,6 @@ function calcularScore(
     taxa_presenca_score: 0,
     formacao_score:      0,
     bonus_preferencial:  0,
-    urgencia_pastoral:   0,
     penalidade:          Math.round(penalidade),
     prioridade_bonus:    Math.round(prioridadeBonus),
     total:               0,
@@ -513,12 +506,7 @@ function calcularScore(
     breakdown.frequencia_historica = Math.round(frequenciaHistorica);
     breakdown.aleatoriedade        = 0;
 
-    // Bônus de urgência pastoral: aplicado apenas quando diasSemServir >= 14 dias.
-    // Cria separação de tier clara: membros "atrasados" sempre pontam acima dos recentes.
-    const urgenciaPastoral = diasSemServir >= LIMIAR_URGENCIA_DIAS ? BONUS_URGENCIA_PASTORAL : 0;
-    breakdown.urgencia_pastoral = urgenciaPastoral;
-
-    breakdown.total = Math.max(0, Math.round(raw - penalidade + prioridadeBonus + urgenciaPastoral));
+    breakdown.total = Math.max(0, Math.round(raw - penalidade + prioridadeBonus));
   }
 
   return breakdown;

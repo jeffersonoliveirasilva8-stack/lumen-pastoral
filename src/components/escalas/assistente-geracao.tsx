@@ -13,6 +13,13 @@ import {
   type AssignmentHistoryEntry,
   type FuncaoRestricao,
 } from "@/lib/escala-engine";
+import {
+  selecionarMembrosPastoral,
+  inicializarEstadoPastoral,
+  calcularUrgencia,
+  urgenciaNivel,
+  type EstadoPastoral,
+} from "@/biblioteca/pastoral-distribuicao";
 import { supabaseErrorMessage } from "@/lib/supabase-error";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -654,7 +661,7 @@ export function AssistenteGeracaoEscalas({
     setPasso(4);
   }
 
-  // ── P0.1 + P1.1 + P1.2 + P1.3 — Geração ─────────────────────────────────
+  // ── P0.1 + P1.1 + P1.2 + P1.3 + FASE 9 — Geração ──────────────────────────
   const gerarMutation = useMutation({
     mutationFn: async () => {
       const total = preVisualizacao.length;
@@ -666,6 +673,37 @@ export function AssistenteGeracaoEscalas({
       let totalVagasSolicitadas = 0;
       const batchHistory: AssignmentHistoryEntry[] = [];
       const membroContagem = new Map<string, { nome: string; count: number }>();
+
+      // ── FASE 9A: estado pastoral inicial (últimas 2 semanas) ────────────────
+      const hoje = new Date();
+      const estadosPastorais = new Map<string, EstadoPastoral>();
+      const batchOportunidades = new Map<string, number>(); // membro_id → oportunidades na rodada
+
+      // Inicializa estado base com dados do assignmentHistory (até 14 dias)
+      for (const m of membros) {
+        estadosPastorais.set(m.id, inicializarEstadoPastoral(m.id, assignmentHistory, hoje));
+        batchOportunidades.set(m.id, 0);
+      }
+
+      // ── FASE 9C: pré-calcula oportunidades futuras totais por membro ─────────
+      // (quantas missas na rodada cada membro poderia potencialmente servir)
+      for (const cel of preVisualizacao) {
+        const diaSemana = new Date(cel.data + "T12:00:00").getDay();
+        for (const m of membros) {
+          if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
+          if (indisponibilidades.some((i) => i.membro_id === m.id && i.data === cel.data)) continue;
+          const ministeriosNaCel = cel.funcoes.map((f) => f.ministerio_id);
+          const temVinculo = ministeriosNaCel.some((mid) => membroMinisterios[m.id]?.includes(mid));
+          if (!temVinculo) continue;
+          batchOportunidades.set(m.id, (batchOportunidades.get(m.id) ?? 0) + 1);
+        }
+      }
+
+      // Aplica oportunidades da rodada no estado pastoral
+      for (const [mid, oport] of batchOportunidades) {
+        const ep = estadosPastorais.get(mid);
+        if (ep) ep.oportunidades_futuras = oport;
+      }
 
       const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
       const engineConfig = {
@@ -740,31 +778,62 @@ export function AssistenteGeracaoEscalas({
 
           if (membros.length > 0) {
             const missa = missasPadrao.find((m) => m.id === cel.missaPadraoId);
+            const missaRestricaoIndisp = (missa ? (membroMissaRestricoes[missa.id] ?? []) : [])
+              .map((mid) => ({ membro_id: mid, data: cel.data }));
+            const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
             const funcoesPedido = cel.funcoes.map((f) => ({
               ministerio_id: f.ministerio_id,
               quantidade:    f.quantidade,
               ministerio:    { id: f.ministerio_id, nome: f.ministerio_nome, cor: f.ministerio_cor },
             }));
-            const missaRestricaoIndisp = (missa ? (membroMissaRestricoes[missa.id] ?? []) : [])
-              .map((mid) => ({ membro_id: mid, data: cel.data }));
-            const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
 
-            const sugestoes = generateEscalaAssignments(
-              { titulo: cel.titulo, data: cel.data, tipo: cel.tipo, observacoes: null },
-              funcoesPedido,
-              membrosComAtuacoes,
-              membroMinisterios,
-              {
-                history:            [...assignmentHistory, ...batchHistory],
+            // ── FASE 9B: atualiza oportunidades para esta missa ───────────────
+            const diaSemana = new Date(cel.data + "T12:00:00").getDay();
+            for (const m of membros) {
+              if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
+              if ([...indisponibilidades, ...missaRestricaoIndisp].some(
+                (i) => i.membro_id === m.id && i.data === cel.data)) continue;
+              const temVinculo = cel.funcoes.some((f) => membroMinisterios[m.id]?.includes(f.ministerio_id));
+              if (!temVinculo) continue;
+              const ep = estadosPastorais.get(m.id);
+              if (ep) {
+                ep.oportunidades_rodada++;
+                ep.oportunidades_futuras = Math.max(0, ep.oportunidades_futuras - 1);
+              }
+            }
+
+            let sugestoes: { membro_id: string; ministerio_id: string }[];
+
+            if (cel.solene || cel.tem_adoracao || cel.tem_bispo) {
+              // Solenidades: mantém engine existente
+              sugestoes = generateEscalaAssignments(
+                { titulo: cel.titulo, data: cel.data, tipo: cel.tipo, observacoes: null },
+                funcoesPedido,
+                membrosComAtuacoes,
+                membroMinisterios,
+                {
+                  history:            [...assignmentHistory, ...batchHistory],
+                  indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
+                  restricoes:         funcaoRestricoes,
+                  config:             engineConfig,
+                  solene:             cel.solene,
+                  tem_adoracao:       cel.tem_adoracao,
+                  tem_bispo:          cel.tem_bispo,
+                  debug:              false,
+                }
+              );
+            } else {
+              // Missas comuns: seletor pastoral (FASE 9)
+              sugestoes = selecionarMembrosPastoral({
+                funcoes:            funcoesPedido,
+                membros:            membrosComAtuacoes,
+                estadosPastorais,
+                membroMinisterios,
                 indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
                 restricoes:         funcaoRestricoes,
-                config:             engineConfig,
-                solene:             cel.solene,
-                tem_adoracao:       cel.tem_adoracao,
-                tem_bispo:          cel.tem_bispo,
-                debug:              false,
-              }
-            );
+                celData:            cel.data,
+              });
+            }
 
             if (sugestoes.length > 0) {
               const { error: bErr } = await (supabase as any).from("escala_membros").upsert(
@@ -775,6 +844,14 @@ export function AssistenteGeracaoEscalas({
                 totalSugestoes += sugestoes.length;
                 sugestoes.forEach((s) => {
                   batchHistory.push({ memberId: s.membro_id, ministerioId: s.ministerio_id, date: cel.data });
+                  // ── FASE 9B: atualiza estado pastoral do membro escalado ───
+                  const ep = estadosPastorais.get(s.membro_id);
+                  if (ep) {
+                    ep.servicos_rodada++;
+                    ep.servicos_14d++;
+                    ep.dias_ultimo_servico = 0;
+                    ep.taxa_cobertura_14d = ep.servicos_14d / Math.max(ep.oportunidades_14d + ep.oportunidades_rodada, 1);
+                  }
                   // P1.2 — acumular distribuição por membro
                   const mb = membros.find((m) => m.id === s.membro_id);
                   if (mb) {
