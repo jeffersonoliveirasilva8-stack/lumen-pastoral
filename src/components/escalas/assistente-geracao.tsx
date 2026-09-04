@@ -679,6 +679,15 @@ export function AssistenteGeracaoEscalas({
       const estadosPastorais = new Map<string, EstadoPastoral>();
       const batchOportunidades = new Map<string, number>(); // membro_id → oportunidades na rodada
 
+      // membroMinisterios recebido é ministerio_id → membro_id[]; inverte para membro_id → ministerio_id[]
+      const membroPara: Record<string, string[]> = {};
+      for (const [minId, mids] of Object.entries(membroMinisterios)) {
+        for (const mid of mids) {
+          if (!membroPara[mid]) membroPara[mid] = [];
+          membroPara[mid].push(minId);
+        }
+      }
+
       // Inicializa estado base com dados do assignmentHistory (até 14 dias)
       for (const m of membros) {
         estadosPastorais.set(m.id, inicializarEstadoPastoral(m.id, assignmentHistory, hoje));
@@ -693,7 +702,7 @@ export function AssistenteGeracaoEscalas({
           if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
           if (indisponibilidades.some((i) => i.membro_id === m.id && i.data === cel.data)) continue;
           const ministeriosNaCel = cel.funcoes.map((f) => f.ministerio_id);
-          const temVinculo = ministeriosNaCel.some((mid) => membroMinisterios[m.id]?.includes(mid));
+          const temVinculo = ministeriosNaCel.some((mid) => membroPara[m.id]?.includes(mid));
           if (!temVinculo) continue;
           batchOportunidades.set(m.id, (batchOportunidades.get(m.id) ?? 0) + 1);
         }
@@ -793,7 +802,7 @@ export function AssistenteGeracaoEscalas({
               if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
               if ([...indisponibilidades, ...missaRestricaoIndisp].some(
                 (i) => i.membro_id === m.id && i.data === cel.data)) continue;
-              const temVinculo = cel.funcoes.some((f) => membroMinisterios[m.id]?.includes(f.ministerio_id));
+              const temVinculo = cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id));
               if (!temVinculo) continue;
               const ep = estadosPastorais.get(m.id);
               if (ep) {
@@ -828,7 +837,7 @@ export function AssistenteGeracaoEscalas({
                 funcoes:            funcoesPedido,
                 membros:            membrosComAtuacoes,
                 estadosPastorais,
-                membroMinisterios,
+                membroMinisterios:  membroPara, // já invertido: membro_id → ministerio_id[]
                 indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
                 restricoes:         funcaoRestricoes,
                 celData:            cel.data,
