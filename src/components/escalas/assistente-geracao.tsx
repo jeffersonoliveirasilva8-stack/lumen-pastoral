@@ -832,12 +832,27 @@ export function AssistenteGeracaoEscalas({
               );
             } else {
               // Missas comuns: seletor pastoral (FASE 9)
+              // Atualiza dias_ultimo_servico com base nos serviços já feitos nesta rodada
+              const celDataObj = new Date(cel.data + "T12:00:00");
+              for (const h of batchHistory) {
+                if (!h.date) continue;
+                const ep = estadosPastorais.get(h.memberId);
+                if (!ep) continue;
+                const diasDesde = Math.floor((celDataObj.getTime() - new Date(h.date + "T12:00:00").getTime()) / 86400000);
+                if (diasDesde >= 0 && diasDesde < ep.dias_ultimo_servico) {
+                  ep.dias_ultimo_servico = diasDesde;
+                }
+              }
+              // Bloqueia membros já escalados em outra célula no mesmo dia durante esta rodada
+              const batchSameDayBlocks = batchHistory
+                .filter((h) => h.date === cel.data)
+                .map((h) => ({ membro_id: h.memberId, data: cel.data }));
               sugestoes = selecionarMembrosPastoral({
                 funcoes:            funcoesPedido,
                 membros:            membrosComAtuacoes,
                 estadosPastorais,
                 membroMinisterios:  membroPara, // já invertido: membro_id → ministerio_id[]
-                indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
+                indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp, ...batchSameDayBlocks],
                 restricoes:         funcaoRestricoes,
                 celData:            cel.data,
               });
