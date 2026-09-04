@@ -109,7 +109,16 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
   const escaladosNestaMissa = new Set<string>();
   const diaSemana = new Date(celData + "T12:00:00").getDay();
 
+  const _debug = typeof window !== "undefined"; // só no browser
+  if (_debug) console.log("[FASE9] selecionarMembrosPastoral", { celData, diaSemana, totalMembros: membros.length, totalFuncoes: funcoes.length, membroPara_keys: Object.keys(membroPara).length });
+
   for (const funcao of funcoes) {
+    const semVinculo   = membros.filter((m) => !membroPara[m.id]?.includes(funcao.ministerio_id));
+    const comVinculo   = membros.filter((m) =>  membroPara[m.id]?.includes(funcao.ministerio_id));
+    const bloqIndisp   = comVinculo.filter((m) => indisponibilidades.some((i) => i.membro_id === m.id && i.data === celData));
+    const bloqDia      = comVinculo.filter((m) => m.restricoes_dia_semana?.includes(diaSemana));
+    if (_debug) console.log(`[FASE9] funcao=${funcao.ministerio_id} qtd=${funcao.quantidade} | semVinculo=${semVinculo.length} comVinculo=${comVinculo.length} bloqIndisp=${bloqIndisp.length} bloqDia=${bloqDia.length}`);
+
     const candidatos = membros.filter((m) => {
       if (!membroPara[m.id]?.includes(funcao.ministerio_id)) return false;
       if (escaladosNestaMissa.has(m.id)) return false;
@@ -120,6 +129,7 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
       )) return false;
       return true;
     });
+    if (_debug && candidatos.length === 0) console.warn(`[FASE9] ⚠ ZERO candidatos para ${funcao.ministerio_id} em ${celData}`);
 
     const ordenados = candidatos.slice().sort((a, b) => {
       const epA = estadosPastorais.get(a.id);
