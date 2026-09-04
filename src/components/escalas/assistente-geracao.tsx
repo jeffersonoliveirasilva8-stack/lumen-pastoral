@@ -700,7 +700,7 @@ export function AssistenteGeracaoEscalas({
         const diaSemana = new Date(cel.data + "T12:00:00").getDay();
         for (const m of membros) {
           if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
-          if (indisponibilidades.some((i) => i.membro_id === m.id && i.data === cel.data)) continue;
+          if (membroEstaBloqueado(m.id, cel.data, indisponibilidades)) continue;
           const ministeriosNaCel = cel.funcoes.map((f) => f.ministerio_id);
           const temVinculo = ministeriosNaCel.some((mid) => membroPara[m.id]?.includes(mid));
           if (!temVinculo) continue;
@@ -800,8 +800,7 @@ export function AssistenteGeracaoEscalas({
             const diaSemana = new Date(cel.data + "T12:00:00").getDay();
             for (const m of membros) {
               if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
-              if ([...indisponibilidades, ...missaRestricaoIndisp].some(
-                (i) => i.membro_id === m.id && i.data === cel.data)) continue;
+              if (membroEstaBloqueado(m.id, cel.data, [...indisponibilidades, ...missaRestricaoIndisp])) continue;
               const temVinculo = cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id));
               if (!temVinculo) continue;
               const ep = estadosPastorais.get(m.id);
@@ -889,6 +888,7 @@ export function AssistenteGeracaoEscalas({
       } satisfies Relatorio;
     },
     onSuccess: (resultado) => {
+      console.log("[FASE9] Relatório geração:", resultado);
       setRelatorio(resultado);
       setPasso(5);
       onSuccess(); // invalidar queries no pai imediatamente

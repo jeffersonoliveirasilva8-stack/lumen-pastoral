@@ -122,7 +122,12 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
     const candidatos = membros.filter((m) => {
       if (!membroPara[m.id]?.includes(funcao.ministerio_id)) return false;
       if (escaladosNestaMissa.has(m.id)) return false;
-      if (indisponibilidades.some((i) => i.membro_id === m.id && i.data === celData)) return false;
+      if (indisponibilidades.some((i) => {
+        if (i.membro_id !== m.id) return false;
+        if ((i as any).cancelada) return false;
+        if ((i as any).tipo === "intervalo" && (i as any).data_fim) return celData >= i.data && celData <= (i as any).data_fim;
+        return i.data === celData;
+      })) return false;
       if (m.restricoes_dia_semana?.includes(diaSemana)) return false;
       if (restricoes.some(
         (r) => r.membro_id === m.id && r.ministerio_id === funcao.ministerio_id && r.tipo === "nao_pode"
