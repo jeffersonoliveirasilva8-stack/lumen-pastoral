@@ -86,39 +86,14 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
   const { funcoes, membros, estadosPastorais, membroMinisterios,
           indisponibilidades, restricoes, celData } = params;
 
-  // membroMinisterios pode vir como ministerio_id→membro_id[] (formato do DB) ou
-  // membro_id→ministerio_id[] (formato interno). Detecta pelo primeiro valor:
-  // se o primeiro valor é array e a primeira chave não aparece como membro, é formato DB.
-  // Estratégia segura: constrói mapa membro→ministerios das duas formas e mescla.
-  const membroPara: Record<string, string[]> = {};
-  const membroIds = new Set(membros.map((m) => m.id));
-  for (const [key, vals] of Object.entries(membroMinisterios)) {
-    if (membroIds.has(key)) {
-      // chave é membro_id, valores são ministerio_ids
-      membroPara[key] = [...(membroPara[key] ?? []), ...(vals as string[])];
-    } else {
-      // chave é ministerio_id, valores são membro_ids
-      for (const mid of vals as string[]) {
-        if (!membroPara[mid]) membroPara[mid] = [];
-        membroPara[mid].push(key);
-      }
-    }
-  }
+  // membroMinisterios é sempre membro_id→ministerio_id[] (garantido pelo chamador)
+  const membroPara = membroMinisterios;
 
   const result: { membro_id: string; ministerio_id: string }[] = [];
   const escaladosNestaMissa = new Set<string>();
   const diaSemana = new Date(celData + "T12:00:00").getDay();
 
-  const _debug = typeof window !== "undefined"; // só no browser
-  if (_debug) console.log("[FASE9] selecionarMembrosPastoral", { celData, diaSemana, totalMembros: membros.length, totalFuncoes: funcoes.length, membroPara_keys: Object.keys(membroPara).length });
-
   for (const funcao of funcoes) {
-    const semVinculo   = membros.filter((m) => !membroPara[m.id]?.includes(funcao.ministerio_id));
-    const comVinculo   = membros.filter((m) =>  membroPara[m.id]?.includes(funcao.ministerio_id));
-    const bloqIndisp   = comVinculo.filter((m) => indisponibilidades.some((i) => i.membro_id === m.id && i.data === celData));
-    const bloqDia      = comVinculo.filter((m) => m.restricoes_dia_semana?.includes(diaSemana));
-    if (_debug) console.log(`[FASE9] funcao=${funcao.ministerio_id} qtd=${funcao.quantidade} | semVinculo=${semVinculo.length} comVinculo=${comVinculo.length} bloqIndisp=${bloqIndisp.length} bloqDia=${bloqDia.length}`);
-
     const candidatos = membros.filter((m) => {
       if (!membroPara[m.id]?.includes(funcao.ministerio_id)) return false;
       if (escaladosNestaMissa.has(m.id)) return false;
@@ -134,8 +109,6 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
       )) return false;
       return true;
     });
-    if (_debug && candidatos.length === 0) console.warn(`[FASE9] ⚠ ZERO candidatos para ${funcao.ministerio_id} em ${celData}`);
-
     const ordenados = candidatos.slice().sort((a, b) => {
       const epA = estadosPastorais.get(a.id);
       const epB = estadosPastorais.get(b.id);

@@ -888,7 +888,6 @@ export function AssistenteGeracaoEscalas({
       } satisfies Relatorio;
     },
     onSuccess: (resultado) => {
-      console.log("[FASE9] Relatório geração:", resultado);
       setRelatorio(resultado);
       setPasso(5);
       onSuccess(); // invalidar queries no pai imediatamente
