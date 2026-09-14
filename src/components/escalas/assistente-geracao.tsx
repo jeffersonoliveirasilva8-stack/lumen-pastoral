@@ -503,7 +503,12 @@ export function AssistenteGeracaoEscalas({
     setDataInicio(ultimaConfig.periodo.dataInicio);
     setDataFim(ultimaConfig.periodo.dataFim);
     setTipoPeriodo(ultimaConfig.periodo.tipo);
-    setMissasSelecionadas(new Set(ultimaConfig.missasSelecionadas));
+    // Inclui missas padrão criadas após a última config (não estariam na lista salva)
+    const savedSet = new Set(ultimaConfig.missasSelecionadas);
+    const todosIds = missasPadrao.map((m) => m.id);
+    const novos = todosIds.filter((id) => !ultimaConfig.missasSelecionadas.includes(id));
+    novos.forEach((id) => savedSet.add(id));
+    setMissasSelecionadas(savedSet);
     setSugerirUltimaConfig(false);
   }
   function recusarUltimaConfig() {
@@ -522,8 +527,45 @@ export function AssistenteGeracaoEscalas({
     const startDate = new Date(dataInicio + "T00:00:00");
     const endDate   = new Date(dataFim   + "T00:00:00");
     const celebracoes: CelebracaoPreview[] = [];
+
     for (const missa of missasPadrao) {
       if (!missasSelecionadas.has(missa.id)) continue;
+
+      // Missa com data específica (esporádico): inclui se a data cai no período
+      if (missa.recorrencia?.tipo === "esporadico") {
+        const dataEsp = missa.recorrencia?.data as string | undefined;
+        if (dataEsp && dataEsp >= dataInicio && dataEsp <= dataFim) {
+          const dateStr = dataEsp;
+          const funcoes = (() => {
+            const base = (missaFuncoesMap[missa.id] ?? []).map((f) => ({ ...f }));
+            const extras = funcoesExcecaoData.filter(
+              (e) => e.missa_padrao_id === missa.id && e.data === dateStr
+            );
+            for (const ex of extras) {
+              const idx = base.findIndex((b) => b.ministerio_id === ex.ministerio_id);
+              if (idx >= 0) base[idx].quantidade = ex.quantidade;
+              else base.push({ ministerio_id: ex.ministerio_id, ministerio_nome: ministeriosMap[ex.ministerio_id]?.nome ?? "?", ministerio_cor: ministeriosMap[ex.ministerio_id]?.cor ?? "#999", quantidade: ex.quantidade });
+            }
+            return base;
+          })();
+          celebracoes.push({
+            _id: crypto.randomUUID(),
+            titulo: `${missa.nome} — ${format(new Date(dateStr + "T12:00:00"), "dd/MM", { locale: ptBR })}`,
+            data: dateStr,
+            hora_inicio: missa.hora_inicio,
+            local: missa.local,
+            tipo: missa.tipo_missa_id ? "tipo_missa" : "missa",
+            tipo_missa_id: missa.tipo_missa_id,
+            solene: missa.solene,
+            tem_adoracao: missa.tem_adoracao,
+            tem_bispo: missa.tem_bispo,
+            missaPadraoId: missa.id,
+            funcoes,
+          });
+        }
+        continue;
+      }
+
       const cur = new Date(startDate);
       while (cur <= endDate) {
         if (cur.getDay() === missa.dia_semana && passaRecorrencia(cur, missa.recorrencia)) {
