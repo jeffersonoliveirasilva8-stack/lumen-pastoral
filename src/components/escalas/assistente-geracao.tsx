@@ -746,7 +746,7 @@ export function AssistenteGeracaoEscalas({
       for (const cel of preVisualizacao) {
         const diaSemana = new Date(cel.data + "T12:00:00").getDay();
         for (const m of membros) {
-          if (!cel.esporadico && m.restricoes_dia_semana?.includes(diaSemana)) continue;
+          if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
           if (membroEstaBloqueado(m.id, cel.data, indisponibilidades)) continue;
           const ministeriosNaCel = cel.funcoes.map((f) => f.ministerio_id);
           const temVinculo = ministeriosNaCel.some((mid) => membroPara[m.id]?.includes(mid));
@@ -845,10 +845,13 @@ export function AssistenteGeracaoEscalas({
 
             // ── FASE 9B: atualiza oportunidades para esta missa ───────────────
             const diaSemana = new Date(cel.data + "T12:00:00").getDay();
+            // Esporádicos não têm restrição por missa específica (membro_missa_restricoes)
+            const indisp9B = cel.esporadico
+              ? [...indisponibilidades]
+              : [...indisponibilidades, ...missaRestricaoIndisp];
             for (const m of membros) {
-              // Eventos esporádicos ignoram restrição de dia da semana
-              if (!cel.esporadico && m.restricoes_dia_semana?.includes(diaSemana)) continue;
-              if (membroEstaBloqueado(m.id, cel.data, [...indisponibilidades, ...missaRestricaoIndisp])) continue;
+              if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
+              if (membroEstaBloqueado(m.id, cel.data, indisp9B)) continue;
               const temVinculo = cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id));
               if (!temVinculo) continue;
               const ep = estadosPastorais.get(m.id);
@@ -858,10 +861,10 @@ export function AssistenteGeracaoEscalas({
               }
             }
 
-            // Para eventos esporádicos, membros usados sem restrição de dia da semana
-            const membrosParaEscala = cel.esporadico
-              ? membrosComAtuacoes.map((m) => ({ ...m, restricoes_dia_semana: [] }))
-              : membrosComAtuacoes;
+            // Esporádicos não consultam membro_missa_restricoes (não exige preenchimento manual)
+            const indispParaGeracao = cel.esporadico
+              ? [...indisponibilidades]
+              : [...indisponibilidades, ...missaRestricaoIndisp];
 
             let sugestoes: { membro_id: string; ministerio_id: string }[];
 
@@ -870,11 +873,11 @@ export function AssistenteGeracaoEscalas({
               sugestoes = generateEscalaAssignments(
                 { titulo: cel.titulo, data: cel.data, tipo: cel.tipo, observacoes: null },
                 funcoesPedido,
-                membrosParaEscala,
+                membrosComAtuacoes,
                 membroMinisterios,
                 {
                   history:            [...assignmentHistory, ...batchHistory],
-                  indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp],
+                  indisponibilidades: indispParaGeracao,
                   restricoes:         funcaoRestricoes,
                   config:             engineConfig,
                   solene:             cel.solene,
@@ -902,10 +905,10 @@ export function AssistenteGeracaoEscalas({
                 .map((h) => ({ membro_id: h.memberId, data: cel.data }));
               sugestoes = selecionarMembrosPastoral({
                 funcoes:            funcoesPedido,
-                membros:            membrosParaEscala,
+                membros:            membrosComAtuacoes,
                 estadosPastorais,
                 membroMinisterios:  membroPara, // já invertido: membro_id → ministerio_id[]
-                indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp, ...batchSameDayBlocks],
+                indisponibilidades: [...indispParaGeracao, ...batchSameDayBlocks],
                 restricoes:         funcaoRestricoes,
                 celData:            cel.data,
               });
