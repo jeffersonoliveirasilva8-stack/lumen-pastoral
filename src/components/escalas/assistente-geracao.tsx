@@ -85,6 +85,8 @@ export type CelebracaoPreview = {
   tem_bispo: boolean;
   missaPadraoId: string;
   funcoes: FuncaoCelebracao[];
+  /** true = evento pontual; restrições semanais de dia da semana não se aplicam */
+  esporadico?: boolean;
 };
 
 type MotivoConflito =
@@ -563,6 +565,7 @@ export function AssistenteGeracaoEscalas({
             tem_bispo: missa.tem_bispo,
             missaPadraoId: missa.id,
             funcoes,
+            esporadico: true,
           });
         }
         continue;
@@ -743,7 +746,7 @@ export function AssistenteGeracaoEscalas({
       for (const cel of preVisualizacao) {
         const diaSemana = new Date(cel.data + "T12:00:00").getDay();
         for (const m of membros) {
-          if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
+          if (!cel.esporadico && m.restricoes_dia_semana?.includes(diaSemana)) continue;
           if (membroEstaBloqueado(m.id, cel.data, indisponibilidades)) continue;
           const ministeriosNaCel = cel.funcoes.map((f) => f.ministerio_id);
           const temVinculo = ministeriosNaCel.some((mid) => membroPara[m.id]?.includes(mid));
@@ -843,7 +846,8 @@ export function AssistenteGeracaoEscalas({
             // ── FASE 9B: atualiza oportunidades para esta missa ───────────────
             const diaSemana = new Date(cel.data + "T12:00:00").getDay();
             for (const m of membros) {
-              if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
+              // Eventos esporádicos ignoram restrição de dia da semana
+              if (!cel.esporadico && m.restricoes_dia_semana?.includes(diaSemana)) continue;
               if (membroEstaBloqueado(m.id, cel.data, [...indisponibilidades, ...missaRestricaoIndisp])) continue;
               const temVinculo = cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id));
               if (!temVinculo) continue;
@@ -854,6 +858,11 @@ export function AssistenteGeracaoEscalas({
               }
             }
 
+            // Para eventos esporádicos, membros usados sem restrição de dia da semana
+            const membrosParaEscala = cel.esporadico
+              ? membrosComAtuacoes.map((m) => ({ ...m, restricoes_dia_semana: [] }))
+              : membrosComAtuacoes;
+
             let sugestoes: { membro_id: string; ministerio_id: string }[];
 
             if (cel.solene || cel.tem_adoracao || cel.tem_bispo) {
@@ -861,7 +870,7 @@ export function AssistenteGeracaoEscalas({
               sugestoes = generateEscalaAssignments(
                 { titulo: cel.titulo, data: cel.data, tipo: cel.tipo, observacoes: null },
                 funcoesPedido,
-                membrosComAtuacoes,
+                membrosParaEscala,
                 membroMinisterios,
                 {
                   history:            [...assignmentHistory, ...batchHistory],
@@ -893,7 +902,7 @@ export function AssistenteGeracaoEscalas({
                 .map((h) => ({ membro_id: h.memberId, data: cel.data }));
               sugestoes = selecionarMembrosPastoral({
                 funcoes:            funcoesPedido,
-                membros:            membrosComAtuacoes,
+                membros:            membrosParaEscala,
                 estadosPastorais,
                 membroMinisterios:  membroPara, // já invertido: membro_id → ministerio_id[]
                 indisponibilidades: [...indisponibilidades, ...missaRestricaoIndisp, ...batchSameDayBlocks],
