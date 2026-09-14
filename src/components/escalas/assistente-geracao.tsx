@@ -462,14 +462,16 @@ export function AssistenteGeracaoEscalas({
   const missaFuncoesMap = useMemo(() => {
     const map: Record<string, FuncaoCelebracao[]> = {};
     for (const missa of missasPadrao) {
-      if (missa.tipo_missa_id) {
+      // Funções configuradas diretamente nesta missa padrão têm prioridade
+      const proprias = missaPadraoFuncoesData.filter((f) => f.missa_padrao_id === missa.id);
+      if (proprias.length > 0) {
+        map[missa.id] = proprias.map((f) => ({ ministerio_id: f.ministerio_id, ministerio_nome: ministeriosMap[f.ministerio_id]?.nome ?? "?", ministerio_cor: ministeriosMap[f.ministerio_id]?.cor ?? "#999", quantidade: f.quantidade }));
+      } else if (missa.tipo_missa_id) {
         map[missa.id] = tipoMissaFuncoesData
           .filter((f) => f.tipo_missa_id === missa.tipo_missa_id)
           .map((f) => ({ ministerio_id: f.ministerio_id, ministerio_nome: ministeriosMap[f.ministerio_id]?.nome ?? "?", ministerio_cor: ministeriosMap[f.ministerio_id]?.cor ?? "#999", quantidade: f.quantidade_min }));
       } else {
-        map[missa.id] = missaPadraoFuncoesData
-          .filter((f) => f.missa_padrao_id === missa.id)
-          .map((f) => ({ ministerio_id: f.ministerio_id, ministerio_nome: ministeriosMap[f.ministerio_id]?.nome ?? "?", ministerio_cor: ministeriosMap[f.ministerio_id]?.cor ?? "#999", quantidade: f.quantidade }));
+        map[missa.id] = [];
       }
     }
     return map;
