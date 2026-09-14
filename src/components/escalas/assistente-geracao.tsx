@@ -845,9 +845,15 @@ export function AssistenteGeracaoEscalas({
 
             // ── FASE 9B: atualiza oportunidades para esta missa ───────────────
             const diaSemana = new Date(cel.data + "T12:00:00").getDay();
-            // Esporádicos não têm restrição por missa específica (membro_missa_restricoes)
+            // Para esporádicos: deriva bloqueios de dia da semana a partir das missas regulares daquele dia.
+            // Membro restrito de QUALQUER missa regular na segunda → bloqueado de esporádico na segunda.
+            const restDiaEsporadico = cel.esporadico
+              ? missasPadrao
+                  .filter((mp) => mp.recorrencia?.tipo !== "esporadico" && mp.dia_semana === diaSemana)
+                  .flatMap((mp) => (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: cel.data })))
+              : [];
             const indisp9B = cel.esporadico
-              ? [...indisponibilidades]
+              ? [...indisponibilidades, ...restDiaEsporadico]
               : [...indisponibilidades, ...missaRestricaoIndisp];
             for (const m of membros) {
               if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
@@ -861,9 +867,9 @@ export function AssistenteGeracaoEscalas({
               }
             }
 
-            // Esporádicos não consultam membro_missa_restricoes (não exige preenchimento manual)
+            // Para esporádicos: mesma lógica de bloqueio por dia derivado das missas regulares
             const indispParaGeracao = cel.esporadico
-              ? [...indisponibilidades]
+              ? [...indisponibilidades, ...restDiaEsporadico]
               : [...indisponibilidades, ...missaRestricaoIndisp];
 
             let sugestoes: { membro_id: string; ministerio_id: string }[];
