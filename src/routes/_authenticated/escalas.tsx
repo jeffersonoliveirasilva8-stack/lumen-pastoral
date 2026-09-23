@@ -4757,26 +4757,28 @@ function EscalaDetail({
       setShowInsights(false);
       // Emails só quando a escala já está publicada — rascunho não notifica membros
       if (escala.status === "publicada") {
-        for (let i = 0; i < assignments.length; i++) {
-          const { membro_id, ministerio_id } = assignments[i];
-          const membro = membros.find((m) => m.id === membro_id);
-          const min = ministerios.find((m) => m.id === ministerio_id);
-          if (membro?.email) {
-            if (i > 0) await new Promise((r) => setTimeout(r, 400));
-            await supabase.functions.invoke("send-email", {
-              body: {
-                template: "escala_atribuida",
-                to: membro.email,
-                nome: membro.nome,
-                paroquia: paroquiaNome,
-                escalaTitulo: escala.titulo,
-                escalaData: escala.data,
-                escalaHora: escala.hora_inicio?.slice(0, 5) ?? "",
-                ministerioNome: min?.nome ?? "",
-              },
-            });
+        (async () => {
+          for (let i = 0; i < assignments.length; i++) {
+            const { membro_id, ministerio_id } = assignments[i];
+            const membro = membros.find((m) => m.id === membro_id);
+            const min = ministerios.find((m) => m.id === ministerio_id);
+            if (membro?.email) {
+              if (i > 0) await new Promise((r) => setTimeout(r, 400));
+              await supabase.functions.invoke("send-email", {
+                body: {
+                  template: "escala_atribuida",
+                  to: membro.email,
+                  nome: membro.nome,
+                  paroquia: paroquiaNome,
+                  escalaTitulo: escala.titulo,
+                  escalaData: escala.data,
+                  escalaHora: escala.hora_inicio?.slice(0, 5) ?? "",
+                  ministerioNome: min?.nome ?? "",
+                },
+              });
+            }
           }
-        }
+        })();
       }
     },
     onError: (e: unknown) => {

@@ -7,7 +7,7 @@ import {
   GraduationCap, ChevronDown, ChevronUp, BookOpen, Link2, FileText, Video,
   ClipboardList, ExternalLink,
 } from "lucide-react";
-import { format, parseISO, isPast } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
@@ -75,33 +75,34 @@ function PortalMembroEventos() {
   const qc = useQueryClient();
   const [expandedJust, setExpandedJust] = useState<string | null>(null);
 
-  const { data: eventos = [], isLoading } = useQuery<Evento[]>({
-    queryKey: ["portal-eventos", membro?.paroquia_id],
-    enabled: !!membro?.paroquia_id,
-    queryFn: async () => {
-      const { data, error } = await anyDb
-        .from("formacoes_eventos")
-        .select("id,titulo,descricao,tipo,data_inicio,data_fim,local,pontuacao,obrigatorio")
-        .eq("paroquia_id", membro!.paroquia_id)
-        .eq("ativo", true)
-        .order("data_inicio", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as Evento[];
-    },
-  });
-
-  const { data: minhasPresencas = [], isLoading: loadingPresencas } = useQuery<MinhaPresenca[]>({
-    queryKey: ["portal-minhas-presencas", membro?.id],
+  // Busca apenas os eventos onde o membro foi convidado (tem registro em presencas_eventos)
+  const { data: rawConvites = [], isLoading } = useQuery({
+    queryKey: ["portal-eventos", membro?.id],
     enabled: !!membro?.id,
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("presencas_eventos")
-        .select("id,evento_id,presente,justificativa,pontuacao_recebida")
+        .select("id,evento_id,presente,justificativa,pontuacao_recebida,confirmado_pelo_membro,formacoes_eventos:evento_id(id,titulo,descricao,tipo,data_inicio,data_fim,local,pontuacao,obrigatorio,ativo)")
         .eq("membro_id", membro!.id);
       if (error) throw error;
-      return (data ?? []) as MinhaPresenca[];
+      return (data ?? []) as any[];
     },
   });
+
+  const eventos: Evento[] = rawConvites
+    .filter((r) => r.formacoes_eventos?.ativo === true)
+    .map((r) => r.formacoes_eventos as Evento)
+    .sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
+
+  const minhasPresencas: MinhaPresenca[] = rawConvites
+    .filter((r) => r.formacoes_eventos?.ativo === true)
+    .map((r) => ({
+      id: r.id,
+      evento_id: r.evento_id,
+      presente: r.presente,
+      justificativa: r.justificativa,
+      pontuacao_recebida: r.pontuacao_recebida,
+    }));
 
   const presencaMap = new Map(minhasPresencas.map((p) => [p.evento_id, p]));
 
@@ -133,18 +134,18 @@ function PortalMembroEventos() {
       if (existing) {
         const { error } = await anyDb
           .from("presencas_eventos")
-          .update({ presente: null, justificativa: null })
+          .update({ presente: null, justificativa: null, confirmado_pelo_membro: true })
           .eq("id", existing.id);
         if (error) throw error;
       } else {
         const { error } = await anyDb
           .from("presencas_eventos")
-          .insert({ evento_id: eventoId, membro_id: membro!.id, presente: null });
+          .insert({ evento_id: eventoId, membro_id: membro!.id, presente: null, confirmado_pelo_membro: true });
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["portal-minhas-presencas", membro?.id] });
+      qc.invalidateQueries({ queryKey: ["portal-eventos", membro?.id] });
       toast.success("Presença confirmada!");
     },
     onError: (e: unknown) => toast.error((e as Error).message),
@@ -173,7 +174,7 @@ function PortalMembroEventos() {
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["portal-minhas-presencas", membro?.id] });
+      qc.invalidateQueries({ queryKey: ["portal-eventos", membro?.id] });
       setExpandedJust(null);
       toast.success("Ausência registrada.");
     },
@@ -182,10 +183,11 @@ function PortalMembroEventos() {
 
   if (!membro) return null;
 
-  const proximos = eventos.filter((e) => !isPast(parseISO(e.data_inicio)));
-  const passados = eventos.filter((e) => isPast(parseISO(e.data_inicio)));
+  // Compara usando a data local (slice 0-10) para não sofrer conversão de fuso
+  const proximos = eventos.filter((e) => new Date(e.data_inicio.slice(0, 16)) > new Date());
+  const passados = eventos.filter((e) => new Date(e.data_inicio.slice(0, 16)) <= new Date());
 
-  const loading = isLoading || loadingPresencas;
+  const loading = isLoading;
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-6 pb-24">
@@ -293,7 +295,10 @@ function EventoCard({
   const [showMateriais, setShowMateriais] = useState(false);
   const tipo = TIPOS[evento.tipo] ?? TIPOS.outro;
 
-  const dataFormatada = format(parseISO(evento.data_inicio), "d 'de' MMMM, HH:mm", { locale: ptBR });
+  // Usa slice direto para evitar conversão UTC→local (o banco armazena no horário de Brasília)
+  const datePart = evento.data_inicio.slice(0, 10);
+  const timePart = evento.data_inicio.slice(11, 16);
+  const dataFormatada = format(new Date(datePart + "T12:00:00"), "d 'de' MMMM", { locale: ptBR }) + (timePart && timePart !== "00:00" ? `, ${timePart}` : "");
   const isJustExpanded = expandedJust === evento.id;
 
   // Determine my status
@@ -319,10 +324,10 @@ function EventoCard({
           {/* Date block */}
           <div className="shrink-0 w-12 text-center pt-0.5">
             <p className="text-[10px] font-medium text-muted-foreground uppercase">
-              {format(parseISO(evento.data_inicio), "MMM", { locale: ptBR })}
+              {format(new Date(evento.data_inicio.slice(0, 10) + "T12:00:00"), "MMM", { locale: ptBR })}
             </p>
             <p className="text-2xl font-serif leading-tight">
-              {format(parseISO(evento.data_inicio), "d")}
+              {format(new Date(evento.data_inicio.slice(0, 10) + "T12:00:00"), "d")}
             </p>
           </div>
 

@@ -73,7 +73,7 @@ type FormEvento = {
   obrigatorio: boolean;
 };
 
-type MembroSimples = { id: string; nome: string; ministerio_ids: string[] };
+type MembroSimples = { id: string; nome: string; email: string | null; ministerio_ids: string[] };
 type Ministerio = { id: string; nome: string; categoria: string | null };
 type ModoConvite = "todos" | "categoria" | "especificos";
 
@@ -155,19 +155,29 @@ function RouteComponent() {
   });
 
   // Membros ativos da paróquia
+  const { data: paroquiaNome = "" } = useQuery<string>({
+    queryKey: ["paroquia-nome", pid],
+    enabled: !!pid,
+    queryFn: async () => {
+      const { data } = await anyDb.from("paroquias").select("nome").eq("id", pid!).single();
+      return (data?.nome ?? "") as string;
+    },
+  });
+
   const { data: membrosAtivos = [] } = useQuery<MembroSimples[]>({
     queryKey: ["membros-ativos-formacao", pid],
     enabled: !!pid && formOpen,
     queryFn: async () => {
       const { data } = await anyDb
         .from("membros")
-        .select("id, nome, membro_ministerios(ministerio_id)")
+        .select("id, nome, email, membro_ministerios(ministerio_id)")
         .eq("paroquia_id", pid!)
         .eq("ativo", true)
         .order("nome");
       return (data ?? []).map((m: any) => ({
         id: m.id,
         nome: m.nome,
+        email: m.email ?? null,
         ministerio_ids: (m.membro_ministerios ?? []).map((mm: any) => mm.ministerio_id),
       }));
     },
@@ -255,6 +265,39 @@ function RouteComponent() {
             confirmado_pelo_membro: false,
           }));
           await anyDb.from("presencas_eventos").insert(presencas);
+
+          // Notificação push (in-app)
+          const dataEvento = `${payload.data_inicio.slice(0, 10)}`;
+          const horaEvento = payload.data_inicio.slice(11, 16);
+          const notifs = membrosParaConvidar.map((m) => ({
+            paroquia_id: pid,
+            membro_id: m.id,
+            titulo: `📅 ${payload.titulo}`,
+            mensagem: `Você foi convidado para: ${payload.titulo}${payload.local ? ` — ${payload.local}` : ""}. Data: ${format(parseISO(dataEvento), "dd/MM/yyyy", { locale: ptBR })}${horaEvento && horaEvento !== "00:00" ? ` às ${horaEvento}` : ""}.`,
+            tipo: "info",
+            lida: false,
+            apenas_admin: false,
+            link_referencia: "/portal-membro/eventos",
+          }));
+          await anyDb.from("notificacoes").insert(notifs);
+
+          // Emails com rate limit
+          for (let i = 0; i < membrosParaConvidar.length; i++) {
+            const m = membrosParaConvidar[i];
+            if (!m.email) continue;
+            if (i > 0) await new Promise((r) => setTimeout(r, 400));
+            await supabase.functions.invoke("send-email", {
+              body: {
+                template: "evento_convite",
+                to: m.email,
+                nome: m.nome,
+                paroquia: paroquiaNome,
+                escalaTitulo: payload.titulo,
+                escalaData: dataEvento,
+                escalaHora: horaEvento,
+              },
+            });
+          }
         }
       }
     },
@@ -598,6 +641,7 @@ function RouteComponent() {
       <PresencaSheet
         evento={presencaEvento}
         paroquiaId={pid ?? ""}
+        paroquiaNome={paroquiaNome}
         onClose={() => {
           setPresencaEvento(null);
           qc.invalidateQueries({ queryKey: ["formacoes-eventos", pid, format(mes, "yyyy-MM")] });
@@ -630,6 +674,7 @@ type PresencaRow = {
   id: string;
   membro_id: string;
   nome: string;
+  email: string | null;
   presente: boolean | null;
   confirmado: boolean;
 };
@@ -637,10 +682,11 @@ type PresencaRow = {
 type MembroPicker = { id: string; nome: string };
 
 function PresencaSheet({
-  evento, paroquiaId, onClose,
+  evento, paroquiaId, paroquiaNome, onClose,
 }: {
   evento: Evento | null;
   paroquiaId: string;
+  paroquiaNome: string;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -655,7 +701,7 @@ function PresencaSheet({
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("presencas_eventos")
-        .select("id, membro_id, presente, confirmado_pelo_membro, membros(nome)")
+        .select("id, membro_id, presente, confirmado_pelo_membro, membros(nome, email)")
         .eq("evento_id", evento!.id)
         .order("confirmado_pelo_membro", { ascending: false })
         .order("presente", { ascending: false, nullsFirst: false });
@@ -664,6 +710,7 @@ function PresencaSheet({
         id: r.id,
         membro_id: r.membro_id,
         nome: r.membros?.nome ?? "—",
+        email: r.membros?.email ?? null,
         presente: r.presente,
         confirmado: r.confirmado_pelo_membro === true,
       }));
@@ -713,24 +760,44 @@ function PresencaSheet({
     toast.success(`${membro.nome} adicionado.`);
   }
 
-  // Notificar todos os convidados
+  // Notificar todos os convidados (push + email)
   async function notificarMembros() {
     if (!evento || lista.length === 0) return;
     setNotificando(true);
     try {
-      const data = evento.data_inicio.slice(0, 10);
+      const dataEvento = evento.data_inicio.slice(0, 10);
       const hora = evento.data_inicio.slice(11, 16);
+      // Push notifications
       const notifs = lista.map((r) => ({
         paroquia_id: paroquiaId,
         membro_id: r.membro_id,
         titulo: `📅 ${evento.titulo}`,
-        mensagem: `Você foi convidado para: ${evento.titulo}${evento.local ? ` — ${evento.local}` : ""}. Data: ${format(parseISO(data), "dd/MM/yyyy")}${hora && hora !== "00:00" ? ` às ${hora}` : ""}.`,
+        mensagem: `Você foi convidado para: ${evento.titulo}${evento.local ? ` — ${evento.local}` : ""}. Data: ${format(parseISO(dataEvento), "dd/MM/yyyy")}${hora && hora !== "00:00" ? ` às ${hora}` : ""}.`,
         tipo: "info",
         lida: false,
         apenas_admin: false,
         link_referencia: "/portal-membro/eventos",
       }));
       await anyDb.from("notificacoes").insert(notifs);
+      // Emails com rate limit
+      let emailsEnviados = 0;
+      for (let i = 0; i < lista.length; i++) {
+        const r = lista[i];
+        if (!r.email) continue;
+        if (emailsEnviados > 0) await new Promise((res) => setTimeout(res, 400));
+        await supabase.functions.invoke("send-email", {
+          body: {
+            template: "evento_convite",
+            to: r.email,
+            nome: r.nome,
+            paroquia: paroquiaNome,
+            escalaTitulo: evento.titulo,
+            escalaData: dataEvento,
+            escalaHora: hora,
+          },
+        });
+        emailsEnviados++;
+      }
       toast.success(`Notificação enviada para ${lista.length} membro(s).`);
     } catch (e) {
       toast.error(supabaseErrorMessage(e));
