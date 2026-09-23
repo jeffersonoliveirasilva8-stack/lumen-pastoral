@@ -1055,8 +1055,11 @@ function EscalasPage() {
       link_referencia: "/escalas",
     }));
     await (supabase as any).from("notificacoes").insert(notifs);
-    for (const m of membrosList as { id: string; nome: string; email: string | null }[]) {
+    const membrosListTyped = membrosList as { id: string; nome: string; email: string | null }[];
+    for (let i = 0; i < membrosListTyped.length; i++) {
+      const m = membrosListTyped[i];
       if (!m.email) continue;
+      if (i > 0) await new Promise((r) => setTimeout(r, 400));
       await supabase.functions.invoke("send-email", {
         body: {
           template: "vaga_disponivel",
@@ -4754,11 +4757,13 @@ function EscalaDetail({
       setShowInsights(false);
       // Emails só quando a escala já está publicada — rascunho não notifica membros
       if (escala.status === "publicada") {
-        for (const { membro_id, ministerio_id } of assignments) {
+        for (let i = 0; i < assignments.length; i++) {
+          const { membro_id, ministerio_id } = assignments[i];
           const membro = membros.find((m) => m.id === membro_id);
           const min = ministerios.find((m) => m.id === ministerio_id);
           if (membro?.email) {
-            supabase.functions.invoke("send-email", {
+            if (i > 0) await new Promise((r) => setTimeout(r, 400));
+            await supabase.functions.invoke("send-email", {
               body: {
                 template: "escala_atribuida",
                 to: membro.email,
