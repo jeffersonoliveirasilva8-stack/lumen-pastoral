@@ -74,7 +74,8 @@ type FormEvento = {
 };
 
 type MembroSimples = { id: string; nome: string; ministerio_ids: string[] };
-type Ministerio = { id: string; nome: string };
+type Ministerio = { id: string; nome: string; categoria: string | null };
+type ModoConvite = "todos" | "categoria" | "especificos";
 
 const FORM_EMPTY: FormEvento = {
   titulo: "", tipo: "formacao", data_inicio: "", hora_inicio: "19:00",
@@ -105,8 +106,11 @@ function RouteComponent() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Seleção de membros ao criar evento
-  const [convidarTodos, setConvidarTodos] = useState(true);
-  const [filtroMinisterio, setFiltroMinisterio] = useState("todos");
+  const [convidarAtCriar, setConvidarAtCriar] = useState(true);
+  const [modoConvite, setModoConvite] = useState<ModoConvite>("todos");
+  const [categoriaConvite, setCategoriaConvite] = useState<string>("");
+  const [especificos, setEspecificos] = useState<MembroSimples[]>([]);
+  const [buscaEspecificos, setBuscaEspecificos] = useState("");
 
   const mesStr = format(mes, "MMMM yyyy", { locale: ptBR });
   const inicioMes = format(mes, "yyyy-MM-dd") + "T00:00:00";
@@ -169,14 +173,14 @@ function RouteComponent() {
     },
   });
 
-  // Ministérios para filtro
+  // Ministérios com categoria para filtro
   const { data: ministerios = [] } = useQuery<Ministerio[]>({
     queryKey: ["ministerios-formacao", pid],
     enabled: !!pid && formOpen,
     queryFn: async () => {
       const { data } = await anyDb
         .from("ministerios")
-        .select("id, nome")
+        .select("id, nome, categoria")
         .eq("paroquia_id", pid!)
         .eq("ativo", true)
         .order("nome");
@@ -184,12 +188,39 @@ function RouteComponent() {
     },
   });
 
-  // Membros que serão convidados conforme filtro
+  // Categorias únicas disponíveis (ex: Acólito, Cerimoniário)
+  const categoriasDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of ministerios) {
+      if (m.categoria) set.add(m.categoria);
+    }
+    return Array.from(set).sort();
+  }, [ministerios]);
+
+  // Membros que serão convidados conforme seleção
   const membrosParaConvidar = useMemo(() => {
-    if (!convidarTodos) return [];
-    if (filtroMinisterio === "todos") return membrosAtivos;
-    return membrosAtivos.filter((m) => m.ministerio_ids.includes(filtroMinisterio));
-  }, [convidarTodos, filtroMinisterio, membrosAtivos]);
+    if (!convidarAtCriar) return [];
+    if (modoConvite === "todos") return membrosAtivos;
+    if (modoConvite === "especificos") return especificos;
+    if (modoConvite === "categoria" && categoriaConvite) {
+      const idsNaCategoria = new Set(
+        ministerios.filter((m) => m.categoria === categoriaConvite).map((m) => m.id)
+      );
+      return membrosAtivos.filter((m) =>
+        m.ministerio_ids.some((mid) => idsNaCategoria.has(mid))
+      );
+    }
+    return [];
+  }, [convidarAtCriar, modoConvite, categoriaConvite, especificos, membrosAtivos, ministerios]);
+
+  // Membros disponíveis para seleção individual (exclui já selecionados)
+  const membrosDisponiveisEspecificos = useMemo(() => {
+    const selecionadosIds = new Set(especificos.map((m) => m.id));
+    const termo = buscaEspecificos.toLowerCase().trim();
+    return membrosAtivos
+      .filter((m) => !selecionadosIds.has(m.id))
+      .filter((m) => !termo || m.nome.toLowerCase().includes(termo));
+  }, [membrosAtivos, especificos, buscaEspecificos]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -238,8 +269,11 @@ function RouteComponent() {
       setFormOpen(false);
       setEditId(null);
       setForm(FORM_EMPTY);
-      setConvidarTodos(true);
-      setFiltroMinisterio("todos");
+      setConvidarAtCriar(true);
+      setModoConvite("todos");
+      setCategoriaConvite("");
+      setEspecificos([]);
+      setBuscaEspecificos("");
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
@@ -263,8 +297,11 @@ function RouteComponent() {
   function openNew() {
     setEditId(null);
     setForm({ ...FORM_EMPTY, data_inicio: format(new Date(), "yyyy-MM-dd") });
-    setConvidarTodos(true);
-    setFiltroMinisterio("todos");
+    setConvidarAtCriar(true);
+    setModoConvite("todos");
+    setCategoriaConvite("");
+    setEspecificos([]);
+    setBuscaEspecificos("");
     setFormOpen(true);
   }
 
@@ -280,8 +317,11 @@ function RouteComponent() {
       descricao: ev.descricao ?? "",
       obrigatorio: ev.obrigatorio,
     });
-    setConvidarTodos(false);
-    setFiltroMinisterio("todos");
+    setConvidarAtCriar(false);
+    setModoConvite("todos");
+    setCategoriaConvite("");
+    setEspecificos([]);
+    setBuscaEspecificos("");
     setFormOpen(true);
   }
 
@@ -432,28 +472,107 @@ function RouteComponent() {
               <div className="rounded-xl border border-border p-3 space-y-3 bg-muted/30">
                 <div className="flex items-center gap-2">
                   <Checkbox
-                    id="convidar-todos"
-                    checked={convidarTodos}
-                    onCheckedChange={(v) => setConvidarTodos(!!v)}
+                    id="convidar-ao-criar"
+                    checked={convidarAtCriar}
+                    onCheckedChange={(v) => setConvidarAtCriar(!!v)}
                   />
-                  <Label htmlFor="convidar-todos" className="cursor-pointer font-normal">
+                  <Label htmlFor="convidar-ao-criar" className="cursor-pointer font-normal">
                     Convidar membros ao criar
                   </Label>
                 </div>
-                {convidarTodos && (
-                  <div className="space-y-2 pl-6">
-                    <Label className="text-xs text-muted-foreground">Filtrar por tipo de membro</Label>
-                    <Select value={filtroMinisterio} onValueChange={setFiltroMinisterio}>
-                      <SelectTrigger className="rounded-xl h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos os tipos</SelectItem>
-                        {ministerios.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+
+                {convidarAtCriar && (
+                  <div className="space-y-3 pl-1">
+                    {/* Chips de seleção */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setModoConvite("todos")}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          modoConvite === "todos"
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border bg-background hover:bg-accent"
+                        }`}
+                      >
+                        Todos
+                      </button>
+                      {categoriasDisponiveis.map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => { setModoConvite("categoria"); setCategoriaConvite(cat); }}
+                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                            modoConvite === "categoria" && categoriaConvite === cat
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "border-border bg-background hover:bg-accent"
+                          }`}
+                        >
+                          {cat}s
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setModoConvite("especificos")}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          modoConvite === "especificos"
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border bg-background hover:bg-accent"
+                        }`}
+                      >
+                        Específicos
+                      </button>
+                    </div>
+
+                    {/* Seleção individual */}
+                    {modoConvite === "especificos" && (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            className="pl-7 h-8 text-sm rounded-lg"
+                            placeholder="Buscar membro…"
+                            value={buscaEspecificos}
+                            onChange={(e) => setBuscaEspecificos(e.target.value)}
+                          />
+                        </div>
+                        {/* Lista de resultados */}
+                        {buscaEspecificos.trim().length >= 1 && membrosDisponiveisEspecificos.length > 0 && (
+                          <div className="max-h-32 overflow-y-auto rounded-lg border border-border bg-card space-y-0.5 p-1">
+                            {membrosDisponiveisEspecificos.slice(0, 10).map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent flex items-center justify-between"
+                                onClick={() => { setEspecificos((prev) => [...prev, m]); setBuscaEspecificos(""); }}
+                              >
+                                <span>{m.nome}</span>
+                                <Plus className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {/* Selecionados */}
+                        {especificos.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {especificos.map((m) => (
+                              <span
+                                key={m.id}
+                                className="flex items-center gap-1 text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5"
+                              >
+                                {m.nome}
+                                <button
+                                  type="button"
+                                  onClick={() => setEspecificos((prev) => prev.filter((x) => x.id !== m.id))}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <p className="text-xs text-muted-foreground">
                       {membrosParaConvidar.length} membro(s) serão convidados
                     </p>
