@@ -442,13 +442,13 @@ function RouteComponent() {
                 </div>
                 {convidarTodos && (
                   <div className="space-y-2 pl-6">
-                    <Label className="text-xs text-muted-foreground">Filtrar por ministério</Label>
+                    <Label className="text-xs text-muted-foreground">Filtrar por tipo de membro</Label>
                     <Select value={filtroMinisterio} onValueChange={setFiltroMinisterio}>
                       <SelectTrigger className="rounded-xl h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="todos">Todos os ministérios</SelectItem>
+                        <SelectItem value="todos">Todos os tipos</SelectItem>
                         {ministerios.map((m) => (
                           <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
                         ))}
