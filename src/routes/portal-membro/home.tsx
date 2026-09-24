@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useMemo, useEffect, useState } from "react";
-import { format, isToday, isTomorrow, differenceInDays, parseISO, subMonths, startOfMonth, endOfMonth, startOfDay, isThisWeek } from "date-fns";
+import { format, isToday, isTomorrow, differenceInDays, parseISO, subMonths, startOfMonth, endOfMonth, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Calendar, Clock, MapPin,
@@ -93,12 +93,12 @@ function PortalMembroHome() {
         event: "*", schema: "public", table: "formacoes_eventos",
         filter: `paroquia_id=eq.${membro.paroquia_id}`,
       }, () => {
-        qc.invalidateQueries({ queryKey: ["portal-home-eventos", membro.paroquia_id] });
+        qc.invalidateQueries({ queryKey: ["portal-home-convites", membro.id] });
       })
       .on("postgres_changes", {
         event: "*", schema: "public", table: "presencas_eventos",
       }, () => {
-        qc.invalidateQueries({ queryKey: ["portal-home-presencas", membro.id] });
+        qc.invalidateQueries({ queryKey: ["portal-home-convites", membro.id] });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -185,45 +185,34 @@ function PortalMembroHome() {
 
   const { data: rankingPos } = useRankingPos(membro?.paroquia_id, membro?.id);
 
-  const { data: proximosEventos = [] } = useQuery<{ id: string; titulo: string; tipo: string; data_inicio: string; pontuacao: number }[]>({
-    queryKey: ["portal-home-eventos", membro?.paroquia_id],
-    enabled: !!membro?.paroquia_id,
-    queryFn: async () => {
-      const { data, error } = await anyDb
-        .from("formacoes_eventos")
-        .select("id,titulo,tipo,data_inicio,pontuacao")
-        .eq("paroquia_id", membro!.paroquia_id)
-        .eq("ativo", true)
-        .gte("data_inicio", new Date().toISOString())
-        .order("data_inicio", { ascending: true })
-        .limit(10);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  // Eventos desta semana (destacados no topo)
-  const eventosEstaSemana = proximosEventos.filter((ev) =>
-    isThisWeek(parseISO(ev.data_inicio), { weekStartsOn: 0 }) ||
-    differenceInDays(parseISO(ev.data_inicio), today) <= 6
-  );
-  const eventosFuturos = proximosEventos.filter((ev) =>
-    !eventosEstaSemana.find((e) => e.id === ev.id)
-  ).slice(0, 3);
-
-  const { data: minhasPresencasHome = [] } = useQuery<{ evento_id: string; presente: boolean | null }[]>({
-    queryKey: ["portal-home-presencas", membro?.id],
-    enabled: !!membro?.id && proximosEventos.length > 0,
+  // Busca apenas convites do membro (presencas_eventos com join no evento)
+  // Evita mostrar eventos que o membro não foi convidado e já usa slice para fuso
+  const { data: convitesHome = [] } = useQuery<{
+    id: string; presente: boolean | null; confirmado_pelo_membro: boolean;
+    formacoes_eventos: { id: string; titulo: string; tipo: string; data_inicio: string; pontuacao: number; ativo: boolean } | null;
+  }[]>({
+    queryKey: ["portal-home-convites", membro?.id],
+    enabled: !!membro?.id,
     queryFn: async () => {
       const { data, error } = await anyDb
         .from("presencas_eventos")
-        .select("evento_id,presente")
-        .eq("membro_id", membro!.id)
-        .in("evento_id", proximosEventos.map((e) => e.id));
+        .select("id,presente,confirmado_pelo_membro,formacoes_eventos:evento_id(id,titulo,tipo,data_inicio,pontuacao,ativo)")
+        .eq("membro_id", membro!.id);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
   });
+
+  // Filtra: evento ativo, futuro ou hoje, dentro de 7 dias — usa slice para evitar conversão UTC→local
+  const todayStr = format(today, "yyyy-MM-dd");
+  const eventosEstaSemana = convitesHome
+    .filter((r) => r.formacoes_eventos?.ativo === true)
+    .filter((r) => {
+      const dataStr = r.formacoes_eventos!.data_inicio.slice(0, 10);
+      const dias = differenceInDays(new Date(dataStr + "T12:00:00"), new Date(todayStr + "T12:00:00"));
+      return dias >= 0 && dias <= 6;
+    })
+    .sort((a, b) => a.formacoes_eventos!.data_inicio.localeCompare(b.formacoes_eventos!.data_inicio));
 
   // Aniversariantes do mês
   const mesAtual = today.getMonth() + 1;
@@ -321,6 +310,7 @@ function PortalMembroHome() {
     },
   });
 
+  // Confirmação de escala
   const confirmarMutation = useMutation({
     mutationFn: async (escala_membro_id: string) => {
       const { error } = await anyDb
@@ -332,6 +322,24 @@ function PortalMembroHome() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["portal-home-escalas", membro!.id] });
+      toast.success("Presença confirmada!");
+    },
+    onError: () => toast.error("Erro ao confirmar. Tente novamente."),
+  });
+
+  // Confirmação de presença em formação/evento (presencas_eventos)
+  const confirmarFormacaoMutation = useMutation({
+    mutationFn: async (presencaId: string) => {
+      const { error } = await anyDb
+        .from("presencas_eventos")
+        .update({ confirmado_pelo_membro: true, presente: null })
+        .eq("id", presencaId)
+        .eq("membro_id", membro!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portal-home-convites", membro!.id] });
+      qc.invalidateQueries({ queryKey: ["portal-eventos", membro!.id] });
       toast.success("Presença confirmada!");
     },
     onError: () => toast.error("Erro ao confirmar. Tente novamente."),
@@ -471,7 +479,7 @@ function PortalMembroHome() {
         )}
       </section>
 
-      {/* ── Eventos desta semana — destaque antecipado ── */}
+      {/* ── Eventos desta semana — apenas os que o membro foi convidado ── */}
       {eventosEstaSemana.length > 0 && (
         <section className="space-y-2.5">
           <div className="flex items-center justify-between">
@@ -484,16 +492,22 @@ function PortalMembroHome() {
             <Link to="/portal-membro/eventos" className="text-xs text-primary hover:underline">Ver todos</Link>
           </div>
           <div className="rounded-2xl overflow-hidden border border-violet-200 dark:border-violet-900 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-950/20 dark:to-indigo-950/20 divide-y divide-violet-100 dark:divide-violet-900/50">
-            {eventosEstaSemana.map((ev) => {
-              const evDate = parseISO(ev.data_inicio);
-              const diasFaltam = differenceInDays(startOfDay(evDate), startOfDay(today));
-              const p = minhasPresencasHome.find((pr) => pr.evento_id === ev.id);
-              const confirmado = p !== undefined && p.presente === null;
+            {eventosEstaSemana.map((convite) => {
+              const ev = convite.formacoes_eventos!;
+              // Usa slice para não sofrer conversão UTC→local (exibe o horário como foi cadastrado)
+              const dataStr = ev.data_inicio.slice(0, 10);
+              const horaStr = ev.data_inicio.slice(11, 16);
+              const diasFaltam = differenceInDays(
+                new Date(dataStr + "T12:00:00"),
+                new Date(todayStr + "T12:00:00")
+              );
+              const jaConfirmou = convite.confirmado_pelo_membro || convite.presente === true;
+              const recusou = convite.presente === false;
               const TIPO_ICON: Record<string, string> = {
                 missa: "⛪", reuniao: "👥", retiro: "🕊️", formacao: "📖", adoracao: "🙏", outro: "📅",
               };
               return (
-                <div key={ev.id} className="flex items-center gap-3 px-4 py-3.5">
+                <div key={convite.id} className="flex items-center gap-3 px-4 py-3.5">
                   <div className="shrink-0 h-10 w-10 rounded-xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center text-lg">
                     {TIPO_ICON[ev.tipo] ?? "📅"}
                   </div>
@@ -501,25 +515,29 @@ function PortalMembroHome() {
                     <p className="text-sm font-semibold text-foreground truncate">{ev.titulo}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 text-xs text-violet-600 dark:text-violet-400">
                       <span className="font-medium">
-                        {isToday(evDate) ? "Hoje" : isTomorrow(evDate) ? "Amanhã" : diasFaltam === 0 ? "Hoje" : `em ${diasFaltam} dias`}
+                        {diasFaltam === 0 ? "Hoje" : diasFaltam === 1 ? "Amanhã" : `em ${diasFaltam} dias`}
                       </span>
+                      {horaStr && horaStr !== "00:00" && <><span>·</span><span>{horaStr}</span></>}
                       <span>·</span>
-                      <span>{format(evDate, "HH:mm")}</span>
-                      <span>·</span>
-                      <span className="text-violet-500/70">+{ev.pontuacao} pts ao participar</span>
+                      <span className="text-violet-500/70">+{ev.pontuacao} pts</span>
                     </div>
                   </div>
-                  {confirmado ? (
+                  {recusou ? (
+                    <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 border border-red-300/30 font-medium">
+                      Não vou
+                    </span>
+                  ) : jaConfirmou ? (
                     <span className="shrink-0 text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-400/30 font-medium">
-                      Confirmado
+                      ✓ Confirmado
                     </span>
                   ) : (
-                    <Link
-                      to="/portal-membro/eventos"
-                      className="shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-violet-500 text-white font-semibold hover:bg-violet-600 active:scale-95 transition-transform"
+                    <button
+                      onClick={() => confirmarFormacaoMutation.mutate(convite.id)}
+                      disabled={confirmarFormacaoMutation.isPending}
+                      className="shrink-0 text-[11px] px-2.5 py-1 rounded-full bg-violet-500 text-white font-semibold hover:bg-violet-600 active:scale-95 transition-transform disabled:opacity-60"
                     >
-                      Ver
-                    </Link>
+                      {confirmarFormacaoMutation.isPending ? "..." : "Confirmar"}
+                    </button>
                   )}
                 </div>
               );
@@ -701,61 +719,71 @@ function PortalMembroHome() {
         </section>
       )}
 
-      {/* ── Próximos eventos (fora desta semana) ── */}
-      {eventosFuturos.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Formações e Eventos</p>
-              <h2 className="mt-2 text-xl font-serif text-foreground">Próximos eventos</h2>
+      {/* ── Próximos eventos (fora desta semana, membro foi convidado) ── */}
+      {(() => {
+        const eventosFuturos = convitesHome
+          .filter((r) => r.formacoes_eventos?.ativo === true)
+          .filter((r) => {
+            const dataStr = r.formacoes_eventos!.data_inicio.slice(0, 10);
+            const dias = differenceInDays(new Date(dataStr + "T12:00:00"), new Date(todayStr + "T12:00:00"));
+            return dias > 6;
+          })
+          .sort((a, b) => a.formacoes_eventos!.data_inicio.localeCompare(b.formacoes_eventos!.data_inicio))
+          .slice(0, 3);
+        if (eventosFuturos.length === 0) return null;
+        return (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">Formações e Eventos</p>
+                <h2 className="mt-2 text-xl font-serif text-foreground">Próximos eventos</h2>
+              </div>
+              <Link to="/portal-membro/eventos" className="text-sm text-primary hover:underline">Ver todos</Link>
             </div>
-            <Link to="/portal-membro/eventos" className="text-sm text-primary hover:underline">Ver todos</Link>
-          </div>
-          <div className="rounded-3xl border border-border bg-card overflow-hidden divide-y divide-border">
-            {eventosFuturos.map((ev) => {
-              const p = minhasPresencasHome.find((pr) => pr.evento_id === ev.id);
-              const confirmado = p !== undefined && p.presente === null;
-              const ausente = p?.presente === false;
-              return (
-                <div key={ev.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="shrink-0 w-10 text-center">
-                    <p className="text-[10px] text-muted-foreground uppercase">
-                      {format(parseISO(ev.data_inicio), "MMM", { locale: ptBR })}
-                    </p>
-                    <p className="text-lg font-serif leading-tight">
-                      {format(parseISO(ev.data_inicio), "d")}
-                    </p>
+            <div className="rounded-3xl border border-border bg-card overflow-hidden divide-y divide-border">
+              {eventosFuturos.map((convite) => {
+                const ev = convite.formacoes_eventos!;
+                // Usa slice para evitar conversão UTC→local
+                const dataStr = ev.data_inicio.slice(0, 10);
+                const horaStr = ev.data_inicio.slice(11, 16);
+                const diaNum = dataStr.slice(8);
+                const mesStr = format(new Date(dataStr + "T12:00:00"), "MMM", { locale: ptBR });
+                const jaConfirmou = convite.confirmado_pelo_membro || convite.presente === true;
+                const recusou = convite.presente === false;
+                return (
+                  <div key={convite.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="shrink-0 w-10 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase">{mesStr}</p>
+                      <p className="text-lg font-serif leading-tight">{diaNum}</p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{ev.titulo}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {horaStr && horaStr !== "00:00" ? `${horaStr} · ` : ""}+{ev.pontuacao} pts ao participar
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      {recusou ? (
+                        <span className="text-xs px-2 py-1 rounded-lg bg-red-500/10 text-red-700 border border-red-300 font-medium">Não vou</span>
+                      ) : jaConfirmou ? (
+                        <span className="text-xs px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 border border-emerald-300 font-medium">✓ Confirmado</span>
+                      ) : (
+                        <button
+                          onClick={() => confirmarFormacaoMutation.mutate(convite.id)}
+                          disabled={confirmarFormacaoMutation.isPending}
+                          className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/25 font-medium hover:bg-primary/20 transition disabled:opacity-60"
+                        >
+                          Confirmar
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{ev.titulo}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(parseISO(ev.data_inicio), "HH:mm")} · +{ev.pontuacao} pts ao participar
-                    </p>
-                  </div>
-                  <div className="shrink-0">
-                    {confirmado ? (
-                      <span className="text-xs px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 border border-emerald-300 font-medium">
-                        Confirmado
-                      </span>
-                    ) : ausente ? (
-                      <span className="text-xs px-2 py-1 rounded-lg bg-red-500/10 text-red-700 border border-red-300 font-medium">
-                        Justificado
-                      </span>
-                    ) : (
-                      <Link
-                        to="/portal-membro/eventos"
-                        className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/25 font-medium hover:bg-primary/20 transition"
-                      >
-                        Responder
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* ── Aniversariantes do mês ── sempre visível ── */}
       <section className="space-y-4">
