@@ -894,15 +894,14 @@ export function AssistenteGeracaoEscalas({
               );
             } else {
               // Missas comuns: seletor pastoral (FASE 9)
-              // Atualiza dias_ultimo_servico com base nos serviços já feitos nesta rodada
+              // Recalcula dias_ultimo_servico de cada membro a partir do lastServiceDate
+              // (corrige o bug em que dias_ultimo_servico=0 nunca era atualizado para dias futuros)
               const celDataObj = new Date(cel.data + "T12:00:00");
-              for (const h of batchHistory) {
-                if (!h.date) continue;
-                const ep = estadosPastorais.get(h.memberId);
-                if (!ep) continue;
-                const diasDesde = Math.floor((celDataObj.getTime() - new Date(h.date + "T12:00:00").getTime()) / 86400000);
-                if (diasDesde >= 0 && diasDesde < ep.dias_ultimo_servico) {
-                  ep.dias_ultimo_servico = diasDesde;
+              for (const ep of estadosPastorais.values()) {
+                if (ep.lastServiceDate) {
+                  ep.dias_ultimo_servico = Math.floor(
+                    (celDataObj.getTime() - new Date(ep.lastServiceDate + "T12:00:00").getTime()) / 86400000
+                  );
                 }
               }
               // Bloqueia membros já escalados em outra célula no mesmo dia durante esta rodada
@@ -917,6 +916,7 @@ export function AssistenteGeracaoEscalas({
                 indisponibilidades: [...indispParaGeracao, ...batchSameDayBlocks],
                 restricoes:         funcaoRestricoes,
                 celData:            cel.data,
+                intervaloMinimoDias: engineConfig.intervalo_minimo_dias ?? 0,
               });
             }
 
@@ -934,7 +934,7 @@ export function AssistenteGeracaoEscalas({
                   if (ep) {
                     ep.servicos_rodada++;
                     ep.servicos_14d++;
-                    ep.dias_ultimo_servico = 0;
+                    ep.lastServiceDate = cel.data; // rastreia data para recálculo correto de dias_ultimo_servico
                     ep.taxa_cobertura_14d = ep.servicos_14d / Math.max(ep.oportunidades_14d + ep.oportunidades_rodada, 1);
                   }
                   // P1.2 — acumular distribuição por membro

@@ -22,8 +22,10 @@ export type EstadoPastoral = {
   oportunidades_14d: number;
   /** servicos_14d / max(oportunidades_14d, 1) */
   taxa_cobertura_14d: number;
-  /** dias desde o último serviço */
+  /** dias desde o último serviço (recalculado antes de cada missa) */
   dias_ultimo_servico: number;
+  /** data do último serviço (histórico ou batch) — usado para recalcular dias_ultimo_servico */
+  lastServiceDate: string | null;
   /** serviços atribuídos na rodada atual */
   servicos_rodada: number;
   /** missas elegíveis na rodada atual até este ponto */
@@ -69,6 +71,8 @@ export type SelecionarParams = {
   indisponibilidades: { membro_id: string; data: string }[];
   restricoes: RestricaoFuncao[];
   celData: string;
+  /** Intervalo mínimo em dias entre serviços (hard-block) */
+  intervaloMinimoDias?: number;
 };
 
 /**
@@ -84,7 +88,7 @@ export type SelecionarParams = {
  */
 export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id: string; ministerio_id: string }[] {
   const { funcoes, membros, estadosPastorais, membroMinisterios,
-          indisponibilidades, restricoes, celData } = params;
+          indisponibilidades, restricoes, celData, intervaloMinimoDias } = params;
 
   // membroMinisterios é sempre membro_id→ministerio_id[] (garantido pelo chamador)
   const membroPara = membroMinisterios;
@@ -92,6 +96,7 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
   const result: { membro_id: string; ministerio_id: string }[] = [];
   const escaladosNestaMissa = new Set<string>();
   const diaSemana = new Date(celData + "T12:00:00").getDay();
+  const celDataObj = new Date(celData + "T12:00:00");
 
   for (const funcao of funcoes) {
     const candidatos = membros.filter((m) => {
@@ -107,6 +112,14 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
       if (restricoes.some(
         (r) => r.membro_id === m.id && r.ministerio_id === funcao.ministerio_id && r.tipo === "nao_pode"
       )) return false;
+      // Hard-block por intervalo mínimo entre serviços
+      if (intervaloMinimoDias && intervaloMinimoDias > 0) {
+        const ep = estadosPastorais.get(m.id);
+        if (ep?.lastServiceDate) {
+          const diasDesde = Math.floor((celDataObj.getTime() - new Date(ep.lastServiceDate + "T12:00:00").getTime()) / 86400000);
+          if (diasDesde < intervaloMinimoDias) return false;
+        }
+      }
       return true;
     });
     const ordenados = candidatos.slice().sort((a, b) => {
@@ -172,6 +185,7 @@ export function inicializarEstadoPastoral(
     oportunidades_14d: 0,
     taxa_cobertura_14d: 0,
     dias_ultimo_servico: diasUltimo,
+    lastServiceDate: ultimoServico?.date ?? null,
     servicos_rodada: 0,
     oportunidades_rodada: 0,
     oportunidades_futuras: 0,
