@@ -1,8 +1,12 @@
 /**
- * FASE 9 — Motor de Cobertura e Distribuição Pastoral
+ * Motor de Cobertura e Distribuição Pastoral
  *
- * Seleciona membros para missas comuns usando prioridade estrutural,
- * não pesos no score. A arquitetura é: distribuidor, não ranqueador.
+ * Seleciona membros para missas comuns usando prioridade estrutural:
+ * 1. Quem foi menos vezes na rodada atual (equilíbrio dentro do mês)
+ * 2. Quem ficou mais tempo sem servir (rodízio principal)
+ * 3. Quem tem menos oportunidades futuras (protege quem só pode em datas específicas)
+ * 4. Taxa histórica de cobertura (equidade a longo prazo)
+ * 5. Score do banco (desempate determinístico)
  */
 
 type AssignmentHistoryEntry = {
@@ -52,11 +56,12 @@ export type RestricaoFuncao = {
   tipo: string; // "pode" | "nao_pode"
 };
 
+/** Mantida para exibição de status — não é mais usada na ordenação interna */
 export function calcularUrgencia(ep: EstadoPastoral): UrgenciaPastoral {
-  if (ep.dias_ultimo_servico >= 14 && ep.taxa_cobertura_14d < 0.3) return "critica";
-  if (ep.dias_ultimo_servico >= 10 || ep.taxa_cobertura_14d < 0.5) return "alta";
-  if (ep.oportunidades_futuras <= 1)                                return "alta";
-  return ep.servicos_rodada === 0 ? "normal" : "baixa";
+  if (ep.dias_ultimo_servico >= 28) return "critica";
+  if (ep.dias_ultimo_servico >= 14) return "alta";
+  if (ep.servicos_rodada === 0) return "normal";
+  return "baixa";
 }
 
 export function urgenciaNivel(u: UrgenciaPastoral): number {
@@ -76,21 +81,19 @@ export type SelecionarParams = {
 };
 
 /**
- * Seleciona membros para uma missa comum usando prioridade pastoral.
+ * Seleciona membros para uma missa comum garantindo rodízio e equilíbrio.
  *
- * 6 critérios (em ordem):
- * 1. Urgência (critica > alta > normal > baixa)
- * 2. Serviços na rodada (menos = maior prioridade)
- * 3. Taxa de cobertura histórica (menor = maior prioridade, tolerância 5%)
- * 4. Oportunidades futuras (menos = maior prioridade, protege quem só pode domingo)
- * 5. Dias sem servir (mais = maior prioridade)
- * 6. Score do banco (puro tiebreaker)
+ * Critérios em ordem de prioridade:
+ * 1. servicos_rodada    — quem foi menos vezes este mês (=0 > =1 > =2...)
+ * 2. dias_ultimo_servico — quem ficou mais tempo sem servir (rodízio principal)
+ * 3. oportunidades_futuras — quem tem menos chances restantes (cobre quem só pode em datas específicas)
+ * 4. taxa_cobertura_14d — quem tem menor taxa histórica (equidade a longo prazo)
+ * 5. score              — desempate determinístico
  */
 export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id: string; ministerio_id: string }[] {
   const { funcoes, membros, estadosPastorais, membroMinisterios,
           indisponibilidades, restricoes, celData, intervaloMinimoDias } = params;
 
-  // membroMinisterios é sempre membro_id→ministerio_id[] (garantido pelo chamador)
   const membroPara = membroMinisterios;
 
   const result: { membro_id: string; ministerio_id: string }[] = [];
@@ -112,7 +115,6 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
       if (restricoes.some(
         (r) => r.membro_id === m.id && r.ministerio_id === funcao.ministerio_id && r.tipo === "nao_pode"
       )) return false;
-      // Hard-block por intervalo mínimo entre serviços
       if (intervaloMinimoDias && intervaloMinimoDias > 0) {
         const ep = estadosPastorais.get(m.id);
         if (ep?.lastServiceDate) {
@@ -122,27 +124,30 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
       }
       return true;
     });
+
     const ordenados = candidatos.slice().sort((a, b) => {
       const epA = estadosPastorais.get(a.id);
       const epB = estadosPastorais.get(b.id);
       if (!epA || !epB) return 0;
 
-      const uA = urgenciaNivel(calcularUrgencia(epA));
-      const uB = urgenciaNivel(calcularUrgencia(epB));
-      if (uA !== uB) return uA - uB;
-
+      // 1. Quem foi menos vezes na rodada atual (distribui dentro do mês)
       if (epA.servicos_rodada !== epB.servicos_rodada)
         return epA.servicos_rodada - epB.servicos_rodada;
 
-      const taxaDiff = epA.taxa_cobertura_14d - epB.taxa_cobertura_14d;
-      if (Math.abs(taxaDiff) > 0.05) return taxaDiff;
+      // 2. Quem ficou mais tempo sem servir (rodízio principal — normalizado em 120 dias)
+      const diasA = Math.min(epA.dias_ultimo_servico, 120);
+      const diasB = Math.min(epB.dias_ultimo_servico, 120);
+      if (diasA !== diasB) return diasB - diasA;
 
+      // 3. Quem tem menos oportunidades futuras (protege disponibilidade restrita)
       if (epA.oportunidades_futuras !== epB.oportunidades_futuras)
         return epA.oportunidades_futuras - epB.oportunidades_futuras;
 
-      if (epA.dias_ultimo_servico !== epB.dias_ultimo_servico)
-        return epB.dias_ultimo_servico - epA.dias_ultimo_servico;
+      // 4. Taxa histórica de cobertura (equidade a longo prazo, tolerância 5%)
+      const taxaDiff = epA.taxa_cobertura_14d - epB.taxa_cobertura_14d;
+      if (Math.abs(taxaDiff) > 0.05) return taxaDiff;
 
+      // 5. Score do banco (desempate determinístico)
       return b.score - a.score;
     });
 
@@ -183,7 +188,6 @@ export function inicializarEstadoPastoral(
     membro_id: membroId,
     servicos_14d: servicos14d,
     oportunidades_14d: 0,
-    // Sem dado de oportunidades reais, usar 0.5 como neutro para não distorcer urgência
     taxa_cobertura_14d: 0.5,
     dias_ultimo_servico: diasUltimo,
     lastServiceDate: ultimoServico?.date ?? null,

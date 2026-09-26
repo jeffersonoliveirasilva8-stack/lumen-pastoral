@@ -934,8 +934,11 @@ export function AssistenteGeracaoEscalas({
                   if (ep) {
                     ep.servicos_rodada++;
                     ep.servicos_14d++;
-                    ep.lastServiceDate = cel.data; // rastreia data para recálculo correto de dias_ultimo_servico
-                    ep.taxa_cobertura_14d = ep.servicos_14d / Math.max(ep.oportunidades_14d + ep.oportunidades_rodada, 1);
+                    ep.lastServiceDate = cel.data;
+                    // taxa = serviços ÷ oportunidades elegíveis na rodada (oportunidades_14d não disponível)
+                    ep.taxa_cobertura_14d = ep.oportunidades_rodada > 0
+                      ? ep.servicos_14d / ep.oportunidades_rodada
+                      : 0.5;
                   }
                   // P1.2 — acumular distribuição por membro
                   const mb = membros.find((m) => m.id === s.membro_id);
