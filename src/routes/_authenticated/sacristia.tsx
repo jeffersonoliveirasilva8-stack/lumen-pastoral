@@ -35,7 +35,7 @@ type MembroEscala = {
   escala_id: string;
   status: string;
   justificativa: string | null;
-  membro: { id: string; nome: string; telefone: string | null };
+  membro: { id: string; nome: string; telefone: string | null; email?: string | null };
   ministerio: { id: string; nome: string; cor: string };
 };
 
@@ -55,7 +55,7 @@ type Tab = "pendentes" | "em_andamento" | "concluidas";
 const STATUS_FINAIS = ["presente", "faltou", "atrasado", "justificou"];
 
 function SacristiaPage() {
-  const { profile, user, isAdministrador } = useAuth();
+  const { profile, user, isAuxiliar } = useAuth();
   const qc = useQueryClient();
   const hojeStr = format(new Date(), "yyyy-MM-dd");
   const [presencaMap, setPresencaMap] = useState<Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente">>({});
@@ -74,10 +74,24 @@ function SacristiaPage() {
   const [outroServiuBusca, setOutroServiuBusca] = useState("");
   const [outroServiuId, setOutroServiuId] = useState<string | null>(null);
 
+  const { data: paroquiaNome = "" } = useQuery<string>({
+    queryKey: ["paroquia-nome", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    staleTime: 3_600_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("paroquias")
+        .select("nome")
+        .eq("id", profile!.paroquia_id!)
+        .single();
+      return (data?.nome ?? "") as string;
+    },
+  });
+
   // Para auxiliares: descobre o membro_id do usuário logado para filtrar escalas
   const { data: meupMembroId } = useQuery<string | null>({
     queryKey: ["meu-membro-id-sacristia", profile?.paroquia_id, user?.id],
-    enabled: !!profile?.paroquia_id && !!user?.id && !!isAdministrador,
+    enabled: !!profile?.paroquia_id && !!user?.id && !!isAuxiliar,
     queryFn: async () => {
       const { data } = await anyDb
         .from("membros")
@@ -117,7 +131,7 @@ function SacristiaPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("escala_membros")
-        .select("id, membro_id, ministerio_id, escala_id, status, justificativa, membros!membro_id(id, nome, telefone), ministerios(id, nome, cor)")
+        .select("id, membro_id, ministerio_id, escala_id, status, justificativa, membros!membro_id(id, nome, telefone, email), ministerios(id, nome, cor)")
         .in("escala_id", escalaIds)
         .or("ativo.is.null,ativo.eq.true");
       return ((data ?? []) as any[]).map((r) => ({
@@ -174,7 +188,7 @@ function SacristiaPage() {
 
   // Filtro para auxiliares
   function filtrarParaUsuario(escalas: EscalaItem[]) {
-    if (!isAdministrador || !meupMembroId || membrosEscala.length === 0) return escalas;
+    if (!isAuxiliar || !meupMembroId || membrosEscala.length === 0) return escalas;
     const minhasEscalaIds = new Set(
       membrosEscala.filter((m) => m.membro_id === meupMembroId).map((m) => m.escala_id)
     );
@@ -184,7 +198,7 @@ function SacristiaPage() {
   const escalasExibidas = useMemo(() => {
     const lista = tab === "pendentes" ? pendentes : tab === "em_andamento" ? em_andamento : concluidas;
     return filtrarParaUsuario(lista);
-  }, [tab, pendentes, em_andamento, concluidas, meupMembroId, membrosEscala, isAdministrador]);
+  }, [tab, pendentes, em_andamento, concluidas, meupMembroId, membrosEscala, isAuxiliar]);
 
   const salvarPresencasMutation = useMutation({
     mutationFn: async (escalaId: string) => {
@@ -205,7 +219,7 @@ function SacristiaPage() {
       if (error) throw error;
     },
     onMutate: (escalaId) => setSavingEscalaId(escalaId),
-    onSuccess: () => {
+    onSuccess: async (_, escalaId) => {
       qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
       qc.invalidateQueries({ queryKey: ["sacristia-todas"] });
       qc.invalidateQueries({ queryKey: ["escala-membros"] });
@@ -214,6 +228,44 @@ function SacristiaPage() {
       qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       toast.success("Presenças salvas.");
+
+      // Envia e-mail de confirmação para cada membro com status final registrado
+      const escala = todasEscalas.find((e) => e.id === escalaId);
+      if (!escala) return;
+      const membrosDestaEscala = membrosEscala.filter((m) => m.escala_id === escalaId);
+
+      // Agrupa por membro_id (membro pode ter N ministérios na mesma escala)
+      const porMembro = new Map<string, MembroEscala[]>();
+      for (const m of membrosDestaEscala) {
+        const st = presencaMap[m.id] ?? m.status;
+        if (!STATUS_FINAIS.includes(st)) continue;
+        if (!m.membro.email) continue;
+        if (!porMembro.has(m.membro_id)) porMembro.set(m.membro_id, []);
+        porMembro.get(m.membro_id)!.push(m);
+      }
+      let delay = 0;
+      for (const [, rows] of porMembro) {
+        const m0 = rows[0];
+        if (delay > 0) await new Promise((r) => setTimeout(r, 400));
+        delay++;
+        const st = presencaMap[m0.id] ?? m0.status;
+        const ministerioNome = rows.map((r) => r.ministerio.nome).join(", ");
+        const justif = st === "justificou" ? (justificativaMap[m0.id] ?? m0.justificativa ?? "") : "";
+        await supabase.functions.invoke("send-email", {
+          body: {
+            template: "registro_presenca_membro",
+            to: m0.membro.email,
+            nome: m0.membro.nome,
+            paroquia: paroquiaNome,
+            escalaTitulo: escala.titulo,
+            escalaData: escala.data,
+            escalaHora: escala.hora_inicio?.slice(0, 5) ?? "",
+            ministerioNome,
+            status: st,
+            justificativa: justif,
+          },
+        }).catch(() => {});
+      }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
     onSettled: () => setSavingEscalaId(null),
@@ -635,7 +687,7 @@ function SacristiaPage() {
                           Solene
                         </Badge>
                       )}
-                      {tab === "pendentes" && !isAdministrador && (
+                      {tab === "pendentes" && !isAuxiliar && (
                         <Button
                           variant="ghost"
                           size="sm"

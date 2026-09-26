@@ -385,6 +385,128 @@ function tEscalaCancelada(nome: string, paroquia: string, escalaTitulo: string, 
   return baseLayout(paroquia, body, siteUrl);
 }
 
+function tEscalaResumoPeriodo(
+  nome: string,
+  paroquia: string,
+  acao: string,
+  escalasItems: Array<{ titulo: string; data: string; hora: string; ministerioNome: string }>,
+  siteUrl: string,
+): string {
+  const sn = htmlSafe(nome);
+  const sp = htmlSafe(paroquia);
+  const MESES = ["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const DIAS  = ["domingo","segunda-feira","ter&ccedil;a-feira","quarta-feira","quinta-feira","sexta-feira","s&aacute;bado"];
+  const linhas = escalasItems.map((e) => {
+    const st = htmlSafe(e.titulo);
+    const sm = htmlSafe(e.ministerioNome);
+    let dataFmt = htmlSafe(e.data);
+    try {
+      const [y, mo, d] = e.data.split("-").map(Number);
+      const dt = new Date(y, mo - 1, d);
+      dataFmt = `${DIAS[dt.getDay()]}, ${d} de ${MESES[mo - 1]}`;
+    } catch {/**/}
+    const horaFmt = e.hora ? ` &agrave;s ${htmlSafe(e.hora)}` : "";
+    return `<tr style="border-bottom:1px solid #eee;">
+      <td style="padding:10px 8px 10px 0;font-size:14px;font-weight:600;color:#111;vertical-align:top;">${st}</td>
+      <td style="padding:10px 8px;font-size:13px;color:#555;vertical-align:top;white-space:nowrap;">${dataFmt}${horaFmt}</td>
+      <td style="padding:10px 0 10px 8px;font-size:13px;font-weight:700;color:#1a1a2e;vertical-align:top;">${sm}</td>
+    </tr>`;
+  }).join("");
+  const isCancel = acao === "cancelada";
+  const portalUrl = `${siteUrl}/portal-membro/escalas`;
+  const titulo = isCancel
+    ? "Escalas canceladas &#10060;"
+    : "Voc&ecirc; foi escalado(a) &#127775;";
+  const intro = isCancel
+    ? `As seguintes escalas foram <strong>canceladas</strong> pela coordena&ccedil;&atilde;o da <span class="hi">${sp}</span>:`
+    : `A coordena&ccedil;&atilde;o da <span class="hi">${sp}</span> publicou escalas com a sua participa&ccedil;&atilde;o:`;
+  const cta = isCancel
+    ? `<p>Voc&ecirc; <strong>n&atilde;o precisa comparecer</strong> nas datas acima. Em caso de d&uacute;vidas, entre em contato com a coordena&ccedil;&atilde;o.</p>`
+    : `<p>Por favor, <strong>confirme sua presen&ccedil;a</strong> em cada escala o quanto antes:</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">&#10003;&nbsp; Ver escalas</a></div>`;
+  const body = `
+    <h1>${titulo}</h1>
+    <p>Ol&aacute;, <strong>${sn}</strong>! ${intro}</p>
+    <div style="background:#f7f6f2;border-radius:10px;padding:20px 24px;margin:20px 0;overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;min-width:280px;">
+        <thead>
+          <tr>
+            <th style="padding:0 8px 8px 0;font-size:11px;color:#888;text-align:left;font-weight:600;letter-spacing:.06em;text-transform:uppercase;">Escala</th>
+            <th style="padding:0 8px 8px;font-size:11px;color:#888;text-align:left;font-weight:600;letter-spacing:.06em;text-transform:uppercase;">Data</th>
+            <th style="padding:0 0 8px 8px;font-size:11px;color:#888;text-align:left;font-weight:600;letter-spacing:.06em;text-transform:uppercase;">Fun&ccedil;&atilde;o</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>
+    ${cta}
+    <p class="note">Em caso de d&uacute;vidas, entre em contato com a coordena&ccedil;&atilde;o da <span style="font-weight:600">${sp}</span>.</p>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
+function tRegistroPresencaMembro(
+  nome: string,
+  paroquia: string,
+  escalaTitulo: string,
+  escalaData: string,
+  escalaHora: string,
+  ministerioNome: string,
+  status: string,
+  justificativa: string,
+  siteUrl: string,
+): string {
+  const sn = htmlSafe(nome);
+  const sp = htmlSafe(paroquia);
+  const st = htmlSafe(escalaTitulo);
+  const sm = htmlSafe(ministerioNome);
+  const sj = htmlSafe(justificativa);
+  const MESES = ["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const DIAS  = ["domingo","segunda-feira","ter&ccedil;a-feira","quarta-feira","quinta-feira","sexta-feira","s&aacute;bado"];
+  let dataFmt = htmlSafe(escalaData);
+  try {
+    const [y, mo, d] = escalaData.split("-").map(Number);
+    const dt = new Date(y, mo - 1, d);
+    dataFmt = `${DIAS[dt.getDay()]}, ${d} de ${MESES[mo - 1]} de ${y}`;
+  } catch {/**/}
+  const horaFmt = escalaHora ? ` &agrave;s ${htmlSafe(escalaHora)}` : "";
+  const statusMap: Record<string, { icon: string; label: string; cor: string }> = {
+    presente:   { icon: "&#9989;",  label: "Presente",   cor: "#059669" },
+    atrasado:   { icon: "&#9201;",  label: "Atrasado(a)", cor: "#d97706" },
+    justificou: { icon: "&#128221;", label: "Justificativa registrada", cor: "#2563eb" },
+    faltou:     { icon: "&#10060;",  label: "Ausente",    cor: "#dc2626" },
+  };
+  const s = statusMap[status] ?? { icon: "&#8226;", label: status, cor: "#555" };
+  const portalUrl = `${siteUrl}/portal-membro/escalas`;
+  const body = `
+    <h1>Presen&ccedil;a registrada &#128221;</h1>
+    <p>Ol&aacute;, <strong>${sn}</strong>! Seu registro de presen&ccedil;a na escala abaixo foi confirmado pela coordena&ccedil;&atilde;o da <span class="hi">${sp}</span>.</p>
+    <div style="background:#f7f6f2;border-radius:10px;padding:20px 24px;margin:20px 0;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#888;font-size:13px;width:90px;">Escala</td>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;font-weight:700;color:#111;font-size:15px;">${st}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#888;font-size:13px;">Data</td>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#333;font-size:14px;">${dataFmt}${horaFmt}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#888;font-size:13px;">Fun&ccedil;&atilde;o</td>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;font-weight:600;color:#111;">${sm}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;color:#888;font-size:13px;">Presen&ccedil;a</td>
+          <td style="padding:7px 0;font-weight:700;font-size:15px;color:${s.cor};">${s.icon}&nbsp; ${s.label}</td>
+        </tr>
+      </table>
+      ${sj ? `<p style="margin:12px 0 0;font-size:13px;color:#555;font-style:italic;">Justificativa: ${sj}</p>` : ""}
+    </div>
+    <p>Voc&ecirc; pode acompanhar seu hist&oacute;rico de presen&ccedil;as no portal:</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">Ver minhas escalas &rarr;</a></div>
+    <p class="note">Em caso de d&uacute;vidas, entre em contato com a coordena&ccedil;&atilde;o da <span style="font-weight:600">${sp}</span>.</p>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
 function tVagaDisponivel(nome: string, paroquia: string, ministerioNome: string, escalaTitulo: string, escalaData: string, escalaHora: string, siteUrl: string): string {
   const sn = htmlSafe(nome); const sp = htmlSafe(paroquia); const sf = htmlSafe(ministerioNome); const st = htmlSafe(escalaTitulo);
   let dataFmt = escalaData;
@@ -648,8 +770,8 @@ Deno.serve(async (req) => {
       requesterId = user?.id ?? null;
     } catch { /* não-fatal — rate limit por destinatário ainda se aplica */ }
 
-    const body = await req.json() as { template: string; to?: string; nome?: string; paroquia?: string; code?: string; escalaTitulo?: string; escalaData?: string; escalaHora?: string; ministerioNome?: string; pendentes?: number; total?: number; redirectTo?: string; token?: string; from?: string };
-    const { template, nome = "", paroquia = "Pastoral", code = "", escalaTitulo = "", escalaData = "", escalaHora = "", ministerioNome = "", pendentes = 0, total = 0, redirectTo = "", token = "", from: bodyFrom = "" } = body;
+    const body = await req.json() as { template: string; to?: string; nome?: string; paroquia?: string; code?: string; escalaTitulo?: string; escalaData?: string; escalaHora?: string; ministerioNome?: string; pendentes?: number; total?: number; redirectTo?: string; token?: string; from?: string; escalasItems?: Array<{ titulo: string; data: string; hora: string; ministerioNome: string }>; acao?: string; status?: string; justificativa?: string };
+    const { template, nome = "", paroquia = "Pastoral", code = "", escalaTitulo = "", escalaData = "", escalaHora = "", ministerioNome = "", pendentes = 0, total = 0, redirectTo = "", token = "", from: bodyFrom = "", escalasItems = [] as Array<{ titulo: string; data: string; hora: string; ministerioNome: string }>, acao = "", status: statusPresenca = "", justificativa = "" } = body;
     let to = body.to ?? "";
 
     if (!template) return json({ ok: false, error: "Missing field: template" }, 400);
@@ -829,6 +951,21 @@ Deno.serve(async (req) => {
     } else if (template === "escala_cancelada") {
       subject = `${paroquia} — Escala cancelada: ${escalaTitulo}`;
       html    = tEscalaCancelada(nome, paroquia, escalaTitulo, escalaData, escalaHora, ministerioNome, siteUrl);
+
+    } else if (template === "registro_presenca_membro") {
+      const isFaltou = statusPresenca === "faltou";
+      subject = isFaltou
+        ? `${paroquia} — Aus&ecirc;ncia registrada: ${escalaTitulo}`
+        : `${paroquia} — Presen&ccedil;a registrada: ${escalaTitulo}`;
+      html = tRegistroPresencaMembro(nome, paroquia, escalaTitulo, escalaData, escalaHora, ministerioNome, statusPresenca, justificativa, siteUrl);
+
+    } else if (template === "escala_resumo_periodo") {
+      const isCancel = acao === "cancelada";
+      const n = escalasItems.length;
+      subject = isCancel
+        ? `${paroquia} — ${n > 1 ? `${n} escalas canceladas` : `Escala cancelada: ${escalasItems[0]?.titulo ?? ""}`}`
+        : `${paroquia} — ${n > 1 ? `${n} escalas publicadas` : `Escala publicada: ${escalasItems[0]?.titulo ?? ""}`}`;
+      html = tEscalaResumoPeriodo(nome, paroquia, acao, escalasItems, siteUrl);
 
     } else if (template === "vaga_disponivel") {
       subject = `${paroquia} — Vaga disponível: ${ministerioNome}`;

@@ -92,19 +92,17 @@ export function useAuth() {
   // (tipo_acesso='auxiliar' no membro → role='lider' via admin_set_membro_acesso)
   const isLider = roles.some((r) => r === "lider");
 
-  // Legado: 'auxiliar' nunca existiu no enum — isAuxiliar sempre foi false; mantido por compatibilidade
-  const isAuxiliar = isLider;
-
   // Vai para o portal do membro (não o painel admin)
   const isServidor = roles.length > 0 && roles.every((r) =>
     r === "servidor" || r === "membro"
   );
 
-  // Secretário puro → acesso ao painel admin só para sacristia das próprias escalas
-  const isAdministrador = isLider && !isAdmin && !isCoordenador;
+  // Secretário puro: role='lider' sem admin_paroquial nem coordenador
+  // → acesso ao painel admin restrito à sacristia das próprias escalas
+  const isAuxiliar = isLider && !isAdmin && !isCoordenador;
 
   // Qualquer papel com acesso ao painel admin
   const hasAdminAccess = isAdmin || isCoordenador || isLider;
 
-  return { user, profile, loading, roles, isServidor, isAdmin, isSuperAdmin, isCoordenador, isLider, isAuxiliar, isAdministrador, hasAdminAccess, refreshProfile };
+  return { user, profile, loading, roles, isServidor, isAdmin, isSuperAdmin, isCoordenador, isLider, isAuxiliar, hasAdminAccess, refreshProfile };
 }

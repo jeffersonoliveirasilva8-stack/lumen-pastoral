@@ -51,12 +51,71 @@ Deno.serve(async (req) => {
   // Lê modo do query-param ou body
   const url   = new URL(req.url);
   let mode    = url.searchParams.get("mode") ?? "manual";
-  let bodyMode: string | undefined;
+  let parsedBody: any = {};
   try {
-    const b = await req.json();
-    bodyMode = b?.mode;
+    parsedBody = await req.json();
+    if (parsedBody?.mode) mode = parsedBody.mode;
   } catch { /* sem body */ }
-  if (bodyMode) mode = bodyMode;
+
+  // ── Modo "evento": envia lembrete para todos membros de um evento específico ──
+  if (mode === "evento") {
+    const eventoId  = url.searchParams.get("evento_id") ?? parsedBody?.evento_id;
+    const fromIndex = parseInt(url.searchParams.get("from_index") ?? parsedBody?.from_index ?? "0", 10) || 0;
+    if (!eventoId) return json({ ok: false, error: "evento_id obrigatório para mode=evento" }, 400);
+
+    const { data: evento } = await admin
+      .from("formacoes_eventos")
+      .select("id, titulo, data_inicio, paroquia_id")
+      .eq("id", eventoId)
+      .single();
+
+    if (!evento) return json({ ok: false, error: "Evento não encontrado" }, 404);
+
+    const { data: presencas } = await admin
+      .from("presencas_eventos")
+      .select("membro_id, presente, membros(id, nome, email)")
+      .eq("evento_id", eventoId)
+      .or("presente.is.null,presente.eq.false");
+
+    // Busca nome da paróquia
+    const { data: paroquia } = await admin.from("paroquias").select("nome").eq("id", (evento as any).paroquia_id).single();
+    const paroquiaNome = paroquia?.nome ?? "Pastoral Litúrgica";
+    const dataInicio   = new Date((evento as any).data_inicio);
+    const escalaData   = toLocalDate(dataInicio);
+    const escalaHora   = dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+
+    let enviados = 0;
+    const erros: string[] = [];
+
+    const presencasList = (presencas ?? []).slice(fromIndex);
+    for (let i = 0; i < presencasList.length; i++) {
+      const p = presencasList[i] as any;
+      const membro = p.membros;
+      if (!membro?.email) continue;
+      if (i > 0) await new Promise((r) => setTimeout(r, 800));
+      try {
+        const res = await fetch(sendEmailUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${anonKey}`, "apikey": anonKey },
+          body: JSON.stringify({
+            template:     "evento_convite",
+            to:           membro.email,
+            nome:         membro.nome,
+            paroquia:     paroquiaNome,
+            escalaTitulo: (evento as any).titulo,
+            escalaData,
+            escalaHora,
+          }),
+        });
+        if (res.ok) enviados++;
+        else erros.push(`${membro.email}: ${await res.text()}`);
+      } catch (err: any) {
+        erros.push(`${membro.email}: ${err.message}`);
+      }
+    }
+
+    return json({ ok: true, mode: "evento", evento: (evento as any).titulo, enviados, erros_count: erros.length, erros });
+  }
 
   const now      = new Date();
   const hoje     = toLocalDate(now);

@@ -282,6 +282,7 @@ function PortalMembroEscalas() {
         .from("escala_membros")
         .select(`id, status, escalas!inner(titulo, data, status), ministerios(nome, cor)`)
         .eq("membro_id", membro!.id)
+        .or("ativo.is.null,ativo.eq.true" as any)
         .eq("escalas.status", "cancelada")
         .order("escalas.data", { ascending: false })
         .limit(20);

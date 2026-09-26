@@ -1024,6 +1024,9 @@ function EscalasPage() {
       refetchRemovidos();
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros-removidos"] });
+      qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
     },
   });
 
@@ -1037,7 +1040,8 @@ function EscalasPage() {
     if (elegiveisIds.length === 0) return;
     const { data: jaAtribData } = await supabase
       .from("escala_membros").select("membro_id")
-      .eq("escala_id", escalaId).eq("ministerio_id", ministerioId);
+      .eq("escala_id", escalaId).eq("ministerio_id", ministerioId)
+      .neq("ativo" as any, false);
     const jaAtrib = new Set((jaAtribData ?? []).map((a: { membro_id: string }) => a.membro_id));
     const destinatariosIds = elegiveisIds.filter((id: string) => !jaAtrib.has(id));
     if (destinatariosIds.length === 0) return;
@@ -1096,15 +1100,18 @@ function EscalasPage() {
       if (error) throw error;
       return data as { acao: string; substituicao_id?: string };
     },
-    onSuccess: (data, args) => {
+    onSuccess: async (data, args) => {
       refetchAtribuicoes();
+      refetchRemovidos();
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       qc.invalidateQueries({ queryKey: ["membros-ativos", profile?.paroquia_id] });
+      qc.invalidateQueries({ queryKey: ["escala-membros"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros-removidos"] });
+      qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
       if (data?.acao === "vaga_aberta") {
         toast.success("Vaga aberta para substituição.");
         qc.invalidateQueries({ queryKey: ["admin-substituicoes"] });
-        // Notificação só é enviada após confirmação da criação da substituição
         if (args.notificarVaga) {
           handleNotificarVaga({
             escalaId:      args.escalaId,
@@ -1114,6 +1121,23 @@ function EscalasPage() {
         }
       } else {
         toast.success("Membro removido da escala.");
+      }
+      // Notifica o membro removido que foi retirado da escala publicada
+      const membroRemovido = membros.find((m: Membro) => m.id === args.membroId);
+      const escalaRef = escalas.find((e) => e.id === args.escalaId) ?? detailEscala;
+      if (membroRemovido?.email && escalaRef) {
+        await supabase.functions.invoke("send-email", {
+          body: {
+            template: "escala_cancelada",
+            to: membroRemovido.email,
+            nome: membroRemovido.nome,
+            paroquia: paroquiaNome ?? "",
+            escalaTitulo: escalaRef.titulo,
+            escalaData: escalaRef.data,
+            escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+            ministerioNome: args.ministerioNome,
+          },
+        }).catch(() => {});
       }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
@@ -1214,25 +1238,51 @@ function EscalasPage() {
           .select("membro_id, ministerio_id, membros!membro_id(id, nome, email)")
           .eq("escala_id", vars.id)
           .neq("ativo", false);
-        for (let i = 0; i < (atrib ?? []).length; i++) {
-          const a = (atrib ?? [])[i];
-          const emailTo   = a.membros?.email ?? membros.find((m: Membro) => m.id === a.membro_id)?.email;
-          const nomeMemb  = a.membros?.nome  ?? membros.find((m: Membro) => m.id === a.membro_id)?.nome ?? "";
-          const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
+        // Agrupa por membro_id: 1 e-mail por membro mesmo que tenha N ministérios
+        const porMembroPub = new Map<string, Array<{ membro_id: string; ministerio_id: string; membros?: { email?: string; nome?: string } }>>();
+        for (const a of (atrib ?? [])) {
+          if (!porMembroPub.has(a.membro_id)) porMembroPub.set(a.membro_id, []);
+          porMembroPub.get(a.membro_id)!.push(a);
+        }
+        let emailDelayPub = 0;
+        for (const [, rows] of porMembroPub) {
+          const a0 = rows[0];
+          const emailTo  = a0.membros?.email ?? membros.find((m: Membro) => m.id === a0.membro_id)?.email;
+          const nomeMemb = a0.membros?.nome  ?? membros.find((m: Membro) => m.id === a0.membro_id)?.nome ?? "";
           if (!emailTo) continue;
-          if (i > 0) await new Promise((r) => setTimeout(r, 400));
-          supabase.functions.invoke("send-email", {
-            body: {
-              template: "escala_publicada",
-              to: emailTo,
-              nome: nomeMemb,
-              paroquia: paroquiaNome,
-              escalaTitulo: escalaRef.titulo,
-              escalaData: escalaRef.data,
-              escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
-              ministerioNome: min?.nome ?? "",
-            },
-          });
+          if (emailDelayPub > 0) await new Promise((r) => setTimeout(r, 400));
+          emailDelayPub++;
+          if (rows.length === 1) {
+            const min = ministerios.find((m: Ministerio) => m.id === a0.ministerio_id);
+            await supabase.functions.invoke("send-email", {
+              body: {
+                template: "escala_publicada",
+                to: emailTo,
+                nome: nomeMemb,
+                paroquia: paroquiaNome,
+                escalaTitulo: escalaRef.titulo,
+                escalaData: escalaRef.data,
+                escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+                ministerioNome: min?.nome ?? "",
+              },
+            }).catch(() => {});
+          } else {
+            await supabase.functions.invoke("send-email", {
+              body: {
+                template: "escala_resumo_periodo",
+                to: emailTo,
+                nome: nomeMemb,
+                paroquia: paroquiaNome,
+                acao: "publicada",
+                escalasItems: rows.map((r) => ({
+                  titulo: escalaRef.titulo,
+                  data: escalaRef.data,
+                  hora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+                  ministerioNome: ministerios.find((m: Ministerio) => m.id === r.ministerio_id)?.nome ?? "",
+                })),
+              },
+            }).catch(() => {});
+          }
         }
       }
 
@@ -1256,25 +1306,49 @@ function EscalasPage() {
           link_referencia: "/portal-membro/escalas",
         }));
         if (notifs.length > 0) await (supabase as any).from("notificacoes").insert(notifs);
-        // E-mails
-        for (let i = 0; i < atribList.length; i++) {
-          const a = atribList[i];
-          const membro = membros.find((m: Membro) => m.id === a.membro_id);
-          const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
+        // E-mails — agrupa por membro_id para 1 e-mail por membro
+        const porMembroCancel = new Map<string, Array<{ membro_id: string; ministerio_id: string }>>();
+        for (const a of atribList) {
+          if (!porMembroCancel.has(a.membro_id)) porMembroCancel.set(a.membro_id, []);
+          porMembroCancel.get(a.membro_id)!.push(a);
+        }
+        let emailDelayCancel = 0;
+        for (const [, rows] of porMembroCancel) {
+          const membro = membros.find((m: Membro) => m.id === rows[0].membro_id);
           if (!membro?.email) continue;
-          if (i > 0) await new Promise((r) => setTimeout(r, 400));
-          supabase.functions.invoke("send-email", {
-            body: {
-              template: "escala_cancelada",
-              to: membro.email,
-              nome: membro.nome,
-              paroquia: paroquiaNome,
-              escalaTitulo: escalaRef.titulo,
-              escalaData: escalaRef.data,
-              escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
-              ministerioNome: min?.nome ?? "",
-            },
-          });
+          if (emailDelayCancel > 0) await new Promise((r) => setTimeout(r, 400));
+          emailDelayCancel++;
+          if (rows.length === 1) {
+            const min = ministerios.find((m: Ministerio) => m.id === rows[0].ministerio_id);
+            await supabase.functions.invoke("send-email", {
+              body: {
+                template: "escala_cancelada",
+                to: membro.email,
+                nome: membro.nome,
+                paroquia: paroquiaNome,
+                escalaTitulo: escalaRef.titulo,
+                escalaData: escalaRef.data,
+                escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+                ministerioNome: min?.nome ?? "",
+              },
+            }).catch(() => {});
+          } else {
+            await supabase.functions.invoke("send-email", {
+              body: {
+                template: "escala_resumo_periodo",
+                to: membro.email,
+                nome: membro.nome,
+                paroquia: paroquiaNome,
+                acao: "cancelada",
+                escalasItems: rows.map((r) => ({
+                  titulo: escalaRef.titulo,
+                  data: escalaRef.data,
+                  hora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+                  ministerioNome: ministerios.find((m: Ministerio) => m.id === r.ministerio_id)?.nome ?? "",
+                })),
+              },
+            }).catch(() => {});
+          }
         }
       }
     },
@@ -1323,26 +1397,59 @@ function EscalasPage() {
           if (notifs.length > 0) await (supabase as any).from("notificacoes").insert(notifs);
         }
 
-        const template = status === "publicada" ? "escala_publicada" : "escala_cancelada";
-        for (let i = 0; i < allAtrib.length; i++) {
-          const a = allAtrib[i];
-          const escalaRef = escalas.find((e) => e.id === a.escala_id);
-          const membro = membros.find((m: Membro) => m.id === a.membro_id);
-          const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
-          if (!membro?.email || !escalaRef) continue;
-          if (i > 0) await new Promise((r) => setTimeout(r, 400));
-          supabase.functions.invoke("send-email", {
-            body: {
-              template,
-              to: membro.email,
-              nome: membro.nome,
-              paroquia: paroquiaNome,
-              escalaTitulo: escalaRef.titulo,
-              escalaData: escalaRef.data,
-              escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
-              ministerioNome: min?.nome ?? "",
-            },
-          });
+        // Agrupa por membro_id: 1 e-mail por membro com todas as suas escalas
+        const porMembroBulk = new Map<string, Array<{ membro_id: string; ministerio_id: string; escala_id: string }>>();
+        for (const a of allAtrib) {
+          if (!porMembroBulk.has(a.membro_id)) porMembroBulk.set(a.membro_id, []);
+          porMembroBulk.get(a.membro_id)!.push(a);
+        }
+        const acaoBulk = status === "publicada" ? "publicada" : "cancelada";
+        let emailDelayBulk = 0;
+        for (const [membroId, rows] of porMembroBulk) {
+          const membro = membros.find((m: Membro) => m.id === membroId);
+          if (!membro?.email) continue;
+          if (emailDelayBulk > 0) await new Promise((r) => setTimeout(r, 400));
+          emailDelayBulk++;
+          if (rows.length === 1) {
+            const a = rows[0];
+            const escalaRef = escalas.find((e) => e.id === a.escala_id);
+            const min = ministerios.find((m: Ministerio) => m.id === a.ministerio_id);
+            if (!escalaRef) continue;
+            await supabase.functions.invoke("send-email", {
+              body: {
+                template: acaoBulk === "publicada" ? "escala_publicada" : "escala_cancelada",
+                to: membro.email,
+                nome: membro.nome,
+                paroquia: paroquiaNome,
+                escalaTitulo: escalaRef.titulo,
+                escalaData: escalaRef.data,
+                escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+                ministerioNome: min?.nome ?? "",
+              },
+            }).catch(() => {});
+          } else {
+            await supabase.functions.invoke("send-email", {
+              body: {
+                template: "escala_resumo_periodo",
+                to: membro.email,
+                nome: membro.nome,
+                paroquia: paroquiaNome,
+                acao: acaoBulk,
+                escalasItems: rows
+                  .map((r) => {
+                    const escalaRef = escalas.find((e) => e.id === r.escala_id);
+                    if (!escalaRef) return null;
+                    return {
+                      titulo: escalaRef.titulo,
+                      data: escalaRef.data,
+                      hora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+                      ministerioNome: ministerios.find((m: Ministerio) => m.id === r.ministerio_id)?.nome ?? "",
+                    };
+                  })
+                  .filter(Boolean),
+              },
+            }).catch(() => {});
+          }
         }
       }
     },
@@ -1395,22 +1502,64 @@ function EscalasPage() {
   });
 
   const swapMembroMutation = useMutation({
-    mutationFn: async ({ removeId, escalaId, membroId, ministerioId }: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => {
+    mutationFn: async ({ removeId, escalaId, membroId, ministerioId }: { removeId: string; removeMembroId: string; escalaId: string; membroId: string; ministerioId: string }) => {
       const { error: updErr } = await (supabase as any)
         .from("escala_membros")
         .update({ ativo: false, removido_em: new Date().toISOString() })
         .eq("id", removeId);
       if (updErr) throw updErr;
-      const { error: insErr } = await (supabase as any).from("escala_membros").upsert({ escala_id: escalaId, membro_id: membroId, ministerio_id: ministerioId, status: "pendente", ativo: true, removido_em: null }, { onConflict: "escala_id,membro_id,ministerio_id" });
+      const { error: insErr } = await (supabase as any).from("escala_membros").upsert({
+        escala_id: escalaId, membro_id: membroId, ministerio_id: ministerioId,
+        status: "pendente", ativo: true, removido_em: null,
+        justificativa: null, presenca_registrada_por: null, presenca_registrada_em: null,
+      }, { onConflict: "escala_id,membro_id,ministerio_id" });
       if (insErr) throw insErr;
     },
-    onSuccess: () => {
+    onSuccess: async (_, args) => {
       qc.invalidateQueries({ queryKey: ["escalas-counts"] });
       qc.invalidateQueries({ queryKey: ["escala-membros"] });
       qc.invalidateQueries({ queryKey: ["escala-membros-removidos"] });
       qc.invalidateQueries({ queryKey: ["escala-historico"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+      qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
       toast.success("Substituição realizada.");
+      const escalaRef = escalas.find((e) => e.id === args.escalaId) ?? detailEscala;
+      const min = ministerios.find((m: Ministerio) => m.id === args.ministerioId);
+      const minNome = min?.nome ?? "";
+      // Notifica membro removido
+      const membroAntigo = membros.find((m: Membro) => m.id === args.removeMembroId);
+      if (membroAntigo?.email && escalaRef) {
+        await supabase.functions.invoke("send-email", {
+          body: {
+            template: "escala_cancelada",
+            to: membroAntigo.email,
+            nome: membroAntigo.nome,
+            paroquia: paroquiaNome ?? "",
+            escalaTitulo: escalaRef.titulo,
+            escalaData: escalaRef.data,
+            escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+            ministerioNome: minNome,
+          },
+        }).catch(() => {});
+      }
+      // Notifica novo membro
+      const membroNovo = membros.find((m: Membro) => m.id === args.membroId);
+      if (membroNovo?.email && escalaRef) {
+        await new Promise((r) => setTimeout(r, 400));
+        await supabase.functions.invoke("send-email", {
+          body: {
+            template: "escala_atribuida",
+            to: membroNovo.email,
+            nome: membroNovo.nome,
+            paroquia: paroquiaNome ?? "",
+            escalaTitulo: escalaRef.titulo,
+            escalaData: escalaRef.data,
+            escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
+            ministerioNome: minNome,
+          },
+        }).catch(() => {});
+      }
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
@@ -1440,7 +1589,12 @@ function EscalasPage() {
         );
       }
 
-      await (supabase as any).from("escala_membros").delete().eq("escala_id", escalaId);
+      // Soft-delete: preserva histórico de presenças e status anteriores
+      await (supabase as any)
+        .from("escala_membros")
+        .update({ ativo: false, removido_em: new Date().toISOString() })
+        .eq("escala_id", escalaId)
+        .eq("ativo", true);
 
       const funcoesPedido = (funcoesData as any[]).map((f) => ({
         ministerio_id:        f.ministerio_id,
@@ -1502,13 +1656,19 @@ function EscalasPage() {
       );
 
       if (resultado.sugestoes.length > 0) {
-        const { error: reorganizarErr } = await (supabase as any).from("escala_membros").insert(
+        const { error: reorganizarErr } = await (supabase as any).from("escala_membros").upsert(
           resultado.sugestoes.map((s) => ({
             escala_id: escalaId,
             membro_id: s.membro_id,
             ministerio_id: s.ministerio_id,
             status: "pendente",
-          }))
+            ativo: true,
+            removido_em: null,
+            justificativa: null,
+            presenca_registrada_por: null,
+            presenca_registrada_em: null,
+          })),
+          { onConflict: "escala_id,membro_id,ministerio_id" }
         );
         if (reorganizarErr) {
           console.error("[REORGANIZAR] Erro ao inserir membros:", reorganizarErr);
@@ -1538,6 +1698,8 @@ function EscalasPage() {
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
       qc.invalidateQueries({ queryKey: ["escala-membros"] });
+      qc.invalidateQueries({ queryKey: ["escala-membros-removidos"] });
+      qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
       setReorganizarOpen(false);
       setReorganizarEscalaId("");
       if (count > 0) {
@@ -3196,7 +3358,7 @@ function SwapMembroModal({
   funcaoRestricoes: FuncaoRestricao[];
   paroquiaConfig: ParoquiaConfigRaw;
   assignmentHistory: AssignmentHistoryEntry[];
-  onSwap: (args: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
+  onSwap: (args: { removeId: string; removeMembroId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
   onClose: () => void;
 }) {
   const [selectedEscala, setSelectedEscala] = useState<string>("");
@@ -3416,7 +3578,7 @@ function SwapMembroModal({
                   .limit(1);
                 const atribId = atribs?.[0]?.id;
                 if (atribId) {
-                  onSwap({ removeId: atribId, escalaId: selectedEscala, membroId, ministerioId: repMinisterioId });
+                  onSwap({ removeId: atribId, removeMembroId: repMembroId, escalaId: selectedEscala, membroId, ministerioId: repMinisterioId });
                 }
               }
               onClose();
@@ -3557,7 +3719,7 @@ function ListaView({
   onExportPDF: (id: string) => void;
   onReorganizar: () => void;
   onBulkPublish: (ids: string[]) => void;
-  onSwapMembro: (args: { removeId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
+  onSwapMembro: (args: { removeId: string; removeMembroId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
   isBulkPublishing: boolean;
 }) {
   const [radarOpen, setRadarOpen] = useState(false);
@@ -4693,23 +4855,35 @@ function EscalaDetail({
           .eq("id", escala.id);
       }
 
-      // Upsert primeiro — garante que os novos dados existam antes de remover os antigos.
-      // Se a deleção falhar, os dados novos já estão salvos (menos catastrófico que o inverso).
-      const { error: insertErr } = await anyDb.from("escala_membros").upsert(
-        rows.map((r: any) => ({ ...r, ativo: true, removido_em: null })),
+      // Captura IDs ativos antes do upsert para poder calcular o diff depois
+      const { data: ativosAntes } = await anyDb
+        .from("escala_membros")
+        .select("id")
+        .eq("escala_id", escala.id)
+        .eq("ativo", true);
+      const idsAntes = new Set<string>((ativosAntes ?? []).map((r: any) => r.id));
+
+      // Upsert primeiro — garante que os novos dados existam antes de soft-deletar os antigos.
+      // Retorna os IDs upsertados para calcular o diff e preservar histórico de presença.
+      const { data: upserted, error: insertErr } = await anyDb.from("escala_membros").upsert(
+        rows.map((r: any) => ({
+          ...r,
+          ativo: true,
+          removido_em: null,
+          justificativa: null,
+          presenca_registrada_por: null,
+          presenca_registrada_em: null,
+        })),
         { onConflict: "escala_id,membro_id,ministerio_id" }
-      );
+      ).select("id");
       if (insertErr) throw insertErr;
 
-      // Remove linhas que não fazem parte da nova alocação
-      const novosIds = rows.map((r) => r.membro_id);
-      if (novosIds.length > 0) {
+      const idsDepois = new Set<string>((upserted ?? []).map((r: any) => r.id));
+      const paraDesativar = [...idsAntes].filter(id => !idsDepois.has(id));
+      if (paraDesativar.length > 0) {
         await anyDb.from("escala_membros")
-          .delete()
-          .eq("escala_id", escala.id)
-          .not("membro_id", "in", `(${novosIds.join(",")})`);
-      } else {
-        await anyDb.from("escala_membros").delete().eq("escala_id", escala.id);
+          .update({ ativo: false, removido_em: new Date().toISOString() })
+          .in("id", paraDesativar);
       }
 
       return rows.length;
