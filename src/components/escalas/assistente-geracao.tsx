@@ -9,17 +9,10 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  generateEscalaAssignments,
+  generateEscalaWithAlertas,
   type AssignmentHistoryEntry,
   type FuncaoRestricao,
 } from "@/lib/escala-engine";
-import {
-  selecionarMembrosPastoral,
-  inicializarEstadoPastoral,
-  calcularUrgencia,
-  urgenciaNivel,
-  type EstadoPastoral,
-} from "@/biblioteca/pastoral-distribuicao";
 import { supabaseErrorMessage } from "@/lib/supabase-error";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -119,12 +112,57 @@ type ConflitoPotencial = {
   detalhe?: string;
 };
 
+type FuncaoVagaDetalhe = {
+  celebracao: string;
+  data: string;
+  ministerio_nome: string;
+  solicitados: number;
+  alocados: number;
+  motivo?: string;
+};
+
+type MembroCobertura = {
+  id: string;
+  nome: string;
+  escalas: number;
+  oportunidades: number;
+  taxa: number;
+};
+
+type PlanoCelebracao = {
+  cel: CelebracaoPreview;
+  alocacoes: { membro_id: string; ministerio_id: string }[];
+  funcoesVagas: FuncaoVagaDetalhe[];
+  semFuncoes: boolean;
+  alertas: string[];
+};
+
+type SimulacaoResultado = {
+  plano: PlanoCelebracao[];
+  sumario: {
+    totalCelebracoes: number;
+    celebracoesCompletas: number;
+    celebracoesIncompletas: number;
+    celebracoesSemFuncoes: number;
+    totalFuncoes: number;
+    funcoesPreenchidas: number;
+    funcoesVagas: number;
+    membrosEscalados: number;
+    membrosElegiveisSemEscala: MembroCobertura[];
+    distribuicao: { id: string; nome: string; count: number; oportunidades: number; taxa: number }[];
+    alertas: string[];
+  };
+};
+
 type Relatorio = {
   criadas: number;
   ignoradas: number;
   vagasPreenchidas: number;
   vagasNaoPreenchidas: number;
-  distribuicao: { id: string; nome: string; count: number }[];
+  distribuicao: { id: string; nome: string; count: number; oportunidades: number; taxa: number }[];
+  funcoesVagas: FuncaoVagaDetalhe[];
+  celebracoesSemFuncoes: { titulo: string; data: string }[];
+  alertas: string[];
 };
 
 type ConfigSalva = {
@@ -412,6 +450,7 @@ export function AssistenteGeracaoEscalas({
   const [paginaAtual, setPaginaAtual] = useState(0);
   const [progresso, setProgresso] = useState({ atual: 0, total: 0 });
   const [relatorio, setRelatorio] = useState<Relatorio | null>(null);
+  const [simulacao, setSimulacao] = useState<SimulacaoResultado | null>(null);
   const [ultimaConfig, setUltimaConfig] = useState<ConfigSalva | null>(null);
   const [sugerirUltimaConfig, setSugerirUltimaConfig] = useState(false);
 
@@ -487,6 +526,7 @@ export function AssistenteGeracaoEscalas({
     setPreVisualizacao([]);
     setConflitos([]);
     setRelatorio(null);
+    setSimulacao(null);
     setProgresso({ atual: 0, total: 0 });
     setPaginaAtual(0);
 
@@ -708,79 +748,233 @@ export function AssistenteGeracaoEscalas({
     setPasso(4);
   }
 
-  // ── P0.1 + P1.1 + P1.2 + P1.3 + FASE 9 — Geração ──────────────────────────
+  // ── Motor unificado V3: constrói plano sem gravar no banco ──────────────────
+  function computarPlano(): SimulacaoResultado {
+    const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
+    const engineConfig = {
+      usa_tochas:                paroquiaConfig?.usa_tochas ?? false,
+      limite_semanal:            regras.limite_semanal           as number  | undefined,
+      limite_mensal:             regras.limite_mensal            as number  | undefined,
+      impedir_repeticao_seguida: (regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
+      intervalo_minimo_dias:     regras.intervalo_minimo_dias    as number  | undefined,
+      distribuicao_masc_pct:     regras.distribuicao_masc_pct   as number  | undefined,
+      variedade_ministerio:      (regras.variedade_ministerio    as boolean | undefined) ?? false,
+      prioridade_bonus_alto:     regras.prioridade_bonus_alto    as number  | undefined,
+      prioridade_bonus_medio:    regras.prioridade_bonus_medio   as number  | undefined,
+      bonus_preferencial_solene: regras.bonus_preferencial_solene as number | undefined,
+    };
+
+    // Acumula histórico de alocações desta rodada (impede conflitos no mesmo dia)
+    const batchHistory: AssignmentHistoryEntry[] = [];
+
+    // Pré-calcula oportunidades elegíveis por membro no mês inteiro
+    const membroOportunidades = new Map<string, number>();
+    const membroPara: Record<string, string[]> = {};
+    for (const [minId, mids] of Object.entries(membroMinisterios)) {
+      for (const mid of mids) {
+        if (!membroPara[mid]) membroPara[mid] = [];
+        membroPara[mid].push(minId);
+      }
+    }
+    for (const cel of preVisualizacao) {
+      const diaSemana = new Date(cel.data + "T12:00:00").getDay();
+      for (const m of membros) {
+        if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
+        if (membroEstaBloqueado(m.id, cel.data, indisponibilidades)) continue;
+        const temVinculo = cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id));
+        if (!temVinculo) continue;
+        membroOportunidades.set(m.id, (membroOportunidades.get(m.id) ?? 0) + 1);
+      }
+    }
+
+    const plano: PlanoCelebracao[] = [];
+    const todosAlertasGlobais: string[] = [];
+
+    for (const cel of preVisualizacao) {
+      // Celebração sem funções configuradas → erro explícito, não silencioso
+      if (cel.funcoes.length === 0) {
+        plano.push({
+          cel,
+          alocacoes: [],
+          funcoesVagas: [],
+          semFuncoes: true,
+          alertas: ["Missa sem funções configuradas. Configure as funções antes de gerar."],
+        });
+        continue;
+      }
+
+      if (membros.length === 0) {
+        plano.push({ cel, alocacoes: [], funcoesVagas: [], semFuncoes: false, alertas: ["Nenhum membro ativo."] });
+        continue;
+      }
+
+      const missa = missasPadrao.find((m) => m.id === cel.missaPadraoId);
+      const diaSemana = new Date(cel.data + "T12:00:00").getDay();
+
+      // Restrições de indisponibilidade por missa padrão (esporádicos derivam do dia da semana)
+      const restDiaEsporadico = cel.esporadico
+        ? missasPadrao
+            .filter((mp) => mp.recorrencia?.tipo !== "esporadico" && mp.dia_semana === diaSemana)
+            .flatMap((mp) => (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: cel.data })))
+        : [];
+      const missaRestricaoIndisp = (missa ? (membroMissaRestricoes[missa.id] ?? []) : [])
+        .map((mid) => ({ membro_id: mid, data: cel.data }));
+      const indispParaGeracao = cel.esporadico
+        ? [...indisponibilidades, ...restDiaEsporadico]
+        : [...indisponibilidades, ...missaRestricaoIndisp];
+
+      const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+
+      // Ordena funções por escassez de candidatos (menos candidatos → processa primeiro)
+      // preservando a prioridade pastoral original quando configurada explicitamente.
+      const funcoesComCandidatos = cel.funcoes.map((f) => {
+        const candidatos = membros.filter((m) => {
+          if (!membroPara[m.id]?.includes(f.ministerio_id)) return false;
+          if (m.restricoes_dia_semana?.includes(diaSemana)) return false;
+          if (membroEstaBloqueado(m.id, cel.data, indispParaGeracao)) return false;
+          return true;
+        }).length;
+        return { ...f, _candidatos: candidatos };
+      });
+      // Ordena por (candidatos ASC) — garantindo que funções escassas são alocadas primeiro
+      funcoesComCandidatos.sort((a, b) => a._candidatos - b._candidatos);
+
+      const funcoesPedido = funcoesComCandidatos.map((f, idx) => ({
+        ministerio_id: f.ministerio_id,
+        quantidade:    f.quantidade,
+        ministerio:    { id: f.ministerio_id, nome: f.ministerio_nome, cor: f.ministerio_cor },
+        // ordem_prioridade reflete a posição após sort por escassez
+        ordem_prioridade: idx,
+      }));
+
+      // Chama o motor V3 para TODAS as celebrações (missas comuns e solenidades)
+      // Motor detecta modo automaticamente: solene=true → scoring mérito; false → equidade
+      const resultado = generateEscalaWithAlertas(
+        { titulo: cel.titulo, data: cel.data, tipo: cel.tipo, observacoes: null },
+        funcoesPedido,
+        membrosComAtuacoes,
+        membroMinisterios,
+        {
+          history:            [...assignmentHistory, ...batchHistory],
+          indisponibilidades: indispParaGeracao,
+          restricoes:         funcaoRestricoes,
+          config:             engineConfig,
+          solene:             cel.solene,
+          tem_adoracao:       cel.tem_adoracao,
+          tem_bispo:          cel.tem_bispo,
+        }
+      );
+
+      // Atualiza batchHistory para que a próxima celebração veja estas alocações
+      resultado.sugestoes.forEach((s) => {
+        batchHistory.push({ memberId: s.membro_id, ministerioId: s.ministerio_id, date: cel.data });
+      });
+
+      // Detecta funções que ficaram com vagas
+      const funcoesVagas: FuncaoVagaDetalhe[] = resultado.detalhesPorFuncao
+        .filter((d) => d.alocados < d.solicitados)
+        .map((d) => ({
+          celebracao:      cel.titulo,
+          data:            cel.data,
+          ministerio_nome: d.ministerio_nome,
+          solicitados:     d.solicitados,
+          alocados:        d.alocados,
+          motivo:          d.motivo_vazio,
+        }));
+
+      if (resultado.alertas.length > 0) todosAlertasGlobais.push(...resultado.alertas);
+
+      plano.push({
+        cel,
+        alocacoes:   resultado.sugestoes,
+        funcoesVagas,
+        semFuncoes:  false,
+        alertas:     resultado.alertas,
+      });
+    }
+
+    // ── Sumário ──
+    const membroEscalas  = new Map<string, number>();
+    for (const p of plano) {
+      for (const a of p.alocacoes) {
+        membroEscalas.set(a.membro_id, (membroEscalas.get(a.membro_id) ?? 0) + 1);
+      }
+    }
+
+    const distribuicao = membros
+      .filter((m) => membroEscalas.has(m.id) || (membroOportunidades.get(m.id) ?? 0) > 0)
+      .map((m) => ({
+        id:           m.id,
+        nome:         m.nome,
+        count:        membroEscalas.get(m.id) ?? 0,
+        oportunidades: membroOportunidades.get(m.id) ?? 0,
+        taxa: (() => {
+          const op = membroOportunidades.get(m.id) ?? 0;
+          const sc = membroEscalas.get(m.id) ?? 0;
+          return op > 0 ? sc / op : 0;
+        })(),
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const membrosElegiveisSemEscala: MembroCobertura[] = distribuicao.filter(
+      (d) => d.count === 0 && d.oportunidades > 0
+    );
+
+    const totalFuncoes    = plano.filter((p) => !p.semFuncoes).reduce((s, p) => s + p.cel.funcoes.reduce((a, f) => a + f.quantidade, 0), 0);
+    const funcoesVagasNum = plano.filter((p) => !p.semFuncoes).reduce((s, p) => s + p.funcoesVagas.reduce((a, f) => a + (f.solicitados - f.alocados), 0), 0);
+    const celebracoesIncompletas = plano.filter((p) => !p.semFuncoes && p.funcoesVagas.length > 0).length;
+
+    return {
+      plano,
+      sumario: {
+        totalCelebracoes:         plano.length,
+        celebracoesCompletas:     plano.filter((p) => !p.semFuncoes && p.funcoesVagas.length === 0).length,
+        celebracoesIncompletas,
+        celebracoesSemFuncoes:    plano.filter((p) => p.semFuncoes).length,
+        totalFuncoes,
+        funcoesPreenchidas:       totalFuncoes - funcoesVagasNum,
+        funcoesVagas:             funcoesVagasNum,
+        membrosEscalados:         membroEscalas.size,
+        membrosElegiveisSemEscala,
+        distribuicao,
+        alertas:                  todosAlertasGlobais,
+      },
+    };
+  }
+
+  // ── Simulação (sem DB) ────────────────────────────────────────────────────
+  const simularMutation = useMutation({
+    mutationFn: async () => computarPlano(),
+    onSuccess: (resultado) => setSimulacao(resultado),
+    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+  });
+
+  // ── Commit (grava no banco usando o plano da simulação) ───────────────────
   const gerarMutation = useMutation({
     mutationFn: async () => {
-      const total = preVisualizacao.length;
+      const sim = simulacao ?? computarPlano();
+      const total = sim.plano.length;
       setProgresso({ atual: 0, total });
 
       let criadas   = 0;
       let ignoradas = 0;
-      let totalSugestoes = 0;
+      let totalSugestoes        = 0;
       let totalVagasSolicitadas = 0;
-      const batchHistory: AssignmentHistoryEntry[] = [];
-      const membroContagem = new Map<string, { nome: string; count: number }>();
+      const funcoesVagasRelatorio: FuncaoVagaDetalhe[] = [];
+      const celebracoesSemFuncoes: { titulo: string; data: string }[] = [];
+      const todosAlertas: string[] = [];
 
-      // ── FASE 9A: estado pastoral inicial (últimas 2 semanas) ────────────────
-      const hoje = new Date();
-      const estadosPastorais = new Map<string, EstadoPastoral>();
-      const batchOportunidades = new Map<string, number>(); // membro_id → oportunidades na rodada
+      for (let i = 0; i < sim.plano.length; i++) {
+        const { cel, alocacoes, funcoesVagas, semFuncoes, alertas } = sim.plano[i];
+        todosAlertas.push(...alertas);
 
-      // membroMinisterios recebido é ministerio_id → membro_id[]; inverte para membro_id → ministerio_id[]
-      const membroPara: Record<string, string[]> = {};
-      for (const [minId, mids] of Object.entries(membroMinisterios)) {
-        for (const mid of mids) {
-          if (!membroPara[mid]) membroPara[mid] = [];
-          membroPara[mid].push(minId);
+        if (semFuncoes) {
+          celebracoesSemFuncoes.push({ titulo: cel.titulo, data: cel.data });
+          setProgresso({ atual: i + 1, total });
+          continue;
         }
-      }
 
-      // Inicializa estado base com dados do assignmentHistory (até 14 dias)
-      for (const m of membros) {
-        estadosPastorais.set(m.id, inicializarEstadoPastoral(m.id, assignmentHistory, hoje));
-        batchOportunidades.set(m.id, 0);
-      }
-
-      // ── FASE 9C: pré-calcula oportunidades futuras totais por membro ─────────
-      // (quantas missas na rodada cada membro poderia potencialmente servir)
-      for (const cel of preVisualizacao) {
-        const diaSemana = new Date(cel.data + "T12:00:00").getDay();
-        for (const m of membros) {
-          if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
-          if (membroEstaBloqueado(m.id, cel.data, indisponibilidades)) continue;
-          const ministeriosNaCel = cel.funcoes.map((f) => f.ministerio_id);
-          const temVinculo = ministeriosNaCel.some((mid) => membroPara[m.id]?.includes(mid));
-          if (!temVinculo) continue;
-          batchOportunidades.set(m.id, (batchOportunidades.get(m.id) ?? 0) + 1);
-        }
-      }
-
-      // Aplica oportunidades da rodada no estado pastoral
-      for (const [mid, oport] of batchOportunidades) {
-        const ep = estadosPastorais.get(mid);
-        if (ep) ep.oportunidades_futuras = oport;
-      }
-
-      const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
-      const engineConfig = {
-        usa_tochas:               paroquiaConfig?.usa_tochas ?? false,
-        limite_semanal:           regras.limite_semanal           as number  | undefined,
-        limite_mensal:            regras.limite_mensal            as number  | undefined,
-        impedir_repeticao_seguida:(regras.impedir_repeticao_consecutiva as boolean | undefined) ?? false,
-        intervalo_minimo_dias:    regras.intervalo_minimo_dias    as number  | undefined,
-        distribuicao_masc_pct:    regras.distribuicao_masc_pct   as number  | undefined,
-        variedade_ministerio:     (regras.variedade_ministerio    as boolean | undefined) ?? false,
-        prioridade_bonus_alto:    regras.prioridade_bonus_alto    as number  | undefined,
-        prioridade_bonus_medio:   regras.prioridade_bonus_medio   as number  | undefined,
-        bonus_preferencial_solene:regras.bonus_preferencial_solene as number | undefined,
-      };
-
-      for (let i = 0; i < preVisualizacao.length; i++) {
-        const cel = preVisualizacao[i];
-
-        // P0.1 — Idempotência: verificar existência antes de criar
-        // hora_inicio incluso para não colidir com missas de mesmo nome mas
-        // horário diferente — espelha o índice escalas_unique_celebration (046)
+        // Idempotência: verifica se já existe escala para este slot
         const baseQuery = (supabase as any)
           .from("escalas")
           .select("id")
@@ -802,175 +996,63 @@ export function AssistenteGeracaoEscalas({
         const { data: newEscala, error } = await (supabase as any)
           .from("escalas")
           .insert({
-            paroquia_id:  paroquiaId,
-            titulo:       cel.titulo,
-            data:         cel.data,
-            hora_inicio:  cel.hora_inicio,
-            local:        cel.local,
-            tipo:         cel.tipo,
+            paroquia_id:   paroquiaId,
+            titulo:        cel.titulo,
+            data:          cel.data,
+            hora_inicio:   cel.hora_inicio,
+            local:         cel.local,
+            tipo:          cel.tipo,
             tipo_missa_id: cel.tipo_missa_id,
-            solene:       cel.solene,
-            tem_adoracao: cel.tem_adoracao,
-            tem_bispo:    cel.tem_bispo,
-            status:       "rascunho",
-            created_by:   profileId,
+            solene:        cel.solene,
+            tem_adoracao:  cel.tem_adoracao,
+            tem_bispo:     cel.tem_bispo,
+            status:        "rascunho",
+            created_by:    profileId,
           })
           .select("id")
           .single();
 
         if (error || !newEscala) {
-          // Erro de UNIQUE (código 23505) = já existe → tratar como ignorada
           if ((error as any)?.code === "23505") { ignoradas++; }
           setProgresso({ atual: i + 1, total });
           continue;
         }
         criadas++;
 
-        if (cel.funcoes.length > 0) {
-          await (supabase as any).from("escala_funcoes").insert(
-            cel.funcoes.map((f) => ({ escala_id: newEscala.id, ministerio_id: f.ministerio_id, quantidade: f.quantidade }))
+        // Grava funções
+        await (supabase as any).from("escala_funcoes").insert(
+          cel.funcoes.map((f) => ({ escala_id: newEscala.id, ministerio_id: f.ministerio_id, quantidade: f.quantidade }))
+        );
+        cel.funcoes.forEach((f) => { totalVagasSolicitadas += f.quantidade; });
+
+        // Grava membros do plano
+        if (alocacoes.length > 0) {
+          const { error: bErr } = await (supabase as any).from("escala_membros").upsert(
+            alocacoes.map((s) => ({ escala_id: newEscala.id, membro_id: s.membro_id, ministerio_id: s.ministerio_id, status: "pendente", ativo: true, removido_em: null })),
+            { onConflict: "escala_id,membro_id,ministerio_id" }
           );
-          cel.funcoes.forEach((f) => { totalVagasSolicitadas += f.quantidade; });
-
-          if (membros.length > 0) {
-            const missa = missasPadrao.find((m) => m.id === cel.missaPadraoId);
-            const missaRestricaoIndisp = (missa ? (membroMissaRestricoes[missa.id] ?? []) : [])
-              .map((mid) => ({ membro_id: mid, data: cel.data }));
-            const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
-            const funcoesPedido = cel.funcoes.map((f) => ({
-              ministerio_id: f.ministerio_id,
-              quantidade:    f.quantidade,
-              ministerio:    { id: f.ministerio_id, nome: f.ministerio_nome, cor: f.ministerio_cor },
-            }));
-
-            // ── FASE 9B: atualiza oportunidades para esta missa ───────────────
-            const diaSemana = new Date(cel.data + "T12:00:00").getDay();
-            // Para esporádicos: deriva bloqueios de dia da semana a partir das missas regulares daquele dia.
-            // Membro restrito de QUALQUER missa regular na segunda → bloqueado de esporádico na segunda.
-            const restDiaEsporadico = cel.esporadico
-              ? missasPadrao
-                  .filter((mp) => mp.recorrencia?.tipo !== "esporadico" && mp.dia_semana === diaSemana)
-                  .flatMap((mp) => (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: cel.data })))
-              : [];
-            const indisp9B = cel.esporadico
-              ? [...indisponibilidades, ...restDiaEsporadico]
-              : [...indisponibilidades, ...missaRestricaoIndisp];
-            for (const m of membros) {
-              if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
-              if (membroEstaBloqueado(m.id, cel.data, indisp9B)) continue;
-              const temVinculo = cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id));
-              if (!temVinculo) continue;
-              const ep = estadosPastorais.get(m.id);
-              if (ep) {
-                ep.oportunidades_rodada++;
-                ep.oportunidades_futuras = Math.max(0, ep.oportunidades_futuras - 1);
-              }
-            }
-
-            // Para esporádicos: mesma lógica de bloqueio por dia derivado das missas regulares
-            const indispParaGeracao = cel.esporadico
-              ? [...indisponibilidades, ...restDiaEsporadico]
-              : [...indisponibilidades, ...missaRestricaoIndisp];
-
-            let sugestoes: { membro_id: string; ministerio_id: string }[];
-
-            if (cel.solene || cel.tem_adoracao || cel.tem_bispo) {
-              // Solenidades: mantém engine existente
-              sugestoes = generateEscalaAssignments(
-                { titulo: cel.titulo, data: cel.data, tipo: cel.tipo, observacoes: null },
-                funcoesPedido,
-                membrosComAtuacoes,
-                membroMinisterios,
-                {
-                  history:            [...assignmentHistory, ...batchHistory],
-                  indisponibilidades: indispParaGeracao,
-                  restricoes:         funcaoRestricoes,
-                  config:             engineConfig,
-                  solene:             cel.solene,
-                  tem_adoracao:       cel.tem_adoracao,
-                  tem_bispo:          cel.tem_bispo,
-                  debug:              false,
-                }
-              );
-            } else {
-              // Missas comuns: seletor pastoral (FASE 9)
-              // Recalcula dias_ultimo_servico de cada membro a partir do lastServiceDate
-              // (corrige o bug em que dias_ultimo_servico=0 nunca era atualizado para dias futuros)
-              const celDataObj = new Date(cel.data + "T12:00:00");
-              for (const ep of estadosPastorais.values()) {
-                if (ep.lastServiceDate) {
-                  ep.dias_ultimo_servico = Math.floor(
-                    (celDataObj.getTime() - new Date(ep.lastServiceDate + "T12:00:00").getTime()) / 86400000
-                  );
-                }
-              }
-              // Bloqueia membros já escalados em outra célula no mesmo dia durante esta rodada
-              const batchSameDayBlocks = batchHistory
-                .filter((h) => h.date === cel.data)
-                .map((h) => ({ membro_id: h.memberId, data: cel.data }));
-              sugestoes = selecionarMembrosPastoral({
-                funcoes:            funcoesPedido,
-                membros:            membrosComAtuacoes,
-                estadosPastorais,
-                membroMinisterios:  membroPara, // já invertido: membro_id → ministerio_id[]
-                indisponibilidades: [...indispParaGeracao, ...batchSameDayBlocks],
-                restricoes:         funcaoRestricoes,
-                celData:            cel.data,
-                intervaloMinimoDias: engineConfig.intervalo_minimo_dias ?? 0,
-              });
-            }
-
-            if (sugestoes.length > 0) {
-              const { error: bErr } = await (supabase as any).from("escala_membros").upsert(
-                sugestoes.map((s) => ({ escala_id: newEscala.id, membro_id: s.membro_id, ministerio_id: s.ministerio_id, status: "pendente", ativo: true, removido_em: null })),
-                { onConflict: "escala_id,membro_id,ministerio_id" }
-              );
-              if (!bErr) {
-                totalSugestoes += sugestoes.length;
-                sugestoes.forEach((s) => {
-                  batchHistory.push({ memberId: s.membro_id, ministerioId: s.ministerio_id, date: cel.data });
-                  // ── FASE 9B: atualiza estado pastoral do membro escalado ───
-                  const ep = estadosPastorais.get(s.membro_id);
-                  if (ep) {
-                    ep.servicos_rodada++;
-                    ep.servicos_14d++;
-                    ep.lastServiceDate = cel.data;
-                    // taxa = serviços ÷ oportunidades elegíveis na rodada (oportunidades_14d não disponível)
-                    ep.taxa_cobertura_14d = ep.oportunidades_rodada > 0
-                      ? ep.servicos_14d / ep.oportunidades_rodada
-                      : 0.5;
-                  }
-                  // P1.2 — acumular distribuição por membro
-                  const mb = membros.find((m) => m.id === s.membro_id);
-                  if (mb) {
-                    const curr = membroContagem.get(s.membro_id) ?? { nome: mb.nome, count: 0 };
-                    membroContagem.set(s.membro_id, { nome: curr.nome, count: curr.count + 1 });
-                  }
-                });
-              }
-            }
-          }
+          if (!bErr) totalSugestoes += alocacoes.length;
         }
 
-        setProgresso({ atual: i + 1, total }); // P1.3 — progresso em tempo real
+        funcoesVagasRelatorio.push(...funcoesVagas);
+        setProgresso({ atual: i + 1, total });
       }
-
-      const distribuicao = [...membroContagem.entries()]
-        .map(([id, v]) => ({ id, nome: v.nome, count: v.count }))
-        .sort((a, b) => b.count - a.count);
 
       return {
         criadas,
         ignoradas,
-        vagasPreenchidas:    totalSugestoes,
-        vagasNaoPreenchidas: Math.max(0, totalVagasSolicitadas - totalSugestoes),
-        distribuicao,
+        vagasPreenchidas:     totalSugestoes,
+        vagasNaoPreenchidas:  Math.max(0, totalVagasSolicitadas - totalSugestoes),
+        distribuicao:         sim.sumario.distribuicao,
+        funcoesVagas:         funcoesVagasRelatorio,
+        celebracoesSemFuncoes,
+        alertas:              [...new Set(todosAlertas)],
       } satisfies Relatorio;
     },
     onSuccess: (resultado) => {
       setRelatorio(resultado);
       setPasso(5);
-      onSuccess(); // invalidar queries no pai imediatamente
+      onSuccess();
     },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
@@ -1017,7 +1099,7 @@ export function AssistenteGeracaoEscalas({
   const itemsPagina   = preVisualizacao.slice(paginaAtual * PAGE_SIZE, (paginaAtual + 1) * PAGE_SIZE);
 
   const periodoValido = !!dataInicio && !!dataFim && dataInicio <= dataFim;
-  const emGeracao     = gerarMutation.isPending;
+  const emGeracao     = gerarMutation.isPending || simularMutation.isPending;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1238,14 +1320,14 @@ export function AssistenteGeracaoEscalas({
               </div>
             )}
 
-            {/* ── Passo 4: Resumo + Progresso ── */}
+            {/* ── Passo 4: Simulação + Confirmação ── */}
             {passo === 4 && (
               <div className="space-y-4">
-                {/* P1.3 — Progresso durante geração */}
+                {/* Progresso do commit */}
                 {emGeracao ? (
                   <div className="space-y-4">
                     <div>
-                      <h3 className="text-sm font-semibold">Gerando escalas…</h3>
+                      <h3 className="text-sm font-semibold">Gravando escalas…</h3>
                       <p className="text-xs text-muted-foreground mt-0.5">Aguarde a conclusão do processo.</p>
                     </div>
                     <div className="space-y-2">
@@ -1263,24 +1345,147 @@ export function AssistenteGeracaoEscalas({
                       </div>
                     </div>
                     <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 px-3 py-2">
-                      <p className="text-xs text-amber-700 dark:text-amber-400">
-                        Não feche esta janela durante a geração.
-                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400">Não feche esta janela durante a gravação.</p>
                     </div>
                   </div>
-                ) : (
+                ) : simularMutation.isPending ? (
+                  <div className="flex items-center justify-center py-10 gap-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <span className="text-sm text-muted-foreground">Simulando geração…</span>
+                  </div>
+                ) : simulacao ? (
+                  /* Resultado da simulação */
                   <>
                     <div>
-                      <h3 className="text-sm font-semibold">Resumo da geração</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">Revise antes de criar as escalas.</p>
+                      <h3 className="text-sm font-semibold">Resultado da simulação</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">Revise antes de gravar as escalas no banco.</p>
                     </div>
-                    {/* Métricas */}
+
+                    {/* Métricas da simulação */}
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      {[
+                        { label: "Celebrações",    value: simulacao.sumario.totalCelebracoes,         color: "" },
+                        { label: "Completas",       value: simulacao.sumario.celebracoesCompletas,     color: "text-green-600 dark:text-green-400" },
+                        { label: "Incompletas",     value: simulacao.sumario.celebracoesIncompletas,   color: simulacao.sumario.celebracoesIncompletas > 0 ? "text-amber-600" : "" },
+                        { label: "Sem funções",     value: simulacao.sumario.celebracoesSemFuncoes,    color: simulacao.sumario.celebracoesSemFuncoes > 0 ? "text-red-600" : "" },
+                        { label: "Vagas preench.",  value: simulacao.sumario.funcoesPreenchidas,       color: "text-primary" },
+                        { label: "Vagas em aberto", value: simulacao.sumario.funcoesVagas,             color: simulacao.sumario.funcoesVagas > 0 ? "text-amber-600" : "" },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-xl border border-border bg-muted/30 px-2 py-2.5 text-center">
+                          <div className={`text-base font-bold tabular-nums ${item.color}`}>{item.value}</div>
+                          <div className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Funções sem candidatos */}
+                    {simulacao.sumario.celebracoesSemFuncoes > 0 && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20 p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
+                          <span className="text-xs font-semibold text-red-800 dark:text-red-300">
+                            {simulacao.sumario.celebracoesSemFuncoes} celebração(ões) sem funções configuradas
+                          </span>
+                        </div>
+                        <div className="space-y-0.5 ml-6 max-h-24 overflow-y-auto">
+                          {simulacao.plano.filter((p) => p.semFuncoes).map((p, i) => (
+                            <p key={i} className="text-xs text-red-700 dark:text-red-400">
+                              {p.cel.data.split("-").reverse().join("/")} — {p.cel.titulo}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Funções vagas */}
+                    {simulacao.sumario.funcoesVagas > 0 && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                            {simulacao.sumario.funcoesVagas} vaga(s) não preenchida(s)
+                          </span>
+                        </div>
+                        <div className="space-y-1 ml-6 max-h-36 overflow-y-auto">
+                          {simulacao.plano.flatMap((p) => p.funcoesVagas).map((fv, i) => (
+                            <div key={i} className="text-xs text-amber-700 dark:text-amber-400">
+                              <span className="font-medium">{fv.data.split("-").reverse().join("/")} · {fv.celebracao}</span>
+                              {" — "}{fv.ministerio_nome}: {fv.alocados}/{fv.solicitados}
+                              {fv.motivo && <span className="text-amber-600/80"> ({fv.motivo})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Membros elegíveis sem escala */}
+                    {simulacao.sumario.membrosElegiveisSemEscala.length > 0 && (
+                      <div className="rounded-xl border border-border bg-muted/20 p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-xs font-semibold">
+                            {simulacao.sumario.membrosElegiveisSemEscala.length} membro(s) elegível(is) sem escala
+                          </span>
+                        </div>
+                        <div className="space-y-0.5 ml-6 max-h-24 overflow-y-auto">
+                          {simulacao.sumario.membrosElegiveisSemEscala.map((m) => (
+                            <p key={m.id} className="text-xs text-muted-foreground">
+                              {m.nome} — {m.oportunidades} oportunidade(s)
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Distribuição */}
+                    {simulacao.sumario.distribuicao.length > 0 && (
+                      <div className="rounded-xl border border-border bg-card">
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b">
+                          <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <p className="text-xs font-semibold">Distribuição simulada</p>
+                          <span className="ml-auto text-[10px] text-muted-foreground">{simulacao.sumario.membrosEscalados} escalado(s)</span>
+                        </div>
+                        <div className="divide-y max-h-40 overflow-y-auto">
+                          {simulacao.sumario.distribuicao.filter((d) => d.count > 0).map((m) => (
+                            <div key={m.id} className="flex items-center justify-between px-4 py-1.5">
+                              <span className="text-xs truncate flex-1">{m.nome}</span>
+                              <span className="ml-2 text-[10px] text-muted-foreground tabular-nums shrink-0">
+                                {m.oportunidades} oport.
+                              </span>
+                              <span className="ml-2 text-xs font-semibold tabular-nums text-primary shrink-0">
+                                {m.count}×
+                              </span>
+                              <span className="ml-1 text-[10px] tabular-nums text-muted-foreground shrink-0">
+                                ({Math.round(m.taxa * 100)}%)
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                      <p className="text-xs text-primary leading-relaxed">
+                        <span className="font-semibold">As escalas serão criadas como rascunho.</span>{" "}
+                        Nenhuma notificação será enviada. Publique manualmente quando estiver pronto.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  /* Estado inicial: ainda não simulou */
+                  <>
+                    <div>
+                      <h3 className="text-sm font-semibold">Simular geração</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Execute a simulação para ver o resultado antes de gravar as escalas.
+                      </p>
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {[
-                        { label: "Período",     value: `${dataInicio.split("-").reverse().slice(0,2).join("/")} → ${dataFim.split("-").reverse().slice(0,2).join("/")}` },
-                        { label: "Celebrações", value: preVisualizacao.length },
-                        { label: "Vagas totais",value: totalVagas },
-                        { label: "Membros elegíveis", value: membrosElegiveis },
+                        { label: "Período",              value: `${dataInicio.split("-").reverse().slice(0,2).join("/")} → ${dataFim.split("-").reverse().slice(0,2).join("/")}` },
+                        { label: "Celebrações",          value: preVisualizacao.length },
+                        { label: "Vagas totais",         value: totalVagas },
+                        { label: "Membros elegíveis",    value: membrosElegiveis },
                       ].map((item) => (
                         <div key={item.label} className="rounded-xl border border-border bg-muted/30 px-3 py-3 text-center">
                           <div className="text-lg font-bold tabular-nums">{item.value}</div>
@@ -1288,76 +1493,23 @@ export function AssistenteGeracaoEscalas({
                         </div>
                       ))}
                     </div>
-
-                    {/* P0.4 — Conflitos com motivo detalhado */}
-                    {conflitos.length > 0 ? (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-4">
-                        <div className="flex items-center gap-2 mb-3">
-                          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                          <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                            {conflitos.length} conflito(s) detectado(s)
-                          </span>
-                        </div>
-                        <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
-                          {(Object.entries(conflitosAgrupados) as [MotivoConflito, ConflitoPotencial[]][]).map(([motivo, items]) => (
-                            <div key={motivo}>
-                              <div className="flex items-center gap-1.5 mb-1.5">
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${MOTIVO_COLOR[motivo]}`}>
-                                  {MOTIVO_LABEL[motivo]}
-                                </span>
-                                <span className="text-xs text-amber-600 dark:text-amber-500">({items.length})</span>
-                              </div>
-                              <div className="space-y-0.5 ml-1">
-                                {items.slice(0, 6).map((c, i) => (
-                                  <div key={i} className="text-xs text-amber-700 dark:text-amber-400">
-                                    <span className="font-medium">{c.ministerioNome}</span>
-                                    {" em "}
-                                    <span className="font-medium">{c.celebracaoTitulo}</span>
-                                    {c.detalhe && <span className="text-amber-600/80 dark:text-amber-500/80"> ({c.detalhe})</span>}
-                                  </div>
-                                ))}
-                                {items.length > 6 && (
-                                  <p className="text-xs text-amber-500 dark:text-amber-600">…e mais {items.length - 6}</p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-green-200 bg-green-50 dark:border-green-900/40 dark:bg-green-950/20 px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Check className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-                          <span className="text-sm font-medium text-green-800 dark:text-green-300">Nenhum conflito detectado</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Restrições aplicadas */}
                     <div className="rounded-xl border border-border bg-muted/20 p-4">
-                      <p className="text-xs font-semibold text-foreground mb-2.5">Restrições aplicadas pelo motor</p>
+                      <p className="text-xs font-semibold text-foreground mb-2.5">Motor V3 — regras aplicadas</p>
                       <div className="space-y-1.5">
                         {[
-                          "Indisponibilidades (dia exato e intervalos)",
-                          "Restrições de dia da semana",
-                          `Limite semanal${paroquiaConfig?.regras_escala?.limite_semanal ? ` (${paroquiaConfig.regras_escala.limite_semanal}×/sem)` : ""}`,
-                          "Anti-repetição consecutiva",
-                          "Histórico de participação (6 meses)",
-                          `Distribuição de gênero${paroquiaConfig?.regras_escala?.distribuicao_masc_pct !== undefined ? ` (${paroquiaConfig.regras_escala.distribuicao_masc_pct}% M / ${100 - paroquiaConfig.regras_escala.distribuicao_masc_pct}% F)` : ""}`,
+                          "Motor único para missas comuns e solenidades",
+                          "Funções escassas alocadas primeiro",
+                          "Histórico compartilhado durante toda a geração",
+                          "Bloqueio de conflito no mesmo dia (hard-block)",
+                          "Limites semanal/mensal (pool progressivo)",
+                          "Penalidade por repetição consecutiva",
+                          "Rodízio por dias sem servir",
                         ].map((r) => (
                           <div key={r} className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Check className="h-3 w-3 text-green-500 shrink-0" />{r}
                           </div>
                         ))}
                       </div>
-                    </div>
-
-                    {/* Aviso rascunho */}
-                    <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-                      <p className="text-xs text-primary leading-relaxed">
-                        <span className="font-semibold">As escalas serão criadas como rascunho.</span>{" "}
-                        Nenhuma notificação ou e-mail será enviado. Publique manualmente quando estiver pronto.
-                      </p>
                     </div>
                   </>
                 )}
@@ -1390,53 +1542,76 @@ export function AssistenteGeracaoEscalas({
                 </div>
 
                 {/* Distribuição por membro */}
-                {relatorio.distribuicao.length > 0 && (
+                {relatorio.distribuicao.filter((d) => d.count > 0).length > 0 && (
                   <div className="rounded-xl border border-border bg-card">
                     <div className="flex items-center gap-2 px-4 py-3 border-b">
                       <Users className="h-4 w-4 text-muted-foreground shrink-0" />
                       <p className="text-xs font-semibold">Distribuição por membro</p>
-                      <span className="ml-auto text-[10px] text-muted-foreground">{relatorio.distribuicao.length} membro(s)</span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">{relatorio.distribuicao.filter((d) => d.count > 0).length} escalado(s)</span>
                     </div>
                     <div className="divide-y max-h-56 overflow-y-auto">
-                      {relatorio.distribuicao.map((m) => (
-                        <div key={m.id} className="flex items-center justify-between px-4 py-2">
-                          <span className="text-sm truncate flex-1">{m.nome}</span>
-                          <span className="ml-3 text-xs font-semibold tabular-nums text-primary shrink-0">
-                            {m.count} escala{m.count !== 1 ? "s" : ""}
-                          </span>
+                      {relatorio.distribuicao.filter((d) => d.count > 0).map((m) => (
+                        <div key={m.id} className="flex items-center justify-between px-4 py-2 gap-2">
+                          <span className="text-xs truncate flex-1">{m.nome}</span>
+                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{m.oportunidades} oport.</span>
+                          <span className="text-xs font-semibold tabular-nums text-primary shrink-0">{m.count}×</span>
+                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">({Math.round(m.taxa * 100)}%)</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Membros sem escala */}
-                {(() => {
-                  const comEscala = new Set(relatorio.distribuicao.map((d) => d.id));
-                  const semEscala = membros.filter((m) => !comEscala.has(m.id));
-                  if (semEscala.length === 0) return null;
-                  return (
-                    <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <p className="text-xs font-semibold">{semEscala.length} membro(s) sem escala</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {semEscala.slice(0, 5).map((m) => m.nome).join(", ")}
-                        {semEscala.length > 5 && ` e mais ${semEscala.length - 5}`}
+                {/* Membros elegíveis sem escala */}
+                {relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).length > 0 && (
+                  <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <p className="text-xs font-semibold">
+                        {relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).length} membro(s) elegível(is) sem escala
                       </p>
                     </div>
-                  );
-                })()}
+                    <p className="text-xs text-muted-foreground">
+                      {relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).slice(0, 5).map((d) => d.nome).join(", ")}
+                      {relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).length > 5 && ` e mais ${relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).length - 5}`}
+                    </p>
+                  </div>
+                )}
+
+                {/* Celebrações sem funções */}
+                {relatorio.celebracoesSemFuncoes.length > 0 && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20 px-4 py-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
+                      <p className="text-xs font-semibold text-red-800 dark:text-red-300">
+                        {relatorio.celebracoesSemFuncoes.length} celebração(ões) sem funções — não foram geradas
+                      </p>
+                    </div>
+                    <p className="text-xs text-red-700 dark:text-red-400">
+                      {relatorio.celebracoesSemFuncoes.slice(0, 3).map((c) => `${c.data.split("-").reverse().join("/")} ${c.titulo}`).join(", ")}
+                      {relatorio.celebracoesSemFuncoes.length > 3 && ` e mais ${relatorio.celebracoesSemFuncoes.length - 3}`}
+                    </p>
+                  </div>
+                )}
 
                 {relatorio.vagasNaoPreenchidas > 0 && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 px-4 py-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 mb-2">
                       <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                      <p className="text-xs text-amber-700 dark:text-amber-400">
-                        <span className="font-semibold">{relatorio.vagasNaoPreenchidas} vaga(s) ficaram em aberto.</span>{" "}
-                        Verifique os vínculos em Membros → Funções e as indisponibilidades cadastradas.
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                        {relatorio.vagasNaoPreenchidas} vaga(s) em aberto
                       </p>
+                    </div>
+                    <div className="space-y-0.5 ml-6 max-h-28 overflow-y-auto">
+                      {relatorio.funcoesVagas.slice(0, 10).map((fv, i) => (
+                        <p key={i} className="text-xs text-amber-700 dark:text-amber-400">
+                          {fv.data.split("-").reverse().join("/")} · {fv.celebracao} — {fv.ministerio_nome}: {fv.alocados}/{fv.solicitados}
+                          {fv.motivo && <span className="text-amber-600/80"> ({fv.motivo})</span>}
+                        </p>
+                      ))}
+                      {relatorio.funcoesVagas.length > 10 && (
+                        <p className="text-xs text-amber-500">…e mais {relatorio.funcoesVagas.length - 10}</p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1475,13 +1650,26 @@ export function AssistenteGeracaoEscalas({
               </Button>
             )}
 
-            {passo === 4 && !emGeracao && (
+            {passo === 4 && !emGeracao && !simularMutation.isPending && !simulacao && (
               <Button size="sm" className="h-8"
                 disabled={preVisualizacao.length === 0}
-                onClick={() => gerarMutation.mutate()}>
+                onClick={() => simularMutation.mutate()}>
                 <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                Gerar escalas
+                Simular
               </Button>
+            )}
+            {passo === 4 && !emGeracao && !simularMutation.isPending && simulacao && (
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-8"
+                  onClick={() => setSimulacao(null)}>
+                  Refazer simulação
+                </Button>
+                <Button size="sm" className="h-8"
+                  onClick={() => gerarMutation.mutate()}>
+                  <Check className="h-3.5 w-3.5 mr-1.5" />
+                  Confirmar e gravar
+                </Button>
+              </div>
             )}
 
             {passo === 5 && (
