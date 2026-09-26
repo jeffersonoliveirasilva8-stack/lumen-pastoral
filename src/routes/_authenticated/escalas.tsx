@@ -1122,10 +1122,11 @@ function EscalasPage() {
       } else {
         toast.success("Membro removido da escala.");
       }
-      // Notifica o membro removido que foi retirado da escala publicada
+      // Notifica o membro removido apenas se a escala já estava publicada
+      // (rascunhos não geram e-mail — o membro nunca foi convocado)
       const membroRemovido = membros.find((m: Membro) => m.id === args.membroId);
       const escalaRef = escalas.find((e) => e.id === args.escalaId) ?? detailEscala;
-      if (membroRemovido?.email && escalaRef) {
+      if (membroRemovido?.email && escalaRef && escalaRef.status === "publicada") {
         await supabase.functions.invoke("send-email", {
           body: {
             template: "escala_cancelada",
