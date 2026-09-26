@@ -183,7 +183,8 @@ export function inicializarEstadoPastoral(
     membro_id: membroId,
     servicos_14d: servicos14d,
     oportunidades_14d: 0,
-    taxa_cobertura_14d: 0,
+    // Sem dado de oportunidades reais, usar 0.5 como neutro para não distorcer urgência
+    taxa_cobertura_14d: 0.5,
     dias_ultimo_servico: diasUltimo,
     lastServiceDate: ultimoServico?.date ?? null,
     servicos_rodada: 0,

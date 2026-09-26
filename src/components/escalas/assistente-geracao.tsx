@@ -438,7 +438,7 @@ export function AssistenteGeracaoEscalas({
     queryFn: async () => {
       const { data } = await (supabase as any).from("tipo_missa_funcoes")
         .select("tipo_missa_id, ministerio_id, quantidade_min")
-        .in("tipo_missa_id", tipomissaIds).eq("tipo_vinculo", "obrigatoria");
+        .in("tipo_missa_id", tipomissaIds);
       return (data ?? []) as { tipo_missa_id: string; ministerio_id: string; quantidade_min: number }[];
     },
   });
@@ -448,9 +448,9 @@ export function AssistenteGeracaoEscalas({
     enabled: open && mpIds.length > 0,
     queryFn: async () => {
       const { data } = await (supabase as any).from("missa_padrao_funcoes_extras")
-        .select("missa_padrao_id, ministerio_id, quantidade")
+        .select("missa_padrao_id, ministerio_id, quantidade, data")
         .in("missa_padrao_id", mpIds);
-      return (data ?? []) as { missa_padrao_id: string; ministerio_id: string; quantidade: number }[];
+      return (data ?? []) as { missa_padrao_id: string; ministerio_id: string; quantidade: number; data: string }[];
     },
   });
 
@@ -591,12 +591,12 @@ export function AssistenteGeracaoEscalas({
               const base = (missaFuncoesMap[missa.id] ?? []).map((f) => ({ ...f }));
               // Merge funções específicas para esta data
               const extras = funcoesExcecaoData.filter(
-                (e) => e.missa_padrao_id === missa.id
+                (e) => e.missa_padrao_id === missa.id && e.data === dateStr
               );
               for (const extra of extras) {
                 const existing = base.find((f) => f.ministerio_id === extra.ministerio_id);
                 if (existing) {
-                  existing.quantidade += extra.quantidade;
+                  existing.quantidade = extra.quantidade;
                 } else {
                   base.push({
                     ministerio_id: extra.ministerio_id,
