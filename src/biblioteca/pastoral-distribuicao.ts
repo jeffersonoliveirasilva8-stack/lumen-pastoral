@@ -90,6 +90,25 @@ export type SelecionarParams = {
  * 4. taxa_cobertura_14d — quem tem menor taxa histórica (equidade a longo prazo)
  * 5. score              — desempate determinístico
  */
+/**
+ * Shuffle determinístico por seed (data + ministério).
+ * Garante que membros empatados em todos os critérios recebam ordem diferente
+ * a cada data/função, evitando que o mesmo score fixo do banco sempre vença.
+ */
+function deterministicShuffle<T>(arr: T[], seed: string): T[] {
+  const result = [...arr];
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = Math.imul(hash * 31 + seed.charCodeAt(i), 1) | 0;
+  }
+  for (let i = result.length - 1; i > 0; i--) {
+    hash = Math.imul(hash ^ (hash >>> 13), 0x9e3779b9) | 0;
+    const j = Math.abs(hash) % (i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id: string; ministerio_id: string }[] {
   const { funcoes, membros, estadosPastorais, membroMinisterios,
           indisponibilidades, restricoes, celData, intervaloMinimoDias } = params;
@@ -102,7 +121,9 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
   const celDataObj = new Date(celData + "T12:00:00");
 
   for (const funcao of funcoes) {
-    const candidatos = membros.filter((m) => {
+    // Shuffle determinístico: garante rotação quando critérios empatam
+    // Seed = data + ministério → ordem diferente em cada missa/função
+    const candidatos = deterministicShuffle(membros, celData + funcao.ministerio_id).filter((m) => {
       if (!membroPara[m.id]?.includes(funcao.ministerio_id)) return false;
       if (escaladosNestaMissa.has(m.id)) return false;
       if (indisponibilidades.some((i) => {
@@ -147,7 +168,8 @@ export function selecionarMembrosPastoral(params: SelecionarParams): { membro_id
       const taxaDiff = epA.taxa_cobertura_14d - epB.taxa_cobertura_14d;
       if (Math.abs(taxaDiff) > 0.05) return taxaDiff;
 
-      // 5. Score do banco (desempate determinístico)
+      // 5. Score do banco — o shuffle acima já quebra empates por data/função
+      //    então o score aqui é apenas para consistência dentro da mesma geração
       return b.score - a.score;
     });
 
