@@ -1814,7 +1814,7 @@ function EscalasPage() {
   const { data: escalaCounts = {} as Record<string, EscalaPreview> } = useQuery({
     queryKey: ["escalas-counts", escalaIds],
     enabled: escalaIds.length > 0,
-    staleTime: 30_000,
+    staleTime: 10_000,
     queryFn: async () => {
       const [funcRes, membRes] = await Promise.all([
         (supabase as any)
@@ -4390,6 +4390,7 @@ function ListaView({
                   {counts && counts.funcoes.length > 0 ? (
                     <div className="space-y-3">
                       {groupFuncoesByCategoria(counts.funcoes).map((group) => {
+
                         const groupFilled  = group.funcoes.reduce((s, f) => s + f.membros.length, 0);
                         const groupNeeded  = group.funcoes.reduce((s, f) => s + f.quantidade, 0);
                         const groupDone    = groupFilled >= groupNeeded && groupNeeded > 0;
@@ -4451,9 +4452,13 @@ function ListaView({
                         );
                       })}
                     </div>
-                  ) : (
+                  ) : counts && counts.filled > 0 ? (
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                      ⚠ {counts.filled} membro(s) escalado(s) — abra a escala para ver os detalhes.
+                    </p>
+                  ) : counts ? (
                     <p className="text-sm text-muted-foreground">Nenhuma função definida para esta escala.</p>
-                  )}
+                  ) : null}
                 </div>
               </div>
             );

@@ -910,24 +910,28 @@ export function AssistenteGeracaoEscalas({
     for (const m of membros) {
       if ((escalasContador.get(m.id) ?? 0) > 0) continue;
       if ((membroOportunidades.get(m.id) ?? 0) === 0) continue;
+      // DEBUG — remover após diagnóstico
+      const dbgMotivos: string[] = [];
+      let dbgInjetado = false;
       for (const planoCel of plano) {
-        if (planoCel.semFuncoes) continue;
-        // Não injeta duas vezes na mesma celebração (evita aglomerar múltiplos injetados)
-        if (celComInjecao.has(planoCel.cel.data + planoCel.cel.titulo)) continue;
-        if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) continue;
-        if (membroEstaBloqueado(m.id, planoCel.cel.data, indisponibilidades)) continue;
-        // Encontra função compatível — aceita mesmo que a função já esteja no limite
-        // (coordenador revisa no rascunho antes de publicar)
+        if (planoCel.semFuncoes) { dbgMotivos.push(`${planoCel.cel.data} semFuncoes`); continue; }
+        if (celComInjecao.has(planoCel.cel.data + planoCel.cel.titulo)) { dbgMotivos.push(`${planoCel.cel.data} celComInjecao`); continue; }
+        if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) { dbgMotivos.push(`${planoCel.cel.data} jaAlocado`); continue; }
+        if (membroEstaBloqueado(m.id, planoCel.cel.data, indisponibilidades)) { dbgMotivos.push(`${planoCel.cel.data} bloqueado`); continue; }
         const funcaoCompat = planoCel.cel.funcoes.find((f) =>
           membroPara[m.id]?.includes(f.ministerio_id)
         );
-        if (!funcaoCompat) continue;
+        if (!funcaoCompat) { dbgMotivos.push(`${planoCel.cel.data} semFuncaoCompat(cel=${planoCel.cel.funcoes.map(f=>f.ministerio_id).join(",")},membro=${membroPara[m.id]?.join(",")})`); continue; }
         planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: funcaoCompat.ministerio_id });
         planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) para garantir ao menos uma escala no período.`);
         todosAlertasGlobais.push(`ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} adicionado(a) para garantir cobertura mínima.`);
         escalasContador.set(m.id, 1);
         celComInjecao.add(planoCel.cel.data + planoCel.cel.titulo);
+        dbgInjetado = true;
         break;
+      }
+      if (!dbgInjetado) {
+        console.warn(`[INJEÇÃO] ${m.nome} (${m.id}): NÃO injetado. membroPara=${JSON.stringify(membroPara[m.id])}. Motivos (primeiras 10):`, dbgMotivos.slice(0, 10));
       }
     }
 
@@ -1021,7 +1025,25 @@ export function AssistenteGeracaoEscalas({
         ).limit(1);
 
         if (existing && existing.length > 0) {
-          ignoradas++;
+          const escalaId = existing[0].id;
+          // Se a escala existe mas não tem funções, grava as funções e membros agora
+          const { data: funcExist } = await (supabase as any)
+            .from("escala_funcoes").select("id").eq("escala_id", escalaId).limit(1);
+          if (!funcExist || funcExist.length === 0) {
+            await (supabase as any).from("escala_funcoes").insert(
+              cel.funcoes.map((f) => ({ escala_id: escalaId, ministerio_id: f.ministerio_id, quantidade: f.quantidade }))
+            );
+            if (alocacoes.length > 0) {
+              await (supabase as any).from("escala_membros").upsert(
+                alocacoes.map((s) => ({ escala_id: escalaId, membro_id: s.membro_id, ministerio_id: s.ministerio_id, status: "pendente", ativo: true, removido_em: null })),
+                { onConflict: "escala_id,membro_id,ministerio_id" }
+              );
+              totalSugestoes += alocacoes.length;
+            }
+            criadas++;
+          } else {
+            ignoradas++;
+          }
           setProgresso({ atual: i + 1, total });
           continue;
         }
@@ -1320,7 +1342,9 @@ export function AssistenteGeracaoEscalas({
                                   </div>
                                 )}
                                 {cel.funcoes.length === 0 && (
-                                  <p className="text-[10px] text-muted-foreground/60 mt-1">Sem funções definidas</p>
+                                  <p className="text-[10px] text-red-600 dark:text-red-400 font-medium mt-1">
+                                    ⚠ Sem funções configuradas — esta missa será ignorada na geração. Configure as funções em Configurações → Missas.
+                                  </p>
                                 )}
                               </div>
                               <Button size="sm" variant="ghost" className="h-7 text-xs shrink-0 -mr-1"
