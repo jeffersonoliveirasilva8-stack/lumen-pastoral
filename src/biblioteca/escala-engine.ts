@@ -500,6 +500,15 @@ function calcularScore(
     raw = 0.40 * participacaoRecente + 0.35 * tempoSemServir + 0.15 * rankingBonus +
           0.10 * frequenciaHistorica;
 
+    // Penalidade de presença em modo COMUM: ELEGIBILIDADE ≠ PRIORIZAÇÃO.
+    // Taxa de presença baixa reduz score (membro fica em Pool1, só cai abaixo de quem
+    // tem boa presença), mas não exclui. Threshold neutro = 0.75; abaixo disso,
+    // penalidade proporcional de até 15 pts. Sem taxa_presenca → neutro (sem penalidade).
+    const taxaPresencaCOMUM = membro.taxa_presenca;
+    if (typeof taxaPresencaCOMUM === "number" && taxaPresencaCOMUM < 0.75) {
+      penalidade += Math.round((0.75 - taxaPresencaCOMUM) / 0.75 * 15);
+    }
+
     breakdown.participacao_recente = Math.round(participacaoRecente);
     breakdown.tempo_sem_servir     = Math.round(tempoSemServir);
     breakdown.ranking_bonus        = Math.round(rankingBonus);
@@ -752,16 +761,6 @@ export function alocarMembros(
         // De-priorizado: serviu na última solenidade desta função — preferir quem não serviu
         excluidos.solenidade_recente++;
         pool1b.push(m);
-      } else if (
-        !ehSolene &&
-        typeof m.taxa_presenca === "number" &&
-        m.taxa_presenca < 0.60
-      ) {
-        // Presença abaixo de 60% → Pool2 apenas em missas comuns (de-priorizado, não excluído).
-        // Em solenidades, presença entra como componente de score (taxa_presenca_score), não como filtro.
-        // Threshold 60%: pastoral — reconhece que faltas justificadas são legítimas, mas
-        // impede que o pool principal seja saturado por quem aceita convocações e não comparece.
-        pool2.push(m);
       } else {
         pool1.push(m);
       }
