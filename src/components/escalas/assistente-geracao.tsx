@@ -893,13 +893,36 @@ export function AssistenteGeracaoEscalas({
       });
     }
 
-    // ── Sumário ──
-    const membroEscalas  = new Map<string, number>();
+    // ── Garantia de cobertura mínima ────────────────────────────────────────
+    // Membros elegíveis (com oportunidades) que ficaram com 0 escalas são injetados
+    // em ao menos uma celebração como alocação adicional. O coordenador pode remover
+    // manualmente no rascunho. Respeita indisponibilidades e vínculo de ministério.
+    const escalasContador = new Map<string, number>();
     for (const p of plano) {
       for (const a of p.alocacoes) {
-        membroEscalas.set(a.membro_id, (membroEscalas.get(a.membro_id) ?? 0) + 1);
+        escalasContador.set(a.membro_id, (escalasContador.get(a.membro_id) ?? 0) + 1);
       }
     }
+    for (const m of membros) {
+      if ((escalasContador.get(m.id) ?? 0) > 0) continue;
+      if ((membroOportunidades.get(m.id) ?? 0) === 0) continue;
+      // Procura a primeira celebração onde pode ser injetado
+      for (const planoCel of plano) {
+        if (planoCel.semFuncoes) continue;
+        if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) continue;
+        if (membroEstaBloqueado(m.id, planoCel.cel.data, indisponibilidades)) continue;
+        const funcaoCompat = planoCel.cel.funcoes.find((f) => membroPara[m.id]?.includes(f.ministerio_id));
+        if (!funcaoCompat) continue;
+        planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: funcaoCompat.ministerio_id });
+        planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) manualmente para garantir ao menos uma escala no período.`);
+        todosAlertasGlobais.push(`ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} adicionado(a) para garantir cobertura mínima.`);
+        escalasContador.set(m.id, 1);
+        break;
+      }
+    }
+
+    // ── Sumário ──
+    const membroEscalas = escalasContador;
 
     const distribuicao = membros
       .filter((m) => membroEscalas.has(m.id) || (membroOportunidades.get(m.id) ?? 0) > 0)
