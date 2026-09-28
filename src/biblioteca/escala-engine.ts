@@ -678,6 +678,7 @@ export function alocarMembros(
     // Pool 1: apto + abaixo de ambos os limites + não alocado
     // Pool 2: apto + acima limite semanal mas abaixo mensal + não alocado
     // Pool 3: apto + acima limite mensal + não alocado (último recurso)
+    // Pool_dia: restrito pelo dia da semana, mas sem outra opção — ativado só quando Pool1-3 esgotam
     // Pool 4: já alocado em outra função MAS funcao.duplicidade_permitida=true
     // Pool 5: excluído por intervalo_minimo_dias — usado só se pools 1-4 não bastam
 
@@ -685,6 +686,7 @@ export function alocarMembros(
     const pool1b: MembroEngine[] = []; // serviu na última solenidade desta função (rodízio de solenidades)
     const pool2: MembroEngine[] = [];
     const pool3: MembroEngine[] = [];
+    const poolDia: MembroEngine[] = []; // restrito por dia da semana — fallback quando não há candidatos livres
     const pool4: MembroEngine[] = []; // multi-função (duplicidade)
     const pool5: MembroEngine[] = []; // intervalo mínimo violado (alerta ao coordenador)
 
@@ -721,10 +723,11 @@ export function alocarMembros(
       if (m.funcoes_nao_pode_ids?.includes(funcao.ministerio_id)) { excluidos.funcao_nao_pode++; continue; }
       if (incompatMap?.has(m.id) && [...ja_alocados].some((id) => incompatMap.get(m.id)!.has(id))) { excluidos.funcao_nao_pode++; continue; }
       if (funcao.atuacoes_exigidas?.length && !funcao.atuacoes_exigidas.some((a) => (m.atuacao_ids ?? []).includes(a))) { excluidos.atuacao++; continue; }
-      // Restrição por dia da semana — aplicada em todos os eventos (comuns e solenidades).
-      // Se o membro não pode no dia da semana, ele não será convocado; caso queira participar
-      // de uma solenidade específica, o coordenador remove a restrição ou usa indisponibilidade avulsa.
-      if (m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data))) { excluidos.dia_semana++; continue; }
+      // Restrição por dia da semana — colocada em poolDia (fallback) em vez de exclusão dura.
+      // Se Pool1-3 têm candidatos suficientes, membros restritos no dia nunca são usados.
+      // Se não há candidatos livres, são convocados com alerta — evita que membro fique
+      // sem nenhuma escala no mês inteiro por ter apenas um dia disponível (ex: domingo).
+      const restritoPorDia = m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data));
       // Indisponibilidade de data específica registrada manualmente — controlada pelo toggle ignorarIndisponibilidades.
       if (!ignorarIndisponibilidades && estaIndisponivel(m.id, contexto.data, indisponibilidades)) { excluidos.indisponibilidade++; continue; }
       if (config?.impedir_repeticao_seguida) {
@@ -745,6 +748,14 @@ export function alocarMembros(
       if (ja_alocados.has(m.id)) {
         excluidos.ja_alocado++;
         if (funcao.duplicidade_permitida) pool4.push(m);
+        continue;
+      }
+
+      // Membro restrito pelo dia da semana vai para poolDia (fallback) em vez de ser excluído.
+      // poolDia é consumido após Pool3, antes de Pool4 (duplicidade).
+      if (restritoPorDia) {
+        excluidos.dia_semana++;
+        poolDia.push(m);
         continue;
       }
 
@@ -842,9 +853,10 @@ export function alocarMembros(
     const scored1  = scorePool(pool1, false);
     const scored1b = scorePool(pool1b, false); // solenidade recente (rodízio)
     const scored2  = scorePool(pool2, false);
-    const scored3  = scorePool(pool3, true);
-    const scored4  = scorePool(pool4, true);
-    const scored5  = scorePool(pool5, true); // intervalo mínimo violado
+    const scored3   = scorePool(pool3, true);
+    const scoredDia = scorePool(poolDia, true); // restrito por dia — fallback
+    const scored4   = scorePool(pool4, true);
+    const scored5   = scorePool(pool5, true); // intervalo mínimo violado
 
     // Contadores por função (para alerta de proporção e atualização do global)
     const totalVagasFuncao = vagas;
@@ -853,7 +865,8 @@ export function alocarMembros(
 
     // Seleção progressiva: ordena por gênero com contadores GLOBAIS (inclui funções já
     // processadas) para evitar que funções de 1 vaga sempre priorizem o mesmo gênero.
-    for (const [poolIdx, scored] of [[0, scored1], [1, scored1b], [2, scored2], [3, scored3], [4, scored4], [5, scored5]] as const) {
+    // poolDia (idx 4) fica entre Pool3 e Pool4 (duplicidade).
+    for (const [poolIdx, scored] of [[0, scored1], [1, scored1b], [2, scored2], [3, scored3], [4, scoredDia], [5, scored4], [6, scored5]] as const) {
       if (vagas <= 0) break;
       const ordenados = ordenarPorGenero(
         scored as ReturnType<typeof scorePool>,
@@ -878,8 +891,14 @@ export function alocarMembros(
               `ℹ "${funcao.ministerio_nome}": ${c.membro.nome} escalado mesmo tendo servido na última solenidade (rodízio esgotado).`,
             );
           }
-          // Pool 5: emite alerta individualizado por membro alocado com intervalo violado
-          if (poolIdx === 5) {
+          // poolDia (idx 4): restrito no dia da semana, escalado por falta de candidatos livres
+          if (poolIdx === 4) {
+            alertas.push(
+              `ℹ "${funcao.ministerio_nome}": ${c.membro.nome} escalado apesar da restrição de dia da semana (sem outros candidatos disponíveis).`,
+            );
+          }
+          // Pool 5 (duplicidade) e Pool 6 (intervalo mínimo): alertas
+          if (poolIdx === 6) {
             alertas.push(
               `⚠ "${funcao.ministerio_nome}": ${c.membro.nome} escalado mesmo dentro do intervalo mínimo de ${config?.intervalo_minimo_dias} dias por falta de outros candidatos disponíveis.`,
             );
