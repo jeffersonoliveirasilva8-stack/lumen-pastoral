@@ -916,12 +916,11 @@ export function AssistenteGeracaoEscalas({
         if (celComInjecao.has(planoCel.cel.data + planoCel.cel.titulo)) continue;
         if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) continue;
         if (membroEstaBloqueado(m.id, planoCel.cel.data, indisponibilidades)) continue;
-        // Só injeta em função que ainda tem vaga (alocados < quantidade configurado)
-        const funcaoCompat = planoCel.cel.funcoes.find((f) => {
-          if (!membroPara[m.id]?.includes(f.ministerio_id)) return false;
-          const jaAlocados = planoCel.alocacoes.filter((a) => a.ministerio_id === f.ministerio_id).length;
-          return jaAlocados < f.quantidade;
-        });
+        // Encontra função compatível — aceita mesmo que a função já esteja no limite
+        // (coordenador revisa no rascunho antes de publicar)
+        const funcaoCompat = planoCel.cel.funcoes.find((f) =>
+          membroPara[m.id]?.includes(f.ministerio_id)
+        );
         if (!funcaoCompat) continue;
         planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: funcaoCompat.ministerio_id });
         planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) para garantir ao menos uma escala no período.`);
