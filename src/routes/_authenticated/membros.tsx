@@ -2255,6 +2255,13 @@ function MembrosPage() {
   const [bulkSendLog, setBulkSendLog] = useState<{ nome: string; ok: boolean }[]>([]);
   const [newIndisp, setNewIndisp] = useState("");
   const [newIndispMotivo, setNewIndispMotivo] = useState("");
+  const [indispModo, setIndispModo] = useState<"unica" | "multipla" | "periodo" | "recorrente">("unica");
+  const [indispMultiplas, setIndispMultiplas] = useState<string[]>([]);
+  const [indispPeriodoInicio, setIndispPeriodoInicio] = useState("");
+  const [indispPeriodoFim, setIndispPeriodoFim] = useState("");
+  const [indispDiaSemana, setIndispDiaSemana] = useState("0"); // 0=dom…6=sab
+  const [indispRecorrenteDe, setIndispRecorrenteDe] = useState("");
+  const [indispRecorrenteAte, setIndispRecorrenteAte] = useState("");
   const [incompatSelectId, setIncompatSelectId] = useState("");
   const [incompatMotivo, setIncompatMotivo] = useState("");
   const [importOpen, setImportOpen] = useState(false);
@@ -2928,14 +2935,23 @@ function MembrosPage() {
     },
   });
 
+  type IndispPayload = { data: string; motivo: string; tipo?: string; data_fim?: string };
   const addIndispMutation = useMutation({
-    mutationFn: async ({ data, motivo }: { data: string; motivo: string }) => {
-      const payload = { paroquia_id: pid!, membro_id: editId!, data, motivo: motivo || null };
-      console.log("[INSERT indisponibilidades] payload", payload);
-      const { error } = await supabase.from("indisponibilidades").insert(payload);
+    mutationFn: async (rows: IndispPayload[]) => {
+      const payloads = rows.map((r) => ({
+        paroquia_id: pid!, membro_id: editId!,
+        data: r.data, motivo: r.motivo || null,
+        tipo: r.tipo ?? null, data_fim: r.data_fim ?? null,
+      }));
+      const { error } = await supabase.from("indisponibilidades").insert(payloads);
       if (error) throw new Error(logDbError("INSERT indisponibilidades", error));
     },
-    onSuccess: () => { refetchIndisp(); setNewIndisp(""); setNewIndispMotivo(""); },
+    onSuccess: () => {
+      refetchIndisp();
+      setNewIndisp(""); setNewIndispMotivo("");
+      setIndispMultiplas([]); setIndispPeriodoInicio(""); setIndispPeriodoFim("");
+      setIndispRecorrenteDe(""); setIndispRecorrenteAte("");
+    },
     onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
   });
 
@@ -3761,7 +3777,10 @@ function MembrosPage() {
               ) : (
                 <div className="space-y-1.5">
                   {indisponibilidades.map((ind) => {
-                    const isPast = ind.data < new Date().toISOString().slice(0, 10);
+                    const hoje = new Date().toISOString().slice(0, 10);
+                    const fimEfetivo = (ind as any).data_fim ?? ind.data;
+                    const isPast = fimEfetivo < hoje;
+                    const fmtData = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" });
                     return (
                       <div key={ind.id} className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
                         ind.cancelada ? "opacity-40 border-border" : isPast ? "border-border opacity-60" : "border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/10"
@@ -3769,7 +3788,9 @@ function MembrosPage() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={`font-medium ${isPast || ind.cancelada ? "" : "text-amber-900 dark:text-amber-200"}`}>
-                              {new Date(ind.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}
+                              {(ind as any).tipo === "intervalo" && (ind as any).data_fim
+                                ? `${fmtData(ind.data)} → ${fmtData((ind as any).data_fim)}`
+                                : fmtData(ind.data)}
                             </span>
                             {ind.tipo === "periodo" && ind.hora_inicio && (
                               <span className="text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 px-1.5 py-0.5 rounded">
@@ -3793,17 +3814,154 @@ function MembrosPage() {
                   })}
                 </div>
               )}
-              <div className="flex gap-2">
-                <Input type="date" className="flex-1 h-8 text-sm" value={newIndisp} onChange={(e) => setNewIndisp(e.target.value)} />
-                <Input placeholder="Motivo *" className="flex-1 h-8 text-sm" value={newIndispMotivo} onChange={(e) => setNewIndispMotivo(e.target.value)} />
-                <Button
-                  size="sm" className="h-8 shrink-0"
-                  disabled={!newIndisp || !newIndispMotivo.trim() || addIndispMutation.isPending}
-                  onClick={() => addIndispMutation.mutate({ data: newIndisp, motivo: newIndispMotivo })}
-                >
-                  {addIndispMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                </Button>
+              {/* Seletor de modo */}
+              <div className="flex gap-1 flex-wrap">
+                {(["unica", "multipla", "periodo", "recorrente"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setIndispModo(m)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      indispModo === m
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {{ unica: "Dia único", multipla: "Múltiplas datas", periodo: "Período", recorrente: "Dia da semana" }[m]}
+                  </button>
+                ))}
               </div>
+
+              {/* Modo: Dia único */}
+              {indispModo === "unica" && (
+                <div className="flex gap-2">
+                  <Input type="date" className="flex-1 h-8 text-sm" value={newIndisp} onChange={(e) => setNewIndisp(e.target.value)} />
+                  <Input placeholder="Motivo" className="flex-1 h-8 text-sm" value={newIndispMotivo} onChange={(e) => setNewIndispMotivo(e.target.value)} />
+                  <Button
+                    size="sm" className="h-8 shrink-0"
+                    disabled={!newIndisp || addIndispMutation.isPending}
+                    onClick={() => addIndispMutation.mutate([{ data: newIndisp, motivo: newIndispMotivo, tipo: "dia" }])}
+                  >
+                    {addIndispMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+              )}
+
+              {/* Modo: Múltiplas datas */}
+              {indispModo === "multipla" && (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      type="date" className="flex-1 h-8 text-sm"
+                      onChange={(e) => {
+                        const d = e.target.value;
+                        if (d && !indispMultiplas.includes(d)) setIndispMultiplas((prev) => [...prev, d].sort());
+                        e.target.value = "";
+                      }}
+                    />
+                    <Input placeholder="Motivo" className="flex-1 h-8 text-sm" value={newIndispMotivo} onChange={(e) => setNewIndispMotivo(e.target.value)} />
+                  </div>
+                  {indispMultiplas.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {indispMultiplas.map((d) => (
+                        <span key={d} className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-0.5 rounded-full">
+                          {new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" })}
+                          <button type="button" onClick={() => setIndispMultiplas((p) => p.filter((x) => x !== d))}><X className="h-3 w-3" /></button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <Button
+                    size="sm" className="h-8 w-full"
+                    disabled={indispMultiplas.length === 0 || addIndispMutation.isPending}
+                    onClick={() => addIndispMutation.mutate(indispMultiplas.map((d) => ({ data: d, motivo: newIndispMotivo, tipo: "dia" })))}
+                  >
+                    {addIndispMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                    Adicionar {indispMultiplas.length > 0 ? `${indispMultiplas.length} datas` : ""}
+                  </Button>
+                </div>
+              )}
+
+              {/* Modo: Período */}
+              {indispModo === "periodo" && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground mb-1">De</p>
+                      <Input type="date" className="h-8 text-sm" value={indispPeriodoInicio} onChange={(e) => setIndispPeriodoInicio(e.target.value)} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground mb-1">Até</p>
+                      <Input type="date" className="h-8 text-sm" value={indispPeriodoFim} onChange={(e) => setIndispPeriodoFim(e.target.value)} />
+                    </div>
+                  </div>
+                  <Input placeholder="Motivo (ex: férias, viagem)" className="h-8 text-sm" value={newIndispMotivo} onChange={(e) => setNewIndispMotivo(e.target.value)} />
+                  <Button
+                    size="sm" className="h-8 w-full"
+                    disabled={!indispPeriodoInicio || !indispPeriodoFim || indispPeriodoFim < indispPeriodoInicio || addIndispMutation.isPending}
+                    onClick={() => addIndispMutation.mutate([{
+                      data: indispPeriodoInicio, data_fim: indispPeriodoFim,
+                      motivo: newIndispMotivo, tipo: "intervalo",
+                    }])}
+                  >
+                    {addIndispMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                    Adicionar período
+                  </Button>
+                </div>
+              )}
+
+              {/* Modo: Dia da semana recorrente */}
+              {indispModo === "recorrente" && (() => {
+                const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                const buildRows = (): IndispPayload[] => {
+                  if (!indispRecorrenteDe || !indispRecorrenteAte) return [];
+                  const diaSem = parseInt(indispDiaSemana, 10);
+                  const rows: IndispPayload[] = [];
+                  const cur = new Date(indispRecorrenteDe + "T12:00:00");
+                  const end = new Date(indispRecorrenteAte + "T12:00:00");
+                  // avança até o primeiro dia da semana pedido
+                  while (cur.getDay() !== diaSem) cur.setDate(cur.getDate() + 1);
+                  while (cur <= end) {
+                    rows.push({ data: cur.toISOString().slice(0, 10), motivo: newIndispMotivo, tipo: "dia" });
+                    cur.setDate(cur.getDate() + 7);
+                  }
+                  return rows;
+                };
+                const preview = buildRows();
+                return (
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <select
+                        value={indispDiaSemana}
+                        onChange={(e) => setIndispDiaSemana(e.target.value)}
+                        className="h-8 text-sm rounded-md border border-input bg-background px-2"
+                      >
+                        {DIAS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                      </select>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span>de</span>
+                        <Input type="date" className="h-8 text-sm w-36" value={indispRecorrenteDe} onChange={(e) => setIndispRecorrenteDe(e.target.value)} />
+                        <span>até</span>
+                        <Input type="date" className="h-8 text-sm w-36" value={indispRecorrenteAte} onChange={(e) => setIndispRecorrenteAte(e.target.value)} />
+                      </div>
+                    </div>
+                    <Input placeholder="Motivo (ex: turno de trabalho)" className="h-8 text-sm" value={newIndispMotivo} onChange={(e) => setNewIndispMotivo(e.target.value)} />
+                    {preview.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {preview.length} {DIAS[parseInt(indispDiaSemana)]}{preview.length > 1 ? "s" : ""} encontrados
+                      </p>
+                    )}
+                    <Button
+                      size="sm" className="h-8 w-full"
+                      disabled={preview.length === 0 || addIndispMutation.isPending}
+                      onClick={() => addIndispMutation.mutate(buildRows())}
+                    >
+                      {addIndispMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                      Adicionar {preview.length > 0 ? `${preview.length} datas` : ""}
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
