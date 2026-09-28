@@ -895,28 +895,39 @@ export function AssistenteGeracaoEscalas({
 
     // ── Garantia de cobertura mínima ────────────────────────────────────────
     // Membros elegíveis (com oportunidades) que ficaram com 0 escalas são injetados
-    // em ao menos uma celebração como alocação adicional. O coordenador pode remover
-    // manualmente no rascunho. Respeita indisponibilidades e vínculo de ministério.
+    // em ao menos uma celebração. Regras:
+    //   1. Nunca ultrapassa o quantidade configurado da função (sem sobrealocação)
+    //   2. Cada celebração recebe no máximo 1 injeção (distribui entre datas distintas)
+    //   3. Respeita indisponibilidades e vínculo de ministério
     const escalasContador = new Map<string, number>();
     for (const p of plano) {
       for (const a of p.alocacoes) {
         escalasContador.set(a.membro_id, (escalasContador.get(a.membro_id) ?? 0) + 1);
       }
     }
+    // Rastreia celebrações que já receberam uma injeção neste passo
+    const celComInjecao = new Set<string>();
     for (const m of membros) {
       if ((escalasContador.get(m.id) ?? 0) > 0) continue;
       if ((membroOportunidades.get(m.id) ?? 0) === 0) continue;
-      // Procura a primeira celebração onde pode ser injetado
       for (const planoCel of plano) {
         if (planoCel.semFuncoes) continue;
+        // Não injeta duas vezes na mesma celebração (evita aglomerar múltiplos injetados)
+        if (celComInjecao.has(planoCel.cel.data + planoCel.cel.titulo)) continue;
         if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) continue;
         if (membroEstaBloqueado(m.id, planoCel.cel.data, indisponibilidades)) continue;
-        const funcaoCompat = planoCel.cel.funcoes.find((f) => membroPara[m.id]?.includes(f.ministerio_id));
+        // Só injeta em função que ainda tem vaga (alocados < quantidade configurado)
+        const funcaoCompat = planoCel.cel.funcoes.find((f) => {
+          if (!membroPara[m.id]?.includes(f.ministerio_id)) return false;
+          const jaAlocados = planoCel.alocacoes.filter((a) => a.ministerio_id === f.ministerio_id).length;
+          return jaAlocados < f.quantidade;
+        });
         if (!funcaoCompat) continue;
         planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: funcaoCompat.ministerio_id });
-        planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) manualmente para garantir ao menos uma escala no período.`);
+        planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) para garantir ao menos uma escala no período.`);
         todosAlertasGlobais.push(`ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} adicionado(a) para garantir cobertura mínima.`);
         escalasContador.set(m.id, 1);
+        celComInjecao.add(planoCel.cel.data + planoCel.cel.titulo);
         break;
       }
     }
