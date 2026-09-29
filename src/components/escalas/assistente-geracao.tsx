@@ -135,6 +135,7 @@ type PlanoCelebracao = {
   funcoesVagas: FuncaoVagaDetalhe[];
   semFuncoes: boolean;
   alertas: string[];
+  indispEfetivas: IndispRow[];
 };
 
 type SimulacaoResultado = {
@@ -778,9 +779,18 @@ export function AssistenteGeracaoEscalas({
     }
     for (const cel of preVisualizacao) {
       const diaSemana = new Date(cel.data + "T12:00:00").getDay();
+      // Inclui restrições de missa específica (igual ao cálculo feito no loop principal)
+      const missaCel = missasPadrao.find((mp) => mp.id === cel.missaPadraoId);
+      const restDiaCel = cel.esporadico
+        ? missasPadrao
+            .filter((mp) => mp.recorrencia?.tipo !== "esporadico" && mp.dia_semana === diaSemana)
+            .flatMap((mp) => (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: cel.data })))
+        : (missaCel ? (membroMissaRestricoes[missaCel.id] ?? []) : [])
+            .map((mid) => ({ membro_id: mid, data: cel.data }));
+      const indispCel = [...indisponibilidades, ...restDiaCel];
       for (const m of membros) {
         if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
-        if (membroEstaBloqueado(m.id, cel.data, indisponibilidades)) continue;
+        if (membroEstaBloqueado(m.id, cel.data, indispCel)) continue;
         const temVinculo = cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id));
         if (!temVinculo) continue;
         membroOportunidades.set(m.id, (membroOportunidades.get(m.id) ?? 0) + 1);
@@ -795,16 +805,17 @@ export function AssistenteGeracaoEscalas({
       if (cel.funcoes.length === 0) {
         plano.push({
           cel,
-          alocacoes: [],
-          funcoesVagas: [],
-          semFuncoes: true,
-          alertas: ["Missa sem funções configuradas. Configure as funções antes de gerar."],
+          alocacoes:      [],
+          funcoesVagas:   [],
+          semFuncoes:     true,
+          alertas:        ["Missa sem funções configuradas. Configure as funções antes de gerar."],
+          indispEfetivas: indisponibilidades,
         });
         continue;
       }
 
       if (membros.length === 0) {
-        plano.push({ cel, alocacoes: [], funcoesVagas: [], semFuncoes: false, alertas: ["Nenhum membro ativo."] });
+        plano.push({ cel, alocacoes: [], funcoesVagas: [], semFuncoes: false, alertas: ["Nenhum membro ativo."], indispEfetivas: indisponibilidades });
         continue;
       }
 
@@ -886,19 +897,21 @@ export function AssistenteGeracaoEscalas({
 
       plano.push({
         cel,
-        alocacoes:   resultado.sugestoes,
+        alocacoes:    resultado.sugestoes,
         funcoesVagas,
-        semFuncoes:  false,
-        alertas:     resultado.alertas,
+        semFuncoes:   false,
+        alertas:      resultado.alertas,
+        indispEfetivas: indispParaGeracao,
       });
     }
 
     // ── Garantia de cobertura mínima ────────────────────────────────────────
-    // Membros elegíveis (com oportunidades) que ficaram com 0 escalas são injetados
-    // em ao menos uma celebração. Regras:
-    //   1. Nunca ultrapassa o quantidade configurado da função (sem sobrealocação)
+    // Membros elegíveis (com oportunidades reais) que ficaram com 0 escalas são injetados
+    // em ao menos uma celebração com vaga disponível. Regras:
+    //   1. Nunca ultrapassa quantidade configurado da função (sem sobrealocação)
     //   2. Cada celebração recebe no máximo 1 injeção (distribui entre datas distintas)
-    //   3. Respeita indisponibilidades e vínculo de ministério
+    //   3. Respeita indisponibilidades E restrições de missa (via indispEfetivas)
+    //   4. Membros com 0 oportunidades reais (todas celebrações bloqueadas) não são elegíveis
     const escalasContador = new Map<string, number>();
     for (const p of plano) {
       for (const a of p.alocacoes) {
@@ -910,28 +923,25 @@ export function AssistenteGeracaoEscalas({
     for (const m of membros) {
       if ((escalasContador.get(m.id) ?? 0) > 0) continue;
       if ((membroOportunidades.get(m.id) ?? 0) === 0) continue;
-      // DEBUG — remover após diagnóstico
-      const dbgMotivos: string[] = [];
-      let dbgInjetado = false;
       for (const planoCel of plano) {
-        if (planoCel.semFuncoes) { dbgMotivos.push(`${planoCel.cel.data} semFuncoes`); continue; }
-        if (celComInjecao.has(planoCel.cel.data + planoCel.cel.titulo)) { dbgMotivos.push(`${planoCel.cel.data} celComInjecao`); continue; }
-        if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) { dbgMotivos.push(`${planoCel.cel.data} jaAlocado`); continue; }
-        if (membroEstaBloqueado(m.id, planoCel.cel.data, indisponibilidades)) { dbgMotivos.push(`${planoCel.cel.data} bloqueado`); continue; }
-        const funcaoCompat = planoCel.cel.funcoes.find((f) =>
-          membroPara[m.id]?.includes(f.ministerio_id)
-        );
-        if (!funcaoCompat) { dbgMotivos.push(`${planoCel.cel.data} semFuncaoCompat(cel=${planoCel.cel.funcoes.map(f=>f.ministerio_id).join(",")},membro=${membroPara[m.id]?.join(",")})`); continue; }
+        if (planoCel.semFuncoes) continue;
+        if (celComInjecao.has(planoCel.cel.data + planoCel.cel.titulo)) continue;
+        if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) continue;
+        // Verifica indisponibilidade E restrição de missa via indispEfetivas da celebração
+        if (membroEstaBloqueado(m.id, planoCel.cel.data, planoCel.indispEfetivas)) continue;
+        // Só injeta em função que ainda tem vaga (sem sobrealocação)
+        const funcaoCompat = planoCel.cel.funcoes.find((f) => {
+          if (!membroPara[m.id]?.includes(f.ministerio_id)) return false;
+          const jaAlocados = planoCel.alocacoes.filter((a) => a.ministerio_id === f.ministerio_id).length;
+          return jaAlocados < f.quantidade;
+        });
+        if (!funcaoCompat) continue;
         planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: funcaoCompat.ministerio_id });
         planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) para garantir ao menos uma escala no período.`);
         todosAlertasGlobais.push(`ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} adicionado(a) para garantir cobertura mínima.`);
         escalasContador.set(m.id, 1);
         celComInjecao.add(planoCel.cel.data + planoCel.cel.titulo);
-        dbgInjetado = true;
         break;
-      }
-      if (!dbgInjetado) {
-        console.warn(`[INJEÇÃO] ${m.nome} (${m.id}): NÃO injetado. membroPara=${JSON.stringify(membroPara[m.id])}. Motivos (primeiras 10):`, dbgMotivos.slice(0, 10));
       }
     }
 
