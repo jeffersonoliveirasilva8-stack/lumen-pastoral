@@ -1820,12 +1820,14 @@ function EscalasPage() {
         (supabase as any)
           .from("escala_funcoes")
           .select("escala_id, quantidade, ministerio_id, ministerios(id, nome, cor, categoria, ordem)")
-          .in("escala_id", escalaIds),
+          .in("escala_id", escalaIds)
+          .limit(5000),
         (supabase as any)
           .from("escala_membros")
           .select("escala_id, ministerio_id, status, membros!membro_id(id, nome)")
           .in("escala_id", escalaIds)
-          .neq("ativo", false),
+          .neq("ativo", false)
+          .limit(5000),
       ]);
       const counts: Record<string, EscalaPreview> = {};
       ((funcRes.data ?? []) as any[]).forEach((f) => {
