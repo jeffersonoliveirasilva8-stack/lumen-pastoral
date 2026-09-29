@@ -1811,19 +1811,7 @@ function EscalasPage() {
   // ── Contagens para progress bar nos cards ───────────────────────────────────
   // Usa apenas os IDs das escalas visíveis na listagem (upcoming) para manter
   // o IN clause curto e garantir que novas escalas invalidem o cache imediatamente.
-  // DEBUG IDs – remover após diagnóstico
-  const DEBUG_IDS = [
-    "0a119647-11be-44e3-84b9-8de14d4f8020", // Matriz Seg 05/10
-    "c8a0f4fe-e53e-4e06-8014-d94ee792f52f", // Sagrada Qua 30/09
-    "fb670fc3-99cd-4851-aab6-c45704a35394", // Matriz Qua 30/09
-  ] as const;
-
-  const escalaIds = useMemo(() => {
-    const ids = upcoming.map((e) => e.id);
-    const found = DEBUG_IDS.filter((d) => ids.includes(d));
-    console.warn("[escalaCounts] escalaIds rebuilt. upcoming:", ids.length, "debug IDs present:", found);
-    return ids;
-  }, [upcoming]);
+  const escalaIds = useMemo(() => upcoming.map((e) => e.id), [upcoming]);
 
   const { data: escalaCounts = {} as Record<string, EscalaPreview>, isFetching: escalaCountsFetching } = useQuery({
     queryKey: ["escalas-counts", escalaIds],
@@ -1831,7 +1819,6 @@ function EscalasPage() {
     staleTime: 10_000,
     placeholderData: (prev) => prev,
     queryFn: async () => {
-      console.warn("[escalaCounts] queryFn START. ids:", escalaIds.length, "sample:", escalaIds.slice(0, 3));
       const [funcRes, membRes] = await Promise.all([
         (supabase as any)
           .from("escala_funcoes")
@@ -1846,20 +1833,11 @@ function EscalasPage() {
           .limit(5000),
       ]);
       if (funcRes.error) {
-        console.error("[escalaCounts] escala_funcoes error:", funcRes.error);
         throw funcRes.error;
       }
       if (membRes.error) {
-        console.error("[escalaCounts] escala_membros error:", membRes.error);
         throw membRes.error;
       }
-      console.warn("[escalaCounts] funcoes:", funcRes.data?.length, "membros:", membRes.data?.length, "ids:", escalaIds.length);
-      // Log debug IDs specifically
-      DEBUG_IDS.forEach((did) => {
-        const fc = (funcRes.data ?? []).filter((f: any) => f.escala_id === did).length;
-        const mc = (membRes.data ?? []).filter((m: any) => m.escala_id === did).length;
-        console.warn(`[escalaCounts] DEBUG ${did.slice(0,8)}: funcoes=${fc} membros=${mc}`);
-      });
       const counts: Record<string, EscalaPreview> = {};
       ((funcRes.data ?? []) as any[]).forEach((f) => {
         if (!counts[f.escala_id]) counts[f.escala_id] = { needed: 0, filled: 0, funcoes: [], confirmados: 0, pendentes: 0, recusados: 0 };
@@ -2405,7 +2383,6 @@ function EscalasPage() {
           membroMissaRestricoes={membroMissaRestricoes}
           paroquiaConfig={paroquiaConfig ?? null}
           onSuccess={() => {
-            console.warn("[onSuccess] invalidateQueries escalas + escalas-counts at", new Date().toISOString());
             qc.invalidateQueries({ queryKey: ["escalas"] });
             qc.invalidateQueries({ queryKey: ["escalas-counts"] });
             qc.invalidateQueries({ queryKey: ["escala-membros"] });
@@ -4273,10 +4250,6 @@ function ListaView({
             const d = new Date(e.data + "T00:00:00");
             const isSelected = selectedIds.has(e.id);
             const counts = escalaCounts[e.id];
-            // DEBUG: log para IDs investigados
-            if (["0a119647-11be-44e3-84b9-8de14d4f8020","c8a0f4fe-e53e-4e06-8014-d94ee792f52f","fb670fc3-99cd-4851-aab6-c45704a35394"].includes(e.id)) {
-              console.warn(`[CARD RENDER] ${e.id.slice(0,8)} counts=${counts ? `funcoes:${counts.funcoes.length} filled:${counts.filled}` : "undefined"} isFetching=${escalaCountsFetching}`);
-            }
             const pct = counts && counts.needed > 0 ? Math.min(1, counts.filled / counts.needed) : null;
 
             return (
