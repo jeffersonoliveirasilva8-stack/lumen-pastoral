@@ -1809,7 +1809,9 @@ function EscalasPage() {
   }
 
   // ── Contagens para progress bar nos cards ───────────────────────────────────
-  const escalaIds = useMemo(() => escalas.map((e) => e.id), [escalas]);
+  // Usa apenas os IDs das escalas visíveis na listagem (upcoming) para manter
+  // o IN clause curto e garantir que novas escalas invalidem o cache imediatamente.
+  const escalaIds = useMemo(() => upcoming.map((e) => e.id), [upcoming]);
 
   const { data: escalaCounts = {} as Record<string, EscalaPreview>, isFetching: escalaCountsFetching } = useQuery({
     queryKey: ["escalas-counts", escalaIds],
