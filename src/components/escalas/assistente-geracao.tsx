@@ -1036,10 +1036,16 @@ export function AssistenteGeracaoEscalas({
 
         if (existing && existing.length > 0) {
           const escalaId = existing[0].id;
-          // Se a escala existe mas não tem funções, grava as funções e membros agora
-          const { data: funcExist } = await (supabase as any)
-            .from("escala_funcoes").select("id").eq("escala_id", escalaId).limit(1);
-          if (!funcExist || funcExist.length === 0) {
+          // Verifica se já tem funções E membros — só pula se ambos existirem
+          const [{ data: funcExist }, { data: membExist }] = await Promise.all([
+            (supabase as any).from("escala_funcoes").select("id").eq("escala_id", escalaId).limit(1),
+            (supabase as any).from("escala_membros").select("id").eq("escala_id", escalaId).eq("ativo", true).limit(1),
+          ]);
+          const temFuncoes = funcExist && funcExist.length > 0;
+          const temMembros = membExist && membExist.length > 0;
+
+          if (!temFuncoes) {
+            // Sem funções: salva funções + membros
             const { error: fErr2 } = await (supabase as any).from("escala_funcoes").insert(
               cel.funcoes.map((f) => ({ escala_id: escalaId, ministerio_id: f.ministerio_id, quantidade: f.quantidade }))
             );
@@ -1052,6 +1058,15 @@ export function AssistenteGeracaoEscalas({
               if (bErr2) throw new Error(`Erro ao salvar membros de "${cel.titulo}" (${cel.data}): ${bErr2.message}`);
               totalSugestoes += alocacoes.length;
             }
+            criadas++;
+          } else if (!temMembros && alocacoes.length > 0) {
+            // Tem funções mas sem membros: recupera salvando os membros desta geração
+            const { error: bErr3 } = await (supabase as any).from("escala_membros").upsert(
+              alocacoes.map((s) => ({ escala_id: escalaId, membro_id: s.membro_id, ministerio_id: s.ministerio_id, status: "pendente", ativo: true, removido_em: null })),
+              { onConflict: "escala_id,membro_id,ministerio_id" }
+            );
+            if (bErr3) throw new Error(`Erro ao recuperar membros de "${cel.titulo}" (${cel.data}): ${bErr3.message}`);
+            totalSugestoes += alocacoes.length;
             criadas++;
           } else {
             ignoradas++;
