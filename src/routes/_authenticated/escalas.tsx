@@ -1811,10 +1811,11 @@ function EscalasPage() {
   // ── Contagens para progress bar nos cards ───────────────────────────────────
   const escalaIds = useMemo(() => escalas.map((e) => e.id), [escalas]);
 
-  const { data: escalaCounts = {} as Record<string, EscalaPreview> } = useQuery({
+  const { data: escalaCounts = {} as Record<string, EscalaPreview>, isFetching: escalaCountsFetching } = useQuery({
     queryKey: ["escalas-counts", escalaIds],
     enabled: escalaIds.length > 0,
     staleTime: 10_000,
+    placeholderData: (prev) => prev,
     queryFn: async () => {
       const [funcRes, membRes] = await Promise.all([
         (supabase as any)
@@ -1829,6 +1830,15 @@ function EscalasPage() {
           .neq("ativo", false)
           .limit(5000),
       ]);
+      if (funcRes.error) {
+        console.error("[escalaCounts] escala_funcoes error:", funcRes.error);
+        throw funcRes.error;
+      }
+      if (membRes.error) {
+        console.error("[escalaCounts] escala_membros error:", membRes.error);
+        throw membRes.error;
+      }
+      console.warn("[escalaCounts] funcoes:", funcRes.data?.length, "membros:", membRes.data?.length, "ids:", escalaIds.length);
       const counts: Record<string, EscalaPreview> = {};
       ((funcRes.data ?? []) as any[]).forEach((f) => {
         if (!counts[f.escala_id]) counts[f.escala_id] = { needed: 0, filled: 0, funcoes: [], confirmados: 0, pendentes: 0, recusados: 0 };
@@ -2318,6 +2328,7 @@ function EscalasPage() {
           allEscalas={escalas}
           selectedIds={selectedEscalaIds}
           escalaCounts={escalaCounts}
+          escalaCountsFetching={escalaCountsFetching}
           membros={membros}
           assignmentHistory={assignmentHistory}
           paroquiaConfig={paroquiaConfig}
@@ -3698,7 +3709,7 @@ function HistoricoView({
 // ── ListaView ─────────────────────────────────────────────────────────────────
 
 function ListaView({
-  escalas, allEscalas, selectedIds, escalaCounts, membros, assignmentHistory, paroquiaConfig,
+  escalas, allEscalas, selectedIds, escalaCounts, escalaCountsFetching, membros, assignmentHistory, paroquiaConfig,
   indisponibilidades, membroMinisterios, funcaoRestricoes,
   onToggleSelect, onSelectAll, onOpenDetail, onEdit, onDelete, onCreate, onExportPDF, onReorganizar,
   onBulkPublish, onSwapMembro, isBulkPublishing,
@@ -3707,6 +3718,7 @@ function ListaView({
   allEscalas: Escala[];
   selectedIds: Set<string>;
   escalaCounts: Record<string, EscalaPreview>;
+  escalaCountsFetching?: boolean;
   membros: Membro[];
   assignmentHistory: AssignmentHistoryEntry[];
   paroquiaConfig: ParoquiaConfigRaw;
@@ -4389,7 +4401,12 @@ function ListaView({
                 </div>
 
                 <div className="border-t border-border/40 px-4 pb-4 pt-3">
-                  {counts && counts.funcoes.length > 0 ? (
+                  {!counts && escalaCountsFetching ? (
+                    <div className="flex gap-2">
+                      <div className="h-16 flex-1 rounded-xl bg-muted/40 animate-pulse" />
+                      <div className="h-16 flex-1 rounded-xl bg-muted/40 animate-pulse" />
+                    </div>
+                  ) : counts && counts.funcoes.length > 0 ? (
                     <div className="space-y-3">
                       {groupFuncoesByCategoria(counts.funcoes).map((group) => {
 

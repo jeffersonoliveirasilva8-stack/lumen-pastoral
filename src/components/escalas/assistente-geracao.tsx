@@ -1040,14 +1040,16 @@ export function AssistenteGeracaoEscalas({
           const { data: funcExist } = await (supabase as any)
             .from("escala_funcoes").select("id").eq("escala_id", escalaId).limit(1);
           if (!funcExist || funcExist.length === 0) {
-            await (supabase as any).from("escala_funcoes").insert(
+            const { error: fErr2 } = await (supabase as any).from("escala_funcoes").insert(
               cel.funcoes.map((f) => ({ escala_id: escalaId, ministerio_id: f.ministerio_id, quantidade: f.quantidade }))
             );
+            if (fErr2) throw new Error(`Erro ao salvar funções de "${cel.titulo}" (${cel.data}): ${fErr2.message}`);
             if (alocacoes.length > 0) {
-              await (supabase as any).from("escala_membros").upsert(
+              const { error: bErr2 } = await (supabase as any).from("escala_membros").upsert(
                 alocacoes.map((s) => ({ escala_id: escalaId, membro_id: s.membro_id, ministerio_id: s.ministerio_id, status: "pendente", ativo: true, removido_em: null })),
                 { onConflict: "escala_id,membro_id,ministerio_id" }
               );
+              if (bErr2) throw new Error(`Erro ao salvar membros de "${cel.titulo}" (${cel.data}): ${bErr2.message}`);
               totalSugestoes += alocacoes.length;
             }
             criadas++;
@@ -1085,9 +1087,10 @@ export function AssistenteGeracaoEscalas({
         criadas++;
 
         // Grava funções
-        await (supabase as any).from("escala_funcoes").insert(
+        const { error: fErr } = await (supabase as any).from("escala_funcoes").insert(
           cel.funcoes.map((f) => ({ escala_id: newEscala.id, ministerio_id: f.ministerio_id, quantidade: f.quantidade }))
         );
+        if (fErr) throw new Error(`Erro ao salvar funções de "${cel.titulo}" (${cel.data}): ${fErr.message}`);
         cel.funcoes.forEach((f) => { totalVagasSolicitadas += f.quantidade; });
 
         // Grava membros do plano
@@ -1096,7 +1099,8 @@ export function AssistenteGeracaoEscalas({
             alocacoes.map((s) => ({ escala_id: newEscala.id, membro_id: s.membro_id, ministerio_id: s.ministerio_id, status: "pendente", ativo: true, removido_em: null })),
             { onConflict: "escala_id,membro_id,ministerio_id" }
           );
-          if (!bErr) totalSugestoes += alocacoes.length;
+          if (bErr) throw new Error(`Erro ao salvar membros de "${cel.titulo}" (${cel.data}): ${bErr.message}`);
+          totalSugestoes += alocacoes.length;
         }
 
         funcoesVagasRelatorio.push(...funcoesVagas);
