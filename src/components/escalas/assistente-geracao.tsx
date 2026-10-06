@@ -127,6 +127,8 @@ type MembroCobertura = {
   escalas: number;
   oportunidades: number;
   taxa: number;
+  /** Por que o membro ficou sem escala (apenas quando escalas=0) */
+  motivo_sem_escala?: string;
 };
 
 type PlanoCelebracao = {
@@ -149,7 +151,10 @@ type SimulacaoResultado = {
     funcoesPreenchidas: number;
     funcoesVagas: number;
     membrosEscalados: number;
+    /** Membros com oportunidades reais mas que ainda ficaram com 0 escalas */
     membrosElegiveisSemEscala: MembroCobertura[];
+    /** Membros sem nenhuma oportunidade válida no período (verdadeiramente inelegíveis) */
+    membrosInelegiveis: MembroCobertura[];
     distribuicao: { id: string; nome: string; count: number; oportunidades: number; taxa: number }[];
     alertas: string[];
   };
@@ -789,7 +794,9 @@ export function AssistenteGeracaoEscalas({
             .map((mid) => ({ membro_id: mid, data: cel.data }));
       const indispCel = [...indisponibilidades, ...restDiaCel];
       for (const m of membros) {
-        if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
+        // restricoes_dia_semana é penalidade SUAVE no motor (–20 pts), não exclusão.
+        // Manter como hard aqui impedia membros com restrição em todos os dias do mês
+        // de receber oportunidades, bloqueando a cobertura mínima.
         if (membroEstaBloqueado(m.id, cel.data, indispCel)) continue;
         const temVinculo = cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id));
         if (!temVinculo) continue;
@@ -841,7 +848,7 @@ export function AssistenteGeracaoEscalas({
       const funcoesComCandidatos = cel.funcoes.map((f) => {
         const candidatos = membros.filter((m) => {
           if (!membroPara[m.id]?.includes(f.ministerio_id)) return false;
-          if (m.restricoes_dia_semana?.includes(diaSemana)) return false;
+          // restricoes_dia_semana não é exclusão — o motor a trata como penalidade suave
           if (membroEstaBloqueado(m.id, cel.data, indispParaGeracao)) return false;
           return true;
         }).length;
@@ -945,6 +952,70 @@ export function AssistenteGeracaoEscalas({
       }
     }
 
+    // ── Fase B: deslocamento — cobertura para membros ainda com 0 escalas ───────
+    // Se após a injeção em vagas abertas um membro elegível ainda tem 0 escalas,
+    // tenta deslocar um membro com ≥2 escalas de uma vaga compatível e ocupada.
+    // Preserva quantidade configurada da função (sem sobrealocação).
+    const celComDeslocamento = new Set<string>();
+    for (const m of membros) {
+      if ((escalasContador.get(m.id) ?? 0) > 0) continue;
+      if ((membroOportunidades.get(m.id) ?? 0) === 0) continue;
+
+      let deslocou = false;
+      for (const planoCel of plano) {
+        if (deslocou) break;
+        if (planoCel.semFuncoes) continue;
+        if (celComDeslocamento.has(planoCel.cel.data + planoCel.cel.titulo)) continue;
+        if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) continue;
+        if (membroEstaBloqueado(m.id, planoCel.cel.data, planoCel.indispEfetivas)) continue;
+
+        for (const f of planoCel.cel.funcoes) {
+          if (!membroPara[m.id]?.includes(f.ministerio_id)) continue;
+
+          const ocupantes = planoCel.alocacoes.filter((a) => a.ministerio_id === f.ministerio_id);
+          // Vaga aberta ainda — deveria ter sido pego no passo anterior; tenta mesmo assim
+          if (ocupantes.length < f.quantidade) {
+            planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: f.ministerio_id });
+            escalasContador.set(m.id, 1);
+            planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) para garantir ao menos uma escala no período.`);
+            todosAlertasGlobais.push(`ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} adicionado(a) para garantir cobertura mínima.`);
+            celComDeslocamento.add(planoCel.cel.data + planoCel.cel.titulo);
+            deslocou = true;
+            break;
+          }
+
+          // Vaga cheia — tenta deslocar quem tem mais escalas no mês (≥2)
+          const candidatoDeslocamento = ocupantes
+            .map((a) => ({ membro_id: a.membro_id, count: escalasContador.get(a.membro_id) ?? 0 }))
+            .sort((a, b) => b.count - a.count)
+            .find((a) => a.count >= 2);
+
+          if (!candidatoDeslocamento) continue;
+
+          const nome = membros.find((x) => x.id === candidatoDeslocamento.membro_id)?.nome ?? candidatoDeslocamento.membro_id;
+          const idxRem = planoCel.alocacoes.findIndex(
+            (a) => a.membro_id === candidatoDeslocamento.membro_id && a.ministerio_id === f.ministerio_id
+          );
+          if (idxRem === -1) continue;
+
+          planoCel.alocacoes.splice(idxRem, 1);
+          escalasContador.set(candidatoDeslocamento.membro_id, candidatoDeslocamento.count - 1);
+
+          planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: f.ministerio_id });
+          escalasContador.set(m.id, 1);
+          planoCel.alertas.push(
+            `ℹ ${m.nome} adicionado(a) por cobertura mínima (substituiu ${nome} que possui outras escalas no mês).`
+          );
+          todosAlertasGlobais.push(
+            `ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} adicionado(a) por cobertura mínima.`
+          );
+          celComDeslocamento.add(planoCel.cel.data + planoCel.cel.titulo);
+          deslocou = true;
+          break;
+        }
+      }
+    }
+
     // ── Sumário ──
     const membroEscalas = escalasContador;
 
@@ -963,9 +1034,48 @@ export function AssistenteGeracaoEscalas({
       }))
       .sort((a, b) => b.count - a.count);
 
-    const membrosElegiveisSemEscala: MembroCobertura[] = distribuicao.filter(
-      (d) => d.count === 0 && d.oportunidades > 0
-    );
+    // Membros com oportunidades reais mas que ainda ficaram com 0 escalas (após deslocamento)
+    const membrosElegiveisSemEscala: MembroCobertura[] = distribuicao
+      .filter((d) => d.count === 0 && d.oportunidades > 0)
+      .map((d) => ({
+        id: d.id,
+        nome: d.nome,
+        escalas: d.count,
+        oportunidades: d.oportunidades,
+        taxa: d.taxa,
+        motivo_sem_escala:
+          "Todas as vagas compatíveis estavam ocupadas por membros sem disponibilidade para deslocamento.",
+      }));
+
+    // Membros verdadeiramente inelegíveis: ativos mas sem oportunidade válida no período
+    const membrosInelegiveis: MembroCobertura[] = membros
+      .filter((m) => !membroEscalas.has(m.id) && (membroOportunidades.get(m.id) ?? 0) === 0)
+      .map((m) => {
+        // Determina o motivo objetivo
+        const temVinculo = preVisualizacao.some((cel) =>
+          cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id))
+        );
+        const todasIndisp = temVinculo && preVisualizacao
+          .filter((cel) => cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id)))
+          .every((cel) => {
+            const diaSemana = new Date(cel.data + "T12:00:00").getDay();
+            if (m.restricoes_dia_semana?.includes(diaSemana)) return true;
+            const missaCel = missasPadrao.find((mp) => mp.id === cel.missaPadraoId);
+            const restDiaCel = cel.esporadico
+              ? missasPadrao
+                  .filter((mp) => mp.recorrencia?.tipo !== "esporadico" && mp.dia_semana === diaSemana)
+                  .flatMap((mp) => (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: cel.data })))
+              : (missaCel ? (membroMissaRestricoes[missaCel.id] ?? []) : [])
+                  .map((mid) => ({ membro_id: mid, data: cel.data }));
+            return membroEstaBloqueado(m.id, cel.data, [...indisponibilidades, ...(restDiaCel as IndispRow[])]);
+          });
+        const motivo = !temVinculo
+          ? "Sem vínculo com nenhuma função presente no período."
+          : todasIndisp
+          ? "Indisponível ou com restrição em todas as celebrações compatíveis."
+          : "Sem oportunidade válida no período.";
+        return { id: m.id, nome: m.nome, escalas: 0, oportunidades: 0, taxa: 0, motivo_sem_escala: motivo };
+      });
 
     const totalFuncoes    = plano.filter((p) => !p.semFuncoes).reduce((s, p) => s + p.cel.funcoes.reduce((a, f) => a + f.quantidade, 0), 0);
     const funcoesVagasNum = plano.filter((p) => !p.semFuncoes).reduce((s, p) => s + p.funcoesVagas.reduce((a, f) => a + (f.solicitados - f.alocados), 0), 0);
@@ -983,6 +1093,7 @@ export function AssistenteGeracaoEscalas({
         funcoesVagas:             funcoesVagasNum,
         membrosEscalados:         membroEscalas.size,
         membrosElegiveisSemEscala,
+        membrosInelegiveis,
         distribuicao,
         alertas:                  todosAlertasGlobais,
       },
@@ -1504,20 +1615,40 @@ export function AssistenteGeracaoEscalas({
                       </div>
                     )}
 
-                    {/* Membros elegíveis sem escala */}
+                    {/* Membros elegíveis sem escala (têm oportunidades mas não foram alocados) */}
                     {simulacao.sumario.membrosElegiveisSemEscala.length > 0 && (
-                      <div className="rounded-xl border border-border bg-muted/20 p-3">
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20 p-3">
                         <div className="flex items-center gap-2 mb-2">
-                          <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span className="text-xs font-semibold">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
                             {simulacao.sumario.membrosElegiveisSemEscala.length} membro(s) elegível(is) sem escala
                           </span>
                         </div>
-                        <div className="space-y-0.5 ml-6 max-h-24 overflow-y-auto">
+                        <div className="space-y-1 ml-6 max-h-32 overflow-y-auto">
                           {simulacao.sumario.membrosElegiveisSemEscala.map((m) => (
-                            <p key={m.id} className="text-xs text-muted-foreground">
-                              {m.nome} — {m.oportunidades} oportunidade(s)
-                            </p>
+                            <div key={m.id}>
+                              <p className="text-xs font-medium text-amber-900 dark:text-amber-200">{m.nome}</p>
+                              <p className="text-[11px] text-muted-foreground">{m.motivo_sem_escala ?? `${m.oportunidades} oportunidade(s) disponível(is)`}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Membros inelegíveis: sem oportunidade objetiva no período */}
+                    {simulacao.sumario.membrosInelegiveis.length > 0 && (
+                      <div className="rounded-xl border border-border bg-muted/20 p-3">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-xs font-semibold">
+                            {simulacao.sumario.membrosInelegiveis.length} membro(s) sem oportunidade no período
+                          </span>
+                        </div>
+                        <div className="space-y-1 ml-6 max-h-24 overflow-y-auto">
+                          {simulacao.sumario.membrosInelegiveis.map((m) => (
+                            <div key={m.id}>
+                              <p className="text-xs text-muted-foreground">{m.nome}</p>
+                              <p className="text-[11px] text-muted-foreground/70">{m.motivo_sem_escala}</p>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -1648,16 +1779,17 @@ export function AssistenteGeracaoEscalas({
                   </div>
                 )}
 
-                {/* Membros elegíveis sem escala */}
+                {/* Membros elegíveis sem escala — após cobertura e deslocamento */}
                 {relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).length > 0 && (
-                  <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20 px-4 py-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <p className="text-xs font-semibold">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
                         {relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).length} membro(s) elegível(is) sem escala
                       </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      Todos os slots compatíveis estavam ocupados por membros sem disponibilidade para deslocamento:{" "}
                       {relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).slice(0, 5).map((d) => d.nome).join(", ")}
                       {relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).length > 5 && ` e mais ${relatorio.distribuicao.filter((d) => d.count === 0 && d.oportunidades > 0).length - 5}`}
                     </p>
