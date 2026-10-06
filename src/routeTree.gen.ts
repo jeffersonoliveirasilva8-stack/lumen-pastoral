@@ -9,124 +9,88 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TrialExpiradoRouteImport } from './routes/trial-expirado'
-import { Route as SuperadminRouteImport } from './routes/superadmin'
-import { Route as ResetSenhaRouteImport } from './routes/reset-senha'
-import { Route as PortalMembroRouteImport } from './routes/portal-membro'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
-import { Route as CheckoutRouteImport } from './routes/checkout'
-import { Route as CadastroRouteImport } from './routes/cadastro'
-import { Route as AcessoNegadoRouteImport } from './routes/acesso-negado'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SuperadminWebhooksRouteImport } from './routes/superadmin/webhooks'
-import { Route as SuperadminUsuariosRouteImport } from './routes/superadmin/usuarios'
-import { Route as SuperadminPlanosRouteImport } from './routes/superadmin/planos'
-import { Route as SuperadminParoquiasRouteImport } from './routes/superadmin/paroquias'
-import { Route as SuperadminFinanceiroRouteImport } from './routes/superadmin/financeiro'
-import { Route as SuperadminDashboardRouteImport } from './routes/superadmin/dashboard'
-import { Route as SuperadminCredenciaisRouteImport } from './routes/superadmin/credenciais'
-import { Route as SuperadminAuditoriaRouteImport } from './routes/superadmin/auditoria'
-import { Route as PortalTokenRouteImport } from './routes/portal.$token'
-import { Route as PortalMembroSubstituicoesRouteImport } from './routes/portal-membro/substituicoes'
-import { Route as PortalMembroRankingRouteImport } from './routes/portal-membro/ranking'
-import { Route as PortalMembroPerfilRouteImport } from './routes/portal-membro/perfil'
-import { Route as PortalMembroOcorrenciasRouteImport } from './routes/portal-membro/ocorrencias'
-import { Route as PortalMembroNotificacoesRouteImport } from './routes/portal-membro/notificacoes'
-import { Route as PortalMembroLiturgiaRouteImport } from './routes/portal-membro/liturgia'
-import { Route as PortalMembroHomeRouteImport } from './routes/portal-membro/home'
-import { Route as PortalMembroEventosRouteImport } from './routes/portal-membro/eventos'
-import { Route as PortalMembroEscalasRouteImport } from './routes/portal-membro/escalas'
-import { Route as PortalMembroCompletarCadastroRouteImport } from './routes/portal-membro/completar-cadastro'
-import { Route as PortalMembroCalendarioRouteImport } from './routes/portal-membro/calendario'
-import { Route as PortalMembroAjudaRouteImport } from './routes/portal-membro/ajuda'
-import { Route as ParoquiaSlugRouteImport } from './routes/paroquia.$slug'
-import { Route as MembroPrimeiroAcessoRouteImport } from './routes/membro/primeiro-acesso'
-import { Route as MembroLoginRouteImport } from './routes/membro/login'
-import { Route as MembroAtivarContaRouteImport } from './routes/membro/ativar-conta'
-import { Route as MembroTokenRouteImport } from './routes/membro.$token'
-import { Route as InscricaoSlugRouteImport } from './routes/inscricao.$slug'
-import { Route as EscalaTokenRouteImport } from './routes/escala.$token'
-import { Route as CheckoutSucessoRouteImport } from './routes/checkout.sucesso'
-import { Route as CheckoutFalhaRouteImport } from './routes/checkout.falha'
-import { Route as AuthMfaChallengeRouteImport } from './routes/auth.mfa-challenge'
-import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
-import { Route as AuthAdminMfaRouteImport } from './routes/auth.admin-mfa'
-import { Route as AuthenticatedSubstituicoesRouteImport } from './routes/_authenticated/substituicoes'
-import { Route as AuthenticatedSolicitacoesRouteImport } from './routes/_authenticated/solicitacoes'
-import { Route as AuthenticatedSacristiaRouteImport } from './routes/_authenticated/sacristia'
-import { Route as AuthenticatedRelatoriosSubstituicoesRouteImport } from './routes/_authenticated/relatorios-substituicoes'
-import { Route as AuthenticatedRelatoriosMembrosRouteImport } from './routes/_authenticated/relatorios-membros'
-import { Route as AuthenticatedRelatoriosEscalasRouteImport } from './routes/_authenticated/relatorios-escalas'
-import { Route as AuthenticatedRelatoriosEquilibrioRouteImport } from './routes/_authenticated/relatorios-equilibrio'
-import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
-import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authenticated/planejamento'
-import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
-import { Route as AuthenticatedOcorrenciasRouteImport } from './routes/_authenticated/ocorrencias'
-import { Route as AuthenticatedNotificacoesRouteImport } from './routes/_authenticated/notificacoes'
-import { Route as AuthenticatedMinisteriosRouteImport } from './routes/_authenticated/ministerios'
-import { Route as AuthenticatedMinhaContaRouteImport } from './routes/_authenticated/minha-conta'
-import { Route as AuthenticatedMembrosRouteImport } from './routes/_authenticated/membros'
-import { Route as AuthenticatedFormacoesRouteImport } from './routes/_authenticated/formacoes'
-import { Route as AuthenticatedEspiritualidadeRouteImport } from './routes/_authenticated/espiritualidade'
-import { Route as AuthenticatedEscalasRouteImport } from './routes/_authenticated/escalas'
-import { Route as AuthenticatedConfiguracoesEscalasRouteImport } from './routes/_authenticated/configuracoes-escalas'
-import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
-import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
-import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
-import { Route as AuthenticatedAssinaturaRouteImport } from './routes/_authenticated/assinatura'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as AcessoNegadoRouteImport } from './routes/acesso-negado'
+import { Route as CadastroRouteImport } from './routes/cadastro'
+import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as PortalMembroRouteImport } from './routes/portal-membro'
+import { Route as ResetSenhaRouteImport } from './routes/reset-senha'
+import { Route as SuperadminRouteImport } from './routes/superadmin'
+import { Route as TrialExpiradoRouteImport } from './routes/trial-expirado'
 import { Route as AuthenticatedAjudaRouteImport } from './routes/_authenticated/ajuda'
-import { Route as SuperadminParoquiasIdRouteImport } from './routes/superadmin/paroquias.$id'
-import { Route as AuthenticatedConfiguracoesParoquiaRouteImport } from './routes/_authenticated/configuracoes.paroquia'
-import { Route as AuthenticatedConfiguracoesAdministradoresRouteImport } from './routes/_authenticated/configuracoes.administradores'
-import { Route as AuthenticatedAdminParoquiasRouteImport } from './routes/_authenticated/admin.paroquias'
+import { Route as AuthenticatedAssinaturaRouteImport } from './routes/_authenticated/assinatura'
+import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
+import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
+import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
+import { Route as AuthenticatedConfiguracoesEscalasRouteImport } from './routes/_authenticated/configuracoes-escalas'
+import { Route as AuthenticatedEscalasRouteImport } from './routes/_authenticated/escalas'
+import { Route as AuthenticatedEspiritualidadeRouteImport } from './routes/_authenticated/espiritualidade'
+import { Route as AuthenticatedFormacoesRouteImport } from './routes/_authenticated/formacoes'
+import { Route as AuthenticatedMembrosRouteImport } from './routes/_authenticated/membros'
+import { Route as AuthenticatedMinhaContaRouteImport } from './routes/_authenticated/minha-conta'
+import { Route as AuthenticatedMinisteriosRouteImport } from './routes/_authenticated/ministerios'
+import { Route as AuthenticatedNotificacoesRouteImport } from './routes/_authenticated/notificacoes'
+import { Route as AuthenticatedOcorrenciasRouteImport } from './routes/_authenticated/ocorrencias'
+import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
+import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authenticated/planejamento'
+import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
+import { Route as AuthenticatedRelatoriosEquilibrioRouteImport } from './routes/_authenticated/relatorios-equilibrio'
+import { Route as AuthenticatedRelatoriosEscalasRouteImport } from './routes/_authenticated/relatorios-escalas'
+import { Route as AuthenticatedRelatoriosMembrosRouteImport } from './routes/_authenticated/relatorios-membros'
+import { Route as AuthenticatedRelatoriosSubstituicoesRouteImport } from './routes/_authenticated/relatorios-substituicoes'
+import { Route as AuthenticatedSacristiaRouteImport } from './routes/_authenticated/sacristia'
+import { Route as AuthenticatedSolicitacoesRouteImport } from './routes/_authenticated/solicitacoes'
+import { Route as AuthenticatedSubstituicoesRouteImport } from './routes/_authenticated/substituicoes'
+import { Route as AuthAdminMfaRouteImport } from './routes/auth.admin-mfa'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthMfaChallengeRouteImport } from './routes/auth.mfa-challenge'
+import { Route as CheckoutFalhaRouteImport } from './routes/checkout.falha'
+import { Route as CheckoutSucessoRouteImport } from './routes/checkout.sucesso'
+import { Route as EscalaTokenRouteImport } from './routes/escala.$token'
+import { Route as InscricaoSlugRouteImport } from './routes/inscricao.$slug'
+import { Route as MembroTokenRouteImport } from './routes/membro.$token'
+import { Route as MembroAtivarContaRouteImport } from './routes/membro/ativar-conta'
+import { Route as MembroLoginRouteImport } from './routes/membro/login'
+import { Route as MembroPrimeiroAcessoRouteImport } from './routes/membro/primeiro-acesso'
+import { Route as ParoquiaSlugRouteImport } from './routes/paroquia.$slug'
+import { Route as PortalMembroAjudaRouteImport } from './routes/portal-membro/ajuda'
+import { Route as PortalMembroCalendarioRouteImport } from './routes/portal-membro/calendario'
+import { Route as PortalMembroCompletarCadastroRouteImport } from './routes/portal-membro/completar-cadastro'
+import { Route as PortalMembroEscalasRouteImport } from './routes/portal-membro/escalas'
+import { Route as PortalMembroEventosRouteImport } from './routes/portal-membro/eventos'
+import { Route as PortalMembroHomeRouteImport } from './routes/portal-membro/home'
+import { Route as PortalMembroLiturgiaRouteImport } from './routes/portal-membro/liturgia'
+import { Route as PortalMembroNotificacoesRouteImport } from './routes/portal-membro/notificacoes'
+import { Route as PortalMembroOcorrenciasRouteImport } from './routes/portal-membro/ocorrencias'
+import { Route as PortalMembroPerfilRouteImport } from './routes/portal-membro/perfil'
+import { Route as PortalMembroRankingRouteImport } from './routes/portal-membro/ranking'
+import { Route as PortalMembroSubstituicoesRouteImport } from './routes/portal-membro/substituicoes'
+import { Route as PortalTokenRouteImport } from './routes/portal.$token'
+import { Route as SuperadminAuditoriaRouteImport } from './routes/superadmin/auditoria'
+import { Route as SuperadminCredenciaisRouteImport } from './routes/superadmin/credenciais'
+import { Route as SuperadminDashboardRouteImport } from './routes/superadmin/dashboard'
+import { Route as SuperadminFinanceiroRouteImport } from './routes/superadmin/financeiro'
+import { Route as SuperadminParoquiasRouteImport } from './routes/superadmin/paroquias'
+import { Route as SuperadminPlanosRouteImport } from './routes/superadmin/planos'
+import { Route as SuperadminUsuariosRouteImport } from './routes/superadmin/usuarios'
+import { Route as SuperadminWebhooksRouteImport } from './routes/superadmin/webhooks'
 import { Route as AuthenticatedAdminLiturgiaRouteImport } from './routes/_authenticated/admin.liturgia'
+import { Route as AuthenticatedAdminParoquiasRouteImport } from './routes/_authenticated/admin.paroquias'
+import { Route as AuthenticatedConfiguracoesAdministradoresRouteImport } from './routes/_authenticated/configuracoes.administradores'
+import { Route as AuthenticatedConfiguracoesParoquiaRouteImport } from './routes/_authenticated/configuracoes.paroquia'
+import { Route as SuperadminParoquiasIdRouteImport } from './routes/superadmin/paroquias.$id'
 
-const TrialExpiradoRoute = TrialExpiradoRouteImport.update({
-  id: '/trial-expirado',
-  path: '/trial-expirado',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SuperadminRoute = SuperadminRouteImport.update({
-  id: '/superadmin',
-  path: '/superadmin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetSenhaRoute = ResetSenhaRouteImport.update({
-  id: '/reset-senha',
-  path: '/reset-senha',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PortalMembroRoute = PortalMembroRouteImport.update({
-  id: '/portal-membro',
-  path: '/portal-membro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EsqueciSenhaRoute = EsqueciSenhaRouteImport.update({
-  id: '/esqueci-senha',
-  path: '/esqueci-senha',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CheckoutRoute = CheckoutRouteImport.update({
-  id: '/checkout',
-  path: '/checkout',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CadastroRoute = CadastroRouteImport.update({
-  id: '/cadastro',
-  path: '/cadastro',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcessoNegadoRoute = AcessoNegadoRouteImport.update({
@@ -134,271 +98,86 @@ const AcessoNegadoRoute = AcessoNegadoRouteImport.update({
   path: '/acesso-negado',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: '/_authenticated',
+const CadastroRoute = CadastroRouteImport.update({
+  id: '/cadastro',
+  path: '/cadastro',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SuperadminWebhooksRoute = SuperadminWebhooksRouteImport.update({
-  id: '/webhooks',
-  path: '/webhooks',
-  getParentRoute: () => SuperadminRoute,
-} as any)
-const SuperadminUsuariosRoute = SuperadminUsuariosRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
-  getParentRoute: () => SuperadminRoute,
-} as any)
-const SuperadminPlanosRoute = SuperadminPlanosRouteImport.update({
-  id: '/planos',
-  path: '/planos',
-  getParentRoute: () => SuperadminRoute,
-} as any)
-const SuperadminParoquiasRoute = SuperadminParoquiasRouteImport.update({
-  id: '/paroquias',
-  path: '/paroquias',
-  getParentRoute: () => SuperadminRoute,
-} as any)
-const SuperadminFinanceiroRoute = SuperadminFinanceiroRouteImport.update({
-  id: '/financeiro',
-  path: '/financeiro',
-  getParentRoute: () => SuperadminRoute,
-} as any)
-const SuperadminDashboardRoute = SuperadminDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => SuperadminRoute,
-} as any)
-const SuperadminCredenciaisRoute = SuperadminCredenciaisRouteImport.update({
-  id: '/credenciais',
-  path: '/credenciais',
-  getParentRoute: () => SuperadminRoute,
-} as any)
-const SuperadminAuditoriaRoute = SuperadminAuditoriaRouteImport.update({
-  id: '/auditoria',
-  path: '/auditoria',
-  getParentRoute: () => SuperadminRoute,
-} as any)
-const PortalTokenRoute = PortalTokenRouteImport.update({
-  id: '/portal/$token',
-  path: '/portal/$token',
+const EsqueciSenhaRoute = EsqueciSenhaRouteImport.update({
+  id: '/esqueci-senha',
+  path: '/esqueci-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PortalMembroSubstituicoesRoute =
-  PortalMembroSubstituicoesRouteImport.update({
-    id: '/substituicoes',
-    path: '/substituicoes',
-    getParentRoute: () => PortalMembroRoute,
-  } as any)
-const PortalMembroRankingRoute = PortalMembroRankingRouteImport.update({
-  id: '/ranking',
-  path: '/ranking',
-  getParentRoute: () => PortalMembroRoute,
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PortalMembroPerfilRoute = PortalMembroPerfilRouteImport.update({
-  id: '/perfil',
-  path: '/perfil',
-  getParentRoute: () => PortalMembroRoute,
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PortalMembroOcorrenciasRoute = PortalMembroOcorrenciasRouteImport.update({
-  id: '/ocorrencias',
-  path: '/ocorrencias',
-  getParentRoute: () => PortalMembroRoute,
+const PortalMembroRoute = PortalMembroRouteImport.update({
+  id: '/portal-membro',
+  path: '/portal-membro',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PortalMembroNotificacoesRoute =
-  PortalMembroNotificacoesRouteImport.update({
-    id: '/notificacoes',
-    path: '/notificacoes',
-    getParentRoute: () => PortalMembroRoute,
-  } as any)
-const PortalMembroLiturgiaRoute = PortalMembroLiturgiaRouteImport.update({
-  id: '/liturgia',
-  path: '/liturgia',
-  getParentRoute: () => PortalMembroRoute,
+const ResetSenhaRoute = ResetSenhaRouteImport.update({
+  id: '/reset-senha',
+  path: '/reset-senha',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PortalMembroHomeRoute = PortalMembroHomeRouteImport.update({
-  id: '/home',
-  path: '/home',
-  getParentRoute: () => PortalMembroRoute,
+const SuperadminRoute = SuperadminRouteImport.update({
+  id: '/superadmin',
+  path: '/superadmin',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PortalMembroEventosRoute = PortalMembroEventosRouteImport.update({
-  id: '/eventos',
-  path: '/eventos',
-  getParentRoute: () => PortalMembroRoute,
+const TrialExpiradoRoute = TrialExpiradoRouteImport.update({
+  id: '/trial-expirado',
+  path: '/trial-expirado',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PortalMembroEscalasRoute = PortalMembroEscalasRouteImport.update({
-  id: '/escalas',
-  path: '/escalas',
-  getParentRoute: () => PortalMembroRoute,
-} as any)
-const PortalMembroCompletarCadastroRoute =
-  PortalMembroCompletarCadastroRouteImport.update({
-    id: '/completar-cadastro',
-    path: '/completar-cadastro',
-    getParentRoute: () => PortalMembroRoute,
-  } as any)
-const PortalMembroCalendarioRoute = PortalMembroCalendarioRouteImport.update({
-  id: '/calendario',
-  path: '/calendario',
-  getParentRoute: () => PortalMembroRoute,
-} as any)
-const PortalMembroAjudaRoute = PortalMembroAjudaRouteImport.update({
+const AuthenticatedAjudaRoute = AuthenticatedAjudaRouteImport.update({
   id: '/ajuda',
   path: '/ajuda',
-  getParentRoute: () => PortalMembroRoute,
-} as any)
-const ParoquiaSlugRoute = ParoquiaSlugRouteImport.update({
-  id: '/paroquia/$slug',
-  path: '/paroquia/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MembroPrimeiroAcessoRoute = MembroPrimeiroAcessoRouteImport.update({
-  id: '/membro/primeiro-acesso',
-  path: '/membro/primeiro-acesso',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MembroLoginRoute = MembroLoginRouteImport.update({
-  id: '/membro/login',
-  path: '/membro/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MembroAtivarContaRoute = MembroAtivarContaRouteImport.update({
-  id: '/membro/ativar-conta',
-  path: '/membro/ativar-conta',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MembroTokenRoute = MembroTokenRouteImport.update({
-  id: '/membro/$token',
-  path: '/membro/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InscricaoSlugRoute = InscricaoSlugRouteImport.update({
-  id: '/inscricao/$slug',
-  path: '/inscricao/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EscalaTokenRoute = EscalaTokenRouteImport.update({
-  id: '/escala/$token',
-  path: '/escala/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CheckoutSucessoRoute = CheckoutSucessoRouteImport.update({
-  id: '/sucesso',
-  path: '/sucesso',
-  getParentRoute: () => CheckoutRoute,
-} as any)
-const CheckoutFalhaRoute = CheckoutFalhaRouteImport.update({
-  id: '/falha',
-  path: '/falha',
-  getParentRoute: () => CheckoutRoute,
-} as any)
-const AuthMfaChallengeRoute = AuthMfaChallengeRouteImport.update({
-  id: '/auth/mfa-challenge',
-  path: '/auth/mfa-challenge',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth/callback',
-  path: '/auth/callback',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthAdminMfaRoute = AuthAdminMfaRouteImport.update({
-  id: '/auth/admin-mfa',
-  path: '/auth/admin-mfa',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedSubstituicoesRoute =
-  AuthenticatedSubstituicoesRouteImport.update({
-    id: '/substituicoes',
-    path: '/substituicoes',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSolicitacoesRoute =
-  AuthenticatedSolicitacoesRouteImport.update({
-    id: '/solicitacoes',
-    path: '/solicitacoes',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSacristiaRoute = AuthenticatedSacristiaRouteImport.update({
-  id: '/sacristia',
-  path: '/sacristia',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedRelatoriosSubstituicoesRoute =
-  AuthenticatedRelatoriosSubstituicoesRouteImport.update({
-    id: '/relatorios-substituicoes',
-    path: '/relatorios-substituicoes',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRelatoriosMembrosRoute =
-  AuthenticatedRelatoriosMembrosRouteImport.update({
-    id: '/relatorios-membros',
-    path: '/relatorios-membros',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRelatoriosEscalasRoute =
-  AuthenticatedRelatoriosEscalasRouteImport.update({
-    id: '/relatorios-escalas',
-    path: '/relatorios-escalas',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRelatoriosEquilibrioRoute =
-  AuthenticatedRelatoriosEquilibrioRouteImport.update({
-    id: '/relatorios-equilibrio',
-    path: '/relatorios-equilibrio',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
-  id: '/ranking',
-  path: '/ranking',
+const AuthenticatedAssinaturaRoute = AuthenticatedAssinaturaRouteImport.update({
+  id: '/assinatura',
+  path: '/assinatura',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedPlanejamentoRoute =
-  AuthenticatedPlanejamentoRouteImport.update({
-    id: '/planejamento',
-    path: '/planejamento',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedPainelRoute = AuthenticatedPainelRouteImport.update({
-  id: '/painel',
-  path: '/painel',
+const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
+  id: '/auditoria',
+  path: '/auditoria',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedOcorrenciasRoute =
-  AuthenticatedOcorrenciasRouteImport.update({
-    id: '/ocorrencias',
-    path: '/ocorrencias',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedNotificacoesRoute =
-  AuthenticatedNotificacoesRouteImport.update({
-    id: '/notificacoes',
-    path: '/notificacoes',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedMinisteriosRoute =
-  AuthenticatedMinisteriosRouteImport.update({
-    id: '/ministerios',
-    path: '/ministerios',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedMinhaContaRoute = AuthenticatedMinhaContaRouteImport.update({
-  id: '/minha-conta',
-  path: '/minha-conta',
+const AuthenticatedCalendarioRoute = AuthenticatedCalendarioRouteImport.update({
+  id: '/calendario',
+  path: '/calendario',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedMembrosRoute = AuthenticatedMembrosRouteImport.update({
-  id: '/membros',
-  path: '/membros',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedFormacoesRoute = AuthenticatedFormacoesRouteImport.update({
-  id: '/formacoes',
-  path: '/formacoes',
+const AuthenticatedConfiguracoesRoute =
+  AuthenticatedConfiguracoesRouteImport.update({
+    id: '/configuracoes',
+    path: '/configuracoes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedConfiguracoesEscalasRoute =
+  AuthenticatedConfiguracoesEscalasRouteImport.update({
+    id: '/configuracoes-escalas',
+    path: '/configuracoes-escalas',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedEscalasRoute = AuthenticatedEscalasRouteImport.update({
+  id: '/escalas',
+  path: '/escalas',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedEspiritualidadeRoute =
@@ -407,59 +186,269 @@ const AuthenticatedEspiritualidadeRoute =
     path: '/espiritualidade',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedEscalasRoute = AuthenticatedEscalasRouteImport.update({
-  id: '/escalas',
-  path: '/escalas',
+const AuthenticatedFormacoesRoute = AuthenticatedFormacoesRouteImport.update({
+  id: '/formacoes',
+  path: '/formacoes',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedConfiguracoesEscalasRoute =
-  AuthenticatedConfiguracoesEscalasRouteImport.update({
-    id: '/configuracoes-escalas',
-    path: '/configuracoes-escalas',
+const AuthenticatedMembrosRoute = AuthenticatedMembrosRouteImport.update({
+  id: '/membros',
+  path: '/membros',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedMinhaContaRoute = AuthenticatedMinhaContaRouteImport.update({
+  id: '/minha-conta',
+  path: '/minha-conta',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedMinisteriosRoute =
+  AuthenticatedMinisteriosRouteImport.update({
+    id: '/ministerios',
+    path: '/ministerios',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedConfiguracoesRoute =
-  AuthenticatedConfiguracoesRouteImport.update({
-    id: '/configuracoes',
-    path: '/configuracoes',
+const AuthenticatedNotificacoesRoute =
+  AuthenticatedNotificacoesRouteImport.update({
+    id: '/notificacoes',
+    path: '/notificacoes',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedCalendarioRoute = AuthenticatedCalendarioRouteImport.update({
-  id: '/calendario',
-  path: '/calendario',
+const AuthenticatedOcorrenciasRoute =
+  AuthenticatedOcorrenciasRouteImport.update({
+    id: '/ocorrencias',
+    path: '/ocorrencias',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPainelRoute = AuthenticatedPainelRouteImport.update({
+  id: '/painel',
+  path: '/painel',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
-  id: '/auditoria',
-  path: '/auditoria',
+const AuthenticatedPlanejamentoRoute =
+  AuthenticatedPlanejamentoRouteImport.update({
+    id: '/planejamento',
+    path: '/planejamento',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedAssinaturaRoute = AuthenticatedAssinaturaRouteImport.update({
-  id: '/assinatura',
-  path: '/assinatura',
+const AuthenticatedRelatoriosEquilibrioRoute =
+  AuthenticatedRelatoriosEquilibrioRouteImport.update({
+    id: '/relatorios-equilibrio',
+    path: '/relatorios-equilibrio',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRelatoriosEscalasRoute =
+  AuthenticatedRelatoriosEscalasRouteImport.update({
+    id: '/relatorios-escalas',
+    path: '/relatorios-escalas',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRelatoriosMembrosRoute =
+  AuthenticatedRelatoriosMembrosRouteImport.update({
+    id: '/relatorios-membros',
+    path: '/relatorios-membros',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRelatoriosSubstituicoesRoute =
+  AuthenticatedRelatoriosSubstituicoesRouteImport.update({
+    id: '/relatorios-substituicoes',
+    path: '/relatorios-substituicoes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSacristiaRoute = AuthenticatedSacristiaRouteImport.update({
+  id: '/sacristia',
+  path: '/sacristia',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedAjudaRoute = AuthenticatedAjudaRouteImport.update({
+const AuthenticatedSolicitacoesRoute =
+  AuthenticatedSolicitacoesRouteImport.update({
+    id: '/solicitacoes',
+    path: '/solicitacoes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSubstituicoesRoute =
+  AuthenticatedSubstituicoesRouteImport.update({
+    id: '/substituicoes',
+    path: '/substituicoes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthAdminMfaRoute = AuthAdminMfaRouteImport.update({
+  id: '/auth/admin-mfa',
+  path: '/auth/admin-mfa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthMfaChallengeRoute = AuthMfaChallengeRouteImport.update({
+  id: '/auth/mfa-challenge',
+  path: '/auth/mfa-challenge',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutFalhaRoute = CheckoutFalhaRouteImport.update({
+  id: '/falha',
+  path: '/falha',
+  getParentRoute: () => CheckoutRoute,
+} as any)
+const CheckoutSucessoRoute = CheckoutSucessoRouteImport.update({
+  id: '/sucesso',
+  path: '/sucesso',
+  getParentRoute: () => CheckoutRoute,
+} as any)
+const EscalaTokenRoute = EscalaTokenRouteImport.update({
+  id: '/escala/$token',
+  path: '/escala/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InscricaoSlugRoute = InscricaoSlugRouteImport.update({
+  id: '/inscricao/$slug',
+  path: '/inscricao/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MembroTokenRoute = MembroTokenRouteImport.update({
+  id: '/membro/$token',
+  path: '/membro/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MembroAtivarContaRoute = MembroAtivarContaRouteImport.update({
+  id: '/membro/ativar-conta',
+  path: '/membro/ativar-conta',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MembroLoginRoute = MembroLoginRouteImport.update({
+  id: '/membro/login',
+  path: '/membro/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MembroPrimeiroAcessoRoute = MembroPrimeiroAcessoRouteImport.update({
+  id: '/membro/primeiro-acesso',
+  path: '/membro/primeiro-acesso',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ParoquiaSlugRoute = ParoquiaSlugRouteImport.update({
+  id: '/paroquia/$slug',
+  path: '/paroquia/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PortalMembroAjudaRoute = PortalMembroAjudaRouteImport.update({
   id: '/ajuda',
   path: '/ajuda',
-  getParentRoute: () => AuthenticatedRoute,
+  getParentRoute: () => PortalMembroRoute,
 } as any)
-const SuperadminParoquiasIdRoute = SuperadminParoquiasIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => SuperadminParoquiasRoute,
+const PortalMembroCalendarioRoute = PortalMembroCalendarioRouteImport.update({
+  id: '/calendario',
+  path: '/calendario',
+  getParentRoute: () => PortalMembroRoute,
 } as any)
-const AuthenticatedConfiguracoesParoquiaRoute =
-  AuthenticatedConfiguracoesParoquiaRouteImport.update({
-    id: '/paroquia',
-    path: '/paroquia',
-    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+const PortalMembroCompletarCadastroRoute =
+  PortalMembroCompletarCadastroRouteImport.update({
+    id: '/completar-cadastro',
+    path: '/completar-cadastro',
+    getParentRoute: () => PortalMembroRoute,
   } as any)
-const AuthenticatedConfiguracoesAdministradoresRoute =
-  AuthenticatedConfiguracoesAdministradoresRouteImport.update({
-    id: '/administradores',
-    path: '/administradores',
-    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+const PortalMembroEscalasRoute = PortalMembroEscalasRouteImport.update({
+  id: '/escalas',
+  path: '/escalas',
+  getParentRoute: () => PortalMembroRoute,
+} as any)
+const PortalMembroEventosRoute = PortalMembroEventosRouteImport.update({
+  id: '/eventos',
+  path: '/eventos',
+  getParentRoute: () => PortalMembroRoute,
+} as any)
+const PortalMembroHomeRoute = PortalMembroHomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => PortalMembroRoute,
+} as any)
+const PortalMembroLiturgiaRoute = PortalMembroLiturgiaRouteImport.update({
+  id: '/liturgia',
+  path: '/liturgia',
+  getParentRoute: () => PortalMembroRoute,
+} as any)
+const PortalMembroNotificacoesRoute =
+  PortalMembroNotificacoesRouteImport.update({
+    id: '/notificacoes',
+    path: '/notificacoes',
+    getParentRoute: () => PortalMembroRoute,
+  } as any)
+const PortalMembroOcorrenciasRoute = PortalMembroOcorrenciasRouteImport.update({
+  id: '/ocorrencias',
+  path: '/ocorrencias',
+  getParentRoute: () => PortalMembroRoute,
+} as any)
+const PortalMembroPerfilRoute = PortalMembroPerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
+  getParentRoute: () => PortalMembroRoute,
+} as any)
+const PortalMembroRankingRoute = PortalMembroRankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
+  getParentRoute: () => PortalMembroRoute,
+} as any)
+const PortalMembroSubstituicoesRoute =
+  PortalMembroSubstituicoesRouteImport.update({
+    id: '/substituicoes',
+    path: '/substituicoes',
+    getParentRoute: () => PortalMembroRoute,
+  } as any)
+const PortalTokenRoute = PortalTokenRouteImport.update({
+  id: '/portal/$token',
+  path: '/portal/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SuperadminAuditoriaRoute = SuperadminAuditoriaRouteImport.update({
+  id: '/auditoria',
+  path: '/auditoria',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminCredenciaisRoute = SuperadminCredenciaisRouteImport.update({
+  id: '/credenciais',
+  path: '/credenciais',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminDashboardRoute = SuperadminDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminFinanceiroRoute = SuperadminFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminParoquiasRoute = SuperadminParoquiasRouteImport.update({
+  id: '/paroquias',
+  path: '/paroquias',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminPlanosRoute = SuperadminPlanosRouteImport.update({
+  id: '/planos',
+  path: '/planos',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminUsuariosRoute = SuperadminUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const SuperadminWebhooksRoute = SuperadminWebhooksRouteImport.update({
+  id: '/webhooks',
+  path: '/webhooks',
+  getParentRoute: () => SuperadminRoute,
+} as any)
+const AuthenticatedAdminLiturgiaRoute =
+  AuthenticatedAdminLiturgiaRouteImport.update({
+    id: '/admin/liturgia',
+    path: '/admin/liturgia',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedAdminParoquiasRoute =
   AuthenticatedAdminParoquiasRouteImport.update({
@@ -467,12 +456,23 @@ const AuthenticatedAdminParoquiasRoute =
     path: '/admin/paroquias',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedAdminLiturgiaRoute =
-  AuthenticatedAdminLiturgiaRouteImport.update({
-    id: '/admin/liturgia',
-    path: '/admin/liturgia',
-    getParentRoute: () => AuthenticatedRoute,
+const AuthenticatedConfiguracoesAdministradoresRoute =
+  AuthenticatedConfiguracoesAdministradoresRouteImport.update({
+    id: '/administradores',
+    path: '/administradores',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
   } as any)
+const AuthenticatedConfiguracoesParoquiaRoute =
+  AuthenticatedConfiguracoesParoquiaRouteImport.update({
+    id: '/paroquia',
+    path: '/paroquia',
+    getParentRoute: () => AuthenticatedConfiguracoesRoute,
+  } as any)
+const SuperadminParoquiasIdRoute = SuperadminParoquiasIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => SuperadminParoquiasRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -958,74 +958,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/trial-expirado': {
-      id: '/trial-expirado'
-      path: '/trial-expirado'
-      fullPath: '/trial-expirado'
-      preLoaderRoute: typeof TrialExpiradoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/superadmin': {
-      id: '/superadmin'
-      path: '/superadmin'
-      fullPath: '/superadmin'
-      preLoaderRoute: typeof SuperadminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-senha': {
-      id: '/reset-senha'
-      path: '/reset-senha'
-      fullPath: '/reset-senha'
-      preLoaderRoute: typeof ResetSenhaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/portal-membro': {
-      id: '/portal-membro'
-      path: '/portal-membro'
-      fullPath: '/portal-membro'
-      preLoaderRoute: typeof PortalMembroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/esqueci-senha': {
-      id: '/esqueci-senha'
-      path: '/esqueci-senha'
-      fullPath: '/esqueci-senha'
-      preLoaderRoute: typeof EsqueciSenhaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/checkout': {
-      id: '/checkout'
-      path: '/checkout'
-      fullPath: '/checkout'
-      preLoaderRoute: typeof CheckoutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro': {
-      id: '/cadastro'
-      path: '/cadastro'
-      fullPath: '/cadastro'
-      preLoaderRoute: typeof CadastroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/acesso-negado': {
-      id: '/acesso-negado'
-      path: '/acesso-negado'
-      fullPath: '/acesso-negado'
-      preLoaderRoute: typeof AcessoNegadoRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -1035,396 +972,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/acesso-negado': {
+      id: '/acesso-negado'
+      path: '/acesso-negado'
+      fullPath: '/acesso-negado'
+      preLoaderRoute: typeof AcessoNegadoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/superadmin/webhooks': {
-      id: '/superadmin/webhooks'
-      path: '/webhooks'
-      fullPath: '/superadmin/webhooks'
-      preLoaderRoute: typeof SuperadminWebhooksRouteImport
-      parentRoute: typeof SuperadminRoute
-    }
-    '/superadmin/usuarios': {
-      id: '/superadmin/usuarios'
-      path: '/usuarios'
-      fullPath: '/superadmin/usuarios'
-      preLoaderRoute: typeof SuperadminUsuariosRouteImport
-      parentRoute: typeof SuperadminRoute
-    }
-    '/superadmin/planos': {
-      id: '/superadmin/planos'
-      path: '/planos'
-      fullPath: '/superadmin/planos'
-      preLoaderRoute: typeof SuperadminPlanosRouteImport
-      parentRoute: typeof SuperadminRoute
-    }
-    '/superadmin/paroquias': {
-      id: '/superadmin/paroquias'
-      path: '/paroquias'
-      fullPath: '/superadmin/paroquias'
-      preLoaderRoute: typeof SuperadminParoquiasRouteImport
-      parentRoute: typeof SuperadminRoute
-    }
-    '/superadmin/financeiro': {
-      id: '/superadmin/financeiro'
-      path: '/financeiro'
-      fullPath: '/superadmin/financeiro'
-      preLoaderRoute: typeof SuperadminFinanceiroRouteImport
-      parentRoute: typeof SuperadminRoute
-    }
-    '/superadmin/dashboard': {
-      id: '/superadmin/dashboard'
-      path: '/dashboard'
-      fullPath: '/superadmin/dashboard'
-      preLoaderRoute: typeof SuperadminDashboardRouteImport
-      parentRoute: typeof SuperadminRoute
-    }
-    '/superadmin/credenciais': {
-      id: '/superadmin/credenciais'
-      path: '/credenciais'
-      fullPath: '/superadmin/credenciais'
-      preLoaderRoute: typeof SuperadminCredenciaisRouteImport
-      parentRoute: typeof SuperadminRoute
-    }
-    '/superadmin/auditoria': {
-      id: '/superadmin/auditoria'
-      path: '/auditoria'
-      fullPath: '/superadmin/auditoria'
-      preLoaderRoute: typeof SuperadminAuditoriaRouteImport
-      parentRoute: typeof SuperadminRoute
-    }
-    '/portal/$token': {
-      id: '/portal/$token'
-      path: '/portal/$token'
-      fullPath: '/portal/$token'
-      preLoaderRoute: typeof PortalTokenRouteImport
+    '/cadastro': {
+      id: '/cadastro'
+      path: '/cadastro'
+      fullPath: '/cadastro'
+      preLoaderRoute: typeof CadastroRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/portal-membro/substituicoes': {
-      id: '/portal-membro/substituicoes'
-      path: '/substituicoes'
-      fullPath: '/portal-membro/substituicoes'
-      preLoaderRoute: typeof PortalMembroSubstituicoesRouteImport
-      parentRoute: typeof PortalMembroRoute
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/portal-membro/ranking': {
-      id: '/portal-membro/ranking'
-      path: '/ranking'
-      fullPath: '/portal-membro/ranking'
-      preLoaderRoute: typeof PortalMembroRankingRouteImport
-      parentRoute: typeof PortalMembroRoute
+    '/esqueci-senha': {
+      id: '/esqueci-senha'
+      path: '/esqueci-senha'
+      fullPath: '/esqueci-senha'
+      preLoaderRoute: typeof EsqueciSenhaRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/portal-membro/perfil': {
-      id: '/portal-membro/perfil'
-      path: '/perfil'
-      fullPath: '/portal-membro/perfil'
-      preLoaderRoute: typeof PortalMembroPerfilRouteImport
-      parentRoute: typeof PortalMembroRoute
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/portal-membro/ocorrencias': {
-      id: '/portal-membro/ocorrencias'
-      path: '/ocorrencias'
-      fullPath: '/portal-membro/ocorrencias'
-      preLoaderRoute: typeof PortalMembroOcorrenciasRouteImport
-      parentRoute: typeof PortalMembroRoute
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/portal-membro/notificacoes': {
-      id: '/portal-membro/notificacoes'
-      path: '/notificacoes'
-      fullPath: '/portal-membro/notificacoes'
-      preLoaderRoute: typeof PortalMembroNotificacoesRouteImport
-      parentRoute: typeof PortalMembroRoute
+    '/portal-membro': {
+      id: '/portal-membro'
+      path: '/portal-membro'
+      fullPath: '/portal-membro'
+      preLoaderRoute: typeof PortalMembroRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/portal-membro/liturgia': {
-      id: '/portal-membro/liturgia'
-      path: '/liturgia'
-      fullPath: '/portal-membro/liturgia'
-      preLoaderRoute: typeof PortalMembroLiturgiaRouteImport
-      parentRoute: typeof PortalMembroRoute
+    '/reset-senha': {
+      id: '/reset-senha'
+      path: '/reset-senha'
+      fullPath: '/reset-senha'
+      preLoaderRoute: typeof ResetSenhaRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/portal-membro/home': {
-      id: '/portal-membro/home'
-      path: '/home'
-      fullPath: '/portal-membro/home'
-      preLoaderRoute: typeof PortalMembroHomeRouteImport
-      parentRoute: typeof PortalMembroRoute
+    '/superadmin': {
+      id: '/superadmin'
+      path: '/superadmin'
+      fullPath: '/superadmin'
+      preLoaderRoute: typeof SuperadminRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/portal-membro/eventos': {
-      id: '/portal-membro/eventos'
-      path: '/eventos'
-      fullPath: '/portal-membro/eventos'
-      preLoaderRoute: typeof PortalMembroEventosRouteImport
-      parentRoute: typeof PortalMembroRoute
+    '/trial-expirado': {
+      id: '/trial-expirado'
+      path: '/trial-expirado'
+      fullPath: '/trial-expirado'
+      preLoaderRoute: typeof TrialExpiradoRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/portal-membro/escalas': {
-      id: '/portal-membro/escalas'
-      path: '/escalas'
-      fullPath: '/portal-membro/escalas'
-      preLoaderRoute: typeof PortalMembroEscalasRouteImport
-      parentRoute: typeof PortalMembroRoute
-    }
-    '/portal-membro/completar-cadastro': {
-      id: '/portal-membro/completar-cadastro'
-      path: '/completar-cadastro'
-      fullPath: '/portal-membro/completar-cadastro'
-      preLoaderRoute: typeof PortalMembroCompletarCadastroRouteImport
-      parentRoute: typeof PortalMembroRoute
-    }
-    '/portal-membro/calendario': {
-      id: '/portal-membro/calendario'
-      path: '/calendario'
-      fullPath: '/portal-membro/calendario'
-      preLoaderRoute: typeof PortalMembroCalendarioRouteImport
-      parentRoute: typeof PortalMembroRoute
-    }
-    '/portal-membro/ajuda': {
-      id: '/portal-membro/ajuda'
+    '/_authenticated/ajuda': {
+      id: '/_authenticated/ajuda'
       path: '/ajuda'
-      fullPath: '/portal-membro/ajuda'
-      preLoaderRoute: typeof PortalMembroAjudaRouteImport
-      parentRoute: typeof PortalMembroRoute
-    }
-    '/paroquia/$slug': {
-      id: '/paroquia/$slug'
-      path: '/paroquia/$slug'
-      fullPath: '/paroquia/$slug'
-      preLoaderRoute: typeof ParoquiaSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/membro/primeiro-acesso': {
-      id: '/membro/primeiro-acesso'
-      path: '/membro/primeiro-acesso'
-      fullPath: '/membro/primeiro-acesso'
-      preLoaderRoute: typeof MembroPrimeiroAcessoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/membro/login': {
-      id: '/membro/login'
-      path: '/membro/login'
-      fullPath: '/membro/login'
-      preLoaderRoute: typeof MembroLoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/membro/ativar-conta': {
-      id: '/membro/ativar-conta'
-      path: '/membro/ativar-conta'
-      fullPath: '/membro/ativar-conta'
-      preLoaderRoute: typeof MembroAtivarContaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/membro/$token': {
-      id: '/membro/$token'
-      path: '/membro/$token'
-      fullPath: '/membro/$token'
-      preLoaderRoute: typeof MembroTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inscricao/$slug': {
-      id: '/inscricao/$slug'
-      path: '/inscricao/$slug'
-      fullPath: '/inscricao/$slug'
-      preLoaderRoute: typeof InscricaoSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/escala/$token': {
-      id: '/escala/$token'
-      path: '/escala/$token'
-      fullPath: '/escala/$token'
-      preLoaderRoute: typeof EscalaTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/checkout/sucesso': {
-      id: '/checkout/sucesso'
-      path: '/sucesso'
-      fullPath: '/checkout/sucesso'
-      preLoaderRoute: typeof CheckoutSucessoRouteImport
-      parentRoute: typeof CheckoutRoute
-    }
-    '/checkout/falha': {
-      id: '/checkout/falha'
-      path: '/falha'
-      fullPath: '/checkout/falha'
-      preLoaderRoute: typeof CheckoutFalhaRouteImport
-      parentRoute: typeof CheckoutRoute
-    }
-    '/auth/mfa-challenge': {
-      id: '/auth/mfa-challenge'
-      path: '/auth/mfa-challenge'
-      fullPath: '/auth/mfa-challenge'
-      preLoaderRoute: typeof AuthMfaChallengeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/auth/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth/admin-mfa': {
-      id: '/auth/admin-mfa'
-      path: '/auth/admin-mfa'
-      fullPath: '/auth/admin-mfa'
-      preLoaderRoute: typeof AuthAdminMfaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/substituicoes': {
-      id: '/_authenticated/substituicoes'
-      path: '/substituicoes'
-      fullPath: '/substituicoes'
-      preLoaderRoute: typeof AuthenticatedSubstituicoesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/solicitacoes': {
-      id: '/_authenticated/solicitacoes'
-      path: '/solicitacoes'
-      fullPath: '/solicitacoes'
-      preLoaderRoute: typeof AuthenticatedSolicitacoesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/sacristia': {
-      id: '/_authenticated/sacristia'
-      path: '/sacristia'
-      fullPath: '/sacristia'
-      preLoaderRoute: typeof AuthenticatedSacristiaRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/relatorios-substituicoes': {
-      id: '/_authenticated/relatorios-substituicoes'
-      path: '/relatorios-substituicoes'
-      fullPath: '/relatorios-substituicoes'
-      preLoaderRoute: typeof AuthenticatedRelatoriosSubstituicoesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/relatorios-membros': {
-      id: '/_authenticated/relatorios-membros'
-      path: '/relatorios-membros'
-      fullPath: '/relatorios-membros'
-      preLoaderRoute: typeof AuthenticatedRelatoriosMembrosRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/relatorios-escalas': {
-      id: '/_authenticated/relatorios-escalas'
-      path: '/relatorios-escalas'
-      fullPath: '/relatorios-escalas'
-      preLoaderRoute: typeof AuthenticatedRelatoriosEscalasRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/relatorios-equilibrio': {
-      id: '/_authenticated/relatorios-equilibrio'
-      path: '/relatorios-equilibrio'
-      fullPath: '/relatorios-equilibrio'
-      preLoaderRoute: typeof AuthenticatedRelatoriosEquilibrioRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/ranking': {
-      id: '/_authenticated/ranking'
-      path: '/ranking'
-      fullPath: '/ranking'
-      preLoaderRoute: typeof AuthenticatedRankingRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/planejamento': {
-      id: '/_authenticated/planejamento'
-      path: '/planejamento'
-      fullPath: '/planejamento'
-      preLoaderRoute: typeof AuthenticatedPlanejamentoRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/painel': {
-      id: '/_authenticated/painel'
-      path: '/painel'
-      fullPath: '/painel'
-      preLoaderRoute: typeof AuthenticatedPainelRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/ocorrencias': {
-      id: '/_authenticated/ocorrencias'
-      path: '/ocorrencias'
-      fullPath: '/ocorrencias'
-      preLoaderRoute: typeof AuthenticatedOcorrenciasRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/notificacoes': {
-      id: '/_authenticated/notificacoes'
-      path: '/notificacoes'
-      fullPath: '/notificacoes'
-      preLoaderRoute: typeof AuthenticatedNotificacoesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/ministerios': {
-      id: '/_authenticated/ministerios'
-      path: '/ministerios'
-      fullPath: '/ministerios'
-      preLoaderRoute: typeof AuthenticatedMinisteriosRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/minha-conta': {
-      id: '/_authenticated/minha-conta'
-      path: '/minha-conta'
-      fullPath: '/minha-conta'
-      preLoaderRoute: typeof AuthenticatedMinhaContaRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/membros': {
-      id: '/_authenticated/membros'
-      path: '/membros'
-      fullPath: '/membros'
-      preLoaderRoute: typeof AuthenticatedMembrosRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/formacoes': {
-      id: '/_authenticated/formacoes'
-      path: '/formacoes'
-      fullPath: '/formacoes'
-      preLoaderRoute: typeof AuthenticatedFormacoesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/espiritualidade': {
-      id: '/_authenticated/espiritualidade'
-      path: '/espiritualidade'
-      fullPath: '/espiritualidade'
-      preLoaderRoute: typeof AuthenticatedEspiritualidadeRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/escalas': {
-      id: '/_authenticated/escalas'
-      path: '/escalas'
-      fullPath: '/escalas'
-      preLoaderRoute: typeof AuthenticatedEscalasRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/configuracoes-escalas': {
-      id: '/_authenticated/configuracoes-escalas'
-      path: '/configuracoes-escalas'
-      fullPath: '/configuracoes-escalas'
-      preLoaderRoute: typeof AuthenticatedConfiguracoesEscalasRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/configuracoes': {
-      id: '/_authenticated/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/calendario': {
-      id: '/_authenticated/calendario'
-      path: '/calendario'
-      fullPath: '/calendario'
-      preLoaderRoute: typeof AuthenticatedCalendarioRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/auditoria': {
-      id: '/_authenticated/auditoria'
-      path: '/auditoria'
-      fullPath: '/auditoria'
-      preLoaderRoute: typeof AuthenticatedAuditoriaRouteImport
+      fullPath: '/ajuda'
+      preLoaderRoute: typeof AuthenticatedAjudaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/assinatura': {
@@ -1434,33 +1056,397 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAssinaturaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/ajuda': {
-      id: '/_authenticated/ajuda'
-      path: '/ajuda'
-      fullPath: '/ajuda'
-      preLoaderRoute: typeof AuthenticatedAjudaRouteImport
+    '/_authenticated/auditoria': {
+      id: '/_authenticated/auditoria'
+      path: '/auditoria'
+      fullPath: '/auditoria'
+      preLoaderRoute: typeof AuthenticatedAuditoriaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/superadmin/paroquias/$id': {
-      id: '/superadmin/paroquias/$id'
-      path: '/$id'
-      fullPath: '/superadmin/paroquias/$id'
-      preLoaderRoute: typeof SuperadminParoquiasIdRouteImport
-      parentRoute: typeof SuperadminParoquiasRoute
+    '/_authenticated/calendario': {
+      id: '/_authenticated/calendario'
+      path: '/calendario'
+      fullPath: '/calendario'
+      preLoaderRoute: typeof AuthenticatedCalendarioRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/configuracoes/paroquia': {
-      id: '/_authenticated/configuracoes/paroquia'
-      path: '/paroquia'
-      fullPath: '/configuracoes/paroquia'
-      preLoaderRoute: typeof AuthenticatedConfiguracoesParoquiaRouteImport
-      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    '/_authenticated/configuracoes': {
+      id: '/_authenticated/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/configuracoes/administradores': {
-      id: '/_authenticated/configuracoes/administradores'
-      path: '/administradores'
-      fullPath: '/configuracoes/administradores'
-      preLoaderRoute: typeof AuthenticatedConfiguracoesAdministradoresRouteImport
-      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    '/_authenticated/configuracoes-escalas': {
+      id: '/_authenticated/configuracoes-escalas'
+      path: '/configuracoes-escalas'
+      fullPath: '/configuracoes-escalas'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesEscalasRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/escalas': {
+      id: '/_authenticated/escalas'
+      path: '/escalas'
+      fullPath: '/escalas'
+      preLoaderRoute: typeof AuthenticatedEscalasRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/espiritualidade': {
+      id: '/_authenticated/espiritualidade'
+      path: '/espiritualidade'
+      fullPath: '/espiritualidade'
+      preLoaderRoute: typeof AuthenticatedEspiritualidadeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/formacoes': {
+      id: '/_authenticated/formacoes'
+      path: '/formacoes'
+      fullPath: '/formacoes'
+      preLoaderRoute: typeof AuthenticatedFormacoesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/membros': {
+      id: '/_authenticated/membros'
+      path: '/membros'
+      fullPath: '/membros'
+      preLoaderRoute: typeof AuthenticatedMembrosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/minha-conta': {
+      id: '/_authenticated/minha-conta'
+      path: '/minha-conta'
+      fullPath: '/minha-conta'
+      preLoaderRoute: typeof AuthenticatedMinhaContaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ministerios': {
+      id: '/_authenticated/ministerios'
+      path: '/ministerios'
+      fullPath: '/ministerios'
+      preLoaderRoute: typeof AuthenticatedMinisteriosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/notificacoes': {
+      id: '/_authenticated/notificacoes'
+      path: '/notificacoes'
+      fullPath: '/notificacoes'
+      preLoaderRoute: typeof AuthenticatedNotificacoesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ocorrencias': {
+      id: '/_authenticated/ocorrencias'
+      path: '/ocorrencias'
+      fullPath: '/ocorrencias'
+      preLoaderRoute: typeof AuthenticatedOcorrenciasRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/painel': {
+      id: '/_authenticated/painel'
+      path: '/painel'
+      fullPath: '/painel'
+      preLoaderRoute: typeof AuthenticatedPainelRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/planejamento': {
+      id: '/_authenticated/planejamento'
+      path: '/planejamento'
+      fullPath: '/planejamento'
+      preLoaderRoute: typeof AuthenticatedPlanejamentoRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ranking': {
+      id: '/_authenticated/ranking'
+      path: '/ranking'
+      fullPath: '/ranking'
+      preLoaderRoute: typeof AuthenticatedRankingRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/relatorios-equilibrio': {
+      id: '/_authenticated/relatorios-equilibrio'
+      path: '/relatorios-equilibrio'
+      fullPath: '/relatorios-equilibrio'
+      preLoaderRoute: typeof AuthenticatedRelatoriosEquilibrioRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/relatorios-escalas': {
+      id: '/_authenticated/relatorios-escalas'
+      path: '/relatorios-escalas'
+      fullPath: '/relatorios-escalas'
+      preLoaderRoute: typeof AuthenticatedRelatoriosEscalasRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/relatorios-membros': {
+      id: '/_authenticated/relatorios-membros'
+      path: '/relatorios-membros'
+      fullPath: '/relatorios-membros'
+      preLoaderRoute: typeof AuthenticatedRelatoriosMembrosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/relatorios-substituicoes': {
+      id: '/_authenticated/relatorios-substituicoes'
+      path: '/relatorios-substituicoes'
+      fullPath: '/relatorios-substituicoes'
+      preLoaderRoute: typeof AuthenticatedRelatoriosSubstituicoesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/sacristia': {
+      id: '/_authenticated/sacristia'
+      path: '/sacristia'
+      fullPath: '/sacristia'
+      preLoaderRoute: typeof AuthenticatedSacristiaRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/solicitacoes': {
+      id: '/_authenticated/solicitacoes'
+      path: '/solicitacoes'
+      fullPath: '/solicitacoes'
+      preLoaderRoute: typeof AuthenticatedSolicitacoesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/substituicoes': {
+      id: '/_authenticated/substituicoes'
+      path: '/substituicoes'
+      fullPath: '/substituicoes'
+      preLoaderRoute: typeof AuthenticatedSubstituicoesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/auth/admin-mfa': {
+      id: '/auth/admin-mfa'
+      path: '/auth/admin-mfa'
+      fullPath: '/auth/admin-mfa'
+      preLoaderRoute: typeof AuthAdminMfaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/mfa-challenge': {
+      id: '/auth/mfa-challenge'
+      path: '/auth/mfa-challenge'
+      fullPath: '/auth/mfa-challenge'
+      preLoaderRoute: typeof AuthMfaChallengeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout/falha': {
+      id: '/checkout/falha'
+      path: '/falha'
+      fullPath: '/checkout/falha'
+      preLoaderRoute: typeof CheckoutFalhaRouteImport
+      parentRoute: typeof CheckoutRoute
+    }
+    '/checkout/sucesso': {
+      id: '/checkout/sucesso'
+      path: '/sucesso'
+      fullPath: '/checkout/sucesso'
+      preLoaderRoute: typeof CheckoutSucessoRouteImport
+      parentRoute: typeof CheckoutRoute
+    }
+    '/escala/$token': {
+      id: '/escala/$token'
+      path: '/escala/$token'
+      fullPath: '/escala/$token'
+      preLoaderRoute: typeof EscalaTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inscricao/$slug': {
+      id: '/inscricao/$slug'
+      path: '/inscricao/$slug'
+      fullPath: '/inscricao/$slug'
+      preLoaderRoute: typeof InscricaoSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/membro/$token': {
+      id: '/membro/$token'
+      path: '/membro/$token'
+      fullPath: '/membro/$token'
+      preLoaderRoute: typeof MembroTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/membro/ativar-conta': {
+      id: '/membro/ativar-conta'
+      path: '/membro/ativar-conta'
+      fullPath: '/membro/ativar-conta'
+      preLoaderRoute: typeof MembroAtivarContaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/membro/login': {
+      id: '/membro/login'
+      path: '/membro/login'
+      fullPath: '/membro/login'
+      preLoaderRoute: typeof MembroLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/membro/primeiro-acesso': {
+      id: '/membro/primeiro-acesso'
+      path: '/membro/primeiro-acesso'
+      fullPath: '/membro/primeiro-acesso'
+      preLoaderRoute: typeof MembroPrimeiroAcessoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/paroquia/$slug': {
+      id: '/paroquia/$slug'
+      path: '/paroquia/$slug'
+      fullPath: '/paroquia/$slug'
+      preLoaderRoute: typeof ParoquiaSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portal-membro/ajuda': {
+      id: '/portal-membro/ajuda'
+      path: '/ajuda'
+      fullPath: '/portal-membro/ajuda'
+      preLoaderRoute: typeof PortalMembroAjudaRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/calendario': {
+      id: '/portal-membro/calendario'
+      path: '/calendario'
+      fullPath: '/portal-membro/calendario'
+      preLoaderRoute: typeof PortalMembroCalendarioRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/completar-cadastro': {
+      id: '/portal-membro/completar-cadastro'
+      path: '/completar-cadastro'
+      fullPath: '/portal-membro/completar-cadastro'
+      preLoaderRoute: typeof PortalMembroCompletarCadastroRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/escalas': {
+      id: '/portal-membro/escalas'
+      path: '/escalas'
+      fullPath: '/portal-membro/escalas'
+      preLoaderRoute: typeof PortalMembroEscalasRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/eventos': {
+      id: '/portal-membro/eventos'
+      path: '/eventos'
+      fullPath: '/portal-membro/eventos'
+      preLoaderRoute: typeof PortalMembroEventosRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/home': {
+      id: '/portal-membro/home'
+      path: '/home'
+      fullPath: '/portal-membro/home'
+      preLoaderRoute: typeof PortalMembroHomeRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/liturgia': {
+      id: '/portal-membro/liturgia'
+      path: '/liturgia'
+      fullPath: '/portal-membro/liturgia'
+      preLoaderRoute: typeof PortalMembroLiturgiaRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/notificacoes': {
+      id: '/portal-membro/notificacoes'
+      path: '/notificacoes'
+      fullPath: '/portal-membro/notificacoes'
+      preLoaderRoute: typeof PortalMembroNotificacoesRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/ocorrencias': {
+      id: '/portal-membro/ocorrencias'
+      path: '/ocorrencias'
+      fullPath: '/portal-membro/ocorrencias'
+      preLoaderRoute: typeof PortalMembroOcorrenciasRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/perfil': {
+      id: '/portal-membro/perfil'
+      path: '/perfil'
+      fullPath: '/portal-membro/perfil'
+      preLoaderRoute: typeof PortalMembroPerfilRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/ranking': {
+      id: '/portal-membro/ranking'
+      path: '/ranking'
+      fullPath: '/portal-membro/ranking'
+      preLoaderRoute: typeof PortalMembroRankingRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal-membro/substituicoes': {
+      id: '/portal-membro/substituicoes'
+      path: '/substituicoes'
+      fullPath: '/portal-membro/substituicoes'
+      preLoaderRoute: typeof PortalMembroSubstituicoesRouteImport
+      parentRoute: typeof PortalMembroRoute
+    }
+    '/portal/$token': {
+      id: '/portal/$token'
+      path: '/portal/$token'
+      fullPath: '/portal/$token'
+      preLoaderRoute: typeof PortalTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/superadmin/auditoria': {
+      id: '/superadmin/auditoria'
+      path: '/auditoria'
+      fullPath: '/superadmin/auditoria'
+      preLoaderRoute: typeof SuperadminAuditoriaRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/credenciais': {
+      id: '/superadmin/credenciais'
+      path: '/credenciais'
+      fullPath: '/superadmin/credenciais'
+      preLoaderRoute: typeof SuperadminCredenciaisRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/dashboard': {
+      id: '/superadmin/dashboard'
+      path: '/dashboard'
+      fullPath: '/superadmin/dashboard'
+      preLoaderRoute: typeof SuperadminDashboardRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/financeiro': {
+      id: '/superadmin/financeiro'
+      path: '/financeiro'
+      fullPath: '/superadmin/financeiro'
+      preLoaderRoute: typeof SuperadminFinanceiroRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/paroquias': {
+      id: '/superadmin/paroquias'
+      path: '/paroquias'
+      fullPath: '/superadmin/paroquias'
+      preLoaderRoute: typeof SuperadminParoquiasRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/planos': {
+      id: '/superadmin/planos'
+      path: '/planos'
+      fullPath: '/superadmin/planos'
+      preLoaderRoute: typeof SuperadminPlanosRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/usuarios': {
+      id: '/superadmin/usuarios'
+      path: '/usuarios'
+      fullPath: '/superadmin/usuarios'
+      preLoaderRoute: typeof SuperadminUsuariosRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/superadmin/webhooks': {
+      id: '/superadmin/webhooks'
+      path: '/webhooks'
+      fullPath: '/superadmin/webhooks'
+      preLoaderRoute: typeof SuperadminWebhooksRouteImport
+      parentRoute: typeof SuperadminRoute
+    }
+    '/_authenticated/admin/liturgia': {
+      id: '/_authenticated/admin/liturgia'
+      path: '/admin/liturgia'
+      fullPath: '/admin/liturgia'
+      preLoaderRoute: typeof AuthenticatedAdminLiturgiaRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/admin/paroquias': {
       id: '/_authenticated/admin/paroquias'
@@ -1469,12 +1455,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminParoquiasRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/admin/liturgia': {
-      id: '/_authenticated/admin/liturgia'
-      path: '/admin/liturgia'
-      fullPath: '/admin/liturgia'
-      preLoaderRoute: typeof AuthenticatedAdminLiturgiaRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/_authenticated/configuracoes/administradores': {
+      id: '/_authenticated/configuracoes/administradores'
+      path: '/administradores'
+      fullPath: '/configuracoes/administradores'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesAdministradoresRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
+    '/_authenticated/configuracoes/paroquia': {
+      id: '/_authenticated/configuracoes/paroquia'
+      path: '/paroquia'
+      fullPath: '/configuracoes/paroquia'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesParoquiaRouteImport
+      parentRoute: typeof AuthenticatedConfiguracoesRoute
+    }
+    '/superadmin/paroquias/$id': {
+      id: '/superadmin/paroquias/$id'
+      path: '/$id'
+      fullPath: '/superadmin/paroquias/$id'
+      preLoaderRoute: typeof SuperadminParoquiasIdRouteImport
+      parentRoute: typeof SuperadminParoquiasRoute
     }
   }
 }
@@ -1675,13 +1675,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
