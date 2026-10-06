@@ -979,16 +979,9 @@ export function AssistenteGeracaoEscalas({
       );
       if (incompatIds.size > 0 && planoCel.alocacoes.some((a) => incompatIds.has(a.membro_id))) return false;
 
-      // 8. Regras específicas de solenidade
-      // O motor usa scoring especial para solenidades (modoSolenePrincipal). Para preservar
-      // a qualidade litúrgica, a cobertura mínima só insere em solenidades membros com
-      // forcar_escalacao_solene=true OU listados como preferenciais da função.
-      if (planoCel.cel.solene) {
-        const ehPreferencial = preferenciaisSolene.some(
-          (p) => p.ministerio_id === f.ministerio_id && p.membro_id === m.id
-        );
-        if (!m.forcar_escalacao_solene && !ehPreferencial) return false;
-      }
+      // Nota: forcar_escalacao_solene NÃO é exclusão hard no motor — é bônus de scoring.
+      // Membros sem a flag continuam elegíveis para solenidades (Pool1 normal).
+      // Não aplicamos restrição extra aqui para manter consistência com o motor.
 
       return true;
     }
