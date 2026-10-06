@@ -196,6 +196,10 @@ export type AssistenteGeracaoProps = {
   funcaoRestricoes: FuncaoRestricao[];
   membroMissaRestricoes: Record<string, string[]>;
   paroquiaConfig: ParoquiaConfig | null;
+  /** Pares de membros incompatíveis — mesma semântica de membro_incompatibilidades */
+  incompatibilidades: { membro_a_id: string; membro_b_id: string }[];
+  /** Membros preferenciais por função em solenidades */
+  preferenciaisSolene: { ministerio_id: string; membro_id: string }[];
   onSuccess: () => void;
 };
 
@@ -442,6 +446,7 @@ export function AssistenteGeracaoEscalas({
   membros, ministerios, missasPadrao,
   membroMinisterios, membroAtuacoes, assignmentHistory,
   indisponibilidades, funcaoRestricoes, membroMissaRestricoes,
+  incompatibilidades, preferenciaisSolene,
   paroquiaConfig, onSuccess,
 }: AssistenteGeracaoProps) {
 
@@ -912,79 +917,132 @@ export function AssistenteGeracaoEscalas({
       });
     }
 
-    // ── Garantia de cobertura mínima ────────────────────────────────────────
-    // Membros elegíveis (com oportunidades reais) que ficaram com 0 escalas são injetados
-    // em ao menos uma celebração com vaga disponível. Regras:
-    //   1. Nunca ultrapassa quantidade configurado da função (sem sobrealocação)
-    //   2. Cada celebração recebe no máximo 1 injeção (distribui entre datas distintas)
-    //   3. Respeita indisponibilidades E restrições de missa (via indispEfetivas)
-    //   4. Membros com 0 oportunidades reais (todas celebrações bloqueadas) não são elegíveis
+    // ── Contagem de escalas após geração principal ───────────────────────────
     const escalasContador = new Map<string, number>();
     for (const p of plano) {
       for (const a of p.alocacoes) {
         escalasContador.set(a.membro_id, (escalasContador.get(a.membro_id) ?? 0) + 1);
       }
     }
-    // Rastreia celebrações que já receberam uma injeção neste passo
-    const celComInjecao = new Set<string>();
-    for (const m of membros) {
-      if ((escalasContador.get(m.id) ?? 0) > 0) continue;
-      if ((membroOportunidades.get(m.id) ?? 0) === 0) continue;
-      for (const planoCel of plano) {
-        if (planoCel.semFuncoes) continue;
-        if (celComInjecao.has(planoCel.cel.data + planoCel.cel.titulo)) continue;
-        if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) continue;
-        // Verifica indisponibilidade E restrição de missa via indispEfetivas da celebração
-        if (membroEstaBloqueado(m.id, planoCel.cel.data, planoCel.indispEfetivas)) continue;
-        // Só injeta em função que ainda tem vaga (sem sobrealocação)
-        const funcaoCompat = planoCel.cel.funcoes.find((f) => {
-          if (!membroPara[m.id]?.includes(f.ministerio_id)) return false;
-          const jaAlocados = planoCel.alocacoes.filter((a) => a.ministerio_id === f.ministerio_id).length;
-          return jaAlocados < f.quantidade;
-        });
-        if (!funcaoCompat) continue;
-        planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: funcaoCompat.ministerio_id });
-        planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) para garantir ao menos uma escala no período.`);
-        todosAlertasGlobais.push(`ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} adicionado(a) para garantir cobertura mínima.`);
-        escalasContador.set(m.id, 1);
-        celComInjecao.add(planoCel.cel.data + planoCel.cel.titulo);
-        break;
+
+    // ── Validador único de candidato — reutiliza as mesmas hard constraints do motor ──
+    // Deve ser chamado ANTES de qualquer inserção ou deslocamento nas Fases 2 e B.
+    // Retorna true somente se o motor aceitaria este membro para esta função/célula.
+    //
+    // Limitação conhecida: atuacoes_exigidas não é verificado aqui porque o assistente
+    // não busca esse campo nas queries de missaPadraoFuncoes/tipoMissaFuncoes. Essa
+    // limitação existe também na chamada principal ao motor (funcoesPedido, linha 860).
+    // A correção requer mudança nas queries — registrado para sprint futuro.
+    function candidatoValido(
+      m: Membro,
+      planoCel: PlanoCelebracao,
+      f: FuncaoCelebracao,
+      planoAtual: PlanoCelebracao[],
+    ): boolean {
+      // 1. Vínculo membro ↔ função
+      if (!membroPara[m.id]?.includes(f.ministerio_id)) return false;
+
+      // 2. Restrição de função: nao_pode (funcaoRestricoes da paróquia)
+      if (funcaoRestricoes.some(
+        (r) => r.membro_id === m.id && r.ministerio_id === f.ministerio_id && r.tipo === "nao_pode"
+      )) return false;
+
+      // 3. Indisponibilidade + restrição de missa (indispEfetivas inclui ambas)
+      if (membroEstaBloqueado(m.id, planoCel.cel.data, planoCel.indispEfetivas)) return false;
+
+      // 4. Duplicidade na mesma celebração
+      if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) return false;
+
+      // 5. Conflito no mesmo dia em outra célula do plano
+      // (mesma regra que sameDayBlocks no motor: membro já alocado numa célula deste dia)
+      if (planoAtual.some(
+        (p) => p !== planoCel && p.cel.data === planoCel.cel.data && p.alocacoes.some((a) => a.membro_id === m.id)
+      )) return false;
+
+      // 6. Intervalo mínimo de dias configurado (usa assignmentHistory + batchHistory)
+      if (engineConfig.intervalo_minimo_dias && engineConfig.intervalo_minimo_dias > 0) {
+        const limite = format(
+          addDays(new Date(planoCel.cel.data + "T12:00:00"), -engineConfig.intervalo_minimo_dias),
+          "yyyy-MM-dd"
+        );
+        const historico = [...assignmentHistory, ...batchHistory];
+        if (historico.some(
+          (h) => h.memberId === m.id && h.date && h.date >= limite && h.date < planoCel.cel.data
+        )) return false;
       }
+
+      // 7. Incompatibilidades entre membros (respeita pares membro_incompatibilidades)
+      const incompatIds = new Set(
+        incompatibilidades
+          .filter((inc) => inc.membro_a_id === m.id || inc.membro_b_id === m.id)
+          .map((inc) => (inc.membro_a_id === m.id ? inc.membro_b_id : inc.membro_a_id))
+      );
+      if (incompatIds.size > 0 && planoCel.alocacoes.some((a) => incompatIds.has(a.membro_id))) return false;
+
+      // 8. Regras específicas de solenidade
+      // O motor usa scoring especial para solenidades (modoSolenePrincipal). Para preservar
+      // a qualidade litúrgica, a cobertura mínima só insere em solenidades membros com
+      // forcar_escalacao_solene=true OU listados como preferenciais da função.
+      if (planoCel.cel.solene) {
+        const ehPreferencial = preferenciaisSolene.some(
+          (p) => p.ministerio_id === f.ministerio_id && p.membro_id === m.id
+        );
+        if (!m.forcar_escalacao_solene && !ehPreferencial) return false;
+      }
+
+      return true;
     }
 
-    // ── Fase B: deslocamento — cobertura para membros ainda com 0 escalas ───────
-    // Se após a injeção em vagas abertas um membro elegível ainda tem 0 escalas,
-    // tenta deslocar um membro com ≥2 escalas de uma vaga compatível e ocupada.
-    // Preserva quantidade configurada da função (sem sobrealocação).
-    const celComDeslocamento = new Set<string>();
+    // ── Cobertura mínima: Fase 2 (vaga aberta) + Fase B (deslocamento) ────────
+    // Garante que todo membro elegível receba ao menos 1 escala no período.
+    // Invariante preservado: nenhum membro que tinha ≥1 escala pode terminar com 0.
+    //   • Fase 2: injeta em vaga com espaço disponível (alocados < quantidade)
+    //   • Fase B: desloca membro com ≥2 escalas para liberar vaga — quem sai fica com ≥1
+    //   • candidatoValido() rejeita inserções que o motor também rejeitaria
+    //   • 1 operação por celebração (celComCoberturaMinima) — evita concentrar todos numa célula
+    const celComCoberturaMinima = new Set<string>();
+    const celKey = (p: PlanoCelebracao) => `${p.cel.data}|${p.cel.titulo}`;
+
     for (const m of membros) {
       if ((escalasContador.get(m.id) ?? 0) > 0) continue;
       if ((membroOportunidades.get(m.id) ?? 0) === 0) continue;
 
-      let deslocou = false;
+      let coberto = false;
+
+      // ── Fase 2: vaga aberta ────────────────────────────────────────────────
       for (const planoCel of plano) {
-        if (deslocou) break;
+        if (coberto) break;
         if (planoCel.semFuncoes) continue;
-        if (celComDeslocamento.has(planoCel.cel.data + planoCel.cel.titulo)) continue;
-        if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) continue;
-        if (membroEstaBloqueado(m.id, planoCel.cel.data, planoCel.indispEfetivas)) continue;
+        if (celComCoberturaMinima.has(celKey(planoCel))) continue;
 
         for (const f of planoCel.cel.funcoes) {
-          if (!membroPara[m.id]?.includes(f.ministerio_id)) continue;
+          if (!candidatoValido(m, planoCel, f, plano)) continue;
+          const jaAlocados = planoCel.alocacoes.filter((a) => a.ministerio_id === f.ministerio_id).length;
+          if (jaAlocados >= f.quantidade) continue;
+
+          planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: f.ministerio_id });
+          escalasContador.set(m.id, 1);
+          planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) para garantir ao menos uma escala no período.`);
+          todosAlertasGlobais.push(`ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} — cobertura mínima (vaga aberta).`);
+          celComCoberturaMinima.add(celKey(planoCel));
+          coberto = true;
+          break;
+        }
+      }
+
+      if (coberto) continue;
+
+      // ── Fase B: deslocamento ───────────────────────────────────────────────
+      // Só desloca membros com ≥2 escalas → quem sai termina com ≥1 (invariante preservado).
+      for (const planoCel of plano) {
+        if (coberto) break;
+        if (planoCel.semFuncoes) continue;
+        if (celComCoberturaMinima.has(celKey(planoCel))) continue;
+
+        for (const f of planoCel.cel.funcoes) {
+          if (!candidatoValido(m, planoCel, f, plano)) continue;
 
           const ocupantes = planoCel.alocacoes.filter((a) => a.ministerio_id === f.ministerio_id);
-          // Vaga aberta ainda — deveria ter sido pego no passo anterior; tenta mesmo assim
-          if (ocupantes.length < f.quantidade) {
-            planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: f.ministerio_id });
-            escalasContador.set(m.id, 1);
-            planoCel.alertas.push(`ℹ ${m.nome} adicionado(a) para garantir ao menos uma escala no período.`);
-            todosAlertasGlobais.push(`ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} adicionado(a) para garantir cobertura mínima.`);
-            celComDeslocamento.add(planoCel.cel.data + planoCel.cel.titulo);
-            deslocou = true;
-            break;
-          }
-
-          // Vaga cheia — tenta deslocar quem tem mais escalas no mês (≥2)
           const candidatoDeslocamento = ocupantes
             .map((a) => ({ membro_id: a.membro_id, count: escalasContador.get(a.membro_id) ?? 0 }))
             .sort((a, b) => b.count - a.count)
@@ -992,25 +1050,24 @@ export function AssistenteGeracaoEscalas({
 
           if (!candidatoDeslocamento) continue;
 
-          const nome = membros.find((x) => x.id === candidatoDeslocamento.membro_id)?.nome ?? candidatoDeslocamento.membro_id;
           const idxRem = planoCel.alocacoes.findIndex(
             (a) => a.membro_id === candidatoDeslocamento.membro_id && a.ministerio_id === f.ministerio_id
           );
           if (idxRem === -1) continue;
 
+          const nomeDeslocado = membros.find((x) => x.id === candidatoDeslocamento.membro_id)?.nome ?? candidatoDeslocamento.membro_id;
           planoCel.alocacoes.splice(idxRem, 1);
           escalasContador.set(candidatoDeslocamento.membro_id, candidatoDeslocamento.count - 1);
-
           planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: f.ministerio_id });
           escalasContador.set(m.id, 1);
           planoCel.alertas.push(
-            `ℹ ${m.nome} adicionado(a) por cobertura mínima (substituiu ${nome} que possui outras escalas no mês).`
+            `ℹ ${m.nome} adicionado(a) por cobertura mínima (substituiu ${nomeDeslocado} que possui outras escalas no mês).`
           );
           todosAlertasGlobais.push(
-            `ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} adicionado(a) por cobertura mínima.`
+            `ℹ "${planoCel.cel.titulo}" (${planoCel.cel.data}): ${m.nome} — cobertura mínima (deslocou ${nomeDeslocado}).`
           );
-          celComDeslocamento.add(planoCel.cel.data + planoCel.cel.titulo);
-          deslocou = true;
+          celComCoberturaMinima.add(celKey(planoCel));
+          coberto = true;
           break;
         }
       }

@@ -2381,6 +2381,8 @@ function EscalasPage() {
           indisponibilidades={indisponibilidades}
           funcaoRestricoes={funcaoRestricoes}
           membroMissaRestricoes={membroMissaRestricoes}
+          incompatibilidades={membroIncompat}
+          preferenciaisSolene={preferenciaisSolene ?? []}
           paroquiaConfig={paroquiaConfig ?? null}
           onSuccess={() => {
             qc.invalidateQueries({ queryKey: ["escalas"] });
