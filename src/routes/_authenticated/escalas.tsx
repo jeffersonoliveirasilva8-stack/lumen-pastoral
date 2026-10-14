@@ -2272,6 +2272,11 @@ function EscalasPage() {
               onClick={() => bulkUpdateStatusMutation.mutate({ ids: [...selectedEscalaIds], status: "arquivada" })}
             >Arquivar</Button>
             <Button
+              size="sm" variant="outline" className="h-7 text-xs border-orange-200 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-950"
+              disabled={bulkUpdateStatusMutation.isPending}
+              onClick={() => bulkUpdateStatusMutation.mutate({ ids: [...selectedEscalaIds], status: "cancelada" })}
+            ><Ban className="h-3 w-3 mr-1" />Cancelar</Button>
+            <Button
               size="sm" variant="destructive" className="h-7 text-xs"
               onClick={() => setBulkDeleteEscalasOpen(true)}
             ><Trash2 className="h-3 w-3 mr-1" />Excluir</Button>
@@ -2347,6 +2352,7 @@ function EscalasPage() {
           onExportPDF={(id: string) => exportarEscalasPDF([id])}
           onReorganizar={() => setReorganizarOpen(true)}
           onBulkPublish={(ids) => bulkPublishMutation.mutate(ids)}
+          onCancelar={(id) => bulkUpdateStatusMutation.mutate({ ids: [id], status: "cancelada" })}
           onSwapMembro={(args) => swapMembroMutation.mutate(args)}
           isBulkPublishing={bulkPublishMutation.isPending}
         />
@@ -3713,7 +3719,7 @@ function ListaView({
   escalas, allEscalas, selectedIds, escalaCounts, escalaCountsFetching, membros, assignmentHistory, paroquiaConfig,
   indisponibilidades, membroMinisterios, funcaoRestricoes,
   onToggleSelect, onSelectAll, onOpenDetail, onEdit, onDelete, onCreate, onExportPDF, onReorganizar,
-  onBulkPublish, onSwapMembro, isBulkPublishing,
+  onBulkPublish, onCancelar, onSwapMembro, isBulkPublishing,
 }: {
   escalas: Escala[];
   allEscalas: Escala[];
@@ -3735,6 +3741,7 @@ function ListaView({
   onExportPDF: (id: string) => void;
   onReorganizar: () => void;
   onBulkPublish: (ids: string[]) => void;
+  onCancelar: (id: string) => void;
   onSwapMembro: (args: { removeId: string; removeMembroId: string; escalaId: string; membroId: string; ministerioId: string }) => void;
   isBulkPublishing: boolean;
 }) {
@@ -4389,6 +4396,14 @@ function ListaView({
                         <DropdownMenuItem onClick={() => onExportPDF(e.id)}>
                           <FileText className="h-3.5 w-3.5 mr-2" />Exportar PDF
                         </DropdownMenuItem>
+                        {e.status !== "cancelada" && (
+                          <DropdownMenuItem
+                            className="text-orange-600 focus:text-orange-600 dark:text-orange-400"
+                            onClick={() => onCancelar(e.id)}
+                          >
+                            <Ban className="h-3.5 w-3.5 mr-2" />Cancelar missa
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
