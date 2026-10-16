@@ -532,7 +532,7 @@ Deno.serve(async (req) => {
         const { data: memRows } = await (admin as any).from("membros").select("auth_user_id").in("id", memIds).not("auth_user_id", "is", null);
         const userIds: string[] = [...new Set<string>((memRows ?? []).map((r: { auth_user_id: string }) => r.auth_user_id))];
         if (userIds.length > 0) {
-          await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+          const pushRes = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}`, "x-push-secret": pushSecret },
             body: JSON.stringify({
@@ -542,6 +542,7 @@ Deno.serve(async (req) => {
               url:      "/portal-membro/substituicoes",
             }),
           });
+          if (!pushRes.ok) console.warn("send-push vaga_disponivel:", pushRes.status, await pushRes.text().catch(() => ""));
         }
       }
     } catch { /* push nunca interrompe o fluxo principal */ }
