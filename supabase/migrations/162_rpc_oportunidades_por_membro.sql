@@ -114,12 +114,18 @@ BEGIN
     )
 
     -- Critério 2: sem indisponibilidade ativa na data da escala
+    -- Replica estaIndisponivel() do engine:
+    --   tipo 'dia'/'periodo' → data exata; tipo 'intervalo' → range data..data_fim
     AND NOT EXISTS (
       SELECT 1 FROM public.indisponibilidades ind
       WHERE ind.membro_id   = c.membro_id
         AND ind.paroquia_id = p_paroquia_id
-        AND ind.data        = c.escala_data
         AND ind.cancelada   = false
+        AND (
+          (ind.tipo IN ('dia', 'periodo') AND ind.data = c.escala_data)
+          OR (ind.tipo = 'intervalo' AND ind.data_fim IS NOT NULL
+              AND c.escala_data BETWEEN ind.data AND ind.data_fim)
+        )
     )
 
     -- Critério 3: dia da semana não está nas restrições do membro
