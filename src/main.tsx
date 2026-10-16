@@ -53,6 +53,13 @@ declare module "@tanstack/react-router" {
   }
 }
 
+// Registro do Service Worker (apenas em produção, apenas no cliente)
+if (typeof window !== "undefined" && "serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+  });
+}
+
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element not found");
 

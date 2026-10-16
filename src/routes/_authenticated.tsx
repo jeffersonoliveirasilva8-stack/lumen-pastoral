@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, useNavigate, Link, useRouterState } from "@tan
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { TrialBanner } from "@/components/billing/TrialBanner";
+import { PWABanners } from "@/components/PWABanners";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { format } from "date-fns";
 import {
@@ -306,6 +307,7 @@ function AuthLayout() {
 
   return (
     <PageTabsProvider>
+    <PWABanners />
     <div className="flex flex-col lg:h-screen lg:flex-row lg:overflow-hidden bg-background">
       {/* Desktop sidebar */}
       <aside className={`hidden lg:flex flex-col bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border/70 shrink-0 shadow-altar overflow-hidden transition-all duration-[260ms] ease-[cubic-bezier(0.34,1.56,0.64,1)] ${sidebarCollapsed ? "w-16" : "w-56"}`}>
