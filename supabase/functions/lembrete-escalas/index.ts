@@ -244,10 +244,12 @@ Deno.serve(async (req) => {
       erros.push(`${membro.email}: ${err.message}`);
     }
 
-    // Acumula para push (independente do resultado do e-mail)
+    // Acumula para push (deduplicado por auth_user_id para evitar push duplo)
     if (pushSecret && membro.auth_user_id) {
       if (!pushUsersByEscala[escala.id]) pushUsersByEscala[escala.id] = [];
-      pushUsersByEscala[escala.id].push(membro.auth_user_id);
+      if (!pushUsersByEscala[escala.id].includes(membro.auth_user_id)) {
+        pushUsersByEscala[escala.id].push(membro.auth_user_id);
+      }
     }
   }
 
