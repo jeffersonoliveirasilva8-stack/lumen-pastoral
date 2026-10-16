@@ -307,7 +307,7 @@ function AuthLayout() {
 
   return (
     <PageTabsProvider>
-    <PWABanners />
+    <PWABanners paroquiaId={profile?.paroquia_id} />
     <div className="flex flex-col lg:h-screen lg:flex-row lg:overflow-hidden bg-background">
       {/* Desktop sidebar */}
       <aside className={`hidden lg:flex flex-col bg-sidebar/95 text-sidebar-foreground border-r border-sidebar-border/70 shrink-0 shadow-altar overflow-hidden transition-all duration-[260ms] ease-[cubic-bezier(0.34,1.56,0.64,1)] ${sidebarCollapsed ? "w-16" : "w-56"}`}>

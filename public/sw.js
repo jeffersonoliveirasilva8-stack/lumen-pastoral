@@ -112,3 +112,32 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
+
+// --- Web Push: exibe notificação e abre a URL ao clicar ---
+self.addEventListener('push', (event) => {
+  let data = { title: 'Lumen Pastoral', body: '', url: '/' };
+  try {
+    if (event.data) data = { ...data, ...JSON.parse(event.data.text()) };
+  } catch (_) {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body || '',
+      icon: '/icon-192.svg',
+      badge: '/favicon.svg',
+      data: { url: data.url || '/' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((c) => c.url.includes(self.location.origin));
+      if (existing) return existing.focus().then((c) => c.navigate(url));
+      return self.clients.openWindow(url);
+    })
+  );
+});
