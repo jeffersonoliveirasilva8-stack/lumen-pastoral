@@ -278,3 +278,69 @@ describe("Regra: indisponibilidades canceladas não bloqueiam", () => {
     expect(resultado.alocacoes[0].membro_id).toBe("m-ok");
   });
 });
+
+// ── 7. B4 — restricoes_dia_semana EM SOLENIDADES ─────────────────────────────
+
+describe("Fix B4: restricoes_dia_semana respeitada em solenidades (funções principais)", () => {
+  // 2026-07-05 = domingo (dia 0)
+  const contextoSolene: ContextoEscala = {
+    data: "2026-07-05",
+    tipo: "missa",
+    solene: true,
+    tem_bispo: false,
+    tem_adoracao: false,
+  };
+
+  const funcaoPrincipal: FuncaoNecessaria = {
+    ministerio_id: MIN_A,
+    ministerio_nome: "Acólito",
+    quantidade: 1,
+    relevancia: "principal",
+  };
+
+  it("Membro com restrição de domingo deve ter score inferior em solenidade/principal", () => {
+    // João restringe domingo (0), Maria não
+    const joao  = { ...membro("id-joao-b4", "João",  MIN_A, "M"), restricoes_dia_semana: [0] };
+    const maria = { ...membro("id-maria-b4", "Maria", MIN_A, "F"), restricoes_dia_semana: [] };
+
+    const resultado = alocarMembros(
+      [funcaoPrincipal],
+      [joao, maria],
+      [], contextoSolene, [], undefined, [], undefined,
+    );
+
+    // Maria deve ser escolhida pois João tem penalidade por restrição de dia
+    expect(resultado.alocacoes.length).toBe(1);
+    expect(resultado.alocacoes[0].membro_id).toBe("id-maria-b4");
+  });
+
+  it("Candidato João deve registrar penalidade por restrição de dia nos top_candidatos", () => {
+    const joao  = { ...membro("id-joao-b4", "João",  MIN_A, "M"), restricoes_dia_semana: [0] };
+    const maria = { ...membro("id-maria-b4", "Maria", MIN_A, "F"), restricoes_dia_semana: [] };
+
+    const resultado = alocarMembros(
+      [funcaoPrincipal],
+      [joao, maria],
+      [], contextoSolene, [], undefined, [], undefined,
+    );
+
+    const funcaoInsight = resultado.insights?.find((i) => i.ministerio_id === MIN_A);
+    const todosInsights = [...(funcaoInsight?.top_candidatos ?? []), ...(funcaoInsight?.escolhidos ?? [])];
+    const insightJoao = todosInsights.find((i) => i.membro_id === "id-joao-b4");
+    expect(insightJoao?.breakdown?.penalidade).toBeGreaterThan(0);
+  });
+
+  it("Em modo comum (não-solene), comportamento de restrição permanece igual", () => {
+    const contextoComum: ContextoEscala = { ...contextoSolene, solene: false };
+    const joao  = { ...membro("id-joao-b4c", "João",  MIN_A, "M"), restricoes_dia_semana: [0] };
+    const maria = { ...membro("id-maria-b4c", "Maria", MIN_A, "F"), restricoes_dia_semana: [] };
+
+    const resultado = alocarMembros(
+      [{ ...funcaoPrincipal, ministerio_id: MIN_A }],
+      [joao, maria],
+      [], contextoComum, [], undefined, [], undefined,
+    );
+
+    expect(resultado.alocacoes[0].membro_id).toBe("id-maria-b4c");
+  });
+});
