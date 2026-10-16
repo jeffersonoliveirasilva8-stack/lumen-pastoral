@@ -41,10 +41,11 @@ function addDays(dateStr: string, days: number): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey     = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const anonKey      = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const sendEmailUrl = `${supabaseUrl}/functions/v1/send-email`;
+  const sendPushUrl  = `${supabaseUrl}/functions/v1/send-push`;
 
   const admin = createClient(supabaseUrl, serviceKey);
 
@@ -178,14 +179,28 @@ Deno.serve(async (req) => {
 
   const { data: atrib, error: aErr } = await admin
     .from("escala_membros")
-    .select("escala_id, ministerio_id, membros(id, nome, email), ministerios(nome)")
+    .select("escala_id, ministerio_id, membros(id, nome, email, auth_user_id), ministerios(nome)")
     .in("escala_id", escalaIds)
     .neq("ativo", false);
 
   if (aErr) return json({ ok: false, error: aErr.message }, 500);
 
+  // Lê push secret uma vez (falha silenciosa — push é adicional)
+  let pushSecret: string | null = null;
+  try {
+    const { data: cfg } = await admin
+      .from("_push_config")
+      .select("val")
+      .eq("key", "internal_push_secret")
+      .single();
+    pushSecret = cfg?.val ?? null;
+  } catch { /* push desabilitado se não configurado */ }
+
   let enviados = 0;
   const erros: string[] = [];
+
+  // Coleta auth_user_ids por escala para push em lote
+  const pushUsersByEscala: Record<string, string[]> = {};
 
   for (let i = 0; i < (atrib ?? []).length; i++) {
     const a      = (atrib ?? [])[i] as any;
@@ -195,7 +210,7 @@ Deno.serve(async (req) => {
 
     if (!membro?.email || !escala) continue;
 
-    const paroquiaNome = escala.paroquias?.nome ?? "Pastoral";
+    const paroquiaNome  = escala.paroquias?.nome ?? "Pastoral";
     const diasRestantes = tipoLembrete === "3horas" ? 0 : datasAlvo.indexOf(escala.data) + 1;
 
     if (i > 0) await new Promise((r) => setTimeout(r, 350));
@@ -227,6 +242,43 @@ Deno.serve(async (req) => {
       }
     } catch (err: any) {
       erros.push(`${membro.email}: ${err.message}`);
+    }
+
+    // Acumula para push (independente do resultado do e-mail)
+    if (pushSecret && membro.auth_user_id) {
+      if (!pushUsersByEscala[escala.id]) pushUsersByEscala[escala.id] = [];
+      pushUsersByEscala[escala.id].push(membro.auth_user_id);
+    }
+  }
+
+  // Push em lote por escala — fire-and-forget, nunca bloqueia e-mail
+  if (pushSecret) {
+    for (const escala of escalasFiltradas) {
+      const userIds = pushUsersByEscala[escala.id];
+      if (!userIds || userIds.length === 0) continue;
+
+      const dataFmt = escala.data ?? "";
+      const horaFmt = escala.hora_inicio?.slice(0, 5) ?? "";
+      const pushBody = tipoLembrete === "3horas"
+        ? `Começa em aproximadamente 3 horas — ${horaFmt}`
+        : `Amanhã${horaFmt ? " às " + horaFmt : ""}`;
+
+      try {
+        await fetch(sendPushUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type":  "application/json",
+            "Authorization": `Bearer ${anonKey}`,
+            "x-push-secret": pushSecret,
+          },
+          body: JSON.stringify({
+            user_ids: userIds,
+            title:    `Lembrete: ${escala.titulo}`,
+            body:     pushBody,
+            url:      "/portal-membro/escalas",
+          }),
+        });
+      } catch { /* falha de push não interrompe */ }
     }
   }
 
