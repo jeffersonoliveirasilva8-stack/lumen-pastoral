@@ -10,7 +10,7 @@ export function PWABanners() {
   if (!canInstall && !hasUpdate) return null;
 
   return (
-    <div className="fixed top-safe-top left-0 right-0 z-[60] flex flex-col gap-1 px-3 pt-3 pointer-events-none">
+    <div className="fixed top-0 left-0 right-0 z-[60] flex flex-col gap-1 px-3 pt-3 safe-area-pt pointer-events-none">
       {hasUpdate && (
         <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-border bg-card/95 backdrop-blur-sm shadow-lg px-3 py-2 text-sm">
           <RefreshCw className="h-4 w-4 shrink-0 text-primary" />
