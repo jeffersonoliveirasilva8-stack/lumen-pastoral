@@ -1287,71 +1287,8 @@ function EscalasPage() {
         }
       }
 
-      // Ao cancelar, notifica in-app + e-mail todos os membros atribuídos
-      if (vars.status === "cancelada" && escalaRef) {
-        const { data: atrib } = await (supabase as any)
-          .from("escala_membros")
-          .select("membro_id, ministerio_id")
-          .eq("escala_id", vars.id)
-          .neq("ativo", false);
-        const atribList = atrib ?? [];
-        // Notificações in-app
-        const notifs = atribList.map((a: { membro_id: string }) => ({
-          paroquia_id: profile?.paroquia_id,
-          membro_id: a.membro_id,
-          titulo: `Escala cancelada: ${escalaRef.titulo}`,
-          mensagem: `A escala "${escalaRef.titulo}" do dia ${escalaRef.data} foi cancelada pela coordenação.`,
-          tipo: "aviso",
-          lida: false,
-          apenas_admin: false,
-          link_referencia: "/portal-membro/escalas",
-        }));
-        if (notifs.length > 0) await (supabase as any).from("notificacoes").insert(notifs);
-        // E-mails — agrupa por membro_id para 1 e-mail por membro
-        const porMembroCancel = new Map<string, Array<{ membro_id: string; ministerio_id: string }>>();
-        for (const a of atribList) {
-          if (!porMembroCancel.has(a.membro_id)) porMembroCancel.set(a.membro_id, []);
-          porMembroCancel.get(a.membro_id)!.push(a);
-        }
-        let emailDelayCancel = 0;
-        for (const [, rows] of porMembroCancel) {
-          const membro = membros.find((m: Membro) => m.id === rows[0].membro_id);
-          if (!membro?.email) continue;
-          if (emailDelayCancel > 0) await new Promise((r) => setTimeout(r, 400));
-          emailDelayCancel++;
-          if (rows.length === 1) {
-            const min = ministerios.find((m: Ministerio) => m.id === rows[0].ministerio_id);
-            await supabase.functions.invoke("send-email", {
-              body: {
-                template: "escala_cancelada",
-                to: membro.email,
-                nome: membro.nome,
-                paroquia: paroquiaNome,
-                escalaTitulo: escalaRef.titulo,
-                escalaData: escalaRef.data,
-                escalaHora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
-                ministerioNome: min?.nome ?? "",
-              },
-            }).catch(() => {});
-          } else {
-            await supabase.functions.invoke("send-email", {
-              body: {
-                template: "escala_resumo_periodo",
-                to: membro.email,
-                nome: membro.nome,
-                paroquia: paroquiaNome,
-                acao: "cancelada",
-                escalasItems: rows.map((r) => ({
-                  titulo: escalaRef.titulo,
-                  data: escalaRef.data,
-                  hora: escalaRef.hora_inicio?.slice(0, 5) ?? "",
-                  ministerioNome: ministerios.find((m: Ministerio) => m.id === r.ministerio_id)?.nome ?? "",
-                })),
-              },
-            }).catch(() => {});
-          }
-        }
-      }
+      // Cancelamento: notificações e e-mails são enviados server-side pelo
+      // trigger on_escala_cancelada_cascade (migration 153). Não fazer aqui.
     },
   });
 
@@ -1371,40 +1308,20 @@ function EscalasPage() {
       setSelectedEscalaIds(new Set());
       toast.success(`${ids.length} escala(s) ${status === "publicada" ? "publicada(s)" : status === "cancelada" ? "cancelada(s)" : "arquivada(s)"}.`);
 
-      // Envia e-mails ao publicar ou cancelar múltiplas escalas em lote
-      if ((status === "publicada" || status === "cancelada") && ids.length > 0) {
+      // Ao cancelar: notificações e e-mails tratados pelo trigger server-side (migration 153).
+      // Ao publicar em lote: envia e-mails aqui (trigger só cobre publicação individual).
+      if (status === "publicada" && ids.length > 0) {
         const { data: atrib } = await (supabase as any)
           .from("escala_membros")
           .select("membro_id, ministerio_id, escala_id")
           .in("escala_id", ids)
           .neq("ativo", false);
         const allAtrib = atrib ?? [];
-
-        // Notificações in-app ao cancelar em lote
-        if (status === "cancelada") {
-          const notifs = allAtrib.map((a: { membro_id: string; escala_id: string }) => {
-            const escalaRef = escalas.find((e) => e.id === a.escala_id);
-            return {
-              paroquia_id: profile?.paroquia_id,
-              membro_id: a.membro_id,
-              titulo: `Escala cancelada: ${escalaRef?.titulo ?? ""}`,
-              mensagem: `A escala "${escalaRef?.titulo ?? ""}" do dia ${escalaRef?.data ?? ""} foi cancelada pela coordenação.`,
-              tipo: "aviso",
-              lida: false,
-              apenas_admin: false,
-              link_referencia: "/portal-membro/escalas",
-            };
-          });
-          if (notifs.length > 0) await (supabase as any).from("notificacoes").insert(notifs);
-        }
-
-        // Agrupa por membro_id: 1 e-mail por membro com todas as suas escalas
         const porMembroBulk = new Map<string, Array<{ membro_id: string; ministerio_id: string; escala_id: string }>>();
         for (const a of allAtrib) {
           if (!porMembroBulk.has(a.membro_id)) porMembroBulk.set(a.membro_id, []);
           porMembroBulk.get(a.membro_id)!.push(a);
         }
-        const acaoBulk = status === "publicada" ? "publicada" : "cancelada";
         let emailDelayBulk = 0;
         for (const [membroId, rows] of porMembroBulk) {
           const membro = membros.find((m: Membro) => m.id === membroId);
@@ -1418,7 +1335,7 @@ function EscalasPage() {
             if (!escalaRef) continue;
             await supabase.functions.invoke("send-email", {
               body: {
-                template: acaoBulk === "publicada" ? "escala_publicada" : "escala_cancelada",
+                template: "escala_publicada",
                 to: membro.email,
                 nome: membro.nome,
                 paroquia: paroquiaNome,
@@ -1435,7 +1352,7 @@ function EscalasPage() {
                 to: membro.email,
                 nome: membro.nome,
                 paroquia: paroquiaNome,
-                acao: acaoBulk,
+                acao: "publicada",
                 escalasItems: rows
                   .map((r) => {
                     const escalaRef = escalas.find((e) => e.id === r.escala_id);
