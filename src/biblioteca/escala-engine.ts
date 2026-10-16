@@ -115,6 +115,10 @@ export type ScoreBreakdown = {
   frequencia_historica: number;
   ranking_bonus: number;
   aleatoriedade: number;
+  // S2 — equidade proporcional (substituiu participacao_recente quando mapa disponível)
+  s2_equidade?: number;        // 0–100; undefined = S2 não aplicado (fallback para participacao_recente)
+  s2_oportunidades?: number;   // denominador usado no cálculo
+  s2_recebidas?: number;       // numerador usado no cálculo
   // Campos modo SOLENE_PRINCIPAL (mérito + rodízio)
   rotacao_funcao: number;
   experiencia_funcao: number;
@@ -127,6 +131,12 @@ export type ScoreBreakdown = {
   prioridade_bonus: number;
   total: number;
   modo: "comum" | "solene_principal";
+};
+
+/** Resultado de get_oportunidades_por_membro para um único membro. */
+export type OportunidadesMembro = {
+  oportunidades: number;
+  escalas_recebidas: number;
 };
 
 export type InsightCandidato = {
@@ -360,6 +370,7 @@ function calcularScore(
   modoSolenePrincipal: boolean,
   ehPreferencialSolene: boolean,
   config?: ConfigParoquia,
+  oportunidadesMap?: Map<string, OportunidadesMembro>,
 ): ScoreBreakdown {
   const histMembro    = historico.filter((h) => h.membro_id === membro.id);
   const histAnterior  = histMembro.filter((h) => h.data < dataEvento);
@@ -474,8 +485,29 @@ function calcularScore(
 
   } else {
     // ── Modo COMUM: equilíbrio de oportunidades ─────────────────────────────
-    // 1. Participação recente 30d (40%) — menos = maior prioridade
-    const participacaoRecente = Math.max(0, (1 - count30d / CAP_PARTICIPACOES_30D) * 100);
+    // 1. Participação recente / equidade S2 (40%)
+    //    Quando oportunidadesMap está disponível: usa equidade proporcional (S2).
+    //    Caso contrário: fallback para participacaoRecente (recência 30d).
+    //    Casos especiais:
+    //      oportunidades = 0  → fallback (sem dado; não dá vantagem nem penalidade)
+    //      recebidas > oportunidades → capeado em oportunidades (dado inconsistente;
+    //                                  tratado como aproveitamento máximo = equidade mínima)
+    let participacaoRecente: number;
+    let s2Equidade: number | undefined;
+    let s2Oportunidades: number | undefined;
+    let s2Recebidas: number | undefined;
+    const oport = oportunidadesMap?.get(membro.id);
+    if (oport && oport.oportunidades > 0) {
+      const recebidas    = Math.min(oport.escalas_recebidas, oport.oportunidades);
+      const aproveitamento = recebidas / oport.oportunidades;
+      s2Equidade       = Math.round((1 - aproveitamento) * 100); // 100 = nunca recebeu; 0 = recebeu tudo
+      s2Oportunidades  = oport.oportunidades;
+      s2Recebidas      = recebidas;
+      participacaoRecente = s2Equidade;
+    } else {
+      // Fallback: sem mapa ou oportunidades = 0 → fórmula original (recência 30d)
+      participacaoRecente = Math.max(0, (1 - count30d / CAP_PARTICIPACOES_30D) * 100);
+    }
 
     // 2. Tempo sem servir qualquer função (30%) — mais = maior prioridade
     const tempoSemServir = Math.min(diasSemServir, CAP_DIAS_SEM_SERVIR) / CAP_DIAS_SEM_SERVIR * 100;
@@ -514,6 +546,11 @@ function calcularScore(
     breakdown.ranking_bonus        = Math.round(rankingBonus);
     breakdown.frequencia_historica = Math.round(frequenciaHistorica);
     breakdown.aleatoriedade        = 0;
+    if (s2Equidade !== undefined) {
+      breakdown.s2_equidade      = s2Equidade;
+      breakdown.s2_oportunidades = s2Oportunidades;
+      breakdown.s2_recebidas     = s2Recebidas;
+    }
 
     breakdown.total = Math.max(0, Math.round(raw - penalidade + prioridadeBonus));
   }
@@ -606,6 +643,7 @@ export function alocarMembros(
   preferenciaisSolene: PreferencialSolene[] = [],
   incompatMap?: Map<string, Set<string>>,
   ignorarIndisponibilidades = false,
+  oportunidadesMap?: Map<string, OportunidadesMembro>,
 ): ResultadoAlocacao {
   const alocacoes:        MembroAlocado[]  = [];
   const alertas:          string[]         = [];
@@ -783,6 +821,7 @@ export function alocarMembros(
         const breakdown = calcularScore(
           m, funcao, historicoRecente, contexto.data, data30dAtras, stats,
           modoSolenePrincipal, preferenciaisDaFuncao.has(m.id), config,
+          oportunidadesMap,
         );
 
         // Bonus variedade de ministério (apenas modo comum)

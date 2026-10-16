@@ -344,3 +344,121 @@ describe("Fix B4: restricoes_dia_semana respeitada em solenidades (funções pri
     expect(resultado.alocacoes[0].membro_id).toBe("id-maria-b4c");
   });
 });
+
+// ── 8. S2 — EQUIDADE PROPORCIONAL ────────────────────────────────────────────
+
+describe("S2: equidade proporcional via oportunidadesMap", () => {
+  // contextoS2: segunda-feira (dia 1) para evitar conflito com fixtures do B4
+  const ctx: ContextoEscala = {
+    data: "2026-07-06",
+    tipo: "missa",
+    solene: false,
+    tem_bispo: false,
+    tem_adoracao: false,
+  };
+
+  const funcaoS2: FuncaoNecessaria = { ministerio_id: MIN_A, ministerio_nome: "S2Func", quantidade: 1 };
+
+  function makeMap(membros: Array<{ id: string; oportunidades: number; escalas_recebidas: number }>) {
+    return new Map(membros.map((m) => [m.id, { oportunidades: m.oportunidades, escalas_recebidas: m.escalas_recebidas }]));
+  }
+
+  it("Membro com aproveitamento menor (mais necessitado) tem prioridade", () => {
+    const joao  = membro("s2-joao",  "João",  MIN_A, "M");
+    const maria = membro("s2-maria", "Maria", MIN_A, "F");
+
+    // João: 12 oportunidades, 1 recebida → aproveitamento 8% → equidade 92
+    // Maria: 12 oportunidades, 8 recebidas → aproveitamento 67% → equidade 33
+    const map = makeMap([
+      { id: "s2-joao",  oportunidades: 12, escalas_recebidas: 1 },
+      { id: "s2-maria", oportunidades: 12, escalas_recebidas: 8 },
+    ]);
+
+    const resultado = alocarMembros([funcaoS2], [joao, maria], [], ctx, [], undefined, [], undefined, false, map);
+    expect(resultado.alocacoes[0].membro_id).toBe("s2-joao");
+  });
+
+  it("s2_equidade é registrado no breakdown quando mapa está disponível", () => {
+    const joao = membro("s2-bd-joao", "João", MIN_A, "M");
+    const map = makeMap([{ id: "s2-bd-joao", oportunidades: 10, escalas_recebidas: 3 }]);
+
+    const resultado = alocarMembros([funcaoS2], [joao], [], ctx, [], undefined, [], undefined, false, map);
+
+    const funcaoInsight = resultado.insights?.find((i) => i.ministerio_id === MIN_A);
+    const escolhido = funcaoInsight?.escolhidos[0];
+    expect(escolhido?.breakdown?.s2_equidade).toBeDefined();
+    expect(escolhido?.breakdown?.s2_equidade).toBe(70); // 1 - 3/10 = 0.7 → 70
+    expect(escolhido?.breakdown?.s2_oportunidades).toBe(10);
+    expect(escolhido?.breakdown?.s2_recebidas).toBe(3);
+  });
+
+  it("oportunidades = 0 → fallback para participacao_recente (sem vantagem/penalidade)", () => {
+    const joao  = membro("s2-zero-j", "João",  MIN_A, "M");
+    const maria = membro("s2-zero-m", "Maria", MIN_A, "F");
+
+    // Joao tem oportunidades=0, Maria tem oportunidades=0 → ambos no fallback
+    const map = makeMap([
+      { id: "s2-zero-j", oportunidades: 0, escalas_recebidas: 0 },
+      { id: "s2-zero-m", oportunidades: 0, escalas_recebidas: 5 },
+    ]);
+
+    const resultado = alocarMembros([funcaoS2], [joao, maria], [], ctx, [], undefined, [], undefined, false, map);
+    // Com oportunidades=0 para ambos, cai no fallback — um deve ser selecionado sem erro
+    expect(resultado.alocacoes.length).toBe(1);
+
+    // Confirma que s2_equidade não é setado quando oportunidades=0
+    const funcaoInsight = resultado.insights?.find((i) => i.ministerio_id === MIN_A);
+    const todos = [...(funcaoInsight?.escolhidos ?? []), ...(funcaoInsight?.top_candidatos ?? [])];
+    const insightJoao = todos.find((i) => i.membro_id === "s2-zero-j");
+    expect(insightJoao?.breakdown?.s2_equidade).toBeUndefined();
+  });
+
+  it("escalas_recebidas > oportunidades → capeado; não dá equidade negativa", () => {
+    const joao = membro("s2-cap-j", "João", MIN_A, "M");
+    // Dado inconsistente: recebidas > oportunidades → cap → aproveitamento = 1 → equidade = 0
+    const map = makeMap([{ id: "s2-cap-j", oportunidades: 5, escalas_recebidas: 10 }]);
+
+    const resultado = alocarMembros([funcaoS2], [joao], [], ctx, [], undefined, [], undefined, false, map);
+    const funcaoInsight = resultado.insights?.find((i) => i.ministerio_id === MIN_A);
+    const escolhido = [...(funcaoInsight?.escolhidos ?? []), ...(funcaoInsight?.top_candidatos ?? [])].find((i) => i.membro_id === "s2-cap-j");
+    // equidade = 0 (recebeu tudo) — mas score não negativo
+    expect(escolhido?.breakdown?.s2_equidade).toBe(0);
+    expect(escolhido?.breakdown?.total).toBeGreaterThanOrEqual(0);
+  });
+
+  it("sem oportunidadesMap → score calculado sem erro (comportamento original)", () => {
+    const joao  = membro("s2-nomap-j", "João",  MIN_A, "M");
+    const maria = membro("s2-nomap-m", "Maria", MIN_A, "F");
+
+    // Sem mapa: não deve passar oportunidadesMap (undefined implícito)
+    const resultado = alocarMembros([funcaoS2], [joao, maria], [], ctx, [], undefined, [], undefined, false, undefined);
+    expect(resultado.alocacoes.length).toBe(1);
+
+    const funcaoInsight = resultado.insights?.find((i) => i.ministerio_id === MIN_A);
+    const todos = [...(funcaoInsight?.escolhidos ?? []), ...(funcaoInsight?.top_candidatos ?? [])];
+    // Nenhum deve ter s2_equidade quando mapa não fornecido
+    todos.forEach((c) => expect(c.breakdown?.s2_equidade).toBeUndefined());
+  });
+
+  it("modo solene/principal ignora oportunidadesMap — scoring de mérito preservado", () => {
+    const ctxSolene: ContextoEscala = { data: "2026-07-05", tipo: "missa", solene: true, tem_bispo: false, tem_adoracao: false };
+    const funcaoPrincipal: FuncaoNecessaria = { ministerio_id: MIN_A, ministerio_nome: "Principal", quantidade: 1, relevancia: "principal" };
+
+    const joao  = membro("s2-sol-j", "João",  MIN_A, "M");
+    const maria = membro("s2-sol-m", "Maria", MIN_A, "F");
+
+    // Mesmo com mapa favorecendo João, modo solene/principal usa scoring de mérito
+    const map = makeMap([
+      { id: "s2-sol-j", oportunidades: 10, escalas_recebidas: 0 }, // equidade máxima para João
+      { id: "s2-sol-m", oportunidades: 10, escalas_recebidas: 9 }, // equidade mínima para Maria
+    ]);
+
+    const resultado = alocarMembros([funcaoPrincipal], [joao, maria], [], ctxSolene, [], undefined, [], undefined, false, map);
+
+    const funcaoInsight = resultado.insights?.find((i) => i.ministerio_id === MIN_A);
+    const todos = [...(funcaoInsight?.escolhidos ?? []), ...(funcaoInsight?.top_candidatos ?? [])];
+    // Nenhum deve ter s2_equidade — modo solene_principal não usa S2
+    todos.forEach((c) => expect(c.breakdown?.s2_equidade).toBeUndefined());
+    expect(resultado.alocacoes.length).toBe(1);
+  });
+});
