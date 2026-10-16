@@ -7,12 +7,13 @@
 --
 -- Solução:
 --   1. Coluna motivo_cancelamento TEXT em escalas
---   2. Trigger _on_escala_cancelada_cascade — dispara AFTER UPDATE em escalas
+--   2. Trigger on_escala_cancelada_cascade — dispara AFTER UPDATE em escalas
 --      quando status muda para 'cancelada', atomicamente:
 --        a. Fecha substituições abertas → cancelada + historico_substituicoes
 --        b. Cria notificações in-app para todos os membros atribuídos
+--           (usa destinatario_id conforme schema real da tabela notificacoes)
 --        c. Dispara net.http_post (fire-and-forget) com template escala_cancelada
---           para cada membro com e-mail — substituindo o envio front-end
+--           para cada membro com e-mail
 --
 -- IDEMPOTENTE: sim (CREATE OR REPLACE, ADD COLUMN IF NOT EXISTS)
 -- NÃO DUPLICA: trigger verifica NEW.status = 'cancelada' AND OLD.status <> 'cancelada'
@@ -33,11 +34,19 @@ DECLARE
   v_membro         RECORD;
   v_paroquia_nome  TEXT;
   v_hora_fmt       TEXT;
-  v_min_nome       TEXT;
+  v_actor_id       UUID;
+  v_svc_key        TEXT;
 BEGIN
+  -- Identifica o ator (coordenador que cancelou a escala)
+  SELECT id INTO v_actor_id
+  FROM   public.membros
+  WHERE  auth_user_id = auth.uid()
+    AND  ativo = true
+  LIMIT  1;
+
   -- ── a. Fecha substituições abertas ────────────────────────────────────────
   FOR v_subst IN
-    SELECT s.id, s.solicitante_id
+    SELECT s.id
     FROM   public.substituicoes s
     JOIN   public.escala_membros em ON em.id = s.escala_membro_id
     WHERE  em.escala_id = NEW.id
@@ -51,7 +60,7 @@ BEGIN
     INSERT INTO public.historico_substituicoes
       (substituicao_id, acao, actor_id, detalhes)
     VALUES
-      (v_subst.id, 'cancelada_escala_cancelada', v_subst.solicitante_id,
+      (v_subst.id, 'cancelada_escala_cancelada', v_actor_id,
        jsonb_build_object(
          'escala_id',    NEW.id,
          'motivo',       NEW.motivo_cancelamento
@@ -64,6 +73,7 @@ BEGIN
   WHERE  p.id = NEW.paroquia_id;
 
   v_hora_fmt := COALESCE(LEFT(NEW.hora_inicio::TEXT, 5), '');
+  v_svc_key  := current_setting('app.service_role_key', true);
 
   FOR v_membro IN
     SELECT DISTINCT ON (em.membro_id)
@@ -79,12 +89,12 @@ BEGIN
       AND  m.ativo = true
     ORDER BY em.membro_id, em.created_at
   LOOP
-    -- Notificação in-app
+    -- Notificação in-app (usa destinatario_id conforme schema real)
     INSERT INTO public.notificacoes
-      (paroquia_id, membro_id, titulo, mensagem, tipo, lida, apenas_admin, link_referencia)
+      (paroquia_id, titulo, mensagem, tipo, lida, apenas_admin,
+       destinatario_id, link_referencia)
     VALUES
       (NEW.paroquia_id,
-       v_membro.membro_id,
        'Escala cancelada: ' || NEW.titulo,
        'A escala "' || NEW.titulo || '" do dia ' || NEW.data::TEXT ||
          ' foi cancelada pela coordenação.' ||
@@ -92,31 +102,38 @@ BEGIN
               THEN ' Motivo: ' || NEW.motivo_cancelamento
               ELSE ''
          END,
-       'aviso', false, false, '/portal-membro/escalas');
+       'aviso', false, false,
+       v_membro.membro_id,
+       '/portal-membro/escalas');
 
     -- E-mail (fire-and-forget via pg_net)
     IF v_membro.email IS NOT NULL THEN
-      BEGIN
-        PERFORM net.http_post(
-          url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/send-email',
-          headers := jsonb_build_object(
-            'Content-Type',  'application/json',
-            'Authorization', 'Bearer ' || current_setting('app.service_role_key', true)
-          ),
-          body    := jsonb_build_object(
-            'template',      'escala_cancelada',
-            'to',            v_membro.email,
-            'nome',          v_membro.nome,
-            'paroquia',      COALESCE(v_paroquia_nome, ''),
-            'escalaTitulo',  NEW.titulo,
-            'escalaData',    NEW.data::TEXT,
-            'escalaHora',    v_hora_fmt,
-            'ministerioNome', v_membro.ministerio_nome
-          )
-        );
-      EXCEPTION WHEN OTHERS THEN
-        NULL; -- falha no e-mail não bloqueia o cancelamento
-      END;
+      IF v_svc_key IS NULL THEN
+        RAISE WARNING 'app.service_role_key não configurado — e-mail de cancelamento não enviado para %', v_membro.email;
+      ELSE
+        BEGIN
+          PERFORM net.http_post(
+            url     := 'https://cusuoggmlhtvrclrzvfr.supabase.co/functions/v1/send-email',
+            headers := jsonb_build_object(
+              'Content-Type',  'application/json',
+              'Authorization', 'Bearer ' || v_svc_key
+            ),
+            body    := jsonb_build_object(
+              'template',       'escala_cancelada',
+              'to',             v_membro.email,
+              'nome',           v_membro.nome,
+              'paroquia',       COALESCE(v_paroquia_nome, ''),
+              'escalaTitulo',   NEW.titulo,
+              'escalaData',     NEW.data::TEXT,
+              'escalaHora',     v_hora_fmt,
+              'ministerioNome', v_membro.ministerio_nome
+            )
+          );
+        EXCEPTION WHEN OTHERS THEN
+          RAISE WARNING 'net.http_post falhou para e-mail de cancelamento (membro %): %',
+            v_membro.membro_id, SQLERRM;
+        END;
+      END IF;
     END IF;
   END LOOP;
 
