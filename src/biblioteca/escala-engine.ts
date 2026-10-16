@@ -643,7 +643,7 @@ export function alocarMembros(
   preferenciaisSolene: PreferencialSolene[] = [],
   incompatMap?: Map<string, Set<string>>,
   ignorarIndisponibilidades = false,
-  oportunidadesMap?: Map<string, OportunidadesMembro>,
+  oportunidadesMap?: Map<string, Map<string, OportunidadesMembro>>,
 ): ResultadoAlocacao {
   const alocacoes:        MembroAlocado[]  = [];
   const alertas:          string[]         = [];
@@ -821,7 +821,7 @@ export function alocarMembros(
         const breakdown = calcularScore(
           m, funcao, historicoRecente, contexto.data, data30dAtras, stats,
           modoSolenePrincipal, preferenciaisDaFuncao.has(m.id), config,
-          oportunidadesMap,
+          oportunidadesMap?.get(funcao.ministerio_id),
         );
 
         // Bonus variedade de ministério (apenas modo comum)

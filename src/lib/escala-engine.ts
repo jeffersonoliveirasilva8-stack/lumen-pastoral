@@ -76,7 +76,10 @@ import {
   type DetalheFuncao,
   type InsightFuncao,
   type PreferencialSolene,
+  type OportunidadesMembro,
 } from "../biblioteca/escala-engine";
+
+export type { OportunidadesMembro };
 
 type AllocOptions = {
   history?: AssignmentHistoryEntry[];
@@ -97,6 +100,8 @@ type AllocOptions = {
   /** Data de corte YYYY-MM-DD para rodízio de solenidades — solenidades anteriores são ignoradas */
   data_corte_rodizio?: string;
   debug?: boolean;
+  /** Mapa de oportunidades S2 por ministerio_id → membro_id → dados. Construído via buildOportunidadesMap(). */
+  oportunidadesMap?: Map<string, Map<string, OportunidadesMembro>>;
 };
 
 // ── Logging condicional ───────────────────────────────────────────────────────
@@ -277,6 +282,7 @@ function _buildAndAllocate(
     funcoesEngine, membrosEngine, indisponibilidades, contexto,
     historicoRecente, config, options?.preferenciaisSolene ?? [], incompatMap,
     options?.ignorar_indisponibilidades ?? false,
+    options?.oportunidadesMap,
   );
 
   if (debug) {
@@ -326,4 +332,51 @@ export function generateEscalaWithAlertas(
     detalhesPorFuncao: r.detalhesPorFuncao,
     insights:         r.insights,
   };
+}
+
+// ── buildOportunidadesMap ─────────────────────────────────────────────────────
+// Chama a RPC get_oportunidades_por_membro uma vez por ministerio_id e monta
+// o mapa usado pelo motor S2. Em caso de erro, retorna undefined (fallback ao
+// comportamento anterior, sem bloquear a alocação).
+
+type SupabaseLike = {
+  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+};
+
+export async function buildOportunidadesMap(
+  supabase: SupabaseLike,
+  paroquia_id: string,
+  ministerio_ids: string[],
+  janela_semanas = 12,
+): Promise<Map<string, Map<string, OportunidadesMembro>> | undefined> {
+  const unicos = [...new Set(ministerio_ids)].filter(Boolean);
+  if (unicos.length === 0 || !paroquia_id) return undefined;
+
+  const resultado = new Map<string, Map<string, OportunidadesMembro>>();
+
+  try {
+    await Promise.all(
+      unicos.map(async (ministerio_id) => {
+        const { data, error } = await supabase.rpc("get_oportunidades_por_membro", {
+          p_paroquia_id:    paroquia_id,
+          p_ministerio_id:  ministerio_id,
+          p_janela_semanas: janela_semanas,
+        });
+        if (error || !Array.isArray(data)) return;
+
+        const slice = new Map<string, OportunidadesMembro>();
+        for (const row of data as Array<{ membro_id: string; oportunidades: number; escalas_recebidas: number }>) {
+          slice.set(row.membro_id, {
+            oportunidades:     Number(row.oportunidades),
+            escalas_recebidas: Number(row.escalas_recebidas),
+          });
+        }
+        resultado.set(ministerio_id, slice);
+      }),
+    );
+  } catch {
+    return undefined;
+  }
+
+  return resultado.size > 0 ? resultado : undefined;
 }

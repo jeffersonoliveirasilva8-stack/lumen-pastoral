@@ -359,8 +359,11 @@ describe("S2: equidade proporcional via oportunidadesMap", () => {
 
   const funcaoS2: FuncaoNecessaria = { ministerio_id: MIN_A, ministerio_nome: "S2Func", quantidade: 1 };
 
+  // makeMap: retorna Map<ministerio_id, Map<membro_id, OportunidadesMembro>>
+  // por convenção os testes usam funcaoS2.ministerio_id = MIN_A
   function makeMap(membros: Array<{ id: string; oportunidades: number; escalas_recebidas: number }>) {
-    return new Map(membros.map((m) => [m.id, { oportunidades: m.oportunidades, escalas_recebidas: m.escalas_recebidas }]));
+    const slice = new Map(membros.map((m) => [m.id, { oportunidades: m.oportunidades, escalas_recebidas: m.escalas_recebidas }]));
+    return new Map([[MIN_A, slice]]);
   }
 
   it("Membro com aproveitamento menor (mais necessitado) tem prioridade", () => {

@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
   generateEscalaWithAlertas,
+  buildOportunidadesMap,
   type AssignmentHistoryEntry,
   type EscalaAssignmentSuggestion,
   type FuncaoRestricao,
@@ -813,6 +814,12 @@ function EscalasPage() {
             (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: payload.data }))
           );
 
+          const oportunidadesMap = await buildOportunidadesMap(
+            supabase as any,
+            profile?.paroquia_id ?? "",
+            funcoesPedido.map((f) => f.ministerio_id),
+          ).catch(() => undefined);
+
           const resultado = generateEscalaWithAlertas(
             { titulo: payload.titulo, data: payload.data, tipo: payload.tipo, observacoes: payload.observacoes },
             funcoesPedido,
@@ -830,6 +837,7 @@ function EscalasPage() {
               modo_selecao: form.modo_selecao,
               ignorar_indisponibilidades: form.ignorar_indisponibilidades,
               data_corte_rodizio: dataCorteRodizio,
+              oportunidadesMap,
             }
           );
 
@@ -1552,6 +1560,12 @@ function EscalasPage() {
         (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
       );
 
+      const oportunidadesMap = await buildOportunidadesMap(
+        supabase as any,
+        profile?.paroquia_id ?? "",
+        funcoesPedido.map((f) => f.ministerio_id),
+      ).catch(() => undefined);
+
       const resultado = generateEscalaWithAlertas(
         { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
         funcoesPedido,
@@ -1570,6 +1584,7 @@ function EscalasPage() {
           modo_selecao: escala.modo_selecao ?? "equidade",
           ignorar_indisponibilidades: escala.ignorar_indisponibilidades ?? false,
           data_corte_rodizio: dataCorteRodizio,
+          oportunidadesMap,
         }
       );
 
@@ -5105,7 +5120,7 @@ function EscalaDetail({
     return membrosClassificadosParaMinisterio(ministerioId).disponiveis;
   }
 
-  function handleGenerateSuggestions() {
+  async function handleGenerateSuggestions() {
     if (funcoes.length === 0) {
       toast.error("Adicione funções à escala antes de gerar sugestões.");
       return;
@@ -5147,6 +5162,13 @@ function EscalaDetail({
       duplicidade_permitida: f.ministerio?.duplicidade_permitida,
       ordem_prioridade:     f.ministerio?.ordem_prioridade,
     }));
+
+    const oportunidadesMap = await buildOportunidadesMap(
+      supabase as any,
+      authProfile?.paroquia_id ?? "",
+      funcoesPedido.map((f) => f.ministerio_id),
+    ).catch(() => undefined);
+
     const resultado = generateEscalaWithAlertas(
       { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
       funcoesPedido,
@@ -5169,6 +5191,7 @@ function EscalaDetail({
         modo_selecao: escala.modo_selecao ?? "equidade",
         ignorar_indisponibilidades: escala.ignorar_indisponibilidades ?? false,
         data_corte_rodizio: dataCorteRodizio,
+        oportunidadesMap,
       }
     );
 
