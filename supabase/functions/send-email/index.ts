@@ -385,6 +385,45 @@ function tEscalaCancelada(nome: string, paroquia: string, escalaTitulo: string, 
   return baseLayout(paroquia, body, siteUrl);
 }
 
+function tEscalaAlterada(nome: string, paroquia: string, escalaTitulo: string, escalaData: string, escalaHora: string, ministerioNome: string, siteUrl: string): string {
+  const sn = htmlSafe(nome); const sp = htmlSafe(paroquia); const st = htmlSafe(escalaTitulo); const sm = htmlSafe(ministerioNome);
+  const MESES = ["janeiro","fevereiro","mar&ccedil;o","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  let dataFmt = escalaData; let diaSemana = "";
+  try {
+    const [y,mo,d] = escalaData.split("-").map(Number);
+    const dt = new Date(y, mo-1, d);
+    const DIAS = ["domingo","segunda-feira","ter&ccedil;a-feira","quarta-feira","quinta-feira","sexta-feira","s&aacute;bado"];
+    diaSemana = DIAS[dt.getDay()];
+    dataFmt = `${d} de ${MESES[mo-1]} de ${y}`;
+  } catch{/**/}
+  const horaFmt = escalaHora ? `, &agrave;s <strong>${htmlSafe(escalaHora)}</strong>` : "";
+  const portalUrl = `${siteUrl}/portal-membro/escalas`;
+  const body = `
+    <h1>Escala atualizada &#128338;</h1>
+    <p>Ol&aacute;, <strong>${sn}</strong>! A coordena&ccedil;&atilde;o da <span class="hi">${sp}</span> realizou altera&ccedil;&otilde;es em uma escala da qual voc&ecirc; faz parte.</p>
+    <div style="background:#f7f6f2;border-radius:10px;padding:20px 24px;margin:20px 0;">
+      <p style="margin:0 0 14px;font-size:13px;color:#888;text-transform:uppercase;letter-spacing:.08em;font-weight:600;">Informa&ccedil;&otilde;es atualizadas</p>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#888;font-size:13px;width:90px;">Celebra&ccedil;&atilde;o</td>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;font-weight:700;color:#111;font-size:15px;">${st}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#888;font-size:13px;">Data</td>
+          <td style="padding:7px 0;border-bottom:1px solid #eee;color:#333;font-size:14px;">${diaSemana ? diaSemana + ", " : ""}${dataFmt}${horaFmt}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;color:#888;font-size:13px;">Sua fun&ccedil;&atilde;o</td>
+          <td style="padding:7px 0;font-weight:700;color:#1a1a2e;font-size:15px;">${sm}</td>
+        </tr>
+      </table>
+    </div>
+    <p>Verifique os novos detalhes no portal antes da data da celebra&ccedil;&atilde;o:</p>
+    <div class="bw"><a href="${portalUrl}" class="btn">Ver minha escala &rarr;</a></div>
+    <p class="note">Se tiver d&uacute;vidas sobre a altera&ccedil;&atilde;o, entre em contato com a coordena&ccedil;&atilde;o da <span style="font-weight:600">${sp}</span>.</p>`;
+  return baseLayout(paroquia, body, siteUrl);
+}
+
 function tEscalaResumoPeriodo(
   nome: string,
   paroquia: string,
@@ -946,6 +985,11 @@ Deno.serve(async (req) => {
     } else if (template === "escala_publicada") {
       subject = `${paroquia} — Escala publicada: ${escalaTitulo}`;
       html    = tEscalaPublicada(nome, paroquia, escalaTitulo, escalaData, escalaHora, ministerioNome, siteUrl);
+
+    // ── Escala alterada (data/hora/local mudou) ──────────────────────────────
+    } else if (template === "escala_alterada") {
+      subject = `${paroquia} — Escala atualizada: ${escalaTitulo}`;
+      html    = tEscalaAlterada(nome, paroquia, escalaTitulo, escalaData, escalaHora, ministerioNome, siteUrl);
 
     // ── Substituições ────────────────────────────────────────────────────────
     } else if (template === "escala_cancelada") {
