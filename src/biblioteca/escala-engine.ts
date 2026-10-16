@@ -793,10 +793,11 @@ export function alocarMembros(
           }
         }
 
-        // Penalidade por restrição de dia da semana (modo comum): membro prefere não servir
-        // neste dia, mas fica em Pool1 para garantir ao menos uma escalação no período.
+        // Penalidade por restrição de dia da semana: membro prefere não servir neste dia,
+        // mas fica em Pool1 para garantir ao menos uma escalação no período.
         // 20 pts = cai abaixo de candidatos sem restrição, mas serve quando os demais já serviram.
-        if (!modoSolenePrincipal && m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data))) {
+        // Aplicado também em solenidades (funções principais): respeita a restrição declarada.
+        if (m.restricoes_dia_semana?.includes(getDiaSemana(contexto.data))) {
           breakdown.penalidade = (breakdown.penalidade ?? 0) + 20;
           breakdown.total = Math.max(0, breakdown.total - 20);
         }
