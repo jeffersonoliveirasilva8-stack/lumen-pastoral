@@ -224,8 +224,33 @@ async function sendOne(
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
+// Resposta padrão para chamadas não autorizadas — idêntica ao 400 para não
+// revelar se o endpoint existe ou qual campo está faltando.
+const FORBIDDEN = new Response(JSON.stringify({ error: "forbidden" }), {
+  status: 403, headers: { ...CORS, "Content-Type": "application/json" },
+});
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+
+  // ── Autenticação interna ──────────────────────────────────────────────────
+  // Rejeita chamadas com anon key ou sem x-push-secret válido.
+  // INTERNAL_PUSH_SECRET é configurado via: supabase secrets set INTERNAL_PUSH_SECRET=...
+  // O valor deve corresponder ao registrado em public._push_config.
+  const internalSecret = Deno.env.get("INTERNAL_PUSH_SECRET") ?? "";
+  if (!internalSecret) {
+    // Secret não configurado → falha fechado (não processa nada)
+    return FORBIDDEN;
+  }
+  const callerSecret = req.headers.get("x-push-secret") ?? "";
+  // Comparação em tempo constante para evitar timing attacks
+  const secretBytes   = new TextEncoder().encode(internalSecret);
+  const callerBytes   = new TextEncoder().encode(callerSecret);
+  if (secretBytes.length !== callerBytes.length) return FORBIDDEN;
+  let diff = 0;
+  for (let i = 0; i < secretBytes.length; i++) diff |= secretBytes[i] ^ callerBytes[i];
+  if (diff !== 0) return FORBIDDEN;
+  // ─────────────────────────────────────────────────────────────────────────
 
   try {
     const vapidPub  = Deno.env.get("VAPID_PUBLIC_KEY")  ?? "";
