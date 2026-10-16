@@ -520,6 +520,32 @@ Deno.serve(async (req) => {
       if (i < candidatos.length - 1) await sleep(DELAY_MS);
     }
 
+    // Push em lote para candidatos elegíveis (fire-and-forget)
+    try {
+      const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const { data: cfg } = await (admin as any).from("_push_config").select("val").eq("key", "internal_push_secret").single();
+      const pushSecret = cfg?.val ?? null;
+      if (pushSecret && candidatos.length > 0) {
+        // Busca auth_user_ids dos candidatos via membros.id
+        const memIds = candidatos.map((c) => c.id);
+        const { data: memRows } = await (admin as any).from("membros").select("auth_user_id").in("id", memIds).not("auth_user_id", "is", null);
+        const userIds: string[] = [...new Set<string>((memRows ?? []).map((r: { auth_user_id: string }) => r.auth_user_id))];
+        if (userIds.length > 0) {
+          await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}`, "x-push-secret": pushSecret },
+            body: JSON.stringify({
+              user_ids: userIds,
+              title:    `Vaga disponível: ${ministerioNome}`,
+              body:     `${escalaTitulo} — ${escalaData}`,
+              url:      "/portal-membro/substituicoes",
+            }),
+          });
+        }
+      }
+    } catch { /* push nunca interrompe o fluxo principal */ }
+
     return json({ ok: true, enviados, total: candidatos.length, erros: erros.length > 0 ? erros : undefined });
 
   } catch (err) {

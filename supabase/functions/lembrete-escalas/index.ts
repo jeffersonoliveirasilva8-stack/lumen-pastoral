@@ -88,6 +88,14 @@ Deno.serve(async (req) => {
     let enviados = 0;
     const erros: string[] = [];
 
+    // Lê push secret (falha silenciosa)
+    let eventoPushSecret: string | null = null;
+    try {
+      const { data: cfg } = await admin.from("_push_config").select("val").eq("key", "internal_push_secret").single();
+      eventoPushSecret = cfg?.val ?? null;
+    } catch { /**/ }
+
+    const eventoUserIds: string[] = [];
     const presencasList = (presencas ?? []).slice(fromIndex);
     for (let i = 0; i < presencasList.length; i++) {
       const p = presencasList[i] as any;
@@ -113,6 +121,31 @@ Deno.serve(async (req) => {
       } catch (err: any) {
         erros.push(`${membro.email}: ${err.message}`);
       }
+      // Acumula para push (precisa de auth_user_id — busca do membro)
+      if (eventoPushSecret && membro.id) {
+        try {
+          const { data: memRow } = await admin.from("membros").select("auth_user_id").eq("id", membro.id).single();
+          if (memRow?.auth_user_id && !eventoUserIds.includes(memRow.auth_user_id)) {
+            eventoUserIds.push(memRow.auth_user_id);
+          }
+        } catch { /**/ }
+      }
+    }
+
+    // Push em lote para o evento
+    if (eventoPushSecret && eventoUserIds.length > 0) {
+      try {
+        await fetch(sendPushUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${anonKey}`, "x-push-secret": eventoPushSecret },
+          body: JSON.stringify({
+            user_ids: eventoUserIds,
+            title:    `Lembrete: ${(evento as any).titulo}`,
+            body:     `${escalaData}${escalaHora ? " às " + escalaHora : ""}`,
+            url:      "/portal-membro/home",
+          }),
+        });
+      } catch { /**/ }
     }
 
     return json({ ok: true, mode: "evento", evento: (evento as any).titulo, enviados, erros_count: erros.length, erros });
