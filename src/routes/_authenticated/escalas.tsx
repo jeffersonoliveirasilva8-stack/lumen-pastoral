@@ -2209,7 +2209,7 @@ function EscalasPage() {
 
       {/* Barra de mudanças pendentes de membros */}
       {hasPendingMemberChanges && (
-        <div className="fixed floating-bar-bottom right-4 z-50 flex items-center gap-2 rounded-2xl border border-amber-400/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5">
+        <div className="fixed floating-bar-bottom left-4 right-4 z-50 flex items-center gap-2 rounded-2xl border border-amber-400/60 bg-card/95 backdrop-blur-md shadow-2xl px-4 py-2.5 max-w-sm mx-auto sm:left-auto sm:right-4 sm:max-w-none sm:mx-0">
           <span className="text-sm font-semibold text-amber-600 whitespace-nowrap">
             {pendingAdds.length + pendingRemoves.length} mudança(s) pendente(s)
           </span>
