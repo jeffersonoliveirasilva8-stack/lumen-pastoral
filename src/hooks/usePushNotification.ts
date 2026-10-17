@@ -8,8 +8,10 @@ import { toast } from "sonner";
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  // Remove aspas, espaços e newlines que podem vir da variável de ambiente
+  const clean = base64String.replace(/['"]/g, "").trim();
+  const padding = "=".repeat((4 - (clean.length % 4)) % 4);
+  const base64 = (clean + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
   return Uint8Array.from({ length: raw.length }, (_, i) => raw.charCodeAt(i));
 }
@@ -56,6 +58,11 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
       console.warn("VITE_VAPID_PUBLIC_KEY não configurado");
       return false;
     }
+    const vapidKey = VAPID_PUBLIC_KEY?.replace(/['"]/g, "").trim();
+    if (!vapidKey || vapidKey === "undefined") {
+      toast.error("Notificações não configuradas", { description: "VITE_VAPID_PUBLIC_KEY ausente no build." });
+      return false;
+    }
     setStatus("loading");
     try {
       const perm = await Notification.requestPermission();
@@ -64,7 +71,7 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as unknown as ArrayBuffer,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as unknown as ArrayBuffer,
       });
 
       const keys = sub.toJSON().keys as { p256dh: string; auth: string };
