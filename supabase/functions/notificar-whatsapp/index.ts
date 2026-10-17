@@ -120,6 +120,32 @@ Deno.serve(async (req) => {
     const { evento, dados = {}, paroquia_id } = body;
     if (!evento) return json({ ok: false, error: "Missing field: evento" }, 400);
 
+    // Evento especial: push de teste para um usuário específico (sem WhatsApp)
+    if (evento === "teste_push" && dados.user_id && paroquia_id) {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+        const { data: cfg } = await admin.from("_push_config").select("val").eq("key", "internal_push_secret").single();
+        if (cfg?.val) {
+          await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
+              "x-push-secret": cfg.val,
+            },
+            body: JSON.stringify({
+              user_ids: [dados.user_id],
+              title: "🔔 Notificações ativas!",
+              body: "Lumen Pastoral está enviando alertas para este dispositivo.",
+              url: "/painel",
+            }),
+          });
+        }
+      } catch { /* fire-and-forget */ }
+      return json({ ok: true, evento });
+    }
+
     const message = buildMessage(evento, dados);
     const ok = await sendWhatsApp(phone, apikey, message);
 

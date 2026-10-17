@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { toast } from "sonner";
 
 // VAPID public key — deve corresponder ao secret VAPID_PUBLIC_KEY configurado
 // na Edge Function. Substitua após gerar as chaves.
@@ -77,20 +78,21 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
 
       if (error) throw error;
       setStatus("granted");
-      // Notificação de boas-vindas após 2 s (fire-and-forget)
+      // Push de boas-vindas via notificar-whatsapp (que tem acesso ao send-push)
       setTimeout(() => {
-        (supabase as any).functions.invoke("send-push", {
+        (supabase as any).functions.invoke("notificar-whatsapp", {
           body: {
-            user_ids: [user.id],
-            title: "✅ Notificações ativadas!",
-            body: "Você receberá alertas de escalas e substituições aqui.",
-            url: "/painel",
+            evento: "teste_push",
+            paroquia_id: paroquiaId,
+            dados: { user_id: user.id },
           },
         }).catch(() => {});
       }, 2000);
       return true;
     } catch (err) {
       console.error("[push] subscribe error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error("Falha ao ativar notificações", { description: msg });
       setStatus("error");
       return false;
     }
@@ -113,16 +115,17 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
   }, [isSupported]);
 
   const sendTestPush = useCallback(async (): Promise<void> => {
-    if (!user) return;
-    await (supabase as any).functions.invoke("send-push", {
+    if (!user || !paroquiaId) return;
+    const { error } = await (supabase as any).functions.invoke("notificar-whatsapp", {
       body: {
-        user_ids: [user.id],
-        title: "🔔 Teste de notificação",
-        body: "Lumen Pastoral está funcionando corretamente neste dispositivo.",
-        url: "/painel",
+        evento: "teste_push",
+        paroquia_id: paroquiaId,
+        dados: { user_id: user.id },
       },
-    }).catch(() => {});
-  }, [user]);
+    });
+    if (error) toast.error("Erro ao enviar notificação de teste");
+    else toast.success("Notificação enviada!", { description: "Verifique seu celular em instantes." });
+  }, [user, paroquiaId]);
 
   return { status, isSupported: isSupported(), subscribe, unsubscribe, sendTestPush };
 }
