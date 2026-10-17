@@ -16,7 +16,7 @@ export function PWABanners({ paroquiaId }: Props) {
   const [pushDismissed, setPushDismissed] = useState(false);
 
   // Mostra opt-in de push somente se: suportado, não inscrito, não negado, não dispensado
-  const showPush = isSupported && status === "idle" && !pushDismissed && !!paroquiaId;
+  const showPush = isSupported && (status === "idle" || status === "error") && !pushDismissed && !!paroquiaId;
 
   if (!canInstall && !hasUpdate && !showPush) return null;
 
@@ -51,10 +51,12 @@ export function PWABanners({ paroquiaId }: Props) {
       {showPush && (
         <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-border bg-card/95 backdrop-blur-sm shadow-lg px-3 py-2 text-sm">
           <Bell className="h-4 w-4 shrink-0 text-primary" />
-          <span className="flex-1 text-foreground">Ativar notificações de escalas</span>
+          <span className="flex-1 text-foreground">
+            {status === "error" ? "Erro ao ativar notificações — tentar novamente" : "Ativar notificações de escalas"}
+          </span>
           <Button
             size="sm" variant="outline" className="h-7 text-xs"
-            disabled={status === "loading"}
+            disabled={status === "loading" as string}
             onClick={subscribe}
           >
             Ativar

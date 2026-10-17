@@ -18,7 +18,8 @@ export type PushStatus =
   | "denied"        // usuário bloqueou
   | "granted"       // inscrito
   | "idle"          // suportado, não solicitado ainda
-  | "loading";
+  | "loading"
+  | "error";        // falha ao inscrever (VAPID ausente, RPC erro, etc.)
 
 export function usePushNotification(paroquiaId: string | null | undefined) {
   const { user } = useAuth();
@@ -62,7 +63,7 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as unknown as ArrayBuffer,
       });
 
       const keys = sub.toJSON().keys as { p256dh: string; auth: string };
@@ -77,8 +78,9 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
       if (error) throw error;
       setStatus("granted");
       return true;
-    } catch {
-      setStatus("idle");
+    } catch (err) {
+      console.error("[push] subscribe error:", err);
+      setStatus("error");
       return false;
     }
   }, [isSupported, user, paroquiaId]);

@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Loader2, User, Save, Star, Calendar, Phone, Shield, Camera } from "lucide-react";
+import { Loader2, User, Save, Star, Calendar, Phone, Shield, Camera, Bell, BellOff, CheckCircle2 } from "lucide-react";
+import { usePushNotification } from "@/hooks/usePushNotification";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -19,6 +20,56 @@ import { MfaSetup } from "@/components/security/MfaSetup";
 const anyDb = supabase as any;
 
 const FOTO_BUCKET = "membros-fotos";
+
+function MembroPushSection({ paroquiaId }: { paroquiaId: string | null | undefined }) {
+  const { status, isSupported, subscribe, unsubscribe } = usePushNotification(paroquiaId);
+  const isIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isStandalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+
+  let statusLabel = "Não ativadas";
+  let statusColor = "text-muted-foreground";
+  if (status === "granted")    { statusLabel = "Ativadas neste dispositivo"; statusColor = "text-emerald-600"; }
+  else if (status === "denied") { statusLabel = "Bloqueadas — libere nas configurações do browser"; statusColor = "text-destructive"; }
+  else if (status === "unsupported" && isIOS && !isStandalone) { statusLabel = "Instale o app na Tela de Início para ativar"; statusColor = "text-amber-600"; }
+  else if (status === "error")  { statusLabel = "Erro ao ativar — tente novamente"; statusColor = "text-destructive"; }
+
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-card p-4 space-y-3">
+      <p className="text-xs font-semibold flex items-center gap-1.5">
+        <Bell className="h-3.5 w-3.5 text-muted-foreground" /> Notificações
+      </p>
+      <div className="flex items-center gap-2">
+        {status === "granted"
+          ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+          : <BellOff className="h-4 w-4 text-muted-foreground shrink-0" />}
+        <span className={`text-xs ${statusColor}`}>{statusLabel}</span>
+      </div>
+      {status === "unsupported" && isIOS && !isStandalone && (
+        <p className="text-xs text-muted-foreground leading-relaxed bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800">
+          No iPhone/iPad: toque em <strong>Compartilhar</strong> → <strong>Adicionar à Tela de Início</strong>, abra o app instalado e volte aqui.
+        </p>
+      )}
+      {status === "granted" ? (
+        <Button
+          variant="outline" size="sm"
+          className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
+          onClick={unsubscribe}
+        >
+          <BellOff className="h-3.5 w-3.5" /> Desativar notificações
+        </Button>
+      ) : (
+        <Button
+          size="sm" className="w-full"
+          disabled={!isSupported || status === "loading" || status === "denied"}
+          onClick={subscribe}
+        >
+          {status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+          {status === "error" ? "Tentar novamente" : "Ativar notificações"}
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/portal-membro/perfil")({
   component: PortalMembroPerfil,
@@ -467,8 +518,11 @@ function PortalMembroPerfil() {
         </Button>
       </form>
 
+      {/* ── Notificações push ── */}
+      <MembroPushSection paroquiaId={membro?.paroquia_id} />
+
       {/* ── Segurança ── */}
-      <div className="mt-8">
+      <div className="mt-4">
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
           <p className="text-xs font-semibold flex items-center gap-1.5">
             <Shield className="h-3.5 w-3.5 text-muted-foreground" /> Segurança

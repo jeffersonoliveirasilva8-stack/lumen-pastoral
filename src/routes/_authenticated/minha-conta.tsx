@@ -3,8 +3,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Loader2, Phone, User, Save, ShieldCheck, Shield,
-  LogOut, Calendar, Mail, Building2, KeyRound, CheckCircle2,
+  LogOut, Calendar, Mail, Building2, KeyRound, CheckCircle2, Bell, BellOff,
 } from "lucide-react";
+import { usePushNotification } from "@/hooks/usePushNotification";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { MfaSetup } from "@/components/security/MfaSetup";
@@ -67,6 +68,71 @@ function avatarColor(name: string) {
 
 function initials(name: string) {
   return name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+}
+
+function PushSection({ paroquiaId }: { paroquiaId: string | null | undefined }) {
+  const { status, isSupported, subscribe, unsubscribe } = usePushNotification(paroquiaId);
+
+  const isIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isStandalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
+
+  let statusLabel = "";
+  let statusColor = "text-muted-foreground";
+  if (status === "granted")    { statusLabel = "Ativadas neste dispositivo"; statusColor = "text-emerald-600"; }
+  else if (status === "denied") { statusLabel = "Bloqueadas — libere nas configurações do browser"; statusColor = "text-destructive"; }
+  else if (status === "unsupported" && isIOS && !isStandalone) { statusLabel = "Instale o app na Tela de Início para ativar"; statusColor = "text-amber-600"; }
+  else if (status === "unsupported") { statusLabel = "Não suportado neste browser"; statusColor = "text-muted-foreground"; }
+  else if (status === "error")  { statusLabel = "Erro ao ativar — tente novamente"; statusColor = "text-destructive"; }
+  else                          { statusLabel = "Não ativadas"; statusColor = "text-muted-foreground"; }
+
+  return (
+    <section className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-border/60">
+        <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+          <Bell className="h-4 w-4 text-blue-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-semibold">Notificações push</h2>
+          <p className="text-xs text-muted-foreground">Receba alertas de escalas e substituições no celular</p>
+        </div>
+      </div>
+      <div className="p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          {status === "granted"
+            ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+            : <BellOff className="h-4 w-4 text-muted-foreground shrink-0" />}
+          <span className={`text-xs ${statusColor}`}>{statusLabel}</span>
+        </div>
+
+        {status === "unsupported" && isIOS && !isStandalone && (
+          <p className="text-xs text-muted-foreground leading-relaxed bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800">
+            No iPhone/iPad: toque em <strong>Compartilhar</strong> → <strong>Adicionar à Tela de Início</strong>, abra o app instalado e volte aqui.
+          </p>
+        )}
+
+        {status === "granted" ? (
+          <Button
+            variant="outline"
+            className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
+            disabled={status === ("loading" as string)}
+            onClick={unsubscribe}
+          >
+            <BellOff className="h-4 w-4" />
+            Desativar notificações neste dispositivo
+          </Button>
+        ) : (
+          <Button
+            className="w-full"
+            disabled={!isSupported || status === "loading" || status === "denied" || status === ("loading" as string)}
+            onClick={subscribe}
+          >
+            {status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+            {status === "error" ? "Tentar novamente" : "Ativar notificações neste dispositivo"}
+          </Button>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function MinhaConta() {
@@ -287,6 +353,9 @@ function MinhaConta() {
           </div>
         </section>
       )}
+
+      {/* ── Notificações push ───────────────────────────────────────── */}
+      <PushSection paroquiaId={profile.paroquia_id} />
 
       {/* ── Sair da conta ───────────────────────────────────────────── */}
       <section className="rounded-2xl border border-border bg-card overflow-hidden">
