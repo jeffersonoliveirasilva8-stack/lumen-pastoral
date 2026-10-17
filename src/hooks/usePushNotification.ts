@@ -98,7 +98,10 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
       return true;
     } catch (err) {
       console.error("[push] subscribe error:", err);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg =
+        err instanceof Error
+          ? err.message
+          : (err as any)?.message ?? JSON.stringify(err);
       toast.error("Falha ao ativar notificações", { description: msg });
       setStatus("error");
       return false;
