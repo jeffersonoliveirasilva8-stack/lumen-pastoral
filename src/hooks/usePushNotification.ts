@@ -77,6 +77,17 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
 
       if (error) throw error;
       setStatus("granted");
+      // Notificação de boas-vindas após 2 s (fire-and-forget)
+      setTimeout(() => {
+        (supabase as any).functions.invoke("send-push", {
+          body: {
+            user_ids: [user.id],
+            title: "✅ Notificações ativadas!",
+            body: "Você receberá alertas de escalas e substituições aqui.",
+            url: "/painel",
+          },
+        }).catch(() => {});
+      }, 2000);
       return true;
     } catch (err) {
       console.error("[push] subscribe error:", err);
@@ -101,5 +112,17 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
     }
   }, [isSupported]);
 
-  return { status, isSupported: isSupported(), subscribe, unsubscribe };
+  const sendTestPush = useCallback(async (): Promise<void> => {
+    if (!user) return;
+    await (supabase as any).functions.invoke("send-push", {
+      body: {
+        user_ids: [user.id],
+        title: "🔔 Teste de notificação",
+        body: "Lumen Pastoral está funcionando corretamente neste dispositivo.",
+        url: "/painel",
+      },
+    }).catch(() => {});
+  }, [user]);
+
+  return { status, isSupported: isSupported(), subscribe, unsubscribe, sendTestPush };
 }

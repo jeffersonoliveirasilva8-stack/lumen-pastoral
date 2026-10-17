@@ -22,7 +22,8 @@ const anyDb = supabase as any;
 const FOTO_BUCKET = "membros-fotos";
 
 function MembroPushSection({ paroquiaId }: { paroquiaId: string | null | undefined }) {
-  const { status, isSupported, subscribe, unsubscribe } = usePushNotification(paroquiaId);
+  const { status, isSupported, subscribe, unsubscribe, sendTestPush } = usePushNotification(paroquiaId);
+  const [testingSend, setTestingSend] = useState(false);
   const isIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent);
   const isStandalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
 
@@ -50,13 +51,27 @@ function MembroPushSection({ paroquiaId }: { paroquiaId: string | null | undefin
         </p>
       )}
       {status === "granted" ? (
-        <Button
-          variant="outline" size="sm"
-          className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
-          onClick={unsubscribe}
-        >
-          <BellOff className="h-3.5 w-3.5" /> Desativar notificações
-        </Button>
+        <div className="space-y-2">
+          <Button
+            size="sm" variant="outline" className="w-full"
+            disabled={testingSend}
+            onClick={async () => {
+              setTestingSend(true);
+              await sendTestPush();
+              setTestingSend(false);
+            }}
+          >
+            {testingSend ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+            Enviar notificação de teste
+          </Button>
+          <Button
+            size="sm" variant="outline"
+            className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
+            onClick={unsubscribe}
+          >
+            <BellOff className="h-3.5 w-3.5" /> Desativar notificações
+          </Button>
+        </div>
       ) : (
         <Button
           size="sm" className="w-full"

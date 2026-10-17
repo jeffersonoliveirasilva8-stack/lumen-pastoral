@@ -71,7 +71,8 @@ function initials(name: string) {
 }
 
 function PushSection({ paroquiaId }: { paroquiaId: string | null | undefined }) {
-  const { status, isSupported, subscribe, unsubscribe } = usePushNotification(paroquiaId);
+  const { status, isSupported, subscribe, unsubscribe, sendTestPush } = usePushNotification(paroquiaId);
+  const [testingSend, setTestingSend] = useState(false);
 
   const isIOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent);
   const isStandalone = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
@@ -111,19 +112,32 @@ function PushSection({ paroquiaId }: { paroquiaId: string | null | undefined }) 
         )}
 
         {status === "granted" ? (
-          <Button
-            variant="outline"
-            className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
-            disabled={status === ("loading" as string)}
-            onClick={unsubscribe}
-          >
-            <BellOff className="h-4 w-4" />
-            Desativar notificações neste dispositivo
-          </Button>
+          <div className="space-y-2">
+            <Button
+              variant="outline" className="w-full"
+              disabled={testingSend}
+              onClick={async () => {
+                setTestingSend(true);
+                await sendTestPush();
+                setTestingSend(false);
+              }}
+            >
+              {testingSend ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+              Enviar notificação de teste
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
+              onClick={unsubscribe}
+            >
+              <BellOff className="h-4 w-4" />
+              Desativar notificações neste dispositivo
+            </Button>
+          </div>
         ) : (
           <Button
             className="w-full"
-            disabled={!isSupported || status === "loading" || status === "denied" || status === ("loading" as string)}
+            disabled={!isSupported || status === "loading" || status === "denied"}
             onClick={subscribe}
           >
             {status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
