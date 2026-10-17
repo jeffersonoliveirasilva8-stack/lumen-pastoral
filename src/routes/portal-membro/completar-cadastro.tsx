@@ -243,6 +243,21 @@ function CompletarCadastroPage() {
       qc.invalidateQueries({ queryKey: ["completar-extra"] });
       qc.invalidateQueries({ queryKey: ["completar-atuacoes"] });
 
+      // Notifica coordenação (WhatsApp + push) — fire-and-forget
+      if (membro?.paroquia_id) {
+        anyDb.functions.invoke("notificar-whatsapp", {
+          body: {
+            evento: "membro_pendente",
+            paroquia_id: membro.paroquia_id,
+            dados: {
+              nome:     membro.nome    ?? "",
+              email:    membro.email   ?? "",
+              paroquia: membro.paroquia_id,
+            },
+          },
+        }).catch(() => {});
+      }
+
       toast.success("Cadastro completado! Bem-vindo ao portal.");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       navigate({ to: "/portal-membro/home" } as any);

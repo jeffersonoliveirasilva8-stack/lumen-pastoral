@@ -484,6 +484,7 @@ function PortalMembroEscalas() {
           anyDb.functions.invoke("notificar-whatsapp", {
             body: {
               evento: "recusa_escala",
+              paroquia_id: membro?.paroquia_id ?? "",
               dados: {
                 escala: args.escala?.titulo ?? "",
                 ministerio: args.ministerioNome ?? "",

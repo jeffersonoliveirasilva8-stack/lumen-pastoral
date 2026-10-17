@@ -116,12 +116,67 @@ Deno.serve(async (req) => {
       if (error || !user) return json({ ok: false, error: "Unauthorized" }, 401);
     }
 
-    const body = await req.json() as { evento: string; dados?: Record<string, string> };
-    const { evento, dados = {} } = body;
+    const body = await req.json() as { evento: string; dados?: Record<string, string>; paroquia_id?: string };
+    const { evento, dados = {}, paroquia_id } = body;
     if (!evento) return json({ ok: false, error: "Missing field: evento" }, 400);
 
     const message = buildMessage(evento, dados);
     const ok = await sendWhatsApp(phone, apikey, message);
+
+    // Push para coordenação — apenas para eventos sem push via trigger do banco
+    // (nova_substituicao e novo_voluntario já têm push na migration 161)
+    const EVENTOS_COM_PUSH = ["recusa_escala", "membro_pendente"];
+    if (EVENTOS_COM_PUSH.includes(evento) && paroquia_id) {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const admin = createClient(supabaseUrl, serviceKey);
+
+        // Busca auth_user_id de todos os coordenadores/admins da paróquia
+        const { data: coords } = await admin
+          .from("membros")
+          .select("auth_user_id")
+          .eq("paroquia_id", paroquia_id)
+          .in("tipo_acesso", ["coordenador", "administrador", "vice"])
+          .eq("ativo", true)
+          .not("auth_user_id", "is", null);
+
+        const userIds = (coords ?? [])
+          .map((c: { auth_user_id: string }) => c.auth_user_id)
+          .filter(Boolean);
+
+        if (userIds.length > 0) {
+          const { data: cfg } = await admin
+            .from("_push_config")
+            .select("val")
+            .eq("key", "internal_push_secret")
+            .single();
+
+          const pushSecret = cfg?.val;
+          if (pushSecret) {
+            const pushTitle = evento === "recusa_escala"
+              ? `🚫 ${dados.membro ?? "Membro"} recusou a escala`
+              : `👥 Novo membro aguardando aprovação`;
+            const pushBody = evento === "recusa_escala"
+              ? `${dados.escala ?? ""} · ${dados.ministerio ?? ""}`
+              : `${dados.nome ?? ""} · ${dados.paroquia ?? ""}`;
+            const pushUrl = evento === "recusa_escala" ? "/substituicoes" : "/membros";
+
+            await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+              method: "POST",
+              headers: {
+                "Content-Type":  "application/json",
+                "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") ?? ""}`,
+                "x-push-secret": pushSecret,
+              },
+              body: JSON.stringify({ user_ids: userIds, title: pushTitle, body: pushBody, url: pushUrl }),
+            });
+          }
+        }
+      } catch {
+        // push é fire-and-forget — falha não bloqueia WhatsApp
+      }
+    }
 
     return json({ ok, evento, message });
 
