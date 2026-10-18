@@ -69,6 +69,9 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
       if (perm !== "granted") { setStatus(perm === "denied" ? "denied" : "idle"); return false; }
 
       const reg = await navigator.serviceWorker.ready;
+      // Remove inscrição anterior (chave VAPID pode ter mudado)
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) await existing.unsubscribe().catch(() => {});
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey) as unknown as ArrayBuffer,
