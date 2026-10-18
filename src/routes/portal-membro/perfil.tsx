@@ -57,8 +57,7 @@ function MembroPushSection({ paroquiaId }: { paroquiaId: string | null | undefin
             disabled={testingSend}
             onClick={async () => {
               setTestingSend(true);
-              await sendTestPush();
-              setTestingSend(false);
+              try { await sendTestPush(); } finally { setTestingSend(false); }
             }}
           >
             {testingSend ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}

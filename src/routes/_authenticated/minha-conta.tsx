@@ -118,8 +118,7 @@ function PushSection({ paroquiaId }: { paroquiaId: string | null | undefined }) 
               disabled={testingSend}
               onClick={async () => {
                 setTestingSend(true);
-                await sendTestPush();
-                setTestingSend(false);
+                try { await sendTestPush(); } finally { setTestingSend(false); }
               }}
             >
               {testingSend ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}

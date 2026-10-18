@@ -129,20 +129,28 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
 
   const sendTestPush = useCallback(async (): Promise<void> => {
     if (!user || !paroquiaId) return;
-    const { error } = await (supabase as any).functions.invoke("notificar-whatsapp", {
-      body: {
-        evento: "teste_push",
-        paroquia_id: paroquiaId,
-        dados: { user_id: user.id },
-      },
-    });
-    if (error) toast.error("Erro ao enviar notificação de teste", { description: JSON.stringify(error) });
-    else {
-      const p = (data as any)?.push;
-      const detail = p
-        ? `sent:${p.sent ?? "?"} failed:${p.failed ?? "?"} removed:${p.removed ?? "?"}`
-        : JSON.stringify(data);
-      toast.success("send-push →", { description: detail, duration: 10000 });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Tempo esgotado (20s)")), 20000)
+    );
+    try {
+      const result = await Promise.race([
+        (supabase as any).functions.invoke("notificar-whatsapp", {
+          body: { evento: "teste_push", paroquia_id: paroquiaId, dados: { user_id: user.id } },
+        }),
+        timeoutPromise,
+      ]) as { data: unknown; error: unknown };
+      const { data, error } = result;
+      if (error) {
+        toast.error("Erro ao enviar notificação de teste", { description: JSON.stringify(error) });
+      } else {
+        const p = (data as any)?.push;
+        const detail = p
+          ? `sent:${p.sent ?? "?"} failed:${p.failed ?? "?"} removed:${p.removed ?? "?"}`
+          : JSON.stringify(data);
+        toast.success("send-push →", { description: detail, duration: 10000 });
+      }
+    } catch (e) {
+      toast.error("Erro ao enviar teste", { description: e instanceof Error ? e.message : String(e) });
     }
   }, [user, paroquiaId]);
 
