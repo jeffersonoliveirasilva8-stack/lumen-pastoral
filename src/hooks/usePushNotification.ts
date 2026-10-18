@@ -143,11 +143,7 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
       if (error) {
         toast.error("Erro ao enviar notificação de teste", { description: JSON.stringify(error) });
       } else {
-        const p = (data as any)?.push;
-        const detail = (typeof p?.sent === "number")
-          ? `sent:${p.sent} failed:${p.failed} removed:${p.removed}`
-          : JSON.stringify(data).slice(0, 200);
-        toast.success("send-push →", { description: detail, duration: 15000 });
+        toast.success("Notificação enviada!", { description: "Verifique seu celular em instantes." });
       }
     } catch (e) {
       toast.error("Erro ao enviar teste", { description: e instanceof Error ? e.message : String(e) });

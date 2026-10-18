@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
         const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
         const { data: cfg } = await admin.from("_push_config").select("val").eq("key", "internal_push_secret").single();
         if (cfg?.val) {
-          const pushRes = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+          fetch(`${supabaseUrl}/functions/v1/send-push`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -135,12 +135,10 @@ Deno.serve(async (req) => {
               body: "Lumen Pastoral está enviando alertas para este dispositivo.",
               url: "/painel",
             }),
-          });
-          const pushData = await pushRes.json().catch(() => ({ status: pushRes.status }));
-          return json({ ok: true, evento, push: pushData, push_status: pushRes.status });
+          }).catch(() => {});
         }
-        return json({ ok: false, evento, push: "cfg.val ausente" });
-      } catch (e) { return json({ ok: false, evento, push_error: String(e) }); }
+      } catch { /* fire-and-forget */ }
+      return json({ ok: true, evento });
     }
 
     const phone  = Deno.env.get("CALLMEBOT_PHONE");
