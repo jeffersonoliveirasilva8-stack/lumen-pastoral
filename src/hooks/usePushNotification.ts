@@ -133,8 +133,14 @@ export function usePushNotification(paroquiaId: string | null | undefined) {
         dados: { user_id: user.id },
       },
     });
-    if (error) toast.error("Erro ao enviar notificação de teste");
-    else toast.success("Notificação enviada!", { description: "Verifique seu celular em instantes." });
+    if (error) toast.error("Erro ao enviar notificação de teste", { description: JSON.stringify(error) });
+    else {
+      const p = (data as any)?.push;
+      const detail = p
+        ? `sent:${p.sent ?? "?"} failed:${p.failed ?? "?"} removed:${p.removed ?? "?"}`
+        : JSON.stringify(data);
+      toast.success("send-push →", { description: detail, duration: 10000 });
+    }
   }, [user, paroquiaId]);
 
   return { status, isSupported: isSupported(), subscribe, unsubscribe, sendTestPush };

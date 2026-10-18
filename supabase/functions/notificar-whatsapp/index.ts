@@ -95,11 +95,6 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify(d), { status: s, headers: { ...CORS, "Content-Type": "application/json" } });
 
   try {
-    const phone  = Deno.env.get("CALLMEBOT_PHONE");
-    const apikey = Deno.env.get("CALLMEBOT_APIKEY");
-
-    if (!phone || !apikey) return json({ ok: false, error: "CallMeBot not configured" }, 503);
-
     // Aceita chamadas autenticadas (JWT) OU internas (service role via pg_net)
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader) return json({ ok: false, error: "Unauthorized" }, 401);
@@ -127,7 +122,7 @@ Deno.serve(async (req) => {
         const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
         const { data: cfg } = await admin.from("_push_config").select("val").eq("key", "internal_push_secret").single();
         if (cfg?.val) {
-          await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+          const pushRes = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -141,10 +136,16 @@ Deno.serve(async (req) => {
               url: "/painel",
             }),
           });
+          const pushData = await pushRes.json().catch(() => ({ status: pushRes.status }));
+          return json({ ok: true, evento, push: pushData, push_status: pushRes.status });
         }
-      } catch { /* fire-and-forget */ }
-      return json({ ok: true, evento });
+        return json({ ok: false, evento, push: "cfg.val ausente" });
+      } catch (e) { return json({ ok: false, evento, push_error: String(e) }); }
     }
+
+    const phone  = Deno.env.get("CALLMEBOT_PHONE");
+    const apikey = Deno.env.get("CALLMEBOT_APIKEY");
+    if (!phone || !apikey) return json({ ok: false, error: "CallMeBot not configured" }, 503);
 
     const message = buildMessage(evento, dados);
     const ok = await sendWhatsApp(phone, apikey, message);
