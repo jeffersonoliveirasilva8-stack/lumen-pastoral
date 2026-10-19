@@ -74,7 +74,7 @@ export const CATALOGO: readonly CatalogoEntrada[] = [
     descricao:         "Substituição aprovada — notifica o membro que assumiu a vaga",
     fonte_tabela:      "substituicoes",
     fonte_operacao:    "UPDATE",
-    condicao_disparo:  "status: 'pendente' → 'aprovada'",
+    condicao_disparo:  "status: 'com_voluntario' → 'aprovada' (via coord_aprovar_substituicao)",
     destinatarios:     "Membro substituto (substituicoes.substituto_id)",
     evento_ref_tabela: "substituicoes",
     contexto_campos:   ["membros.nome", "escalas.data", "ministerios.nome", "paroquias.nome"],
@@ -86,10 +86,10 @@ export const CATALOGO: readonly CatalogoEntrada[] = [
     descricao:         "Substituição recusada — notifica o membro que solicitou",
     fonte_tabela:      "substituicoes",
     fonte_operacao:    "UPDATE",
-    condicao_disparo:  "status: 'pendente' → 'recusada'",
+    condicao_disparo:  "status: 'solicitada'/'com_voluntario' → 'rejeitada' (via coord_rejeitar_substituicao)",
     destinatarios:     "Membro solicitante (substituicoes.solicitante_id)",
     evento_ref_tabela: "substituicoes",
-    contexto_campos:   ["membros.nome", "escalas.data", "ministerios.nome", "substituicoes.motivo_recusa"],
+    contexto_campos:   ["membros.nome", "escalas.data", "ministerios.nome", "substituicoes.motivo_rejeicao"],
     dedup_nota:        "Um envio por (solicitante_id, 'substituicao_recusada', substituicao_id)",
     prioridade:        2,
   },
@@ -139,12 +139,15 @@ export type SubstituicaoRow = {
   data_escala:       string;
   ministerio:        string;
   paroquia_nome:     string;
-  motivo_recusa?:    string;
+  /** Campo real no banco: substituicoes.motivo_rejeicao (não motivo_recusa) */
+  motivo_rejeicao?:  string;
 };
 
 /** Formata "YYYY-MM-DD" → "DD/MM/YYYY" para exibição no WhatsApp. */
 export function formatarData(iso: string): string {
+  if (!iso || typeof iso !== "string") throw new TypeError(`data_escala inválida: ${iso}`);
   const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) throw new TypeError(`data_escala fora do formato ISO YYYY-MM-DD: ${iso}`);
   return `${d}/${m}/${y}`;
 }
 
@@ -185,7 +188,7 @@ export function resolverSubstituicaoRecusada(row: SubstituicaoRow): Substituicao
     nome_membro: row.solicitante_nome,
     data_escala: formatarData(row.data_escala),
     ministerio:  row.ministerio,
-    motivo:      row.motivo_recusa,
+    motivo:      row.motivo_rejeicao,
   };
 }
 
@@ -199,22 +202,48 @@ export function resolverLembreteEscala(row: EscalaRow): LembreteEscalaContext {
   };
 }
 
+/** Lança TypeError se algum campo obrigatório de EscalaRow estiver ausente. */
+function assertEscalaRow(row: EscalaRow): void {
+  if (!row.membro_nome) throw new TypeError("EscalaRow: membro_nome obrigatório");
+  if (!row.data_escala) throw new TypeError("EscalaRow: data_escala obrigatória");
+  if (!row.ministerio)  throw new TypeError("EscalaRow: ministerio obrigatório");
+  if (!row.paroquia_nome) throw new TypeError("EscalaRow: paroquia_nome obrigatório");
+}
+
+/** Lança TypeError se algum campo obrigatório de SubstituicaoRow estiver ausente. */
+function assertSubstituicaoRow(row: SubstituicaoRow): void {
+  if (!row.solicitante_nome) throw new TypeError("SubstituicaoRow: solicitante_nome obrigatório");
+  if (!row.data_escala)      throw new TypeError("SubstituicaoRow: data_escala obrigatória");
+  if (!row.ministerio)       throw new TypeError("SubstituicaoRow: ministerio obrigatório");
+  if (!row.paroquia_nome)    throw new TypeError("SubstituicaoRow: paroquia_nome obrigatório");
+}
+
 // Dispatcher: dado evento_tipo e row, devolve o TemplateContext correto.
 export function resolverContexto(
   tipo: EventoTipo,
   row: EscalaRow | SubstituicaoRow,
 ): TemplateContext {
   switch (tipo) {
-    case "escala_publicada":
-      return resolverEscalaPublicada(row as EscalaRow);
-    case "substituicao_solicitada":
-      return resolverSubstituicaoSolicitada(row as SubstituicaoRow);
-    case "substituicao_aprovada":
-      return resolverSubstituicaoAprovada(row as SubstituicaoRow);
-    case "substituicao_recusada":
-      return resolverSubstituicaoRecusada(row as SubstituicaoRow);
-    case "lembrete_escala":
-      return resolverLembreteEscala(row as EscalaRow);
+    case "escala_publicada": {
+      const r = row as EscalaRow; assertEscalaRow(r);
+      return resolverEscalaPublicada(r);
+    }
+    case "substituicao_solicitada": {
+      const r = row as SubstituicaoRow; assertSubstituicaoRow(r);
+      return resolverSubstituicaoSolicitada(r);
+    }
+    case "substituicao_aprovada": {
+      const r = row as SubstituicaoRow; assertSubstituicaoRow(r);
+      return resolverSubstituicaoAprovada(r);
+    }
+    case "substituicao_recusada": {
+      const r = row as SubstituicaoRow; assertSubstituicaoRow(r);
+      return resolverSubstituicaoRecusada(r);
+    }
+    case "lembrete_escala": {
+      const r = row as EscalaRow; assertEscalaRow(r);
+      return resolverLembreteEscala(r);
+    }
     default: {
       const _never: never = tipo;
       throw new RangeError(`evento_tipo sem resolvedor: ${_never}`);

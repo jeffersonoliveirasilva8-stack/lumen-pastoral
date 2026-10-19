@@ -108,7 +108,7 @@ const subRow: SubstituicaoRow = {
   data_escala:      "2027-01-15",
   ministerio:       "Leitura",
   paroquia_nome:    "Santa Maria",
-  motivo_recusa:    "Sem disponibilidade",
+  motivo_rejeicao:  "Sem disponibilidade",
 };
 
 Deno.test("resolverEscalaPublicada — formata data e preserva campos", () => {
@@ -135,13 +135,13 @@ Deno.test("resolverSubstituicaoAprovada — fallback para solicitante se substit
   assertEquals(ctx.nome_membro, "João");
 });
 
-Deno.test("resolverSubstituicaoRecusada — inclui motivo quando presente", () => {
+Deno.test("resolverSubstituicaoRecusada — inclui motivo_rejeicao quando presente", () => {
   const ctx = resolverSubstituicaoRecusada(subRow);
   assertEquals(ctx.motivo, "Sem disponibilidade");
 });
 
-Deno.test("resolverSubstituicaoRecusada — motivo undefined quando ausente", () => {
-  const ctx = resolverSubstituicaoRecusada({ ...subRow, motivo_recusa: undefined });
+Deno.test("resolverSubstituicaoRecusada — motivo undefined quando motivo_rejeicao ausente", () => {
+  const ctx = resolverSubstituicaoRecusada({ ...subRow, motivo_rejeicao: undefined });
   assertEquals(ctx.motivo, undefined);
 });
 
@@ -174,4 +174,61 @@ Deno.test("resolverContexto — tipo desconhecido lança RangeError", () => {
     () => resolverContexto("tipo_invalido" as any, escalaRow),
     RangeError,
   );
+});
+
+// ── Condições de disparo — compatibilidade com estados reais do banco ─────────
+
+Deno.test("Catálogo substituicao_aprovada documenta transição com_voluntario→aprovada", () => {
+  const e = entradaDoCatalogo("substituicao_aprovada");
+  assertMatch(e!.condicao_disparo!, /com_voluntario/);
+  assertMatch(e!.condicao_disparo!, /aprovada/);
+  // Garante que 'pendente' (status inexistente) não está documentado
+  assertEquals(e!.condicao_disparo!.includes("pendente"), false);
+});
+
+Deno.test("Catálogo substituicao_recusada documenta transição para rejeitada (status real do banco)", () => {
+  const e = entradaDoCatalogo("substituicao_recusada");
+  assertMatch(e!.condicao_disparo!, /rejeitada/);
+  // Garante que 'recusada' (status inexistente) não está documentado
+  assertEquals(e!.condicao_disparo!.includes("'recusada'"), false);
+});
+
+Deno.test("Catálogo substituicao_recusada usa motivo_rejeicao (campo real do banco)", () => {
+  const e = entradaDoCatalogo("substituicao_recusada");
+  assertEquals(e!.contexto_campos.some((c) => c.includes("motivo_rejeicao")), true);
+  assertEquals(e!.contexto_campos.some((c) => c.includes("motivo_recusa")), false);
+});
+
+// ── Guards de runtime — campos obrigatórios ausentes ─────────────────────────
+
+Deno.test("resolverContexto — lança TypeError se membro_nome ausente em escala_publicada", () => {
+  assertThrows(
+    () => resolverContexto("escala_publicada", { ...escalaRow, membro_nome: "" }),
+    TypeError,
+    "membro_nome",
+  );
+});
+
+Deno.test("resolverContexto — lança TypeError se data_escala ausente em escala_publicada", () => {
+  assertThrows(
+    () => resolverContexto("escala_publicada", { ...escalaRow, data_escala: "" }),
+    TypeError,
+    "data_escala",
+  );
+});
+
+Deno.test("resolverContexto — lança TypeError se solicitante_nome ausente em substituicao_recusada", () => {
+  assertThrows(
+    () => resolverContexto("substituicao_recusada", { ...subRow, solicitante_nome: "" }),
+    TypeError,
+    "solicitante_nome",
+  );
+});
+
+Deno.test("formatarData — lança TypeError para string vazia", () => {
+  assertThrows(() => formatarData(""), TypeError);
+});
+
+Deno.test("formatarData — lança TypeError para formato incorreto", () => {
+  assertThrows(() => formatarData("25/12/2026"), TypeError, "YYYY-MM-DD");
 });
