@@ -137,7 +137,7 @@ type PlanoCelebracao = {
   funcoesVagas: FuncaoVagaDetalhe[];
   semFuncoes: boolean;
   alertas: string[];
-  indispEfetivas: IndispRow[];
+  indispEfetivas: IndispMin[];
 };
 
 type SimulacaoResultado = {
@@ -229,7 +229,13 @@ function passaRecorrencia(data: Date, recorrencia: any): boolean {
 }
 
 // P0.3 — mesma lógica do estaIndisponivel() do engine
-function membroEstaBloqueado(membroId: string, celData: string, indisp: IndispRow[]): boolean {
+type IndispMin = Pick<IndispRow, "membro_id" | "data"> & {
+  cancelada?: boolean;
+  tipo?: string;
+  data_fim?: string | null;
+};
+
+function membroEstaBloqueado(membroId: string, celData: string, indisp: IndispMin[]): boolean {
   return indisp.some((i) => {
     if (i.membro_id !== membroId || i.cancelada) return false;
     if (i.tipo === "intervalo" && i.data_fim) return celData >= i.data && celData <= i.data_fim;

@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type UserConfigFnPromise } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
@@ -7,7 +7,7 @@ import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 const isVercel = process.env.VERCEL === "1" || process.env.DEPLOY_TARGET === "vercel";
 
-export default defineConfig(async ({ command }) => {
+const config: UserConfigFnPromise = async ({ command }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const plugins: any[] = [
     tailwindcss(),
@@ -94,4 +94,6 @@ export default defineConfig(async ({ command }) => {
       port: 8080,
     },
   };
-});
+};
+
+export default defineConfig(config);

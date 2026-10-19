@@ -2941,7 +2941,7 @@ function MembrosPage() {
       const payloads = rows.map((r) => ({
         paroquia_id: pid!, membro_id: editId!,
         data: r.data, motivo: r.motivo || null,
-        tipo: r.tipo ?? null, data_fim: r.data_fim ?? null,
+        tipo: r.tipo ?? undefined, data_fim: r.data_fim ?? null,
       }));
       const { error } = await supabase.from("indisponibilidades").insert(payloads);
       if (error) throw new Error(logDbError("INSERT indisponibilidades", error));
