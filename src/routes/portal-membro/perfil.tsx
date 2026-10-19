@@ -133,27 +133,30 @@ function MembroWhatsAppSection({
     queryKey: ["pm-whatsapp-consent", membroId],
     enabled: !!membroId,
     queryFn: async () => {
-      const { data, error } = await anyDb
+      const { data, error } = await supabase
         .from("membros")
         .select("whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_telefone")
-        .eq("id", membroId)
+        .eq("id", membroId!)
         .single();
       if (error) throw error;
       return data ?? null;
     },
   });
 
+  type WppRPCResponse = { success: boolean; error?: string; opt_in?: boolean };
+
   const mutation = useMutation({
     mutationFn: async ({ optIn, tel }: { optIn: boolean; tel?: string }) => {
-      const params: Record<string, unknown> = { p_opt_in: optIn };
-      if (tel !== undefined) params.p_telefone = tel;
-      const { data, error } = await anyDb.rpc("atualizar_consentimento_whatsapp", params);
+      const rpcArgs: { p_opt_in: boolean; p_telefone?: string } = { p_opt_in: optIn };
+      if (tel !== undefined) rpcArgs.p_telefone = tel;
+      const { data, error } = await supabase.rpc("atualizar_consentimento_whatsapp", rpcArgs);
       if (error) throw error;
-      if (!data?.success) {
-        const code = data?.error as string | undefined;
+      const result = data as WppRPCResponse | null;
+      if (!result?.success) {
+        const code = result?.error;
         throw new Error(RPC_ERRORS[code ?? ""] ?? "Falha ao atualizar consentimento.");
       }
-      return data;
+      return result;
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["pm-whatsapp-consent", membroId] });
