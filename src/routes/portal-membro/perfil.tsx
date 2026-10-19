@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
-import { Loader2, User, Save, Star, Calendar, Phone, Shield, Camera, Bell, BellOff, CheckCircle2 } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Loader2, User, Save, Star, Calendar, Phone, Shield, Camera, Bell, BellOff, CheckCircle2, MessageCircle } from "lucide-react";
 import { usePushNotification } from "@/hooks/usePushNotification";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -80,6 +80,224 @@ function MembroPushSection({ paroquiaId }: { paroquiaId: string | null | undefin
           {status === "loading" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
           {status === "error" ? "Tentar novamente" : "Ativar notificações"}
         </Button>
+      )}
+    </div>
+  );
+}
+
+// ── Seção de consentimento WhatsApp ────────────────────────────
+
+type WhatsAppConsentState = {
+  whatsapp_opt_in: boolean;
+  whatsapp_opt_in_at: string | null;
+  whatsapp_telefone: string | null;
+};
+
+function extractDDDNumero(tel: string | null | undefined): string {
+  if (!tel) return "";
+  const digits = tel.replace(/\D/g, "");
+  if (digits.startsWith("55") && digits.length >= 12) return digits.slice(2);
+  if (digits.length >= 10 && digits.length <= 11) return digits;
+  return "";
+}
+
+function MembroWhatsAppSection({
+  membroId,
+  telefoneExistente,
+}: {
+  membroId: string | undefined;
+  telefoneExistente?: string | null;
+}) {
+  const qc = useQueryClient();
+  const [telefone, setTelefone] = useState(() => extractDDDNumero(telefoneExistente));
+  const [showRevoke, setShowRevoke] = useState(false);
+
+  useEffect(() => {
+    setTelefone((prev) => (prev ? prev : extractDDDNumero(telefoneExistente)));
+  }, [telefoneExistente]);
+
+  const handleTelChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setTelefone(e.target.value.replace(/\D/g, "").slice(0, 11));
+  }, []);
+
+  const RPC_ERRORS: Record<string, string> = {
+    not_authenticated:             "Sessão expirada. Faça login novamente.",
+    opt_in_obrigatorio:            "Informe se deseja habilitar ou revogar.",
+    telefone_obrigatorio:          "Informe o número de telefone.",
+    telefone_invalido:             "Número inválido. Inclua DDI e DDD (8 a 15 dígitos).",
+    membro_nao_encontrado:         "Membro não encontrado. Contate a paróquia.",
+    multiplos_membros_encontrados: "Conta com mais de um membro vinculado. Contate a paróquia.",
+  };
+
+  const { data: consent, isLoading, isError: isQueryError } = useQuery<WhatsAppConsentState | null>({
+    queryKey: ["pm-whatsapp-consent", membroId],
+    enabled: !!membroId,
+    queryFn: async () => {
+      const { data, error } = await anyDb
+        .from("membros")
+        .select("whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_telefone")
+        .eq("id", membroId)
+        .single();
+      if (error) throw error;
+      return data ?? null;
+    },
+  });
+
+  const mutation = useMutation({
+    mutationFn: async ({ optIn, tel }: { optIn: boolean; tel?: string }) => {
+      const params: Record<string, unknown> = { p_opt_in: optIn };
+      if (tel !== undefined) params.p_telefone = tel;
+      const { data, error } = await anyDb.rpc("atualizar_consentimento_whatsapp", params);
+      if (error) throw error;
+      if (!data?.success) {
+        const code = data?.error as string | undefined;
+        throw new Error(RPC_ERRORS[code ?? ""] ?? "Falha ao atualizar consentimento.");
+      }
+      return data;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["pm-whatsapp-consent", membroId] });
+      if (vars.optIn) {
+        toast.success("Notificações por WhatsApp habilitadas.");
+        setTelefone("");
+      } else {
+        toast.success("Consentimento revogado.");
+        setShowRevoke(false);
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function validarCelularBR(digits: string): string | null {
+    if (digits.length !== 11) return "O número deve ter DDD (2 dígitos) + 9 dígitos de celular.";
+    const ddd = parseInt(digits.slice(0, 2), 10);
+    if (ddd < 11 || ddd > 99) return "DDD inválido.";
+    if (digits[2] !== "9") return "Apenas celulares são aceitos (número deve começar com 9 após o DDD).";
+    return null;
+  }
+
+  function handleOptIn(e: React.FormEvent) {
+    e.preventDefault();
+    const digits = telefone.replace(/\D/g, "");
+    const erro = validarCelularBR(digits);
+    if (erro) { toast.error(erro); return; }
+    mutation.mutate({ optIn: true, tel: "55" + digits });
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-card p-4 space-y-3">
+      <p className="text-xs font-semibold flex items-center gap-1.5">
+        <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" /> WhatsApp
+      </p>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Carregando...</span>
+        </div>
+      ) : isQueryError ? (
+        <p className="text-xs text-destructive">
+          Não foi possível carregar o estado do consentimento. Tente novamente mais tarde.
+        </p>
+      ) : consent?.whatsapp_opt_in ? (
+        /* ── Habilitado ── */
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+            <span className="text-xs text-emerald-600">
+              Notificações habilitadas
+              {consent.whatsapp_telefone ? ` — +${consent.whatsapp_telefone}` : ""}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Você receberá notificações da paróquia via WhatsApp.
+          </p>
+          {!showRevoke ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
+              onClick={() => setShowRevoke(true)}
+            >
+              <BellOff className="h-3.5 w-3.5" /> Revogar consentimento
+            </Button>
+          ) : (
+            <div className="space-y-2 rounded-lg bg-destructive/5 border border-destructive/20 p-3">
+              <p className="text-xs text-destructive font-medium">
+                Tem certeza? Você deixará de receber notificações via WhatsApp.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowRevoke(false)}
+                  disabled={mutation.isPending}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="flex-1"
+                  disabled={mutation.isPending}
+                  onClick={() => mutation.mutate({ optIn: false })}
+                >
+                  {mutation.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : "Confirmar revogação"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── Não habilitado ── */
+        <form onSubmit={handleOptIn} className="space-y-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Autorize o recebimento de notificações da paróquia via WhatsApp.
+            {consent?.whatsapp_opt_in_at && (
+              <span className="block mt-1 text-muted-foreground/60">
+                Consentimento revogado anteriormente.
+              </span>
+            )}
+          </p>
+          <div className="space-y-1">
+            <Label htmlFor="wpp-telefone" className="text-xs">
+              Número de WhatsApp
+            </Label>
+            <div className="flex items-center rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring overflow-hidden">
+              <span className="px-3 text-sm text-muted-foreground border-r border-input bg-muted select-none">
+                +55
+              </span>
+              <input
+                id="wpp-telefone"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                placeholder="11 99999-9999"
+                value={telefone}
+                onChange={handleTelChange}
+                disabled={mutation.isPending}
+                className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              DDD + celular com 9 na frente. Ex: 11 99999-9999
+            </p>
+          </div>
+          <Button
+            type="submit"
+            size="sm"
+            className="w-full"
+            disabled={mutation.isPending || telefone.replace(/\D/g, "").length !== 11}
+          >
+            {mutation.isPending
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <MessageCircle className="h-3.5 w-3.5" />}
+            Habilitar notificações por WhatsApp
+          </Button>
+        </form>
       )}
     </div>
   );
@@ -534,6 +752,9 @@ function PortalMembroPerfil() {
 
       {/* ── Notificações push ── */}
       <MembroPushSection paroquiaId={membro?.paroquia_id} />
+
+      {/* ── Consentimento WhatsApp ── */}
+      <MembroWhatsAppSection membroId={membro?.id} telefoneExistente={membro?.telefone} />
 
       {/* ── Segurança ── */}
       <div className="mt-4">
