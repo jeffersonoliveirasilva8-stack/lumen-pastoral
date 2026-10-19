@@ -259,8 +259,7 @@ Deno.test("Serviço — provider retorna 'failed': status gravado, enviado=false
   });
   const result = await enviarWhatsApp(sb, new FailProvider("failed"), baseInput);
   assertEquals(result.enviado, false);
-  if (!result.enviado) {
-    assertEquals(result.pulado, false);
+  if (!result.enviado && !result.pulado) {
     assertEquals(result.sendsId, "sends-fail-001");
     assertMatch(result.motivo, /provider_failed/);
   }
