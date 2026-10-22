@@ -158,11 +158,9 @@ export function renderMensagem(tipo: EventoTipo, ctx: TemplateContext): string {
 export const REQUIRED_ENV_VARS = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
-  // WHATSAPP_MODE=simulate | <provider-específico> (ex: "official")
-  "WHATSAPP_MODE",
-  // Adicionados quando WHATSAPP_MODE !== "simulate" (bloqueados por F5/F6/F3):
-  // "WHATSAPP_API_KEY"
-  // "WHATSAPP_API_URL"
+  // NOTIFICATION_SRV_URL + KEY → ativam NotificationSrvProvider
+  // WHATSAPP_MODE=simulate → ativa SimulatedProvider (para dev/testes)
+  // Pelo menos um dos dois pares deve estar presente em produção.
 ] as const;
 
 export type RequiredEnvVar = typeof REQUIRED_ENV_VARS[number];
@@ -172,6 +170,22 @@ export function assertEnvVars(get: (key: string) => string | undefined): void {
   const missing = REQUIRED_ENV_VARS.filter((v) => !get(v));
   if (missing.length > 0) {
     throw new Error(`Variáveis de ambiente ausentes: ${missing.join(", ")}`);
+  }
+}
+
+/**
+ * Valida que existe pelo menos um provider configurado.
+ * Lança se nem WHATSAPP_MODE=simulate nem NOTIFICATION_SRV_URL+KEY estiverem presentes.
+ */
+export function assertProviderConfigured(get: (key: string) => string | undefined): void {
+  const mode   = get("WHATSAPP_MODE") ?? "";
+  const hasUrl = !!get("NOTIFICATION_SRV_URL");
+  const hasKey = !!get("NOTIFICATION_SRV_KEY");
+  if (mode !== "simulate" && !(hasUrl && hasKey)) {
+    throw new Error(
+      "Nenhum provider WhatsApp configurado. " +
+      "Defina NOTIFICATION_SRV_URL + NOTIFICATION_SRV_KEY ou WHATSAPP_MODE=simulate.",
+    );
   }
 }
 
