@@ -13,11 +13,14 @@
 //   AUTH-10 extractJwtRole: JWT com apenas 1 parte → null
 //   AUTH-11 extractJwtRole: string vazia → null
 //   AUTH-12 timingSafeEqual: token correto mas role ≠ service_role → rejeitado pela lógica combinada
+//   AUTH-13 X-Wa-Secret válido: secret correto → timingSafeEqual retorna true (autorizado)
+//   AUTH-14 X-Wa-Secret inválido: secret errado → timingSafeEqual retorna false (não autorizado)
+//   AUTH-15 X-Wa-Secret ausente: header vazio → timingSafeEqual retorna false (não autorizado)
 //
-// Nota: timingSafeEqual e extractJwtRole são exportadas somente neste módulo
-// de teste via re-export de um módulo de teste auxiliar — as funções são
-// privadas no handler principal. Os testes SW-1..SW-14 cobrem os contratos
-// públicos de whatsapp-contracts.ts.
+// Nota: timingSafeEqual e extractJwtRole são privadas no handler principal;
+// re-implementadas aqui para testes isolados. Os testes SW-1..SW-16 cobrem
+// os contratos públicos de whatsapp-contracts.ts.
+// AUTH-13..15 documentam a lógica de auth do handler X-Wa-Secret.
 
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 
@@ -130,4 +133,30 @@ Deno.test("AUTH-12 token correto mas role=authenticated → rejeitado pela camad
   const role = extractJwtRole(fakeServiceKey);
   assertEquals(role, "authenticated"); // não é service_role
   assertEquals(role !== "service_role", true); // seria bloqueado
+});
+
+// ── AUTH-13 a AUTH-15: X-Wa-Secret (camada de autenticação atual do handler) ──
+//
+// O handler send-whatsapp trocou verificação de 'role === service_role' por:
+//   const waSecret = req.headers.get("X-Wa-Secret") ?? "";
+//   if (!timingSafeEqual(waSecret, expectedSecret)) → 401
+//
+// Esses testes documentam essa lógica usando as primitivas já cobertas acima.
+
+Deno.test("AUTH-13 X-Wa-Secret válido: secret correto → timingSafeEqual retorna true (autorizado)", () => {
+  const expectedSecret = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"; // UUID simulando internal_wa_secret
+  const receivedSecret = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"; // mesmo valor no header
+  assertEquals(timingSafeEqual(receivedSecret, expectedSecret), true);
+});
+
+Deno.test("AUTH-14 X-Wa-Secret inválido: secret errado → timingSafeEqual retorna false (não autorizado)", () => {
+  const expectedSecret = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+  const wrongSecret    = "ffffffff-ffff-ffff-ffff-ffffffffffff"; // valor diferente
+  assertEquals(timingSafeEqual(wrongSecret, expectedSecret), false);
+});
+
+Deno.test("AUTH-15 X-Wa-Secret ausente: header vazio → timingSafeEqual retorna false (não autorizado)", () => {
+  const expectedSecret = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+  const absentHeader   = ""; // req.headers.get("X-Wa-Secret") ?? "" quando ausente
+  assertEquals(timingSafeEqual(absentHeader, expectedSecret), false);
 });

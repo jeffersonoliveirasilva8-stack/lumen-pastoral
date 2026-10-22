@@ -42,6 +42,7 @@ export const EVENTO_TIPOS = [
   "substituicao_solicitada",
   "substituicao_aprovada",
   "substituicao_recusada",
+  "substituicao_confirmada_substituto",  // substituto confirmado (mensagem própria)
   "lembrete_escala",
 ] as const;
 
@@ -79,6 +80,16 @@ export type SubstituicaoRecusadaContext = {
   motivo?:       string;
 };
 
+export type SubstituicaoConfirmadaSubstitutoContext = {
+  /** Nome do membro que será o substituto */
+  nome_membro:      string;
+  data_escala:      string;
+  ministerio:       string;
+  paroquia_nome:    string;
+  /** Nome de quem está sendo substituído — opcional mas recomendado */
+  nome_solicitante?: string;
+};
+
 export type LembreteEscalaContext = {
   nome_membro:   string;
   data_escala:   string;  // "DD/MM/YYYY"
@@ -93,6 +104,7 @@ export type TemplateContext =
   | SubstituicaoSolicitadaContext
   | SubstituicaoAprovadaContext
   | SubstituicaoRecusadaContext
+  | SubstituicaoConfirmadaSubstitutoContext
   | LembreteEscalaContext;
 
 // ── Renderer de mensagens ─────────────────────────────────────────────────────
@@ -132,6 +144,15 @@ export function renderMensagem(tipo: EventoTipo, ctx: TemplateContext): string {
       return (
         `Olá, ${c.nome_membro}. A substituição para ${c.data_escala} ` +
         `(${c.ministerio}) não foi aceita.${motivoLine}`
+      );
+    }
+    case "substituicao_confirmada_substituto": {
+      const c = ctx as SubstituicaoConfirmadaSubstitutoContext;
+      const quem = c.nome_solicitante ? ` no lugar de ${c.nome_solicitante}` : "";
+      return (
+        `Olá, ${c.nome_membro}! ✅\n` +
+        `Você foi confirmado como substituto${quem}.\n` +
+        `📅 ${c.ministerio} — ${c.data_escala} (${c.paroquia_nome})`
       );
     }
     case "lembrete_escala": {

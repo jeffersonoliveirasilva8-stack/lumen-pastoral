@@ -15,6 +15,8 @@
 //   SW-12 renderMensagem: lembrete_escala sem hora → sem "às"
 //   SW-13 renderMensagem: substituicao_recusada sem motivo → sem "Motivo:"
 //   SW-14 renderMensagem: evento_tipo inválido → lança RangeError
+//   SW-15 renderMensagem: substituicao_confirmada_substituto com nome_solicitante → contém "no lugar de"
+//   SW-16 renderMensagem: substituicao_confirmada_substituto sem nome_solicitante → sem "no lugar de"
 
 import { assertEquals, assertMatch, assertThrows } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
@@ -154,4 +156,31 @@ Deno.test("SW-14 renderMensagem: evento_tipo inválido → lança RangeError", (
     () => renderMensagem("tipo_invalido" as any, {} as any),
     RangeError,
   );
+});
+
+// ── SW-15 a SW-16: substituicao_confirmada_substituto ─────────────────────────
+
+Deno.test("SW-15 renderMensagem: substituicao_confirmada_substituto com nome_solicitante", () => {
+  const msg = renderMensagem("substituicao_confirmada_substituto", {
+    nome_membro:      "Ana Costa",
+    data_escala:      "15/11/2026",
+    ministerio:       "Leitores",
+    paroquia_nome:    "Paróquia São Pedro",
+    nome_solicitante: "João Silva",
+  });
+  assertMatch(msg, /Ana Costa/);
+  assertMatch(msg, /João Silva/);
+  assertMatch(msg, /no lugar de/);
+  assertMatch(msg, /15\/11\/2026/);
+});
+
+Deno.test("SW-16 renderMensagem: substituicao_confirmada_substituto sem nome_solicitante", () => {
+  const msg = renderMensagem("substituicao_confirmada_substituto", {
+    nome_membro:   "Carlos Mendes",
+    data_escala:   "20/11/2026",
+    ministerio:    "Acolhida",
+    paroquia_nome: "Paróquia Nossa Senhora",
+  });
+  assertMatch(msg, /Carlos Mendes/);
+  assertEquals(msg.includes("no lugar de"), false);
 });
