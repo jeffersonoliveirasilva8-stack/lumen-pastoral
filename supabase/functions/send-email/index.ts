@@ -20,7 +20,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-email-secret",
 };
 
 // ─── Utilitários de MFA ───────────────────────────────────────────────────────
@@ -794,7 +794,18 @@ Deno.serve(async (req) => {
 
     if (!resendKey) return json({ ok: false, error: "RESEND_API_KEY not configured" },   503);
     if (!siteUrl)   return json({ ok: false, error: "SITE_URL not configured" },          503);
-    if (!req.headers.get("Authorization")) return json({ ok: false, error: "Unauthorized" }, 401);
+
+    // Autenticação interna via x-email-secret (timing-safe, mesmo padrão de send-push)
+    const emailSecret = Deno.env.get("INTERNAL_EMAIL_SECRET") ?? "";
+    if (!emailSecret) return json({ ok: false, error: "Service unavailable" }, 503);
+    const callerSecret = req.headers.get("x-email-secret") ?? "";
+    const enc = new TextEncoder();
+    const secretBytes = enc.encode(emailSecret);
+    const callerBytes  = enc.encode(callerSecret);
+    let diff = secretBytes.length !== callerBytes.length ? 1 : 0;
+    const cmpLen = Math.min(secretBytes.length, callerBytes.length);
+    for (let i = 0; i < cmpLen; i++) diff |= secretBytes[i] ^ callerBytes[i];
+    const secretAuthorized = diff === 0;
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -814,6 +825,13 @@ Deno.serve(async (req) => {
     let to = body.to ?? "";
 
     if (!template) return json({ ok: false, error: "Missing field: template" }, 400);
+
+    // x-email-secret: triggers do banco (server-to-server).
+    // JWT válido: frontend — aceito apenas para mfa_admin_code, cujo chamador já
+    // está autenticado via Supabase Auth. Todos os outros templates exigem o secret.
+    if (!secretAuthorized && !(template === "mfa_admin_code" && requesterId !== null)) {
+      return json({ ok: false, error: "Unauthorized" }, 401);
+    }
 
     // ── Template: ativacao_por_token ─────────────────────────────────────────
     // Não requer 'to': busca o email a partir do token_acesso no banco.
