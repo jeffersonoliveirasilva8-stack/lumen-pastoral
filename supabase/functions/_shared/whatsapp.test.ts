@@ -4,8 +4,12 @@
 //
 // Não fazem chamadas de rede, não alteram banco, não usam credenciais.
 
-import { assertEquals, assertMatch } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { IWhatsAppProvider, SendResult, SimulatedProvider } from "./whatsapp-provider.ts";
+import { assertEquals, assertMatch, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  IWhatsAppProvider, SendResult, SimulatedProvider,
+  NotificationSrvProvider, SendContext,
+  createProvider,
+} from "./whatsapp-provider.ts";
 import { enviarWhatsApp, EnvioWhatsAppInput } from "./whatsapp-service.ts";
 
 // ── Mock helpers ──────────────────────────────────────────────────────────────
@@ -410,4 +414,253 @@ Deno.test("D2/RLS — leitura do histórico não exige conta_ativada (gate retor
     assertEquals(result.pulado, true);
     assertEquals(result.motivo, "duplicado");
   }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// NotificationSrvProvider — testes unitários com fetch mockado
+// ════════════════════════════════════════════════════════════════════════════
+
+// Utilitário: substitui globalThis.fetch durante a duração do callback
+async function withMockFetch(
+  mockFn: typeof globalThis.fetch,
+  cb: () => Promise<void>,
+): Promise<void> {
+  const orig = globalThis.fetch;
+  globalThis.fetch = mockFn;
+  try {
+    await cb();
+  } finally {
+    globalThis.fetch = orig;
+  }
+}
+
+// Resposta 202 padrão
+function make202(id = "notif-uuid-001"): Response {
+  return new Response(JSON.stringify({ id, status: "queued" }), {
+    status: 202,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+// NP-1: env vars ausentes → failed sem chamar rede
+Deno.test("NotificationSrvProvider — sem env vars: retorna failed sem chamada de rede", async () => {
+  Deno.env.delete("NOTIFICATION_SRV_URL");
+  Deno.env.delete("NOTIFICATION_SRV_KEY");
+  let fetchCalled = false;
+  await withMockFetch(async () => { fetchCalled = true; return make202(); }, async () => {
+    const p = new NotificationSrvProvider();
+    const r = await p.send("5511987654321", "msg");
+    assertEquals(r.ok, false);
+    if (!r.ok) {
+      assertEquals(r.status, "failed");
+      assertStringIncludes(r.detail ?? "", "NOTIFICATION_SRV_URL");
+    }
+  });
+  assertEquals(fetchCalled, false);
+});
+
+// NP-2: payload correto — campos obrigatórios presentes, chave não vaza no corpo
+Deno.test("NotificationSrvProvider — payload tem campos obrigatórios e chave não está no corpo", async () => {
+  // deno-lint-ignore no-explicit-any
+  let capturedBody: any = null;
+  let capturedAuth: string | null = null;
+  await withMockFetch(async (_url, init) => {
+    capturedBody = JSON.parse((init?.body as string) ?? "{}");
+    capturedAuth = (init?.headers as Record<string, string>)["Authorization"] ?? null;
+    return make202();
+  }, async () => {
+    Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+    Deno.env.set("NOTIFICATION_SRV_KEY", "key123");
+    const p = new NotificationSrvProvider();
+    await p.send("5511987654321", "Mensagem de teste.", { eventoTipo: "escala_publicada", eventoRefId: "ref-001" });
+    Deno.env.delete("NOTIFICATION_SRV_URL");
+    Deno.env.delete("NOTIFICATION_SRV_KEY");
+  });
+  assertEquals(capturedBody?.channel, "whatsapp");
+  assertEquals(capturedBody?.to, "5511987654321");
+  assertEquals(capturedBody?.text, "Mensagem de teste.");
+  assertEquals(typeof capturedBody?.eventId, "string");
+  assertEquals(typeof capturedBody?.expiresAt, "string");
+  assertEquals(capturedAuth, "Bearer key123");
+  assertEquals(JSON.stringify(capturedBody).includes("key123"), false, "chave não deve aparecer no corpo");
+});
+
+// NP-3: eventId semântico com ctx
+Deno.test("NotificationSrvProvider — eventId semântico com ctx", async () => {
+  let capturedEventId = "";
+  await withMockFetch(async (_url, init) => {
+    // deno-lint-ignore no-explicit-any
+    capturedEventId = (JSON.parse((init?.body as string) ?? "{}") as any).eventId ?? "";
+    return make202();
+  }, async () => {
+    Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+    Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+    await new NotificationSrvProvider().send("5511999999999", "msg", { eventoTipo: "lembrete_escala", eventoRefId: "escala-abc" });
+    Deno.env.delete("NOTIFICATION_SRV_URL");
+    Deno.env.delete("NOTIFICATION_SRV_KEY");
+  });
+  assertEquals(capturedEventId, "lumen:lembrete_escala:escala-abc:whatsapp:v1");
+});
+
+// NP-4: eventId hash determinístico sem ctx — mesmos inputs → mesmo hash
+Deno.test("NotificationSrvProvider — eventId hash é determinístico (sem ctx)", async () => {
+  const ids: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    await withMockFetch(async (_url, init) => {
+      // deno-lint-ignore no-explicit-any
+      ids.push((JSON.parse((init?.body as string) ?? "{}") as any).eventId ?? "");
+      return make202();
+    }, async () => {
+      Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+      Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+      await new NotificationSrvProvider().send("5511111111111", "msg igual");
+      Deno.env.delete("NOTIFICATION_SRV_URL");
+      Deno.env.delete("NOTIFICATION_SRV_KEY");
+    });
+  }
+  assertEquals(ids[0], ids[1], "eventId deve ser igual em chamadas consecutivas com mesmos args");
+  assertMatch(ids[0], /^lumen:whatsapp:[0-9a-f]{32}:v1$/);
+});
+
+// NP-5: 202 → ok:true com providerRef
+Deno.test("NotificationSrvProvider — 202 retorna ok:true com providerRef", async () => {
+  await withMockFetch(async () => make202("uuid-retornado"), async () => {
+    Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+    Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+    const r = await new NotificationSrvProvider().send("5511999999999", "msg");
+    Deno.env.delete("NOTIFICATION_SRV_URL");
+    Deno.env.delete("NOTIFICATION_SRV_KEY");
+    assertEquals(r.ok, true);
+    if (r.ok) assertEquals(r.providerRef, "uuid-retornado");
+  });
+});
+
+// NP-6: 400 → failed com httpStatus e body de erro
+Deno.test("NotificationSrvProvider — 400 retorna failed com httpStatus=400 e detail", async () => {
+  await withMockFetch(async () =>
+    new Response(JSON.stringify({ error: "invalid_request", detail: "campo to inválido" }), { status: 400 }),
+  async () => {
+    Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+    Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+    const r = await new NotificationSrvProvider().send("55", "msg");
+    Deno.env.delete("NOTIFICATION_SRV_URL");
+    Deno.env.delete("NOTIFICATION_SRV_KEY");
+    assertEquals(r.ok, false);
+    if (!r.ok) {
+      assertEquals(r.status, "failed");
+      assertEquals(r.httpStatus, 400);
+      assertStringIncludes(r.detail ?? "", "invalid_request");
+    }
+  });
+});
+
+// NP-7: 500 → failed com httpStatus=500
+Deno.test("NotificationSrvProvider — 500 retorna failed com httpStatus=500", async () => {
+  await withMockFetch(async () => new Response("Internal Error", { status: 500 }), async () => {
+    Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+    Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+    const r = await new NotificationSrvProvider().send("5511999999999", "msg");
+    Deno.env.delete("NOTIFICATION_SRV_URL");
+    Deno.env.delete("NOTIFICATION_SRV_KEY");
+    assertEquals(r.ok, false);
+    if (!r.ok) assertEquals(r.httpStatus, 500);
+  });
+});
+
+// NP-8: erro de rede / fetch lança → unknown
+// "unknown" = o servidor pode ter recebido — não retentar sem reconciliação
+Deno.test("NotificationSrvProvider — erro de rede retorna status unknown", async () => {
+  await withMockFetch(async () => { throw new TypeError("network error"); }, async () => {
+    Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+    Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+    const r = await new NotificationSrvProvider().send("5511999999999", "msg");
+    Deno.env.delete("NOTIFICATION_SRV_URL");
+    Deno.env.delete("NOTIFICATION_SRV_KEY");
+    assertEquals(r.ok, false);
+    if (!r.ok) assertEquals(r.status, "unknown");
+  });
+});
+
+// NP-9: 202 com JSON inválido → ok:true sem providerRef (parsing não-fatal)
+Deno.test("NotificationSrvProvider — 202 com JSON inválido: ok:true, providerRef undefined", async () => {
+  await withMockFetch(async () => new Response("not-json", { status: 202 }), async () => {
+    Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+    Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+    const r = await new NotificationSrvProvider().send("5511999999999", "msg");
+    Deno.env.delete("NOTIFICATION_SRV_URL");
+    Deno.env.delete("NOTIFICATION_SRV_KEY");
+    assertEquals(r.ok, true);
+    if (r.ok) assertEquals(r.providerRef, undefined);
+  });
+});
+
+// NP-10: expiresAt >= 23h no futuro (tolerância para execução lenta)
+Deno.test("NotificationSrvProvider — expiresAt é futuro em pelo menos 23h", async () => {
+  let capturedExpiresAt = "";
+  await withMockFetch(async (_url, init) => {
+    // deno-lint-ignore no-explicit-any
+    capturedExpiresAt = (JSON.parse((init?.body as string) ?? "{}") as any).expiresAt ?? "";
+    return make202();
+  }, async () => {
+    Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+    Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+    await new NotificationSrvProvider().send("5511999999999", "msg");
+    Deno.env.delete("NOTIFICATION_SRV_URL");
+    Deno.env.delete("NOTIFICATION_SRV_KEY");
+  });
+  const expiresMs = new Date(capturedExpiresAt).getTime();
+  const minExpected = Date.now() + 23 * 60 * 60 * 1000;
+  assertEquals(expiresMs >= minExpected, true,
+    `expiresAt deve ser >= 23h a partir de agora; obtido: ${capturedExpiresAt}`);
+});
+
+// NP-11: createProvider() — WHATSAPP_MODE=simulate → SimulatedProvider
+Deno.test("createProvider — WHATSAPP_MODE=simulate retorna SimulatedProvider", () => {
+  Deno.env.set("WHATSAPP_MODE", "simulate");
+  Deno.env.delete("NOTIFICATION_SRV_URL");
+  Deno.env.delete("NOTIFICATION_SRV_KEY");
+  const p = createProvider();
+  assertEquals(p.name, "simulated");
+  Deno.env.delete("WHATSAPP_MODE");
+});
+
+// NP-12: createProvider() — vars configuradas → NotificationSrvProvider
+Deno.test("createProvider — vars configuradas retorna NotificationSrvProvider", () => {
+  Deno.env.delete("WHATSAPP_MODE");
+  Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+  Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+  const p = createProvider();
+  assertEquals(p.name, "notification-srv");
+  Deno.env.delete("NOTIFICATION_SRV_URL");
+  Deno.env.delete("NOTIFICATION_SRV_KEY");
+});
+
+// NP-13: createProvider() — sem configuração → unconfigured, retorna failed (nunca ok:true)
+// Protege contra envios simulados sendo gravados como 'sent' em whatsapp_sends
+Deno.test("createProvider — sem configuração: retorna unconfigured (failed, não simulated)", async () => {
+  Deno.env.delete("WHATSAPP_MODE");
+  Deno.env.delete("NOTIFICATION_SRV_URL");
+  Deno.env.delete("NOTIFICATION_SRV_KEY");
+  const p = createProvider();
+  assertEquals(p.name, "unconfigured");
+  const r = await p.send("5511999999999", "msg");
+  assertEquals(r.ok, false, "provider não configurado NUNCA deve retornar ok:true");
+});
+
+// NP-14: 409 Conflict → failed (idempotência: não retentar)
+Deno.test("NotificationSrvProvider — 409 retorna failed com httpStatus=409", async () => {
+  await withMockFetch(async () =>
+    new Response(JSON.stringify({ error: "idempotency_conflict" }), { status: 409 }),
+  async () => {
+    Deno.env.set("NOTIFICATION_SRV_URL", "https://srv.test");
+    Deno.env.set("NOTIFICATION_SRV_KEY", "k");
+    const r = await new NotificationSrvProvider().send("5511999999999", "msg");
+    Deno.env.delete("NOTIFICATION_SRV_URL");
+    Deno.env.delete("NOTIFICATION_SRV_KEY");
+    assertEquals(r.ok, false);
+    if (!r.ok) {
+      assertEquals(r.status, "failed");
+      assertEquals(r.httpStatus, 409);
+    }
+  });
 });
