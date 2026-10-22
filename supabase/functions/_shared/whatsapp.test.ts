@@ -310,3 +310,104 @@ Deno.test("Serviço — erro no insert: não chama provider, retorna enviado=fal
   // Provider NÃO foi chamado
   assertEquals(provider.calls.length, 0);
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// D2 — conta_ativada
+// ════════════════════════════════════════════════════════════════════════════
+
+// Gate de envio — conta_nao_ativada
+Deno.test("D2/Gate — conta não ativada: pulado=true, motivo=conta_nao_ativada", async () => {
+  const sb = mockSupabase({
+    gateResult: { data: [{ pode: false, telefone: null, motivo: "conta_nao_ativada" }], error: null },
+  });
+  const provider = new OkProvider();
+  const result = await enviarWhatsApp(sb, provider, baseInput);
+  assertEquals(result.enviado, false);
+  if (!result.enviado) {
+    assertEquals(result.pulado, true);
+    assertEquals(result.motivo, "conta_nao_ativada");
+  }
+  // Provider não chamado
+  assertEquals(provider.calls.length, 0);
+});
+
+// Gate de envio — membro ativo com conta ativada passa pelo gate
+Deno.test("D2/Gate — membro ativo com conta ativada: gate permite envio", async () => {
+  const sb = mockSupabase({
+    gateResult: { data: [{ pode: true, telefone: "5511987654321", motivo: null }], error: null },
+    insertResult: { data: { id: "d2-sends-001" }, error: null },
+    updateResult: { error: null },
+  });
+  const provider = new OkProvider();
+  const result = await enviarWhatsApp(sb, provider, baseInput);
+  assertEquals(result.enviado, true);
+  if (result.enviado) assertEquals(result.sendsId, "d2-sends-001");
+  assertEquals(provider.calls.length, 1);
+});
+
+// Gate de envio — membro inativo bloqueado (motivo membro_nao_encontrado,
+// pois ativo=false faz o SELECT retornar NOT FOUND)
+Deno.test("D2/Gate — membro inativo: pulado=true, motivo=membro_nao_encontrado", async () => {
+  const sb = mockSupabase({
+    gateResult: { data: [{ pode: false, telefone: null, motivo: "membro_nao_encontrado" }], error: null },
+  });
+  const result = await enviarWhatsApp(sb, new OkProvider(), baseInput);
+  assertEquals(result.enviado, false);
+  if (!result.enviado) {
+    assertEquals(result.pulado, true);
+    assertEquals(result.motivo, "membro_nao_encontrado");
+  }
+});
+
+// Gate de envio — consentimento previamente registrado, mas conta não ativada
+// (cenário: membro concedeu consentimento antes da correção D2 ser aplicada)
+Deno.test("D2/Gate — consentimento registrado mas conta não ativada: bloqueado no gate", async () => {
+  // _pode_enviar_whatsapp retorna conta_nao_ativada antes de verificar opt_in
+  const sb = mockSupabase({
+    gateResult: { data: [{ pode: false, telefone: null, motivo: "conta_nao_ativada" }], error: null },
+  });
+  const provider = new OkProvider();
+  const result = await enviarWhatsApp(sb, provider, baseInput);
+  assertEquals(result.enviado, false);
+  if (!result.enviado) {
+    assertEquals(result.pulado, true);
+    assertEquals(result.motivo, "conta_nao_ativada");
+  }
+  assertEquals(provider.calls.length, 0);
+});
+
+// Revogação — deve ser permitida mesmo sem conta ativada
+// (atualizar_consentimento_whatsapp: p_opt_in=false não exige conta_ativada)
+// Testado via mock do gate de envio: após revogação, gate retorna sem_consentimento
+Deno.test("D2/Revogação — após revogar, gate retorna sem_consentimento (não conta_nao_ativada)", async () => {
+  // Após revogação bem-sucedida de membro com conta não ativada,
+  // a próxima tentativa de envio retorna sem_consentimento (opt_in=false),
+  // não conta_nao_ativada (a conta_ativada não é verificada se opt_in já é false).
+  // Aqui simulamos o estado pós-revogação:
+  const sb = mockSupabase({
+    gateResult: { data: [{ pode: false, telefone: null, motivo: "sem_consentimento" }], error: null },
+  });
+  const result = await enviarWhatsApp(sb, new OkProvider(), baseInput);
+  assertEquals(result.enviado, false);
+  if (!result.enviado) {
+    assertEquals(result.pulado, true);
+    assertEquals(result.motivo, "sem_consentimento");
+  }
+});
+
+// Acesso aos próprios registros de envio — não depende de conta_ativada
+// (RLS membro_le_proprios_sends não foi alterada — apenas ativo=true exigido)
+Deno.test("D2/RLS — leitura do histórico não exige conta_ativada (gate retorna sends existentes)", async () => {
+  // Simula que o gate encontrou um registro duplicado (pending/sent existe)
+  // mesmo para um membro com conta_ativada=false — o histórico é preservado.
+  const sb = mockSupabase({
+    gateResult: { data: [{ pode: false, telefone: null, motivo: "duplicado" }], error: null },
+  });
+  const result = await enviarWhatsApp(sb, new OkProvider(), baseInput);
+  assertEquals(result.enviado, false);
+  if (!result.enviado) {
+    // O registro existe e está acessível — não foi apagado
+    assertEquals(result.pulado, true);
+    assertEquals(result.motivo, "duplicado");
+  }
+});

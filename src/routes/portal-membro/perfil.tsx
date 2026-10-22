@@ -127,6 +127,7 @@ function MembroWhatsAppSection({
     telefone_invalido:             "Número inválido. Inclua DDI e DDD (8 a 15 dígitos).",
     membro_nao_encontrado:         "Membro não encontrado. Contate a paróquia.",
     multiplos_membros_encontrados: "Conta com mais de um membro vinculado. Contate a paróquia.",
+    conta_nao_ativada:             "Ative sua conta antes de habilitar notificações por WhatsApp.",
   };
 
   const { data: consent, isLoading, isError: isQueryError } = useQuery<WhatsAppConsentState | null>({
@@ -214,6 +215,12 @@ function MembroWhatsAppSection({
           </div>
           <p className="text-xs text-muted-foreground">
             Você receberá notificações da paróquia via WhatsApp.
+            {consent.whatsapp_opt_in_at && (
+              <span className="block mt-0.5 text-muted-foreground/60">
+                Consentimento dado em{" "}
+                {format(new Date(consent.whatsapp_opt_in_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.
+              </span>
+            )}
           </p>
           {!showRevoke ? (
             <Button
