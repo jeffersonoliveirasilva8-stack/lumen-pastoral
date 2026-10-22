@@ -34,6 +34,38 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ── Autenticação ─────────────────────────────────────────────────────────────
+// Compara o token apresentado contra SUPABASE_SERVICE_ROLE_KEY usando
+// comparação timing-safe (XOR byte a byte). Isso evita timing attacks e
+// não depende de validação de assinatura JWT — o token correto SÓ pode ser
+// obtido via Supabase Secrets (nunca exposto em código ou logs).
+// Fallback de segurança: também verifica o claim 'role' no payload JWT.
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const ae = new TextEncoder().encode(a);
+  const be = new TextEncoder().encode(b);
+  if (ae.length !== be.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ae.length; i++) diff |= ae[i] ^ be[i];
+  return diff === 0;
+}
+
+function extractJwtRole(token: string): string | null {
+  try {
+    const parts  = token.split(".");
+    if (parts.length !== 3) return null;
+    const b64url = parts[1];
+    const b64    = b64url
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(b64url.length + (4 - b64url.length % 4) % 4, "=");
+    const claims = JSON.parse(atob(b64)) as Record<string, unknown>;
+    return typeof claims.role === "string" ? claims.role : null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
@@ -47,14 +79,28 @@ Deno.serve(async (req) => {
   try {
     assertEnvVars(Deno.env.get);
   } catch (err) {
-    console.error("[send-whatsapp] Env vars ausentes:", String(err));
+    console.error("[send-whatsapp] Env vars ausentes");
     return json({ ok: false, error: String(err) }, 503);
   }
 
-  // 2. Autenticação — aceita somente service_role
+  // 2. Autenticação — duas camadas:
+  //    (a) timing-safe comparison contra SUPABASE_SERVICE_ROLE_KEY
+  //    (b) verificação do claim 'role' === 'service_role' no payload JWT
   const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return json({ ok: false, error: "Unauthorized" }, 401);
+  }
+  const token      = authHeader.slice(7).trim();
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  if (!authHeader || !authHeader.includes(serviceKey)) {
+
+  // (a) O token deve ser idêntico ao secret armazenado
+  if (!serviceKey || !timingSafeEqual(token, serviceKey)) {
+    return json({ ok: false, error: "Unauthorized" }, 401);
+  }
+
+  // (b) Defense-in-depth: verifica claim 'role' no payload (sem confiar apenas nele)
+  const role = extractJwtRole(token);
+  if (role !== "service_role") {
     return json({ ok: false, error: "Unauthorized" }, 401);
   }
 
