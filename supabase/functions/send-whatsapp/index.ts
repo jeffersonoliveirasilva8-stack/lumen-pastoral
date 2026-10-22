@@ -84,22 +84,17 @@ Deno.serve(async (req) => {
   }
 
   // 2. Autenticação — duas camadas:
-  //    (a) timing-safe comparison contra SUPABASE_SERVICE_ROLE_KEY
-  //    (b) verificação do claim 'role' === 'service_role' no payload JWT
+  //    (a) Gateway Supabase (verify_jwt=true) valida assinatura HMAC-SHA256
+  //        antes de passar a requisição para cá — rejeita JWTs forjados.
+  //    (b) Código verifica claim 'role === service_role' — rejeita tokens de
+  //        usuários comuns que passaram pela validação de assinatura.
+  // Resultado: apenas o portador da service_role key pode chamar esta função.
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) {
     return json({ ok: false, error: "Unauthorized" }, 401);
   }
-  const token      = authHeader.slice(7).trim();
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-
-  // (a) O token deve ser idêntico ao secret armazenado
-  if (!serviceKey || !timingSafeEqual(token, serviceKey)) {
-    return json({ ok: false, error: "Unauthorized" }, 401);
-  }
-
-  // (b) Defense-in-depth: verifica claim 'role' no payload (sem confiar apenas nele)
-  const role = extractJwtRole(token);
+  const token = authHeader.slice(7).trim();
+  const role  = extractJwtRole(token);
   if (role !== "service_role") {
     return json({ ok: false, error: "Unauthorized" }, 401);
   }
