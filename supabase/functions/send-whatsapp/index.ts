@@ -168,6 +168,22 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (payload.evento_tipo === "escala_completa") {
+    const supabaseGuard = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: escala } = await supabaseGuard
+      .from("escalas")
+      .select("status")
+      .eq("id", payload.evento_ref_id)
+      .single();
+    if (!escala || escala.status !== "publicada") {
+      console.warn(`[send-whatsapp] escala ${payload.evento_ref_id} não está mais publicada — pulado (escala_completa)`);
+      return json({ ok: true, enviado: false, pulado: true, motivo: "escala_nao_publicada" });
+    }
+  }
+
   if (
     payload.evento_tipo === "substituicao_aprovada" ||
     payload.evento_tipo === "substituicao_confirmada_substituto"
@@ -209,6 +225,24 @@ Deno.serve(async (req) => {
   }
 
   if (result.pulado) {
+    // Para avisos pastorais: registra 'pulado' no destinatário so que o histórico
+    // mostre o resultado real em vez de 'pending' indefinido.
+    if (payload.evento_tipo === "aviso_pastoral") {
+      try {
+        const supabaseService = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+        await supabaseService.rpc("cp_marcar_pulado", {
+          p_mensagem_id: payload.evento_ref_id,
+          p_membro_id:   payload.membro_id,
+          p_motivo:      result.motivo ?? "bloqueado",
+        });
+      } catch (err) {
+        // Não impede a resposta — falha silenciosa no best-effort
+        console.warn("[send-whatsapp] cp_marcar_pulado falhou:", String(err));
+      }
+    }
     return json({ ok: true, enviado: false, pulado: true, motivo: result.motivo });
   }
 

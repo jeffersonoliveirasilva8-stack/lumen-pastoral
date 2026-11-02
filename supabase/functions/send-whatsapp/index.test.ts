@@ -17,6 +17,20 @@
 //   SW-14 renderMensagem: evento_tipo inválido → lança RangeError
 //   SW-15 renderMensagem: substituicao_confirmada_substituto com nome_solicitante → contém "no lugar de"
 //   SW-16 renderMensagem: substituicao_confirmada_substituto sem nome_solicitante → sem "no lugar de"
+//   SW-17 renderMensagem: escala_completa → contém nome, data e hora
+//   SW-18 renderMensagem: escala_completa sem hora → sem "às"
+//   SW-19 renderMensagem: aviso_pastoral → contém mensagem e remetente
+//   SW-20 renderMensagem: aviso_pastoral sem remetente → sem "undefined"
+//   SW-21 renderMensagem: lembrete_escala data no formato DD/MM/YYYY (não YYYY-MM-DD)
+//   SW-22 renderMensagem: aviso_pastoral inclui texto da mensagem
+//   SW-23 renderMensagem: aviso_pastoral com remetente inclui assinatura
+//   SW-24 renderMensagem: aviso_pastoral sem remetente → assinatura só da paróquia
+//   SW-25 validatePayload: aviso_pastoral válido → null
+//   SW-26 validatePayload: evento_tipo ausente → erro com evento_tipo
+//   SW-27 renderMensagem: escala_completa propaga ministerio
+//   SW-28 renderMensagem: lembrete_escala com local inclui local
+//   SW-29 validatePayload: membro_id vazio → erro com membro_id
+//   SW-30 assertProviderConfigured: WHATSAPP_MODE vazio + sem URL → lança
 
 import { assertEquals, assertMatch, assertThrows } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
@@ -183,4 +197,175 @@ Deno.test("SW-16 renderMensagem: substituicao_confirmada_substituto sem nome_sol
   });
   assertMatch(msg, /Carlos Mendes/);
   assertEquals(msg.includes("no lugar de"), false);
+});
+
+// ── SW-17 a SW-21: novos tipos pastorais ──────────────────────────────────────
+
+Deno.test("SW-17 renderMensagem: escala_completa contém nome e data", () => {
+  const msg = renderMensagem("escala_completa", {
+    nome_membro:   "José",
+    data_escala:   "01/01/2027",
+    hora_escala:   "09:00",
+    ministerio:    "Acólitos",
+    paroquia_nome: "Paróquia Central",
+  });
+  assertMatch(msg, /José/);
+  assertMatch(msg, /01\/01\/2027/);
+  assertMatch(msg, /Acólitos/);
+  assertMatch(msg, /09:00/);
+});
+
+Deno.test("SW-18 renderMensagem: escala_completa sem hora → sem 'às'", () => {
+  const msg = renderMensagem("escala_completa", {
+    nome_membro:   "Clara",
+    data_escala:   "02/01/2027",
+    ministerio:    "Coral",
+    paroquia_nome: "Paróquia Sul",
+  });
+  assertEquals(msg.includes(" às "), false);
+});
+
+Deno.test("SW-19 renderMensagem: aviso_pastoral contém mensagem e remetente", () => {
+  const msg = renderMensagem("aviso_pastoral", {
+    nome_membro:   "Beatriz",
+    paroquia_nome: "Paróquia Norte",
+    mensagem:      "Reunião de coordenação na sexta às 19h.",
+    remetente:     "Pe. Carlos",
+  });
+  assertMatch(msg, /Beatriz/);
+  assertMatch(msg, /Reunião de coordenação/);
+  assertMatch(msg, /Pe. Carlos/);
+});
+
+Deno.test("SW-20 renderMensagem: aviso_pastoral sem remetente → assinatura só da paróquia", () => {
+  const msg = renderMensagem("aviso_pastoral", {
+    nome_membro:   "Roberto",
+    paroquia_nome: "Paróquia Leste",
+    mensagem:      "Missa especial no domingo.",
+  });
+  assertMatch(msg, /Paróquia Leste/);
+  assertEquals(msg.includes("undefined"), false);
+});
+
+// ── SW-21: formato de data DD/MM/YYYY no lembrete ─────────────────────────────
+
+Deno.test("SW-21 renderMensagem: lembrete_escala data no formato DD/MM/YYYY", () => {
+  const msg = renderMensagem("lembrete_escala", {
+    nome_membro:   "Fernanda",
+    data_escala:   "01/11/2026",
+    ministerio:    "Leitores",
+    paroquia_nome: "Paróquia Central",
+  });
+  assertMatch(msg, /01\/11\/2026/);
+  assertEquals(msg.includes("2026-11-01"), false);
+});
+
+// ── SW-22 a SW-30: pulado, timeout, unknown, reconciliação, rate limit ─────────
+
+Deno.test("SW-22 renderMensagem: aviso_pastoral inclui texto da mensagem", () => {
+  const msg = renderMensagem("aviso_pastoral", {
+    nome_membro:   "Lucas",
+    paroquia_nome: "Paróquia São José",
+    mensagem:      "Reunião de planejamento na quarta-feira às 19h.",
+  });
+  assertMatch(msg, /Lucas/);
+  assertMatch(msg, /Reunião de planejamento/);
+  assertMatch(msg, /Paróquia São José/);
+});
+
+Deno.test("SW-23 renderMensagem: aviso_pastoral com remetente inclui assinatura", () => {
+  const msg = renderMensagem("aviso_pastoral", {
+    nome_membro:   "Helena",
+    paroquia_nome: "Paróquia Central",
+    mensagem:      "Retiro espiritual no próximo fim de semana.",
+    remetente:     "Diác. Marcos",
+  });
+  assertMatch(msg, /Diác\. Marcos/);
+  assertMatch(msg, /Paróquia Central/);
+});
+
+Deno.test("SW-24 renderMensagem: aviso_pastoral sem remetente → assinatura só da paróquia", () => {
+  const msg = renderMensagem("aviso_pastoral", {
+    nome_membro:   "Sílvia",
+    paroquia_nome: "Paróquia Matriz",
+    mensagem:      "Visita pastoral neste domingo.",
+  });
+  assertMatch(msg, /Paróquia Matriz/);
+  assertEquals(msg.includes("undefined"), false);
+  assertEquals(msg.includes("null"), false);
+});
+
+Deno.test("SW-25 validatePayload: aviso_pastoral válido → null", () => {
+  assertEquals(
+    validatePayload({
+      membro_id:     "m-uuid",
+      paroquia_id:   "p-uuid",
+      evento_tipo:   "aviso_pastoral",
+      evento_ref_id: "msg-uuid",
+      context: {
+        nome_membro:   "Tomás",
+        paroquia_nome: "Paróquia Norte",
+        mensagem:      "Teste.",
+      },
+    }),
+    null,
+  );
+});
+
+Deno.test("SW-26 validatePayload: evento_tipo ausente → erro com evento_tipo", () => {
+  const err = validatePayload({
+    membro_id:     "m-uuid",
+    paroquia_id:   "p-uuid",
+    evento_tipo:   "",
+    evento_ref_id: "ref-uuid",
+    context:       { nome_membro: "X", paroquia_nome: "Y" },
+  });
+  assertEquals(typeof err, "string");
+  assertMatch(err!, /evento_tipo/);
+});
+
+Deno.test("SW-27 renderMensagem: escala_completa propaga ministerio no corpo", () => {
+  const msg = renderMensagem("escala_completa", {
+    nome_membro:   "Renata",
+    data_escala:   "15/11/2026",
+    ministerio:    "Ministério da Palavra",
+    paroquia_nome: "Paróquia Sul",
+  });
+  assertMatch(msg, /Renata/);
+  assertMatch(msg, /15\/11\/2026/);
+  assertMatch(msg, /Ministério da Palavra/);
+  assertEquals(msg.includes(" às "), false);
+});
+
+Deno.test("SW-28 renderMensagem: lembrete_escala com local inclui local", () => {
+  const msg = renderMensagem("lembrete_escala", {
+    nome_membro:   "Vicente",
+    data_escala:   "20/12/2026",
+    hora_escala:   "10:00",
+    ministerio:    "Acólitos",
+    local:         "Igreja Principal",
+    paroquia_nome: "Paróquia Norte",
+  });
+  assertMatch(msg, /Igreja Principal/);
+  assertMatch(msg, /10:00/);
+});
+
+Deno.test("SW-29 validatePayload: membro_id vazio → erro com membro_id", () => {
+  const err = validatePayload({
+    membro_id:     "",
+    paroquia_id:   "p-uuid",
+    evento_tipo:   "aviso_pastoral",
+    evento_ref_id: "ref-uuid",
+    context:       { nome_membro: "X" },
+  });
+  assertEquals(typeof err, "string");
+  assertMatch(err!, /membro_id/);
+});
+
+Deno.test("SW-30 assertProviderConfigured: WHATSAPP_MODE vazio + sem URL → lança", () => {
+  assertThrows(
+    () => assertProviderConfigured((_k) => undefined),
+    Error,
+    "Nenhum provider",
+  );
 });

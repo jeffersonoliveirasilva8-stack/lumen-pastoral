@@ -1,0 +1,69 @@
+-- migration 175: Ajuste do cron lembrete-escalas para ativar WhatsApp
+--
+-- CONTEXTO
+-- --------
+-- O cron 'lembrete-escalas-diario' (migration 052) envia body := '{}'
+-- o que resulta em mode = "manual" na Edge Function.
+-- No modo "manual" (legado), waEnabled = false — o WhatsApp NÃO é enviado.
+-- O WhatsApp só é enviado nos modos "1dia" ou "sabado".
+--
+-- FIX
+-- ---
+-- Atualizar o body do cron para {"mode":"1dia"} para ativar lembretes
+-- WhatsApp às 08:00 BRT (11:00 UTC) todos os dias para escalas de amanhã.
+--
+-- INSTRUÇÃO PARA APLICAR EM PRODUÇÃO (não executar agora)
+-- -------------------------------------------------------
+-- 1. Via SQL Editor no Supabase Dashboard, executar:
+--
+--   SELECT cron.unschedule('lembrete-escalas-diario');
+--
+--   SELECT cron.schedule(
+--     'lembrete-escalas-diario',
+--     '0 11 * * *',
+--     $$
+--     SELECT net.http_post(
+--       url := current_setting('app.supabase_url') || '/functions/v1/lembrete-escalas',
+--       headers := jsonb_build_object(
+--         'Content-Type', 'application/json',
+--         'Authorization', 'Bearer ' || current_setting('app.supabase_anon_key')
+--       ),
+--       body := '{"mode":"1dia"}'::jsonb
+--     );
+--     $$
+--   );
+--
+-- 2. Verificar com:
+--   SELECT jobname, schedule, command FROM cron.job WHERE jobname LIKE 'lembrete%';
+--
+-- OPCIONAL: Cron adicional para sábado (escalas de domingo)
+-- ---------------------------------------------------------
+-- Se quiser lembrete específico para sábado → domingo (8h BRT = 11h UTC),
+-- criar um segundo cron com mode=sabado. O modo "sabado" já ignora dias
+-- não-sábado internamente, então pode rodar todos os dias sem problema:
+--
+--   SELECT cron.schedule(
+--     'lembrete-escalas-sabado',
+--     '0 23 * * 6',  -- sábado 20:00 BRT (23:00 UTC)
+--     $$
+--     SELECT net.http_post(
+--       url := current_setting('app.supabase_url') || '/functions/v1/lembrete-escalas',
+--       headers := jsonb_build_object(
+--         'Content-Type', 'application/json',
+--         'Authorization', 'Bearer ' || current_setting('app.supabase_anon_key')
+--       ),
+--       body := '{"mode":"sabado"}'::jsonb
+--     );
+--     $$
+--   );
+--
+-- FUSO HORÁRIO
+-- ------------
+-- America/Sao_Paulo (BRT = UTC-3, BRST = UTC-2 no horário de verão).
+-- Supabase cron usa UTC. Em horário de verão ajustar a expressão se necessário.
+--
+-- NÃO EXECUTAR ESTE ARQUIVO COMO MIGRATION AUTOMÁTICA.
+-- Aplicar manualmente via SQL Editor após validação em staging.
+
+-- Aplicar via SQL Editor do Dashboard após validação em staging.
+-- O Supabase CLI rastreia migrations pelo nome do arquivo — não há INSERT manual.

@@ -39,11 +39,13 @@ export type WhatsAppEventResponse =
 
 export const EVENTO_TIPOS = [
   "escala_publicada",
+  "escala_completa",
   "substituicao_solicitada",
   "substituicao_aprovada",
   "substituicao_recusada",
   "substituicao_confirmada_substituto",  // substituto confirmado (mensagem própria)
   "lembrete_escala",
+  "aviso_pastoral",
 ] as const;
 
 export type EventoTipo = typeof EVENTO_TIPOS[number];
@@ -55,37 +57,61 @@ export type EventoTipo = typeof EVENTO_TIPOS[number];
 export type EscalaPublicadaContext = {
   nome_membro:   string;
   data_escala:   string;  // "DD/MM/YYYY"
+  hora_escala?:  string;  // "HH:MM"
   ministerio:    string;
+  local?:        string;
   paroquia_nome: string;
+  link_escala?:  string;  // URL completa para o portal do membro
+};
+
+export type EscalaCompletaContext = {
+  nome_membro:   string;
+  data_escala:   string;  // "DD/MM/YYYY"
+  hora_escala?:  string;  // "HH:MM"
+  ministerio:    string;
+  local?:        string;
+  paroquia_nome: string;
+  link_escala?:  string;
 };
 
 export type SubstituicaoSolicitadaContext = {
   nome_solicitante: string;
   data_escala:      string;
+  hora_escala?:     string;
   ministerio:       string;
+  local?:           string;
   paroquia_nome:    string;
+  link_escala?:     string;
 };
 
 export type SubstituicaoAprovadaContext = {
   nome_membro:   string;
   data_escala:   string;
+  hora_escala?:  string;
   ministerio:    string;
+  local?:        string;
   paroquia_nome: string;
+  link_escala?:  string;
 };
 
 export type SubstituicaoRecusadaContext = {
   nome_membro:   string;
   data_escala:   string;
+  hora_escala?:  string;
   ministerio:    string;
   motivo?:       string;
+  paroquia_nome?: string;
 };
 
 export type SubstituicaoConfirmadaSubstitutoContext = {
   /** Nome do membro que será o substituto */
   nome_membro:      string;
   data_escala:      string;
+  hora_escala?:     string;
   ministerio:       string;
+  local?:           string;
   paroquia_nome:    string;
+  link_escala?:     string;
   /** Nome de quem está sendo substituído — opcional mas recomendado */
   nome_solicitante?: string;
 };
@@ -95,73 +121,145 @@ export type LembreteEscalaContext = {
   data_escala:   string;  // "DD/MM/YYYY"
   hora_escala?:  string;  // "HH:MM"
   ministerio:    string;
+  local?:        string;
   paroquia_nome: string;
+  link_escala?:  string;
+};
+
+export type AvisoPastoralContext = {
+  nome_membro:   string;
+  paroquia_nome: string;
+  /** Texto livre da mensagem pastoral — renderizado diretamente */
+  mensagem:      string;
+  /** Nome do coordenador/responsável que enviou — opcional */
+  remetente?:    string;
 };
 
 // Union discriminada — usada internamente no renderer de templates
 export type TemplateContext =
   | EscalaPublicadaContext
+  | EscalaCompletaContext
   | SubstituicaoSolicitadaContext
   | SubstituicaoAprovadaContext
   | SubstituicaoRecusadaContext
   | SubstituicaoConfirmadaSubstitutoContext
-  | LembreteEscalaContext;
+  | LembreteEscalaContext
+  | AvisoPastoralContext;
 
 // ── Renderer de mensagens ─────────────────────────────────────────────────────
 // A Edge Function chama renderMensagem(evento_tipo, context) antes de enviarWhatsApp.
 // Retorna o texto final da mensagem ou lança RangeError se o tipo for inválido.
+
+function _horaLocal(hora?: string): string {
+  return hora ? ` às ${hora}` : "";
+}
+
+function _local(local?: string): string {
+  return local ? `\n📍 Local: ${local}` : "";
+}
+
+function _link(link?: string): string {
+  return link ? `\n🔗 ${link}` : "";
+}
 
 export function renderMensagem(tipo: EventoTipo, ctx: TemplateContext): string {
   switch (tipo) {
     case "escala_publicada": {
       const c = ctx as EscalaPublicadaContext;
       return (
-        `Olá, ${c.nome_membro}! 📋\n` +
-        `Você foi escalado(a) para *${c.ministerio}* em ${c.paroquia_nome}.\n` +
-        `📅 Data: ${c.data_escala}\n` +
-        `Acesse o portal para ver os detalhes.`
+        `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
+        `Você foi escalado(a) para servir como *${c.ministerio}* na ` +
+        `${c.paroquia_nome}.\n\n` +
+        `📅 Data: *${c.data_escala}*${_horaLocal(c.hora_escala)}` +
+        `${_local(c.local)}\n\n` +
+        `Sua participação é um presente para a nossa comunidade. ` +
+        `Que o Senhor abençoe o seu serviço!` +
+        `${_link(c.link_escala)}`
+      );
+    }
+    case "escala_completa": {
+      const c = ctx as EscalaCompletaContext;
+      return (
+        `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
+        `A escala de *${c.data_escala}*${_horaLocal(c.hora_escala)} está completa! ` +
+        `Todos os ministérios foram preenchidos para a celebração na ${c.paroquia_nome}.\n\n` +
+        `Você está confirmado(a) no *${c.ministerio}*. ` +
+        `Contamos com a sua presença!` +
+        `${_local(c.local)}` +
+        `${_link(c.link_escala)}`
       );
     }
     case "substituicao_solicitada": {
       const c = ctx as SubstituicaoSolicitadaContext;
       return (
-        `Olá! Há uma solicitação de substituição de *${c.nome_solicitante}*.\n` +
-        `📅 Escala: ${c.ministerio} — ${c.data_escala} (${c.paroquia_nome})\n` +
-        `Acesse o portal para aceitar ou recusar.`
+        `Paz e bem! 🙏\n\n` +
+        `*${c.nome_solicitante}* precisa de um substituto para o serviço ` +
+        `de *${c.ministerio}* na ${c.paroquia_nome}.\n\n` +
+        `📅 Data: *${c.data_escala}*${_horaLocal(c.hora_escala)}` +
+        `${_local(c.local)}\n\n` +
+        `Você pode ajudar? Acesse o portal para aceitar ou recusar.` +
+        `${_link(c.link_escala)}`
       );
     }
     case "substituicao_aprovada": {
       const c = ctx as SubstituicaoAprovadaContext;
       return (
-        `Olá, ${c.nome_membro}! ✅\n` +
-        `Sua substituição foi aprovada.\n` +
-        `📅 ${c.ministerio} — ${c.data_escala} (${c.paroquia_nome})`
+        `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
+        `Boa notícia! Sua substituição para o serviço de *${c.ministerio}* ` +
+        `na ${c.paroquia_nome} foi aprovada. ✅\n\n` +
+        `📅 Data: *${c.data_escala}*${_horaLocal(c.hora_escala)}` +
+        `${_local(c.local)}\n\n` +
+        `Fique tranquilo(a). Que Deus abençoe!` +
+        `${_link(c.link_escala)}`
       );
     }
     case "substituicao_recusada": {
       const c = ctx as SubstituicaoRecusadaContext;
-      const motivoLine = c.motivo ? `\nMotivo: ${c.motivo}` : "";
+      const motivoLine = c.motivo ? `\n\nMotivo: _${c.motivo}_` : "";
       return (
-        `Olá, ${c.nome_membro}. A substituição para ${c.data_escala} ` +
-        `(${c.ministerio}) não foi aceita.${motivoLine}`
+        `Paz e bem, ${c.nome_membro}. 🙏\n\n` +
+        `Sua solicitação de substituição para *${c.ministerio}* em ` +
+        `*${c.data_escala}* não foi aprovada desta vez.${motivoLine}\n\n` +
+        `Em caso de dúvidas, entre em contato com a coordenação.`
       );
     }
     case "substituicao_confirmada_substituto": {
       const c = ctx as SubstituicaoConfirmadaSubstitutoContext;
-      const quem = c.nome_solicitante ? ` no lugar de ${c.nome_solicitante}` : "";
+      const quem = c.nome_solicitante
+        ? ` no lugar de *${c.nome_solicitante}*`
+        : "";
       return (
-        `Olá, ${c.nome_membro}! ✅\n` +
-        `Você foi confirmado como substituto${quem}.\n` +
-        `📅 ${c.ministerio} — ${c.data_escala} (${c.paroquia_nome})`
+        `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
+        `Obrigado por aceitar substituir${quem} no serviço de ` +
+        `*${c.ministerio}* na ${c.paroquia_nome}. ✅\n\n` +
+        `📅 Data: *${c.data_escala}*${_horaLocal(c.hora_escala)}` +
+        `${_local(c.local)}\n\n` +
+        `Que o Senhor recompense a sua generosidade!` +
+        `${_link(c.link_escala)}`
       );
     }
     case "lembrete_escala": {
       const c = ctx as LembreteEscalaContext;
-      const hora = c.hora_escala ? ` às ${c.hora_escala}` : "";
       return (
-        `Olá, ${c.nome_membro}! ⏰ Lembrete:\n` +
-        `Você tem *${c.ministerio}* amanhã${hora} em ${c.paroquia_nome}.\n` +
-        `📅 ${c.data_escala}`
+        `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
+        `⏰ *Lembrete de serviço*\n\n` +
+        `Você tem *${c.ministerio}* amanhã${_horaLocal(c.hora_escala)} ` +
+        `na ${c.paroquia_nome}.\n\n` +
+        `📅 Data: *${c.data_escala}*` +
+        `${_local(c.local)}\n\n` +
+        `Contamos com você! Que Deus abençoe o seu serviço.` +
+        `${_link(c.link_escala)}`
+      );
+    }
+    case "aviso_pastoral": {
+      const c = ctx as AvisoPastoralContext;
+      const assinatura = c.remetente
+        ? `\n\n_— ${c.remetente} · ${c.paroquia_nome}_`
+        : `\n\n_— ${c.paroquia_nome}_`;
+      return (
+        `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
+        `${c.mensagem}` +
+        `${assinatura}`
       );
     }
     default: {

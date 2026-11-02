@@ -25,6 +25,7 @@ import { Route as AuthenticatedAjudaRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedAssinaturaRouteImport } from './routes/_authenticated/assinatura'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedCalendarioRouteImport } from './routes/_authenticated/calendario'
+import { Route as AuthenticatedComunicacaoPastoralRouteImport } from './routes/_authenticated/comunicacao-pastoral'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedConfiguracoesEscalasRouteImport } from './routes/_authenticated/configuracoes-escalas'
 import { Route as AuthenticatedEscalasRouteImport } from './routes/_authenticated/escalas'
@@ -163,6 +164,12 @@ const AuthenticatedCalendarioRoute = AuthenticatedCalendarioRouteImport.update({
   path: '/calendario',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedComunicacaoPastoralRoute =
+  AuthenticatedComunicacaoPastoralRouteImport.update({
+    id: '/comunicacao-pastoral',
+    path: '/comunicacao-pastoral',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedConfiguracoesRoute =
   AuthenticatedConfiguracoesRouteImport.update({
     id: '/configuracoes',
@@ -490,6 +497,7 @@ export interface FileRoutesByFullPath {
   '/assinatura': typeof AuthenticatedAssinaturaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
+  '/comunicacao-pastoral': typeof AuthenticatedComunicacaoPastoralRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
   '/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
   '/escalas': typeof AuthenticatedEscalasRoute
@@ -565,6 +573,7 @@ export interface FileRoutesByTo {
   '/assinatura': typeof AuthenticatedAssinaturaRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/calendario': typeof AuthenticatedCalendarioRoute
+  '/comunicacao-pastoral': typeof AuthenticatedComunicacaoPastoralRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
   '/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
   '/escalas': typeof AuthenticatedEscalasRoute
@@ -642,6 +651,7 @@ export interface FileRoutesById {
   '/_authenticated/assinatura': typeof AuthenticatedAssinaturaRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/calendario': typeof AuthenticatedCalendarioRoute
+  '/_authenticated/comunicacao-pastoral': typeof AuthenticatedComunicacaoPastoralRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRouteWithChildren
   '/_authenticated/configuracoes-escalas': typeof AuthenticatedConfiguracoesEscalasRoute
   '/_authenticated/escalas': typeof AuthenticatedEscalasRoute
@@ -719,6 +729,7 @@ export interface FileRouteTypes {
     | '/assinatura'
     | '/auditoria'
     | '/calendario'
+    | '/comunicacao-pastoral'
     | '/configuracoes'
     | '/configuracoes-escalas'
     | '/escalas'
@@ -794,6 +805,7 @@ export interface FileRouteTypes {
     | '/assinatura'
     | '/auditoria'
     | '/calendario'
+    | '/comunicacao-pastoral'
     | '/configuracoes'
     | '/configuracoes-escalas'
     | '/escalas'
@@ -870,6 +882,7 @@ export interface FileRouteTypes {
     | '/_authenticated/assinatura'
     | '/_authenticated/auditoria'
     | '/_authenticated/calendario'
+    | '/_authenticated/comunicacao-pastoral'
     | '/_authenticated/configuracoes'
     | '/_authenticated/configuracoes-escalas'
     | '/_authenticated/escalas'
@@ -1068,6 +1081,13 @@ declare module '@tanstack/react-router' {
       path: '/calendario'
       fullPath: '/calendario'
       preLoaderRoute: typeof AuthenticatedCalendarioRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/comunicacao-pastoral': {
+      id: '/_authenticated/comunicacao-pastoral'
+      path: '/comunicacao-pastoral'
+      fullPath: '/comunicacao-pastoral'
+      preLoaderRoute: typeof AuthenticatedComunicacaoPastoralRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/configuracoes': {
@@ -1502,6 +1522,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAssinaturaRoute: typeof AuthenticatedAssinaturaRoute
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCalendarioRoute: typeof AuthenticatedCalendarioRoute
+  AuthenticatedComunicacaoPastoralRoute: typeof AuthenticatedComunicacaoPastoralRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRouteWithChildren
   AuthenticatedConfiguracoesEscalasRoute: typeof AuthenticatedConfiguracoesEscalasRoute
   AuthenticatedEscalasRoute: typeof AuthenticatedEscalasRoute
@@ -1531,6 +1552,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAssinaturaRoute: AuthenticatedAssinaturaRoute,
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedCalendarioRoute: AuthenticatedCalendarioRoute,
+  AuthenticatedComunicacaoPastoralRoute: AuthenticatedComunicacaoPastoralRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRouteWithChildren,
   AuthenticatedConfiguracoesEscalasRoute:
     AuthenticatedConfiguracoesEscalasRoute,
@@ -1675,3 +1697,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

@@ -25,10 +25,17 @@ function json(body: unknown, status = 200) {
   });
 }
 
-// Converte Date para string YYYY-MM-DD no fuso UTC-3
+// Converte Date para string YYYY-MM-DD no fuso America/Sao_Paulo (UTC-3 fixo desde 2019).
+// Usa Intl.DateTimeFormat para conversão IANA em vez de deslocamento manual.
 function toLocalDate(d: Date): string {
-  const local = new Date(d.getTime() - 3 * 60 * 60 * 1000);
-  return local.toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    year:  "numeric",
+    month: "2-digit",
+    day:   "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 // Próximo dia a partir de uma data local YYYY-MM-DD
@@ -41,11 +48,12 @@ function addDays(dateStr: string, days: number): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey      = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const sendEmailUrl = `${supabaseUrl}/functions/v1/send-email`;
-  const sendPushUrl  = `${supabaseUrl}/functions/v1/send-push`;
+  const supabaseUrl     = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey      = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const anonKey         = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const sendEmailUrl    = `${supabaseUrl}/functions/v1/send-email`;
+  const sendPushUrl     = `${supabaseUrl}/functions/v1/send-push`;
+  const sendWhatsAppUrl = `${supabaseUrl}/functions/v1/send-whatsapp`;
 
   const admin = createClient(supabaseUrl, serviceKey);
 
@@ -182,7 +190,7 @@ Deno.serve(async (req) => {
   // Busca escalas publicadas nas datas alvo
   const { data: escalas, error: eErr } = await admin
     .from("escalas")
-    .select("id, titulo, data, hora_inicio, paroquia_id, paroquias(nome)")
+    .select("id, titulo, data, hora_inicio, local, paroquia_id, paroquias(nome)")
     .eq("status", "publicada")
     .in("data", datasAlvo);
 
@@ -212,22 +220,28 @@ Deno.serve(async (req) => {
 
   const { data: atrib, error: aErr } = await admin
     .from("escala_membros")
-    .select("escala_id, ministerio_id, membros(id, nome, email, auth_user_id), ministerios(nome)")
+    .select("escala_id, ministerio_id, membros(id, nome, email, auth_user_id, whatsapp_opt_in, whatsapp_telefone), ministerios(nome)")
     .in("escala_id", escalaIds)
     .neq("ativo", false);
 
   if (aErr) return json({ ok: false, error: aErr.message }, 500);
 
-  // Lê push secret uma vez (falha silenciosa — push é adicional)
+  // Lê push secret e wa secret uma vez (falha silenciosa — são adicionais)
   let pushSecret: string | null = null;
+  let waSecret: string | null = null;
   try {
-    const { data: cfg } = await admin
+    const { data: cfgs } = await admin
       .from("_push_config")
-      .select("val")
-      .eq("key", "internal_push_secret")
-      .single();
-    pushSecret = cfg?.val ?? null;
-  } catch { /* push desabilitado se não configurado */ }
+      .select("key, val")
+      .in("key", ["internal_push_secret", "internal_wa_secret"]);
+    for (const row of cfgs ?? []) {
+      if (row.key === "internal_push_secret") pushSecret = row.val;
+      if (row.key === "internal_wa_secret")   waSecret   = row.val;
+    }
+  } catch { /* secrets desabilitados se não configurados */ }
+
+  // WhatsApp só para modos de lembrete com prazo de 24h (não para modo 3horas)
+  const waEnabled = waSecret && (mode === "1dia" || mode === "sabado");
 
   let enviados = 0;
   const erros: string[] = [];
@@ -283,6 +297,37 @@ Deno.serve(async (req) => {
       if (!pushUsersByEscala[escala.id].includes(membro.auth_user_id)) {
         pushUsersByEscala[escala.id].push(membro.auth_user_id);
       }
+    }
+
+    // WhatsApp lembrete — fire-and-forget, nunca bloqueia e-mail/push
+    if (waEnabled && membro.id && membro.whatsapp_opt_in && membro.whatsapp_telefone) {
+      try {
+        const waPayload = {
+          membro_id:     membro.id,
+          paroquia_id:   escala.paroquia_id,
+          evento_tipo:   "lembrete_escala",
+          evento_ref_id: escala.id,
+          context: {
+            nome_membro:   membro.nome,
+            data_escala:   escala.data.split("-").reverse().join("/"),
+            hora_escala:   escala.hora_inicio?.slice(0, 5) ?? undefined,
+            ministerio:    min?.nome ?? "",
+            local:         (escala as any).local ?? undefined,
+            paroquia_nome: paroquiaNome,
+            link_escala:   "https://lumenpastoral.com.br/portal-membro/escalas",
+          },
+        };
+        // Fire-and-forget — sem await
+        fetch(sendWhatsAppUrl, {
+          method:  "POST",
+          headers: {
+            "Content-Type":  "application/json",
+            "Authorization": `Bearer ${anonKey}`,
+            "X-Wa-Secret":   waSecret!,
+          },
+          body: JSON.stringify(waPayload),
+        }).catch(() => { /* falha silenciosa */ });
+      } catch { /* falha silenciosa */ }
     }
   }
 
