@@ -157,13 +157,56 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const { data: escala } = await supabaseGuard
+    // evento_ref_id pode ser escalas.id (trigger 171) ou escala_membros.id (trigger 177)
+    const { data: escalaDir } = await supabaseGuard
       .from("escalas")
       .select("status")
       .eq("id", payload.evento_ref_id)
-      .single();
+      .maybeSingle();
+
+    let escalaStatus: string | null = null;
+    if (escalaDir) {
+      escalaStatus = escalaDir.status;
+    } else {
+      // Fallback: tenta via escala_membros.id (inclusão posterior — trigger 177)
+      const { data: em } = await supabaseGuard
+        .from("escala_membros")
+        .select("escalas(status)")
+        .eq("id", payload.evento_ref_id)
+        .maybeSingle();
+      escalaStatus = (em?.escalas as { status?: string } | null)?.status ?? null;
+    }
+
+    if (!escalaStatus || escalaStatus !== "publicada") {
+      console.warn(`[send-whatsapp] escala ref ${payload.evento_ref_id} não está mais publicada — pulado`);
+      return json({ ok: true, enviado: false, pulado: true, motivo: "escala_nao_publicada" });
+    }
+  }
+
+  if (payload.evento_tipo === "escala_funcao_alterada") {
+    // context.escala_id é obrigatório em runtime: o evento_ref_id é um UUID md5
+    // que não referencia nenhuma tabela; a verificação do status depende do escala_id.
+    const escalaId = (payload.context as { escala_id?: string }).escala_id;
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!escalaId || typeof escalaId !== "string" || escalaId.trim() === "") {
+      console.error("[send-whatsapp] context.escala_id ausente em escala_funcao_alterada");
+      return json({ ok: false, error: "context.escala_id obrigatório para escala_funcao_alterada" }, 400);
+    }
+    if (!UUID_RE.test(escalaId)) {
+      console.error("[send-whatsapp] context.escala_id não é um UUID válido:", escalaId);
+      return json({ ok: false, error: "context.escala_id não é um UUID válido" }, 400);
+    }
+    const supabaseGuard = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: escala } = await supabaseGuard
+      .from("escalas")
+      .select("status")
+      .eq("id", escalaId)
+      .maybeSingle();
     if (!escala || escala.status !== "publicada") {
-      console.warn(`[send-whatsapp] escala ${payload.evento_ref_id} não está mais publicada — pulado`);
+      console.warn(`[send-whatsapp] escala ${escalaId} não está mais publicada (funcao_alterada) — pulado`);
       return json({ ok: true, enviado: false, pulado: true, motivo: "escala_nao_publicada" });
     }
   }

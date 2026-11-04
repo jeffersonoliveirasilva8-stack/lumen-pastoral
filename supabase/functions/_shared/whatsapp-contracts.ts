@@ -40,6 +40,7 @@ export type WhatsAppEventResponse =
 export const EVENTO_TIPOS = [
   "escala_publicada",
   "escala_completa",
+  "escala_funcao_alterada",
   "substituicao_solicitada",
   "substituicao_aprovada",
   "substituicao_recusada",
@@ -72,6 +73,18 @@ export type EscalaCompletaContext = {
   local?:        string;
   paroquia_nome: string;
   link_escala?:  string;
+};
+
+export type EscalaFuncaoAlteradaContext = {
+  nome_membro:   string;
+  data_escala:   string;  // "DD/MM/YYYY"
+  hora_escala?:  string;  // "HH:MM"
+  ministerio:    string;  // nova função após mudança
+  local?:        string;
+  paroquia_nome: string;
+  link_escala?:  string;
+  /** UUID de escalas.id — usado pela Edge Function para verificar status=publicada */
+  escala_id:     string;
 };
 
 export type SubstituicaoSolicitadaContext = {
@@ -139,6 +152,7 @@ export type AvisoPastoralContext = {
 export type TemplateContext =
   | EscalaPublicadaContext
   | EscalaCompletaContext
+  | EscalaFuncaoAlteradaContext
   | SubstituicaoSolicitadaContext
   | SubstituicaoAprovadaContext
   | SubstituicaoRecusadaContext
@@ -173,6 +187,18 @@ export function renderMensagem(tipo: EventoTipo, ctx: TemplateContext): string {
         `📅 Data: *${c.data_escala}*${_horaLocal(c.hora_escala)}` +
         `${_local(c.local)}\n\n` +
         `Sua participação é um presente para a nossa comunidade. ` +
+        `Que o Senhor abençoe o seu serviço!` +
+        `${_link(c.link_escala)}`
+      );
+    }
+    case "escala_funcao_alterada": {
+      const c = ctx as EscalaFuncaoAlteradaContext;
+      return (
+        `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
+        `Sua função na escala de *${c.data_escala}*${_horaLocal(c.hora_escala)} ` +
+        `foi atualizada na ${c.paroquia_nome}.\n\n` +
+        `🎭 Nova função: *${c.ministerio}*` +
+        `${_local(c.local)}\n\n` +
         `Que o Senhor abençoe o seu serviço!` +
         `${_link(c.link_escala)}`
       );
@@ -310,19 +336,28 @@ export function assertProviderConfigured(get: (key: string) => string | undefine
 
 // ── Validação de payload ──────────────────────────────────────────────────────
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Retorna null se válido, ou string de erro se inválido. */
 export function validatePayload(raw: unknown): string | null {
-  if (!raw || typeof raw !== "object") return "payload deve ser um objeto JSON";
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
+    return "payload deve ser um objeto JSON";
   const p = raw as Record<string, unknown>;
   if (typeof p.membro_id !== "string" || !p.membro_id)
     return "membro_id ausente ou inválido";
+  if (!UUID_RE.test(p.membro_id))
+    return "membro_id não é um UUID válido";
   if (typeof p.paroquia_id !== "string" || !p.paroquia_id)
     return "paroquia_id ausente ou inválido";
+  if (!UUID_RE.test(p.paroquia_id))
+    return "paroquia_id não é um UUID válido";
   if (!EVENTO_TIPOS.includes(p.evento_tipo as EventoTipo))
     return `evento_tipo inválido: ${p.evento_tipo}. Aceitos: ${EVENTO_TIPOS.join(", ")}`;
   if (typeof p.evento_ref_id !== "string" || !p.evento_ref_id)
     return "evento_ref_id ausente ou inválido";
-  if (!p.context || typeof p.context !== "object")
-    return "context ausente ou inválido";
+  if (!UUID_RE.test(p.evento_ref_id))
+    return "evento_ref_id não é um UUID válido";
+  if (!p.context || typeof p.context !== "object" || Array.isArray(p.context))
+    return "context ausente ou inválido (deve ser um objeto)";
   return null;
 }
