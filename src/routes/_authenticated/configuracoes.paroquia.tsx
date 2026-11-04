@@ -3919,24 +3919,44 @@ function PontuacaoConfigTab({ paroquia, onSaved }: { paroquia: Paroquia; onSaved
             Controla a data de corte para o rodízio de solenidades. Solenidades anteriores ao corte não influenciam quem pode servir na próxima.
           </p>
         </div>
-        {configDb?.rodizio_reset_em && (
-          <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 px-3 py-2.5">
-            <span className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5 text-xs font-bold select-none">✓</span>
-            <p className="text-xs text-emerald-700 dark:text-emerald-400">
-              Último reset em <strong>{new Date(configDb.rodizio_reset_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</strong>.
-              O rodízio considera apenas solenidades publicadas a partir dessa data (e de 18/08/2026, o que for maior).
-            </p>
-          </div>
-        )}
-        {!configDb?.rodizio_reset_em && (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2.5">
-            <span className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 text-xs font-bold select-none">i</span>
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              Nenhum reset manual foi realizado. O rodízio considera solenidades a partir de <strong>18/08/2026</strong> (data de corte padrão do sistema).
-              Solenidades anteriores a essa data não afetam a elegibilidade de nenhum membro.
-            </p>
-          </div>
-        )}
+        {(() => {
+          const CORTE_PADRAO = "2026-08-18";
+          const resetSlice = configDb?.rodizio_reset_em ? configDb.rodizio_reset_em.slice(0, 10) : null;
+          const dataCorteRodizio = resetSlice && resetSlice > CORTE_PADRAO ? resetSlice : CORTE_PADRAO;
+          const dataCorteFormatada = new Date(dataCorteRodizio + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+
+          return (
+            <>
+              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-2.5">
+                <div>
+                  <p className="text-xs text-muted-foreground">Data de corte efetiva do rodízio</p>
+                  <p className="text-sm font-semibold">{dataCorteFormatada}</p>
+                </div>
+                <span className="text-[10px] bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
+                  {resetSlice && resetSlice > CORTE_PADRAO ? "reset manual" : "padrão do sistema"}
+                </span>
+              </div>
+              {configDb?.rodizio_reset_em && (
+                <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 px-3 py-2.5">
+                  <span className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5 text-xs font-bold select-none">✓</span>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                    Último reset em <strong>{new Date(configDb.rodizio_reset_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</strong>.
+                    O rodízio considera apenas solenidades publicadas a partir dessa data (e de 18/08/2026, o que for maior).
+                  </p>
+                </div>
+              )}
+              {!configDb?.rodizio_reset_em && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2.5">
+                  <span className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 text-xs font-bold select-none">i</span>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Nenhum reset manual foi realizado. O rodízio considera solenidades a partir de <strong>18/08/2026</strong> (data de corte padrão do sistema).
+                    Solenidades anteriores a essa data não afetam a elegibilidade de nenhum membro.
+                  </p>
+                </div>
+              )}
+            </>
+          );
+        })()}
         <AlertDialog open={resetRodizioOpen} onOpenChange={setResetRodizioOpen}>
           <Button
             variant="outline" size="sm" className="rounded-xl text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700"

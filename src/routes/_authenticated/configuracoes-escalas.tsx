@@ -1,7 +1,7 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { Loader2, Save, RotateCcw } from "lucide-react";
+import { Loader2, Save, RotateCcw, Star, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSetPageTabs } from "@/contexts/page-tabs";
@@ -113,6 +113,16 @@ function PRow({ label, color, value, onChange }: {
   );
 }
 
+// ── Types (solenidades) ───────────────────────────────────────────────────────
+
+type Ministerio = { id: string; nome: string; relevancia: string };
+type MembroMinisterio = {
+  membro_id: string;
+  ministerio_id: string;
+  preferencial_solene: boolean;
+  membros: { id: string; nome: string } | null;
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 function ConfiguracaoEscalas() {
@@ -126,6 +136,8 @@ function ConfiguracaoEscalas() {
   const [saving, setSaving]   = useState(false);
   const [reprocessLoading, setReprocessLoading] = useState(false);
   const [recalcLoading, setRecalcLoading]       = useState(false);
+  const [expandedMin, setExpandedMin]           = useState<string | null>(null);
+  const [togglingKey, setTogglingKey]           = useState<string | null>(null);
 
   const { data: paroquia } = useQuery({
     queryKey: ["paroquia-regras-escala", paroquiaId],
@@ -151,6 +163,33 @@ function ConfiguracaoEscalas() {
         .maybeSingle();
       if (error) throw error;
       return data ?? DEFAULTS;
+    },
+  });
+
+  const { data: ministerios = [] } = useQuery<Ministerio[]>({
+    queryKey: ["ministerios-list", paroquiaId],
+    enabled: !!paroquiaId,
+    queryFn: async () => {
+      const { data } = await anyDb
+        .from("ministerios")
+        .select("id, nome, relevancia")
+        .eq("paroquia_id", paroquiaId)
+        .order("ordem_prioridade")
+        .order("nome");
+      return data ?? [];
+    },
+  });
+
+  const { data: membroMinisterios = [], refetch: refetchMM } = useQuery<MembroMinisterio[]>({
+    queryKey: ["membro-ministerios-solene", paroquiaId],
+    enabled: !!paroquiaId && ministerios.length > 0,
+    queryFn: async () => {
+      const ids = ministerios.map((m) => m.id);
+      const { data } = await anyDb
+        .from("membro_ministerios")
+        .select("membro_id, ministerio_id, preferencial_solene, membros(id, nome)")
+        .in("ministerio_id", ids);
+      return data ?? [];
     },
   });
 
@@ -229,6 +268,25 @@ function ConfiguracaoEscalas() {
       toast.error("Erro ao recalcular: " + (e as Error).message);
     } finally {
       setRecalcLoading(false);
+    }
+  }
+
+  async function togglePreferencialSolene(membroId: string, ministerioId: string, value: boolean) {
+    const key = `${membroId}__${ministerioId}`;
+    setTogglingKey(key);
+    try {
+      const { error } = await anyDb
+        .from("membro_ministerios")
+        .update({ preferencial_solene: value })
+        .eq("membro_id", membroId)
+        .eq("ministerio_id", ministerioId);
+      if (error) throw error;
+      await refetchMM();
+      qc.invalidateQueries({ queryKey: ["preferencias-solene"] });
+    } catch (e: unknown) {
+      toast.error("Erro ao atualizar: " + (e as Error).message);
+    } finally {
+      setTogglingKey(null);
     }
   }
 
@@ -456,6 +514,78 @@ function ConfiguracaoEscalas() {
             </div>
           </>
         )}
+      </section>
+
+      {/* ── Solenidades ── */}
+      <section className="rounded-2xl border border-border bg-card p-5 space-y-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Solenidades — membros preferenciais</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Marque quais membros recebem bônus de prioridade em cada função durante solenidades. O motor usa isso para preferir esses membros, mas não os torna obrigatórios.
+          </p>
+        </div>
+
+        {ministerios.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">Nenhuma função cadastrada.</p>
+        )}
+
+        {ministerios.map((min) => {
+          const membrosDoMin = membroMinisterios
+            .filter((mm) => mm.ministerio_id === min.id && mm.membros)
+            .sort((a, b) => (a.membros?.nome ?? "").localeCompare(b.membros?.nome ?? "", "pt-BR"));
+          const preferenciais = membrosDoMin.filter((mm) => mm.preferencial_solene).length;
+          const isExpanded = expandedMin === min.id;
+
+          return (
+            <div key={min.id} className="rounded-xl border border-border overflow-hidden">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition text-left"
+                onClick={() => setExpandedMin(isExpanded ? null : min.id)}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{min.nome}</span>
+                  {min.relevancia === "principal" && (
+                    <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-medium">principal</span>
+                  )}
+                  {preferenciais > 0 && (
+                    <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      <Star className="h-2.5 w-2.5" />{preferenciais}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span className="text-xs">{membrosDoMin.length} membro{membrosDoMin.length !== 1 ? "s" : ""}</span>
+                  {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div className="border-t border-border/50 divide-y divide-border/30">
+                  {membrosDoMin.length === 0 && (
+                    <p className="text-xs text-muted-foreground px-4 py-3">Nenhum membro nesta função.</p>
+                  )}
+                  {membrosDoMin.map((mm) => {
+                    const key = `${mm.membro_id}__${mm.ministerio_id}`;
+                    return (
+                      <div key={key} className="flex items-center justify-between px-4 py-2.5 gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {mm.preferencial_solene && <Star className="h-3 w-3 text-amber-500 shrink-0" />}
+                          <span className="text-sm truncate">{mm.membros?.nome}</span>
+                        </div>
+                        <Switch
+                          checked={mm.preferencial_solene}
+                          disabled={togglingKey === key}
+                          onCheckedChange={(v) => togglePreferencialSolene(mm.membro_id, mm.ministerio_id, v)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </section>
 
       {/* ── Salvar ── */}
