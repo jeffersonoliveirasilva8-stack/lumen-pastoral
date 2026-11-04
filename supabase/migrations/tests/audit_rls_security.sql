@@ -172,28 +172,42 @@ BEGIN
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- A10: triggers de escala_completa são SECURITY DEFINER
+-- A10: _trg_fn_whatsapp_inclusao_posterior existe e é SECURITY DEFINER
+--      (migration 177 substituiu os 3 triggers escala_completa por esta função)
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE
-  v_n int;
+  v_n      int;
+  v_old_n  int;
 BEGIN
+  -- Nova função deve existir e ser SECURITY DEFINER
   SELECT COUNT(*) INTO v_n FROM pg_proc p
+  JOIN pg_namespace n ON n.oid = p.pronamespace
+  WHERE n.nspname = 'public'
+    AND p.proname = '_trg_fn_whatsapp_inclusao_posterior'
+    AND p.prosecdef = true;
+
+  ASSERT v_n = 1,
+    format('A10 FAIL: _trg_fn_whatsapp_inclusao_posterior não encontrada ou não é SECURITY DEFINER (count=%s)', v_n);
+
+  -- As 3 funções antigas devem ter sido removidas
+  SELECT COUNT(*) INTO v_old_n FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
     AND p.proname IN (
       '_trg_fn_whatsapp_escala_completa_membros',
       '_trg_fn_whatsapp_escala_completa_publicacao',
       '_trg_fn_whatsapp_escala_completa_funcoes'
-    )
-    AND p.prosecdef = true;
+    );
 
-  ASSERT v_n = 3, format('A10 FAIL: %s de 3 funções de trigger são SECURITY DEFINER', v_n);
-  RAISE NOTICE 'A10 PASS: todas as 3 funções de trigger de escala_completa são SECURITY DEFINER';
+  ASSERT v_old_n = 0,
+    format('A10 FAIL: %s função(ões) escala_completa ainda existem (devem ter sido removidas pela migration 177)', v_old_n);
+
+  RAISE NOTICE 'A10 PASS: _trg_fn_whatsapp_inclusao_posterior é SECURITY DEFINER; 3 funções antigas removidas';
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- A11: trigger em escala_membros só processa INSERT e reativação (não toda UPDATE)
+-- A11: função unificada tem guard de INSERT ativo=false e guard de reativação
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE
@@ -202,15 +216,19 @@ BEGIN
   SELECT prosrc INTO v_src FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
-    AND p.proname = '_trg_fn_whatsapp_escala_completa_membros';
+    AND p.proname = '_trg_fn_whatsapp_inclusao_posterior';
 
-  ASSERT v_src LIKE '%OLD.ativo%' OR v_src LIKE '%TG_OP%',
-    'A11 FAIL: trigger não tem guard de reativação (OLD.ativo)';
-  RAISE NOTICE 'A11 PASS: trigger de membros tem guard contra atualizações sem reativação';
+  ASSERT v_src IS NOT NULL,
+    'A11 FAIL: função _trg_fn_whatsapp_inclusao_posterior não encontrada';
+  ASSERT v_src LIKE '%NEW.ativo IS FALSE%',
+    'A11 FAIL: sem guard explícito para INSERT com ativo=false';
+  ASSERT v_src LIKE '%OLD.ativo IS FALSE%',
+    'A11 FAIL: sem guard de reativação (OLD.ativo IS FALSE)';
+  RAISE NOTICE 'A11 PASS: guards INSERT ativo=false e reativação (OLD.ativo) presentes';
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- A12: trigger de publicação só processa transição → 'publicada'
+-- A12: função cobre mudança de ministerio_id → evento escala_funcao_alterada
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE
@@ -219,30 +237,40 @@ BEGIN
   SELECT prosrc INTO v_src FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
-    AND p.proname = '_trg_fn_whatsapp_escala_completa_publicacao';
+    AND p.proname = '_trg_fn_whatsapp_inclusao_posterior';
 
-  ASSERT v_src LIKE '%OLD.status%',
-    'A12 FAIL: trigger de publicação não verifica OLD.status (permite republicação)';
-  ASSERT v_src LIKE '%publicada%',
-    'A12 FAIL: trigger de publicação não verifica novo status';
-  RAISE NOTICE 'A12 PASS: trigger de publicação tem guard contra republicação';
+  ASSERT v_src LIKE '%escala_funcao_alterada%',
+    'A12 FAIL: função não emite evento escala_funcao_alterada para mudança de ministerio_id';
+  ASSERT v_src LIKE '%ministerio_id IS DISTINCT FROM%',
+    'A12 FAIL: sem detecção de mudança de ministerio_id (IS DISTINCT FROM)';
+  RAISE NOTICE 'A12 PASS: mudança de ministerio_id → escala_funcao_alterada implementada';
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- A13: trigger de funcoes só processa REDUÇÃO de quantidade
+-- A13: função tem SET search_path = public (SECURITY DEFINER seguro)
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE
-  v_src text;
+  v_cfg  text[];
+  v_has  boolean;
 BEGIN
-  SELECT prosrc INTO v_src FROM pg_proc p
+  SELECT p.proconfig INTO v_cfg FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
   WHERE n.nspname = 'public'
-    AND p.proname = '_trg_fn_whatsapp_escala_completa_funcoes';
+    AND p.proname = '_trg_fn_whatsapp_inclusao_posterior';
 
-  ASSERT v_src LIKE '%OLD.quantidade%' OR v_src LIKE '%NEW.quantidade%',
-    'A13 FAIL: trigger de funcoes não compara OLD/NEW.quantidade';
-  RAISE NOTICE 'A13 PASS: trigger de funcoes tem guard para processar apenas reduções';
+  -- Aceita search_path vazio ('search_path=') ou explícito ('search_path=public')
+  -- O importante é que search_path esteja configurado (não herde o default '$user, public')
+  v_has := (v_cfg IS NOT NULL AND EXISTS (
+    SELECT 1 FROM unnest(v_cfg) AS x WHERE x LIKE 'search_path=%'
+  ));
+
+  ASSERT v_has,
+    format('A13 FAIL: SET search_path ausente na função SECURITY DEFINER '
+           '(aceita vazio ou explícito; proconfig=%s)',
+           COALESCE(array_to_string(v_cfg, ','), 'NULL'));
+  RAISE NOTICE 'A13 PASS: SET search_path configurado na função SECURITY DEFINER (proconfig: %)',
+    COALESCE(array_to_string(v_cfg, ','), 'NULL');
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
