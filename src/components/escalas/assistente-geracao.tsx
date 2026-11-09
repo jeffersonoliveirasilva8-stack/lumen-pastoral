@@ -881,19 +881,24 @@ export function AssistenteGeracaoEscalas({
 
       // Chama o motor V3 para TODAS as celebrações (missas comuns e solenidades)
       // Motor detecta modo automaticamente: solene=true → scoring mérito; false → equidade
+      // BUG-1 fix: preferenciaisSolene agora repassado ao motor (estava ausente)
+      // Nota BUG-2: missas_padrao não possui modo_selecao — campo existe apenas em escalas
+      //   individuais. Solenidades ativam mérito automaticamente via solene=true.
+      //   Suporte a modo_selecao por missa padrão requer decisão de design + migration futura.
       const resultado = generateEscalaWithAlertas(
         { titulo: cel.titulo, data: cel.data, tipo: cel.tipo, observacoes: null },
         funcoesPedido,
         membrosComAtuacoes,
         membroMinisterios,
         {
-          history:            [...assignmentHistory, ...batchHistory],
-          indisponibilidades: indispParaGeracao,
-          restricoes:         funcaoRestricoes,
-          config:             engineConfig,
-          solene:             cel.solene,
-          tem_adoracao:       cel.tem_adoracao,
-          tem_bispo:          cel.tem_bispo,
+          history:              [...assignmentHistory, ...batchHistory],
+          indisponibilidades:   indispParaGeracao,
+          restricoes:           funcaoRestricoes,
+          config:               engineConfig,
+          solene:               cel.solene,
+          tem_adoracao:         cel.tem_adoracao,
+          tem_bispo:            cel.tem_bispo,
+          preferenciaisSolene,  // BUG-1: membros preferenciais agora chegam ao motor
         }
       );
 
