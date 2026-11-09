@@ -61,7 +61,7 @@ CREATE POLICY "decisoes_read_coord_admin"
     OR EXISTS (
       SELECT 1 FROM public.coordenadores c
       JOIN public.membros m ON m.id = c.membro_id
-      WHERE m.user_id     = auth.uid()
+      WHERE m.auth_user_id = auth.uid()
         AND m.paroquia_id = membro_decisoes_presenca.paroquia_id
         AND c.ativo        = true
     )
@@ -269,7 +269,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.coordenadores c
     JOIN public.membros m ON m.id = c.membro_id
-    WHERE m.user_id     = v_auth_id
+    WHERE m.auth_user_id = v_auth_id
       AND m.paroquia_id = v_paroquia_id
       AND c.ativo        = true
   ) THEN
@@ -378,7 +378,7 @@ BEGIN
     OR EXISTS (
       SELECT 1 FROM public.coordenadores c
       JOIN public.membros m ON m.id = c.membro_id
-      WHERE m.user_id     = v_auth_id
+      WHERE m.auth_user_id = v_auth_id
         AND m.paroquia_id = v_paroquia_id
         AND c.ativo        = true
     )

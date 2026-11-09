@@ -94,6 +94,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.salvar_presencas_escala(UUID, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.salvar_presencas_escala(UUID, JSONB) TO service_role;
 REVOKE EXECUTE ON FUNCTION public.salvar_presencas_escala(UUID, JSONB) FROM anon;
 
 NOTIFY pgrst, 'reload schema';

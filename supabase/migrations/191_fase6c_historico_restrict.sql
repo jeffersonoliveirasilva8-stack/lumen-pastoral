@@ -48,6 +48,10 @@ ALTER TABLE public.historico_participacoes
 -- DELETE FROM paroquias, pois a FK RESTRICT impede que o cascade de paróquia
 -- (via escalas.paroquia_id CASCADE) processe historico_participacoes.escala_id.
 -- Toda a operação é transacional: qualquer falha reverte automaticamente.
+--
+-- DROP necessário: produção tem RETURNS void; esta versão retorna JSONB.
+-- PostgreSQL não aceita CREATE OR REPLACE com mudança de tipo de retorno.
+DROP FUNCTION IF EXISTS public.admin_deletar_paroquia(UUID);
 
 CREATE OR REPLACE FUNCTION public.admin_deletar_paroquia(p_paroquia_id UUID)
 RETURNS JSONB
@@ -57,16 +61,22 @@ SET search_path = public
 SET row_security = off
 AS $$
 DECLARE
-  v_auth_id UUID := auth.uid();
-  v_role    TEXT;
+  v_auth_id        UUID    := auth.uid();
+  v_is_super_admin BOOLEAN;
+  v_is_admin_par   BOOLEAN;
 BEGIN
-  SELECT role INTO v_role FROM public.profiles WHERE id = v_auth_id;
-  IF v_role NOT IN ('admin_paroquial', 'super_admin') THEN
+  -- Autorização via user_roles (profiles não possui coluna role)
+  SELECT
+    EXISTS(SELECT 1 FROM public.user_roles WHERE user_id = v_auth_id AND role = 'super_admin'),
+    EXISTS(SELECT 1 FROM public.user_roles WHERE user_id = v_auth_id AND role = 'admin_paroquial')
+  INTO v_is_super_admin, v_is_admin_par;
+
+  IF NOT (v_is_super_admin OR v_is_admin_par) THEN
     RETURN jsonb_build_object('success', false, 'error', 'sem_permissao');
   END IF;
 
   -- Garante que somente a paróquia do próprio admin seja afetada (exceto super_admin)
-  IF v_role = 'admin_paroquial' THEN
+  IF v_is_admin_par AND NOT v_is_super_admin THEN
     IF NOT EXISTS (
       SELECT 1 FROM public.profiles
       WHERE id = v_auth_id AND paroquia_id = p_paroquia_id
@@ -94,5 +104,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.admin_deletar_paroquia(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_deletar_paroquia(UUID) TO anon;
+GRANT EXECUTE ON FUNCTION public.admin_deletar_paroquia(UUID) TO service_role;
 
 NOTIFY pgrst, 'reload schema';
