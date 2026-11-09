@@ -39,6 +39,12 @@ type RankingCompleto = {
   total_faltas: number;
   taxa_presenca: number;
   ministerios: MinisterioInfo[];
+  // campos v2 (migration 188) — opcionais para retrocompatibilidade
+  data_ultima_escala?: string | null;
+  dias_sem_servir?: number | null;
+  convocacoes_12sem?: number | null;
+  presencas_12sem?: number | null;
+  taxa_presenca_12sem?: number | null;
 };
 
 type HistoricoItem = {
@@ -73,6 +79,12 @@ function useRankingCompleto(paroquiaId: string | undefined) {
         total_faltas: Number(r.total_faltas ?? 0),
         taxa_presenca: Number(r.taxa_presenca ?? 0),
         ministerios: Array.isArray(r.ministerios) ? r.ministerios : [],
+        // campos v2 (opcionais)
+        data_ultima_escala: r.data_ultima_escala ?? null,
+        dias_sem_servir: r.dias_sem_servir != null ? Number(r.dias_sem_servir) : null,
+        convocacoes_12sem: r.convocacoes_12sem != null ? Number(r.convocacoes_12sem) : null,
+        presencas_12sem: r.presencas_12sem != null ? Number(r.presencas_12sem) : null,
+        taxa_presenca_12sem: r.taxa_presenca_12sem != null ? Number(r.taxa_presenca_12sem) : null,
       }));
     },
   });
@@ -144,13 +156,28 @@ function AvaliacaoParticipacao() {
     if (filtro === "alta_fidelidade") lista = lista.filter((m) => m.taxa_presenca === 100 && m.total_convocacoes > 0);
     // Ordenação
     if (ordenar === "equidade") {
-      lista = [...lista].sort((a, b) => a.total_convocacoes - b.total_convocacoes || b.taxa_presenca - a.taxa_presenca);
+      // Se dados v2 disponíveis: ordena por mais dias sem servir (esquecidos primeiro)
+      const temV2 = lista.some((m) => m.dias_sem_servir != null);
+      if (temV2) {
+        lista = [...lista].sort((a, b) => {
+          // Nunca serviu → prioridade máxima
+          if (a.data_ultima_escala == null && b.data_ultima_escala == null) return a.nome.localeCompare(b.nome, "pt-BR");
+          if (a.data_ultima_escala == null) return -1;
+          if (b.data_ultima_escala == null) return 1;
+          return (b.dias_sem_servir ?? 0) - (a.dias_sem_servir ?? 0);
+        });
+      } else {
+        lista = [...lista].sort((a, b) => a.total_convocacoes - b.total_convocacoes || b.taxa_presenca - a.taxa_presenca);
+      }
     } else if (ordenar === "presenca") {
       lista = [...lista].sort((a, b) => {
         if (a.total_convocacoes === 0 && b.total_convocacoes === 0) return a.nome.localeCompare(b.nome, "pt-BR");
         if (a.total_convocacoes === 0) return -1;
         if (b.total_convocacoes === 0) return 1;
-        return b.taxa_presenca - a.taxa_presenca;
+        // Preferir taxa das 12 semanas quando disponível
+        const taxaA = a.taxa_presenca_12sem ?? a.taxa_presenca;
+        const taxaB = b.taxa_presenca_12sem ?? b.taxa_presenca;
+        return taxaB - taxaA;
       });
     } else {
       lista = [...lista].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -381,15 +408,33 @@ function ParticipacaoCard({ membro: m, onClick }: { membro: RankingCompleto; onC
 
         {/* Métricas compactas */}
         <div className="flex items-center gap-3 shrink-0 text-right">
-          <div>
-            <p className="text-sm font-semibold tabular-nums">{m.total_convocacoes}</p>
-            <p className="text-[9px] text-muted-foreground">conv.</p>
-          </div>
+          {/* dias sem servir (campo v2) ou convocações totais */}
+          {m.dias_sem_servir != null ? (
+            <div>
+              <p className={`text-sm font-semibold tabular-nums ${
+                m.dias_sem_servir > 60 ? "text-amber-500"
+                : m.dias_sem_servir > 90 ? "text-red-500"
+                : ""
+              }`}>
+                {m.dias_sem_servir === 0 ? "hoje" : `${m.dias_sem_servir}d`}
+              </p>
+              <p className="text-[9px] text-muted-foreground">sem servir</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm font-semibold tabular-nums">{m.total_convocacoes}</p>
+              <p className="text-[9px] text-muted-foreground">conv.</p>
+            </div>
+          )}
           <div>
             <p className={`text-sm font-semibold tabular-nums ${taxaColor}`}>
-              {m.total_convocacoes > 0 ? `${m.taxa_presenca}%` : "—"}
+              {m.total_convocacoes > 0
+                ? `${m.taxa_presenca_12sem != null ? m.taxa_presenca_12sem : m.taxa_presenca}%`
+                : "—"}
             </p>
-            <p className="text-[9px] text-muted-foreground">presença</p>
+            <p className="text-[9px] text-muted-foreground">
+              {m.taxa_presenca_12sem != null ? "pres. 12sem" : "presença"}
+            </p>
           </div>
           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground transition" />
         </div>
@@ -470,20 +515,70 @@ function HistoricoSheet({ membro, onClose }: { membro: RankingCompleto | null; o
             </div>
           )}
 
-          {/* Stats */}
-          {membro && (
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { value: membro.total_convocacoes,  label: "convocações", color: "" },
-                { value: membro.total_presencas,    label: "presenças",   color: "text-emerald-600" },
-                { value: membro.total_convocacoes > 0 ? `${membro.taxa_presenca}%` : "—", label: "presença", color: taxaColor },
-              ].map(({ value, label, color }) => (
-                <div key={label} className="rounded-xl border border-border bg-card px-2 py-2.5 text-center">
-                  <p className={`text-base font-bold tabular-nums ${color}`}>{value}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
-                </div>
-              ))}
+          {/* Stats — última escala e dias sem servir (v2) */}
+          {membro && membro.dias_sem_servir != null && (
+            <div className="rounded-xl border border-border bg-card px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Última escala</p>
+                <p className="text-sm font-medium mt-0.5">
+                  {membro.data_ultima_escala
+                    ? format(new Date(membro.data_ultima_escala + "T12:00:00"), "d 'de' MMMM yyyy", { locale: ptBR })
+                    : "Nunca"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className={`text-lg font-bold tabular-nums ${
+                  membro.dias_sem_servir > 90 ? "text-red-500"
+                  : membro.dias_sem_servir > 60 ? "text-amber-500"
+                  : "text-foreground"
+                }`}>
+                  {membro.dias_sem_servir}d
+                </p>
+                <p className="text-[10px] text-muted-foreground">sem servir</p>
+              </div>
             </div>
+          )}
+
+          {/* Stats — convocações e presença */}
+          {membro && (
+            <>
+              {/* Últimas 12 semanas (v2) */}
+              {membro.convocacoes_12sem != null && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Últimas 12 semanas</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: membro.convocacoes_12sem,  label: "conv.", color: "" },
+                      { value: membro.presencas_12sem ?? 0,  label: "presenças", color: "text-emerald-600" },
+                      { value: membro.convocacoes_12sem! > 0 ? `${membro.taxa_presenca_12sem}%` : "—", label: "presença", color: taxaColor },
+                    ].map(({ value, label, color }) => (
+                      <div key={label} className="rounded-xl border border-border bg-card px-2 py-2.5 text-center">
+                        <p className={`text-base font-bold tabular-nums ${color}`}>{value}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Total histórico */}
+              <div>
+                {membro.convocacoes_12sem != null && (
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Total histórico</p>
+                )}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: membro.total_convocacoes,  label: "conv.", color: "" },
+                    { value: membro.total_presencas,    label: "presenças",   color: "text-emerald-600" },
+                    { value: membro.total_convocacoes > 0 ? `${membro.taxa_presenca}%` : "—", label: "presença", color: taxaColor },
+                  ].map(({ value, label, color }) => (
+                    <div key={label} className="rounded-xl border border-border bg-card px-2 py-2.5 text-center">
+                      <p className={`text-base font-bold tabular-nums ${color}`}>{value}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           {/* Histórico de pontuação */}
