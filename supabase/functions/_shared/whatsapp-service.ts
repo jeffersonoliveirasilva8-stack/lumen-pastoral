@@ -93,7 +93,7 @@ export async function enviarWhatsApp(
   // 4. Chamar provider — não lança exceção; erros vêm no retorno
   let sendResult: Awaited<ReturnType<IWhatsAppProvider["send"]>>;
   try {
-    sendResult = await provider.send(telefone, mensagem, { eventoTipo, eventoRefId });
+    sendResult = await provider.send(telefone, mensagem, { eventoTipo, eventoRefId, membroId });
   } catch (err) {
     // Provedor não deveria lançar, mas defendemos aqui
     const detail = err instanceof Error ? err.message : String(err);

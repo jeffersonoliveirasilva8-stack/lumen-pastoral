@@ -78,6 +78,12 @@ Deno.serve(async (_req) => {
     auth: { persistSession: false },
   });
 
+  // D7: reconciliar tentativas stuck antes de processar novos itens
+  const { data: reconciliados } = await client.rpc("_reconciliar_tentativas_stuck");
+  if (reconciliados && reconciliados > 0) {
+    console.log(`[worker] reconciliadas ${reconciliados} tentativas stuck`);
+  }
+
   const results: WorkerResult[] = [];
 
   // Processa até MAX_ITEMS pendentes por invocação

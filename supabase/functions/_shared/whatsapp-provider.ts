@@ -14,6 +14,7 @@ export type SendResult =
 export type SendContext = {
   eventoTipo?: string;
   eventoRefId?: string;
+  membroId?: string;    // D1: incluído no eventId para garantir unicidade por destinatário
 };
 
 export interface IWhatsAppProvider {
@@ -124,15 +125,26 @@ export class NotificationSrvProvider implements IWhatsAppProvider {
       errorDetail = text.slice(0, 200) || undefined;
     } catch { /* não-fatal */ }
 
+    // 429 = rate limit — estado indeterminado, permite retry pelo outbox
+    if (res.status === 429) {
+      return { ok: false, status: "unknown", httpStatus: res.status, detail: errorDetail };
+    }
+
     // 409 = conflito de idempotência (conteúdo divergente — não reenviar)
     // 422 = expirado (não deveria ocorrer com 24h)
-    // ambos mapeiam para failed
+    // demais 4xx/5xx = failed definitivo
     return { ok: false, status: "failed", httpStatus: res.status, detail: errorDetail };
   }
 
   private async _buildEventId(telefone: string, mensagem: string, ctx?: SendContext): Promise<string> {
-    const tipo  = ctx?.eventoTipo;
-    const refId = ctx?.eventoRefId;
+    const tipo     = ctx?.eventoTipo;
+    const refId    = ctx?.eventoRefId;
+    const membroId = ctx?.membroId;
+    if (tipo && refId && membroId) {
+      // D1: inclui membro_id para garantir unicidade por destinatário
+      // lumen:{tipo}:{refId}:{membroId}:whatsapp:v2
+      return `lumen:${tipo}:${refId}:${membroId}:whatsapp:v2`;
+    }
     if (tipo && refId) {
       return `lumen:${tipo}:${refId}:whatsapp:v1`;
     }
