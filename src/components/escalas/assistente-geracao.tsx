@@ -14,7 +14,7 @@ import {
   type FuncaoRestricao,
 } from "@/lib/escala-engine";
 import { supabaseErrorMessage } from "@/lib/supabase-error";
-import { filtrarElegiveis, type DecisaoPresenca } from "@/biblioteca/elegibilidade-presenca";
+import { resolverElegibilidadeFase6c } from "@/biblioteca/fase6c-geracao";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1169,23 +1169,11 @@ export function AssistenteGeracaoEscalas({
   // ── Commit (grava no banco usando o plano da simulação) ───────────────────
   const gerarMutation = useMutation({
     mutationFn: async () => {
-      // FASE 6C: recalcula suspensões frescas antes de alocar — nunca usa cache React Query
-      const { error: calcError, data: calcResult } = await (supabase as any).rpc(
-        "coord_calcular_suspensoes_fase6c",
-        { p_paroquia_id: paroquiaId },
-      );
-      if (calcError) throw new Error(`Falha ao calcular suspensões (FASE 6C): ${calcError.message}`);
-      if (calcResult?.error) throw new Error(`Falha ao calcular suspensões (FASE 6C): ${calcResult.error}`);
-
-      const { data: decisoesFrescas, error: decError } = await (supabase as any).rpc(
-        "coord_get_elegibilidade_presenca",
-        { p_paroquia_id: paroquiaId },
-      );
-      if (decError) throw new Error(`Falha ao obter elegibilidade (FASE 6C): ${decError.message}`);
-
-      const { elegiveis: membrosElegiveisFrecos } = filtrarElegiveis(
+      // FASE 6C: recalcula elegibilidade fresca — nunca reutiliza cache React Query
+      const { elegiveis: membrosElegiveisFrecos } = await resolverElegibilidadeFase6c(
+        supabase as any,
+        paroquiaId,
         membros,
-        (decisoesFrescas ?? []) as DecisaoPresenca[],
       );
 
       // Sempre recalcula com membros frescos — não reutiliza simulação pré-filtrada
