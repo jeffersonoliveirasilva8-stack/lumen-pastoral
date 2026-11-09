@@ -201,6 +201,9 @@ const CAP_DIAS_SEM_SERVIR   = 28;
 const CAP_DIAS_ROTACAO_FUNC = 180;  // 6 meses = rodízio máximo para funções principais
 const CAP_PARTICIPACOES_30D = 5;
 const CAP_FORMACOES_6M      = 10;   // 10 formações em 6 meses = participação plena
+// B7: janela máxima para frequenciaHistorica — evita que histórico ilimitado
+// penalize permanentemente membros antigos. 365 dias = 1 ano de memória.
+const CAP_HIST_JANELA_DIAS  = 365;
 
 const PENALIDADE_MESMO_DIA    = 50;
 const PENALIDADE_DIA_ANTERIOR = 30;
@@ -314,31 +317,33 @@ function computeGrupoStats(
   historico: HistoricoRecente[],
   data30dAtras: string,
   dataEvento: string,
+  dataJanelaHist: string,
 ): GrupoStats {
   let maxTotal = 0, maxRecente = 0, maxDbScore = 0, maxRatioOportunidade = 0;
   const maxPorFuncao: Record<string, number> = {};
 
   for (const m of membros) {
-    const hist = historico.filter((h) => h.membro_id === m.id && h.data < dataEvento);
+    const hist       = historico.filter((h) => h.membro_id === m.id && h.data < dataEvento);
+    // B7: historico para frequenciaHistorica usa janela de CAP_HIST_JANELA_DIAS para evitar
+    // que membros antigos fiquem permanentemente penalizados por participações muito antigas.
+    const histJanela = hist.filter((h) => h.data >= dataJanelaHist);
     maxTotal   = Math.max(maxTotal, hist.length);
     maxRecente = Math.max(maxRecente, hist.filter((h) => h.data >= data30dAtras).length);
     maxDbScore = Math.max(maxDbScore, m.score);
-    // Ratio de oportunidade: convocações ÷ nº de ministérios vinculados.
-    // Normaliza pela "superfície" do membro — quem tem mais funções tem mais chances naturais,
-    // então 10 escalas em 5 ministérios (ratio=2) é mais justo que 10 em 1 (ratio=10).
+    // Ratio de oportunidade: convocações dentro da janela ÷ nº de ministérios vinculados.
     const nMin = Math.max(m.ministerio_ids.length, 1);
-    maxRatioOportunidade = Math.max(maxRatioOportunidade, hist.length / nMin);
+    maxRatioOportunidade = Math.max(maxRatioOportunidade, histJanela.length / nMin);
 
     // Máximo por função (para normalizar experiência em modo solene_principal)
-    for (const h of hist) {
+    for (const h of histJanela) {
       maxPorFuncao[h.ministerio_id] = Math.max(maxPorFuncao[h.ministerio_id] ?? 0, 1);
     }
   }
-  // Segunda passagem: calcular máximo real por função
+  // Segunda passagem: calcular máximo real por função (dentro da janela)
   for (const m of membros) {
-    const hist = historico.filter((h) => h.membro_id === m.id && h.data < dataEvento);
+    const histJanela = historico.filter((h) => h.membro_id === m.id && h.data < dataEvento && h.data >= dataJanelaHist);
     for (const funcao_id of Object.keys(maxPorFuncao)) {
-      const cnt = hist.filter((h) => h.ministerio_id === funcao_id).length;
+      const cnt = histJanela.filter((h) => h.ministerio_id === funcao_id).length;
       maxPorFuncao[funcao_id] = Math.max(maxPorFuncao[funcao_id] ?? 0, cnt);
     }
   }
@@ -371,6 +376,7 @@ function calcularScore(
   ehPreferencialSolene: boolean,
   config?: ConfigParoquia,
   oportunidadesMap?: Map<string, OportunidadesMembro>,
+  dataJanelaHist?: string,
 ): ScoreBreakdown {
   const histMembro    = historico.filter((h) => h.membro_id === membro.id);
   const histAnterior  = histMembro.filter((h) => h.data < dataEvento);
@@ -519,8 +525,13 @@ function calcularScore(
     // Usa conv/nMinistérios em vez de conv bruto: membro com 10 escalas em 5 funções
     // (ratio=2) tem prioridade maior que membro com 10 escalas em 1 função (ratio=10),
     // refletindo que o primeiro serviu proporcionalmente menos à sua disponibilidade.
+    // B7: usa janela de CAP_HIST_JANELA_DIAS para evitar penalidade permanente por
+    // participações antigas — coerente com maxRatioOportunidade de computeGrupoStats.
+    const histJanela   = dataJanelaHist
+      ? histAnterior.filter((h) => h.data >= dataJanelaHist)
+      : histAnterior;
     const nMinisterios = Math.max(membro.ministerio_ids.length, 1);
-    const ratioMembro  = histAnterior.length / nMinisterios;
+    const ratioMembro  = histJanela.length / nMinisterios;
     const frequenciaHistorica = stats.maxRatioOportunidade > 0
       ? (1 - ratioMembro / stats.maxRatioOportunidade) * 100
       : 100;
@@ -651,8 +662,9 @@ export function alocarMembros(
   const insights:         InsightFuncao[]  = [];
   const ja_alocados = new Set<string>();
 
-  const data30dAtras = somarDias(contexto.data, -30);
-  const stats        = computeGrupoStats(membros, historicoRecente, data30dAtras, contexto.data);
+  const data30dAtras  = somarDias(contexto.data, -30);
+  const dataJanelaHist = somarDias(contexto.data, -CAP_HIST_JANELA_DIAS);
+  const stats         = computeGrupoStats(membros, historicoRecente, data30dAtras, contexto.data, dataJanelaHist);
   const ontemStr     = somarDias(contexto.data, -1);
   const ehSolene     = ehMissaSolene(contexto.tipo, contexto.solene, contexto.tem_bispo);
 
@@ -822,6 +834,7 @@ export function alocarMembros(
           m, funcao, historicoRecente, contexto.data, data30dAtras, stats,
           modoSolenePrincipal, preferenciaisDaFuncao.has(m.id), config,
           oportunidadesMap?.get(funcao.ministerio_id),
+          dataJanelaHist,
         );
 
         // Bonus variedade de ministério (apenas modo comum)

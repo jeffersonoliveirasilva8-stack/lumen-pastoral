@@ -1,6 +1,11 @@
 -- ============================================================
 -- Migration 188 — get_ranking_completo v2
 --
+-- DROP necessário: retorno da v1 (migration 148) tem colunas diferentes.
+DROP FUNCTION IF EXISTS public.get_ranking_completo(uuid);
+
+-- ============================================================
+--
 -- Amplia a RPC com campos de janela recente (12 semanas) e
 -- data_ultima_escala para alimentar a página de Avaliação de
 -- Participação com métricas de equidade do motor V3.
