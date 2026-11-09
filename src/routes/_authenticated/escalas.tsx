@@ -22,6 +22,7 @@ import {
   type InsightFuncao,
   type ConfigParoquia,
 } from "@/lib/escala-engine";
+import { filtrarElegiveis, type DecisaoPresenca } from "@/biblioteca/elegibilidade-presenca";
 import {
   useEscalaPreview,
   computePreviewHash,
@@ -568,6 +569,27 @@ function EscalasPage() {
     });
   }, [membros, assignmentHistory, formacaoParticipacoes]);
 
+  // FASE 6C: decisões ativas de elegibilidade (suspensos e em imunidade)
+  const { data: decisoesElegibilidade = [] } = useQuery<DecisaoPresenca[]>({
+    queryKey: ["elegibilidade-presenca", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc(
+        "coord_get_elegibilidade_presenca",
+        { p_paroquia_id: profile!.paroquia_id! },
+      );
+      if (error) { console.warn("[elegibilidade-presenca]", error.message); return []; }
+      return (data ?? []) as DecisaoPresenca[];
+    },
+  });
+
+  // Membros filtrados pela FASE 6C: suspensos são removidos antes de alocarMembros
+  const { elegiveis: membrosElegiveis } = useMemo(
+    () => filtrarElegiveis(membrosEnriquecidos, decisoesElegibilidade),
+    [membrosEnriquecidos, decisoesElegibilidade],
+  );
+
   const { data: comunidades = [] } = useQuery<{ id: string; nome: string }[]>({
     queryKey: ["comunidades", profile?.paroquia_id],
     enabled: !!profile?.paroquia_id,
@@ -801,7 +823,26 @@ function EscalasPage() {
             bonus_preferencial_solene:(regras.bonus_preferencial_solene as number  | undefined) ?? undefined,
           };
 
-          const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+          // FASE 6C: calcula suspensões frescas antes de alocar (mesmo padrão de reorganizarMutation)
+          if (profile?.paroquia_id) {
+            const { data: calcResult, error: calcError } = await (supabase as any).rpc(
+              "coord_calcular_suspensoes_fase6c",
+              { p_paroquia_id: profile.paroquia_id },
+            );
+            if (calcError) throw new Error(`Falha ao calcular suspensões (FASE 6C): ${calcError.message}`);
+            if (calcResult?.error) throw new Error(`Falha ao calcular suspensões (FASE 6C): ${calcResult.error}`);
+          }
+
+          // Busca decisões frescas diretamente (não usa estado React Query)
+          const { data: decisoesFrescasSave } = profile?.paroquia_id
+            ? await (supabase as any).rpc("coord_get_elegibilidade_presenca", { p_paroquia_id: profile.paroquia_id })
+            : { data: [] };
+          const { elegiveis: membrosElegiveisFrecos } = filtrarElegiveis(
+            membrosEnriquecidos,
+            (decisoesFrescasSave ?? []) as DecisaoPresenca[],
+          );
+
+          const membrosComAtuacoes = membrosElegiveisFrecos.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
 
           const saveDia  = new Date(payload.data + "T12:00:00").getDay();
           const saveHora = (payload.hora_inicio ?? "").slice(0, 5);
@@ -907,7 +948,10 @@ function EscalasPage() {
       }
       if (!editId) setFormOpen(false);
     },
-    onError: (e: unknown) => toast.error(supabaseErrorMessage(e)),
+    onError: (e: unknown) => {
+      toast.error(supabaseErrorMessage(e));
+      qc.invalidateQueries({ queryKey: ["escalas"] });
+    },
   });
 
   const deleteMutation = useMutation({
@@ -940,7 +984,19 @@ function EscalasPage() {
 
   const hardDeleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      // Só chamado a partir do Histórico — remove definitivamente uma escala arquivada
+      // Bloqueia exclusão se há histórico de participações (cascade apagaria dados permanentemente)
+      const { count, error: countError } = await (supabase as any)
+        .from("historico_participacoes")
+        .select("id", { count: "exact", head: true })
+        .eq("escala_id", id);
+      if (countError) throw countError;
+      if ((count ?? 0) > 0) {
+        throw new Error(
+          `Esta escala possui ${count} registro(s) de presença e não pode ser excluída permanentemente. Mantenha-a arquivada para preservar o histórico.`,
+        );
+      }
+
+      // Só chamado a partir do Histórico — remove definitivamente uma escala arquivada sem histórico
       const { error } = await (supabase as any).from("escalas").update({ status: "cancelada" }).eq("id", id);
       if (error) throw error;
       // Após mudar para cancelada, o trigger não bloqueia mais e podemos excluir
@@ -1544,7 +1600,29 @@ function EscalasPage() {
         (membroMissaRestricoes[mp.id] ?? []).map((mid) => ({ membro_id: mid, data: escala.data }))
       );
 
-      const membrosComAtuacoes = membrosEnriquecidos.map((m) => ({
+      // FASE 6C: calcula suspensões frescas antes de alocar
+      if (profile?.paroquia_id) {
+        const { data: calcResult, error: calcError } = await (supabase as any).rpc(
+          "coord_calcular_suspensoes_fase6c",
+          { p_paroquia_id: profile.paroquia_id },
+        );
+        if (calcError) throw new Error(`Falha ao calcular suspensões (FASE 6C): ${calcError.message}`);
+        if (calcResult?.error) throw new Error(`Falha ao calcular suspensões (FASE 6C): ${calcResult.error}`);
+
+        // Invalida o cache de elegibilidade para refletir as novas suspensões
+        await qc.invalidateQueries({ queryKey: ["elegibilidade-presenca"] });
+      }
+
+      // Busca decisões frescas diretamente (não depende do estado React Query)
+      const { data: decisoesFrescas } = profile?.paroquia_id
+        ? await (supabase as any).rpc("coord_get_elegibilidade_presenca", { p_paroquia_id: profile.paroquia_id })
+        : { data: [] };
+      const { elegiveis: membrosElegiveisFrecos, idsSuspensos: idsSuspensosFrecos } = filtrarElegiveis(
+        membrosEnriquecidos,
+        (decisoesFrescas ?? []) as DecisaoPresenca[],
+      );
+
+      const membrosComAtuacoes = membrosElegiveisFrecos.map((m) => ({
         ...m,
         atuacao_ids: membroAtuacoes[m.id] ?? [],
       }));
@@ -1608,9 +1686,9 @@ function EscalasPage() {
           throw reorganizarErr;
         }
       }
-      return { count: resultado.sugestoes.length, alertas: resultado.alertas, detalhes: resultado.detalhesPorFuncao, sugestoes: resultado.sugestoes, escalaData: escala.data };
+      return { count: resultado.sugestoes.length, alertas: resultado.alertas, detalhes: resultado.detalhesPorFuncao, sugestoes: resultado.sugestoes, escalaData: escala.data, nSuspensos: idsSuspensosFrecos.size };
     },
-    onSuccess: ({ count, alertas, detalhes, sugestoes, escalaData }) => {
+    onSuccess: ({ count, alertas, detalhes, sugestoes, escalaData, nSuspensos }) => {
       // Remove entradas antigas da data reorganizada e insere apenas as novas.
       // Necessário porque a reorganização faz DELETE+INSERT: sem esse filtro, o
       // cache acumularia as alocações deletadas junto das novas até o refetch.
@@ -1637,6 +1715,13 @@ function EscalasPage() {
       setReorganizarEscalaId("");
       if (count > 0) {
         toast.success(`${count} membro(s) atribuído(s) automaticamente.`);
+        // FASE 6C: avisa se membros suspensos foram excluídos do pool
+        if (nSuspensos > 0) {
+          toast.warning(
+            `${nSuspensos} membro(s) suspenso(s) por recorrência de ausências não foram considerados. Consulte Avaliação de Participação.`,
+            { duration: 10000 },
+          );
+        }
         // Exibe alertas de vagas não preenchidas
         alertas.forEach((a) => toast.warning(a, { duration: 8000 }));
       } else {
@@ -2310,7 +2395,7 @@ function EscalasPage() {
           onClose={() => setAssistenteOpen(false)}
           paroquiaId={profile.paroquia_id!}
           profileId={profile.id}
-          membros={membrosEnriquecidos}
+          membros={membrosElegiveis}
           ministerios={ministerios}
           missasPadrao={missasPadrao}
           membroMinisterios={membroMinisterios}
@@ -2399,7 +2484,7 @@ function EscalasPage() {
             <EscalaDetail
               escala={detailEscala}
               ministerios={ministerios}
-              membros={membrosEnriquecidos}
+              membros={membrosElegiveis}
               funcoes={funcoes}
               atribuicoes={atribuicoesComPending}
               removidos={removidos}
