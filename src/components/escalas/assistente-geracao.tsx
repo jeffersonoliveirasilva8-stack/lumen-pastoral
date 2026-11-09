@@ -14,6 +14,7 @@ import {
   type FuncaoRestricao,
 } from "@/lib/escala-engine";
 import { supabaseErrorMessage } from "@/lib/supabase-error";
+import { filtrarElegiveis, type DecisaoPresenca } from "@/biblioteca/elegibilidade-presenca";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -766,7 +767,9 @@ export function AssistenteGeracaoEscalas({
   }
 
   // ── Motor unificado V3: constrói plano sem gravar no banco ──────────────────
-  function computarPlano(): SimulacaoResultado {
+  function computarPlano(membrosFrecos?: Membro[]): SimulacaoResultado {
+    // FASE 6C: usa lista filtrada quando fornecida (gerarMutation sempre passa membros frescos)
+    const membrosEfetivos = membrosFrecos ?? membros;
     const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
     const engineConfig = {
       usa_tochas:                paroquiaConfig?.usa_tochas ?? false,
@@ -804,7 +807,7 @@ export function AssistenteGeracaoEscalas({
         : (missaCel ? (membroMissaRestricoes[missaCel.id] ?? []) : [])
             .map((mid) => ({ membro_id: mid, data: cel.data }));
       const indispCel = [...indisponibilidades, ...restDiaCel];
-      for (const m of membros) {
+      for (const m of membrosEfetivos) {
         // restricoes_dia_semana é penalidade SUAVE no motor (–20 pts), não exclusão.
         // Manter como hard aqui impedia membros com restrição em todos os dias do mês
         // de receber oportunidades, bloqueando a cobertura mínima.
@@ -832,7 +835,7 @@ export function AssistenteGeracaoEscalas({
         continue;
       }
 
-      if (membros.length === 0) {
+      if (membrosEfetivos.length === 0) {
         plano.push({ cel, alocacoes: [], funcoesVagas: [], semFuncoes: false, alertas: ["Nenhum membro ativo."], indispEfetivas: indisponibilidades });
         continue;
       }
@@ -852,12 +855,12 @@ export function AssistenteGeracaoEscalas({
         ? [...indisponibilidades, ...restDiaEsporadico]
         : [...indisponibilidades, ...missaRestricaoIndisp];
 
-      const membrosComAtuacoes = membros.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
+      const membrosComAtuacoes = membrosEfetivos.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
 
       // Ordena funções por escassez de candidatos (menos candidatos → processa primeiro)
       // preservando a prioridade pastoral original quando configurada explicitamente.
       const funcoesComCandidatos = cel.funcoes.map((f) => {
-        const candidatos = membros.filter((m) => {
+        const candidatos = membrosEfetivos.filter((m) => {
           if (!membroPara[m.id]?.includes(f.ministerio_id)) return false;
           // restricoes_dia_semana não é exclusão — o motor a trata como penalidade suave
           if (membroEstaBloqueado(m.id, cel.data, indispParaGeracao)) return false;
@@ -1054,7 +1057,7 @@ export function AssistenteGeracaoEscalas({
           );
           if (idxRem === -1) continue;
 
-          const nomeDeslocado = membros.find((x) => x.id === candidatoDeslocamento.membro_id)?.nome ?? candidatoDeslocamento.membro_id;
+          const nomeDeslocado = membrosEfetivos.find((x) => x.id === candidatoDeslocamento.membro_id)?.nome ?? candidatoDeslocamento.membro_id;
           planoCel.alocacoes.splice(idxRem, 1);
           escalasContador.set(candidatoDeslocamento.membro_id, candidatoDeslocamento.count - 1);
           planoCel.alocacoes.push({ membro_id: m.id, ministerio_id: f.ministerio_id });
@@ -1075,7 +1078,7 @@ export function AssistenteGeracaoEscalas({
     // ── Sumário ──
     const membroEscalas = escalasContador;
 
-    const distribuicao = membros
+    const distribuicao = membrosEfetivos
       .filter((m) => membroEscalas.has(m.id) || (membroOportunidades.get(m.id) ?? 0) > 0)
       .map((m) => ({
         id:           m.id,
@@ -1104,7 +1107,7 @@ export function AssistenteGeracaoEscalas({
       }));
 
     // Membros verdadeiramente inelegíveis: ativos mas sem oportunidade válida no período
-    const membrosInelegiveis: MembroCobertura[] = membros
+    const membrosInelegiveis: MembroCobertura[] = membrosEfetivos
       .filter((m) => !membroEscalas.has(m.id) && (membroOportunidades.get(m.id) ?? 0) === 0)
       .map((m) => {
         // Determina o motivo objetivo
@@ -1166,7 +1169,27 @@ export function AssistenteGeracaoEscalas({
   // ── Commit (grava no banco usando o plano da simulação) ───────────────────
   const gerarMutation = useMutation({
     mutationFn: async () => {
-      const sim = simulacao ?? computarPlano();
+      // FASE 6C: recalcula suspensões frescas antes de alocar — nunca usa cache React Query
+      const { error: calcError, data: calcResult } = await (supabase as any).rpc(
+        "coord_calcular_suspensoes_fase6c",
+        { p_paroquia_id: paroquiaId },
+      );
+      if (calcError) throw new Error(`Falha ao calcular suspensões (FASE 6C): ${calcError.message}`);
+      if (calcResult?.error) throw new Error(`Falha ao calcular suspensões (FASE 6C): ${calcResult.error}`);
+
+      const { data: decisoesFrescas, error: decError } = await (supabase as any).rpc(
+        "coord_get_elegibilidade_presenca",
+        { p_paroquia_id: paroquiaId },
+      );
+      if (decError) throw new Error(`Falha ao obter elegibilidade (FASE 6C): ${decError.message}`);
+
+      const { elegiveis: membrosElegiveisFrecos } = filtrarElegiveis(
+        membros,
+        (decisoesFrescas ?? []) as DecisaoPresenca[],
+      );
+
+      // Sempre recalcula com membros frescos — não reutiliza simulação pré-filtrada
+      const sim = computarPlano(membrosElegiveisFrecos);
       const total = sim.plano.length;
       setProgresso({ atual: 0, total });
 
