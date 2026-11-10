@@ -87,7 +87,7 @@ function RelatoriosEquilibrioPage() {
         .eq("paroquia_id", profile!.paroquia_id!)
         .gte("data", desde)
         .lte("data", ate)
-        .neq("status", "arquivada");
+        .eq("status", "publicada");
 
       if (!escalas?.length) return [];
 

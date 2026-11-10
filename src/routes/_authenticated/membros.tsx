@@ -1252,7 +1252,7 @@ function ImportDialog({
           telefone: r.telefone || null,
           data_nascimento: r.data_nascimento || null,
           data_ingresso: r.data_ingresso || null,
-          score: r.score ? Number(r.score) || 0 : 0,
+          score: Math.min(100, Math.max(0, r.score ? Number(r.score) || 0 : 0)),
           rg: r.rg || null,
           cpf: r.cpf || null,
           endereco: r.endereco || null,
@@ -1296,7 +1296,7 @@ function ImportDialog({
       if (r.telefone) patch.telefone = r.telefone;
       if (r.data_nascimento) patch.data_nascimento = r.data_nascimento;
       if (r.data_ingresso) patch.data_ingresso = r.data_ingresso;
-      if (r.score) patch.score = Number(r.score) || 0;
+      if (r.score) patch.score = Math.min(100, Math.max(0, Number(r.score) || 0));
       if (r.rg) patch.rg = r.rg;
       if (r.cpf) patch.cpf = r.cpf;
       if (r.endereco) patch.endereco = r.endereco;
@@ -1335,6 +1335,18 @@ function ImportDialog({
 
     setImporting(false);
     if (insertErr) { toast.error(insertErr); return; }
+
+    // Avisa se algum score foi ajustado para [0, 100]
+    const scoresFora = [...toInsert, ...toUpdate].filter((r) => {
+      const v = r.score ? Number(r.score) : 0;
+      return !isNaN(v) && (v < 0 || v > 100);
+    });
+    if (scoresFora.length > 0) {
+      toast.warning(
+        `${scoresFora.length} membro(s) com score fora de 0–100 foram ajustados automaticamente para o limite.`,
+      );
+    }
+
     const parts: string[] = [];
     if (toInsert.length > 0) parts.push(`${toInsert.length} inserido(s)`);
     if (toUpdate.length > 0) parts.push(`${toUpdate.length - updateErrors} atualizado(s)`);

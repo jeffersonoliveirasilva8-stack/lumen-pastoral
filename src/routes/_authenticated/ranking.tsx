@@ -8,12 +8,15 @@ import { useEffect, useState, useMemo } from "react";
 import {
   Loader2, History, ChevronRight, Search, X,
   Users, CheckCircle2, TrendingUp, AlertTriangle,
-  ShieldAlert, Layers, LayoutList,
+  ShieldAlert, Layers, LayoutList, Ban,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "@tanstack/react-query";
+import type { DecisaoPresenca } from "@/biblioteca/elegibilidade-presenca";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -132,6 +135,26 @@ function AvaliacaoParticipacao() {
   }, [profile?.paroquia_id, qc]);
 
   useSetPageTabs([]);
+
+  // FASE 6C: decisões ativas de elegibilidade
+  const { data: decisoesPresenca = [] } = useQuery<DecisaoPresenca[]>({
+    queryKey: ["elegibilidade-presenca", profile?.paroquia_id],
+    enabled: !!profile?.paroquia_id,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await anyDb.rpc("coord_get_elegibilidade_presenca", {
+        p_paroquia_id: profile!.paroquia_id!,
+      });
+      if (error) { console.warn("[elegibilidade-presenca]", error.message); return []; }
+      return (data ?? []) as DecisaoPresenca[];
+    },
+  });
+
+  const suspensaoMap = useMemo(() => {
+    const m = new Map<string, DecisaoPresenca>();
+    for (const d of decisoesPresenca) m.set(d.membro_id, d);
+    return m;
+  }, [decisoesPresenca]);
 
   // Métricas de equidade
   const metricas = useMemo(() => {
@@ -324,7 +347,7 @@ function AvaliacaoParticipacao() {
                   </div>
                   <div className="space-y-2">
                     {lista.map((m) => (
-                      <ParticipacaoCard key={m.id} membro={m} onClick={() => setSelectedMembro(m)} />
+                      <ParticipacaoCard key={m.id} membro={m} decisao={suspensaoMap.get(m.id)} onClick={() => setSelectedMembro(m)} />
                     ))}
                   </div>
                 </div>
@@ -333,7 +356,7 @@ function AvaliacaoParticipacao() {
           ) : (
             <div className="space-y-2">
               {filtrados.map((m) => (
-                <ParticipacaoCard key={m.id} membro={m} onClick={() => setSelectedMembro(m)} />
+                <ParticipacaoCard key={m.id} membro={m} decisao={suspensaoMap.get(m.id)} onClick={() => setSelectedMembro(m)} />
               ))}
               {filtrados.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-border p-8 text-center">
@@ -347,14 +370,19 @@ function AvaliacaoParticipacao() {
         </>
       )}
 
-      <HistoricoSheet membro={selectedMembro} onClose={() => setSelectedMembro(null)} />
+      <HistoricoSheet
+        membro={selectedMembro}
+        decisao={selectedMembro ? suspensaoMap.get(selectedMembro.id) : undefined}
+        onClose={() => setSelectedMembro(null)}
+        onRestabelecido={() => qc.invalidateQueries({ queryKey: ["elegibilidade-presenca"] })}
+      />
     </div>
   );
 }
 
 // ── ParticipacaoCard ──────────────────────────────────────────────────────────
 
-function ParticipacaoCard({ membro: m, onClick }: { membro: RankingCompleto; onClick: () => void }) {
+function ParticipacaoCard({ membro: m, decisao, onClick }: { membro: RankingCompleto; decisao?: DecisaoPresenca; onClick: () => void }) {
   const status = statusMembro(m);
   const taxaColor =
     m.total_convocacoes === 0 ? "text-muted-foreground"
@@ -362,7 +390,13 @@ function ParticipacaoCard({ membro: m, onClick }: { membro: RankingCompleto; onC
     : m.taxa_presenca >= 60 ? "text-amber-500"
     : "text-red-500";
 
-  const statusBadge =
+  const suspensoBadge = decisao?.tipo === "suspensao" ? (
+    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/10 text-orange-600 font-medium border border-orange-500/20 flex items-center gap-0.5">
+      <Ban className="h-2.5 w-2.5" /> Suspenso
+    </span>
+  ) : null;
+
+  const statusBadge = suspensoBadge ?? (
     status === "sem_escalas" ? (
       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-medium border border-amber-500/20">
         Sem escala
@@ -371,7 +405,8 @@ function ParticipacaoCard({ membro: m, onClick }: { membro: RankingCompleto; onC
       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 font-medium border border-red-500/20 flex items-center gap-0.5">
         <ShieldAlert className="h-2.5 w-2.5" /> Risco
       </span>
-    ) : null;
+    ) : null
+  );
 
   return (
     <button
@@ -412,8 +447,8 @@ function ParticipacaoCard({ membro: m, onClick }: { membro: RankingCompleto; onC
           {m.dias_sem_servir != null ? (
             <div>
               <p className={`text-sm font-semibold tabular-nums ${
-                m.dias_sem_servir > 60 ? "text-amber-500"
-                : m.dias_sem_servir > 90 ? "text-red-500"
+                m.dias_sem_servir > 90 ? "text-red-500"
+                : m.dias_sem_servir > 60 ? "text-amber-500"
                 : ""
               }`}>
                 {m.dias_sem_servir === 0 ? "hoje" : `${m.dias_sem_servir}d`}
@@ -445,7 +480,37 @@ function ParticipacaoCard({ membro: m, onClick }: { membro: RankingCompleto; onC
 
 // ── HistoricoSheet ──────────────────────────────────────────────────────────
 
-function HistoricoSheet({ membro, onClose }: { membro: RankingCompleto | null; onClose: () => void }) {
+function HistoricoSheet({ membro, decisao, onClose, onRestabelecido }: {
+  membro: RankingCompleto | null;
+  decisao?: DecisaoPresenca;
+  onClose: () => void;
+  onRestabelecido?: () => void;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const [confirmando, setConfirmando] = useState(false);
+
+  const restabelecerMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await anyDb.rpc("coord_restabelecer_membro_presenca", {
+        p_membro_id: membro!.id,
+        p_motivo:    motivo.trim() || null,
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      setConfirmando(false);
+      setMotivo("");
+      toast.success("Membro restabelecido. Imunidade ativa por 45 dias.");
+      onRestabelecido?.();
+    },
+    onError: (e: unknown) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(msg === "apenas_coordenacao_ativa" ? "Apenas coordenadores ativos podem restabelecer membros." : `Erro ao restabelecer: ${msg}`);
+    },
+  });
+
   const { data: historico = [], isLoading } = useQuery<HistoricoItem[]>({
     queryKey: ["admin-ranking-historico", membro?.id],
     enabled: !!membro?.id,
@@ -495,6 +560,72 @@ function HistoricoSheet({ membro, onClose }: { membro: RankingCompleto | null; o
                 <p className="text-xs font-medium text-red-700 dark:text-red-400">Atenção pastoral</p>
                 <p className="text-xs text-red-600 dark:text-red-300 mt-0.5">
                   Muitas convocações com presença abaixo de 60%. Considere conversar antes de novas escalações.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* FASE 6C — painel de suspensão */}
+          {decisao?.tipo === "suspensao" && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 dark:bg-orange-900/20 dark:border-orange-800 px-4 py-3 space-y-3">
+              <div className="flex items-start gap-2">
+                <Ban className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-orange-700 dark:text-orange-400">Suspenso por recorrência de ausências</p>
+                  {decisao.motivo && (
+                    <p className="text-xs text-orange-600 dark:text-orange-300 mt-0.5">{decisao.motivo}</p>
+                  )}
+                  <p className="text-[10px] text-orange-500/80 dark:text-orange-400/60 mt-1">
+                    Suspenso em {format(new Date(decisao.criado_em), "d 'de' MMM yyyy", { locale: ptBR })}
+                  </p>
+                </div>
+              </div>
+
+              {confirmando ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    placeholder="Motivo do restabelecimento (opcional)"
+                    className="w-full rounded-lg border border-orange-300 bg-white dark:bg-orange-950 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => restabelecerMutation.mutate()}
+                      disabled={restabelecerMutation.isPending}
+                      className="flex-1 rounded-lg bg-orange-500 text-white text-xs font-medium py-1.5 disabled:opacity-50"
+                    >
+                      {restabelecerMutation.isPending ? "Restabelecendo…" : "Confirmar"}
+                    </button>
+                    <button
+                      onClick={() => { setConfirmando(false); setMotivo(""); }}
+                      className="flex-1 rounded-lg border border-orange-300 text-orange-700 dark:text-orange-300 text-xs font-medium py-1.5"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmando(true)}
+                  className="w-full rounded-lg border border-orange-300 text-orange-700 dark:text-orange-300 text-xs font-medium py-1.5"
+                >
+                  Restabelecer membro
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Imunidade ativa após restabelecimento */}
+          {decisao?.tipo === "restabelecimento" && decisao.imune_ate && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 px-4 py-3 flex items-start gap-2">
+              <ShieldAlert className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-medium text-blue-700 dark:text-blue-400">Período de imunidade ativo</p>
+                <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">
+                  Protegido contra nova suspensão até{" "}
+                  {format(new Date(decisao.imune_ate + "T12:00:00"), "d 'de' MMMM yyyy", { locale: ptBR })}.
                 </p>
               </div>
             </div>

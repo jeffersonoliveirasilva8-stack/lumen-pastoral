@@ -221,6 +221,7 @@ function ConfiguracaoEscalas() {
 
   async function save() {
     if (!paroquiaId) return;
+
     setSaving(true);
 
     const { error: e1 } = await supabase

@@ -132,7 +132,10 @@ function AdminSubstituicoes() {
       toast.success("Substituição aprovada. Escala atualizada.");
       anyDb.functions
         .invoke("notificar-substituicao", { body: { substituicao_id: substId, acao: "aprovada" } })
-        .catch(() => {});
+        .catch((err: unknown) => {
+          console.error("[notificar-substituicao] aprovada:", err);
+          toast.warning("Substituição aprovada, mas o envio da notificação falhou.");
+        });
     },
     onError: (e: Error) => {
       const msg = e.message === "substituicao_sem_voluntario"
@@ -187,7 +190,10 @@ function AdminSubstituicoes() {
         .invoke("notificar-substituicao", {
           body: { substituicao_id: substId, acao, substituto_id },
         })
-        .catch(() => {});
+        .catch((err: unknown) => {
+          console.error("[notificar-substituicao] rejeição:", err);
+          toast.warning("Substituição rejeitada, mas o envio da notificação falhou.");
+        });
       setRejectId(null);
       setRejectMotivo("");
     },
