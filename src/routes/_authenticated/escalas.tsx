@@ -1026,12 +1026,17 @@ function EscalasPage() {
 
   const removeFuncaoMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("escala_funcoes").delete().eq("id", id);
+      const { data, error } = await (supabase as any).rpc("remove_funcao", { p_funcao_id: id });
       if (error) throw error;
+      if (data?.success === false) throw new Error(data.error ?? "Erro ao remover função.");
     },
     onSuccess: () => {
       refetchFuncoes();
       refetchAtribuicoes();
+      if (detailEscala?.status === "publicada") {
+        qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+        qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
+      }
     },
   });
 
@@ -1050,10 +1055,10 @@ function EscalasPage() {
     },
     onSuccess: (_data, { membro_id, ministerio_id }) => {
       refetchAtribuicoes();
-      qc.invalidateQueries({ queryKey: ["pm-escalas"] });
-      qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
-      // Email só quando a escala já está publicada — rascunho não notifica membros
+      // Portal cache e e-mail só quando a escala está publicada (P2)
       if (detailEscala?.status === "publicada") {
+        qc.invalidateQueries({ queryKey: ["pm-escalas"] });
+        qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
         const membro = membros.find((m) => m.id === membro_id);
         const min = ministerios.find((m) => m.id === ministerio_id);
         if (membro?.email) {
@@ -1511,7 +1516,7 @@ function EscalasPage() {
       const minNome = min?.nome ?? "";
       // Notifica membro removido
       const membroAntigo = membros.find((m: Membro) => m.id === args.removeMembroId);
-      if (membroAntigo?.email && escalaRef) {
+      if (membroAntigo?.email && escalaRef && escalaRef.status === "publicada") {
         await supabase.functions.invoke("send-email", {
           body: {
             template: "escala_cancelada",
@@ -1527,7 +1532,7 @@ function EscalasPage() {
       }
       // Notifica novo membro
       const membroNovo = membros.find((m: Membro) => m.id === args.membroId);
-      if (membroNovo?.email && escalaRef) {
+      if (membroNovo?.email && escalaRef && escalaRef.status === "publicada") {
         await new Promise((r) => setTimeout(r, 400));
         await supabase.functions.invoke("send-email", {
           body: {
@@ -5052,8 +5057,13 @@ function EscalaDetail({
 
   const reenviarMutation = useMutation({
     mutationFn: async () => {
+      // Guard frontend: escala deve estar publicada
+      if (escala.status !== "publicada") {
+        throw new Error("Reenvio de notificações disponível apenas para escalas publicadas.");
+      }
       const { data, error } = await (supabase as any).rpc("reenviar_notificacoes_escala", { p_escala_id: escala.id });
       if (error) throw error;
+      // Backend também valida: escala_not_published retorna ok=false
       if (data?.ok === false) throw new Error(data.error ?? "Erro ao reenviar notificações.");
 
       // Envia e-mails com stagger de 400ms para respeitar rate limit da edge function
