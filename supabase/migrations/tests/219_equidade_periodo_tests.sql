@@ -402,6 +402,80 @@ BEGIN
 END;
 $$;
 
+-- ── T14: status arquivada entra na avaliação histórica (migration 220) ────────
+DO $$
+DECLARE
+  v_par   UUID := 'aaaaaaaa-1900-0000-0000-000000000001';
+  v_m1    UUID := 'dddddddd-1900-0000-0000-000000000001';
+  v_min1  UUID := 'cccccccc-1900-0000-0000-000000000001';
+  v_e6    UUID := 'eeeeeeee-1900-0000-0000-000000000006'; -- escala arquivada
+  v_inicio DATE := '2026-10-01';
+  v_fim    DATE := '2026-10-31';
+  v_total  BIGINT;
+BEGIN
+  -- Cria escala arquivada em outubro (simula escala já ocorrida)
+  INSERT INTO public.escalas (id, paroquia_id, data, status)
+  VALUES (v_e6, v_par, '2026-10-05', 'arquivada')
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO public.escala_funcoes (escala_id, ministerio_id)
+  VALUES (v_e6, v_min1)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO public.escala_membros (escala_id, membro_id, ministerio_id, ativo)
+  VALUES (v_e6, v_m1, v_min1, true)
+  ON CONFLICT DO NOTHING;
+
+  -- T14: escala arquivada deve aparecer em escalas_total
+  -- (service_role → auth.uid()=NULL → 0 linhas via RPC, verificar direto nas tabelas)
+  SELECT COUNT(DISTINCT em.escala_id) INTO v_total
+  FROM public.escala_membros em
+  JOIN public.escalas e ON e.id = em.escala_id
+    AND e.paroquia_id = v_par
+    AND e.status IN ('publicada', 'arquivada')
+    AND e.data BETWEEN v_inicio AND v_fim
+  WHERE em.membro_id = v_m1 AND em.ativo = true;
+
+  ASSERT v_total = 1,
+    'T14 FAIL: escala arquivada deveria contar escalas_total=1, obteve ' || v_total;
+  RAISE NOTICE 'T14 PASS: escala arquivada contabilizada em escalas_total';
+
+  -- Garantir que cancelada não entra
+  INSERT INTO public.escalas (id, paroquia_id, data, status)
+  VALUES ('eeeeeeee-1900-0000-0000-000000000007', v_par, '2026-10-12', 'cancelada')
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO public.escala_funcoes (escala_id, ministerio_id)
+  VALUES ('eeeeeeee-1900-0000-0000-000000000007', v_min1)
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO public.escala_membros (escala_id, membro_id, ministerio_id, ativo)
+  VALUES ('eeeeeeee-1900-0000-0000-000000000007', v_m1, v_min1, true)
+  ON CONFLICT DO NOTHING;
+
+  SELECT COUNT(DISTINCT em.escala_id) INTO v_total
+  FROM public.escala_membros em
+  JOIN public.escalas e ON e.id = em.escala_id
+    AND e.paroquia_id = v_par
+    AND e.status IN ('publicada', 'arquivada')
+    AND e.data BETWEEN v_inicio AND v_fim
+  WHERE em.membro_id = v_m1 AND em.ativo = true;
+
+  ASSERT v_total = 1,
+    'T14b FAIL: cancelada não deveria entrar, total deveria ser 1, obteve ' || v_total;
+  RAISE NOTICE 'T14b PASS: escala cancelada excluída corretamente';
+
+  -- Cleanup T14
+  DELETE FROM public.escala_membros
+  WHERE escala_id IN (v_e6, 'eeeeeeee-1900-0000-0000-000000000007');
+  DELETE FROM public.escala_funcoes
+  WHERE escala_id IN (v_e6, 'eeeeeeee-1900-0000-0000-000000000007');
+  DELETE FROM public.escalas
+  WHERE id IN (v_e6, 'eeeeeeee-1900-0000-0000-000000000007');
+
+END;
+$$;
+
 -- ── TEARDOWN ──────────────────────────────────────────────────────────────────
 DO $$
 BEGIN

@@ -95,12 +95,13 @@ AS $$
       AND  m.ativo = true
   ),
 
-  -- Escalas publicadas no período (exclui canceladas e rascunhos)
+  -- Escalas publicadas ou arquivadas no período (exclui canceladas e rascunhos)
+  -- arquivada = estado final de escala já ocorrida (necessário para avaliação histórica)
   escalas_periodo AS (
     SELECT e.id, e.data
     FROM   escalas e
     WHERE  e.paroquia_id = p_paroquia_id
-      AND  e.status      = 'publicada'
+      AND  e.status      IN ('publicada', 'arquivada')
       AND  e.data        BETWEEN p_inicio AND p_fim
   ),
 
