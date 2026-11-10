@@ -443,6 +443,11 @@ function ParticipacaoCard({ membro: m, decisao, onClick }: { membro: RankingComp
 
         {/* Métricas compactas */}
         <div className="flex items-center gap-3 shrink-0 text-right">
+          {/* pontos histórico — equidade */}
+          <div>
+            <p className="text-sm font-semibold tabular-nums text-primary">{m.score}</p>
+            <p className="text-[9px] text-muted-foreground">pts</p>
+          </div>
           {/* dias sem servir (campo v2) ou convocações totais */}
           {m.dias_sem_servir != null ? (
             <div>
