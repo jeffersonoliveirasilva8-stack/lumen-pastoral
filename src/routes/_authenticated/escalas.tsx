@@ -859,7 +859,11 @@ function EscalasPage() {
             supabase as any,
             profile?.paroquia_id ?? "",
             funcoesPedido.map((f) => f.ministerio_id),
-          ).catch(() => undefined);
+          ).catch((err) => {
+            console.warn("[S2] buildOportunidadesMap falhou:", err);
+            toast.warning("Equidade proporcional (S2) indisponível — distribuição calculada por recência dos últimos 30 dias.");
+            return undefined;
+          });
 
           const resultado = generateEscalaWithAlertas(
             { titulo: payload.titulo, data: payload.data, tipo: payload.tipo, observacoes: payload.observacoes },
@@ -1647,7 +1651,11 @@ function EscalasPage() {
         supabase as any,
         profile?.paroquia_id ?? "",
         funcoesPedido.map((f) => f.ministerio_id),
-      ).catch(() => undefined);
+      ).catch((err) => {
+        console.warn("[S2] buildOportunidadesMap falhou:", err);
+        toast.warning("Equidade proporcional (S2) indisponível — distribuição calculada por recência dos últimos 30 dias.");
+        return undefined;
+      });
 
       const resultado = generateEscalaWithAlertas(
         { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
@@ -5262,7 +5270,11 @@ function EscalaDetail({
       supabase as any,
       authProfile?.paroquia_id ?? "",
       funcoesPedido.map((f) => f.ministerio_id),
-    ).catch(() => undefined);
+    ).catch((err) => {
+      console.warn("[S2] buildOportunidadesMap falhou:", err);
+      toast.warning("Equidade proporcional (S2) indisponível — distribuição calculada por recência dos últimos 30 dias.");
+      return undefined;
+    });
 
     const resultado = generateEscalaWithAlertas(
       { titulo: escala.titulo, data: escala.data, tipo: escala.tipo, observacoes: escala.observacoes },
