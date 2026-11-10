@@ -1,3 +1,4 @@
+import React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { SubscriptionGate } from "@/components/billing/SubscriptionGate";
 import { useSetPageTabs } from "@/contexts/page-tabs";
@@ -9,8 +10,9 @@ import {
   Loader2, History, ChevronRight, Search, X,
   Users, CheckCircle2, TrendingUp, AlertTriangle,
   ShieldAlert, Layers, LayoutList, Ban,
+  CalendarRange, BarChart3, Info, ArrowRight,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -67,6 +69,56 @@ const TIPO_LABELS: Record<string, string> = {
 
 type Filtro = "todos" | "sem_escalas" | "risco" | "alta_fidelidade";
 
+// ── Tipos para Equidade por Período ──────────────────────────────────────────
+
+type EquidadeMembro = {
+  membro_id: string;
+  nome: string;
+  escalas_total: number;
+  escalas_realizadas: number;
+  escalas_futuras: number;
+  oportunidades: number;
+  taxa_aproveitamento: number | null;
+  atribuicoes_extras: number;    // I3: atribuições fora das oportunidades (admin override)
+  presencas: number;
+  faltas: number;
+  taxa_presenca: number | null;
+  data_ultimo_servico: string | null;
+  media_dias_intervalo: number | null;
+  ministerios_periodo: { id: string; nome: string; cor: string }[];
+  gini_periodo: number;
+};
+
+function useEquidadePeriodo(paroquiaId: string | undefined, inicio: string, fim: string) {
+  return useQuery<EquidadeMembro[]>({
+    queryKey: ["equidade-periodo", paroquiaId, inicio, fim],
+    enabled: !!paroquiaId && !!inicio && !!fim,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await anyDb.rpc("get_equidade_periodo", {
+        p_paroquia_id: paroquiaId,
+        p_inicio: inicio,
+        p_fim: fim,
+      });
+      if (error) throw error;
+      return (data ?? []).map((r: any) => ({
+        ...r,
+        escalas_total:       Number(r.escalas_total ?? 0),
+        escalas_realizadas:  Number(r.escalas_realizadas ?? 0),
+        escalas_futuras:     Number(r.escalas_futuras ?? 0),
+        oportunidades:       Number(r.oportunidades ?? 0),
+        taxa_aproveitamento: r.taxa_aproveitamento != null ? Number(r.taxa_aproveitamento) : null,
+        atribuicoes_extras:  Number(r.atribuicoes_extras ?? 0),
+        presencas:           Number(r.presencas ?? 0),
+        faltas:              Number(r.faltas ?? 0),
+        taxa_presenca:       r.taxa_presenca != null ? Number(r.taxa_presenca) : null,
+        gini_periodo:        Number(r.gini_periodo ?? 0),
+        ministerios_periodo: Array.isArray(r.ministerios_periodo) ? r.ministerios_periodo : [],
+      }));
+    },
+  });
+}
+
 function useRankingCompleto(paroquiaId: string | undefined) {
   return useQuery<RankingCompleto[]>({
     queryKey: ["ranking-completo", paroquiaId],
@@ -113,6 +165,7 @@ function statusMembro(m: RankingCompleto): "sem_escalas" | "risco" | "ok" {
 function AvaliacaoParticipacao() {
   const { profile } = useAuth();
   const qc = useQueryClient();
+  const [abaAtiva, setAbaAtiva] = useState<"ranking" | "equidade">("ranking");
   const { data: membros = [], isLoading } = useRankingCompleto(profile?.paroquia_id ?? undefined);
   const [selectedMembro, setSelectedMembro] = useState<RankingCompleto | null>(null);
   const [busca, setBusca] = useState("");
@@ -241,6 +294,34 @@ function AvaliacaoParticipacao() {
           <p className="page-header-sub">Distribuição de convocações, presença e equidade pastoral.</p>
         </div>
       </div>
+
+      {/* Seletor de abas */}
+      <div className="flex gap-1 p-1 rounded-xl bg-muted/50 border border-border">
+        {([
+          { key: "ranking",   label: "Ranking",           icon: BarChart3 },
+          { key: "equidade",  label: "Equidade por período", icon: CalendarRange },
+        ] as { key: "ranking" | "equidade"; label: string; icon: React.ElementType }[]).map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setAbaAtiva(key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+              abaAtiva === key
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">{label}</span>
+            <span className="sm:hidden">{key === "ranking" ? "Ranking" : "Equidade"}</span>
+          </button>
+        ))}
+      </div>
+
+      {abaAtiva === "equidade" && profile?.paroquia_id && (
+        <EquidadePeriodo paroquiaId={profile.paroquia_id} />
+      )}
+
+      {abaAtiva === "ranking" && (<>
 
       {/* Indicadores de equidade */}
       {metricas && !isLoading && (
@@ -376,6 +457,307 @@ function AvaliacaoParticipacao() {
         onClose={() => setSelectedMembro(null)}
         onRestabelecido={() => qc.invalidateQueries({ queryKey: ["elegibilidade-presenca"] })}
       />
+      </>)}
+    </div>
+  );
+}
+
+// ── EquidadePeriodo ───────────────────────────────────────────────────────────
+
+function fmtDate(d: Date) {
+  return format(d, "yyyy-MM-dd");
+}
+
+function EquidadePeriodo({ paroquiaId }: { paroquiaId: string }) {
+  const hoje = new Date();
+  const [inicio, setInicio] = useState(() => fmtDate(startOfMonth(subMonths(hoje, 1))));
+  const [fim, setFim] = useState(() => fmtDate(endOfMonth(subMonths(hoje, 1))));
+  // Comparativo: período anterior do mesmo tamanho
+  const [compararPeriodo, setCompararPeriodo] = useState(false);
+
+  const { data: membros = [], isLoading, error } = useEquidadePeriodo(paroquiaId, inicio, fim);
+
+  // Período anterior para comparativo
+  const inicioDt = new Date(inicio + "T12:00:00");
+  const fimDt    = new Date(fim + "T12:00:00");
+  const diffDias = Math.round((fimDt.getTime() - inicioDt.getTime()) / 86_400_000) + 1;
+  const inicioAnt = fmtDate(new Date(inicioDt.getTime() - diffDias * 86_400_000));
+  const fimAnt    = fmtDate(new Date(inicioDt.getTime() - 86_400_000));
+
+  const { data: membrosAnt = [] } = useEquidadePeriodo(
+    compararPeriodo ? paroquiaId : undefined,
+    inicioAnt,
+    fimAnt,
+  );
+
+  const mapaAnt = useMemo(() => {
+    const m = new Map<string, EquidadeMembro>();
+    for (const r of membrosAnt) m.set(r.membro_id, r);
+    return m;
+  }, [membrosAnt]);
+
+  // Métricas agregadas do período
+  const metricas = useMemo(() => {
+    if (!membros.length) return null;
+    const gini = membros[0]?.gini_periodo ?? 0;
+    const semEscala = membros.filter((m) => m.escalas_total === 0).length;
+    const comOport  = membros.filter((m) => m.oportunidades > 0);
+    const mediaAprov = comOport.length > 0
+      ? Math.round(comOport.reduce((s, m) => s + (m.taxa_aproveitamento ?? 0), 0) / comOport.length)
+      : 0;
+    const totalEscalas = membros.reduce((s, m) => s + m.escalas_total, 0);
+    return { gini, semEscala, mediaAprov, totalEscalas, total: membros.length };
+  }, [membros]);
+
+  const giniLabel = !metricas ? "—"
+    : metricas.gini <= 0.20 ? "Boa"
+    : metricas.gini <= 0.35 ? "Moderada"
+    : metricas.gini <= 0.50 ? "Elevada"
+    : "Crítica";
+  const giniColor = !metricas ? ""
+    : metricas.gini <= 0.20 ? "text-emerald-600"
+    : metricas.gini <= 0.35 ? "text-amber-500"
+    : "text-red-500";
+
+  return (
+    <div className="space-y-4">
+      {/* Seletor de período */}
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <CalendarRange className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Período de análise</span>
+        </div>
+        <div className="flex gap-2 items-center flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-muted-foreground">De</label>
+            <input
+              type="date"
+              value={inicio}
+              onChange={(e) => setInicio(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-muted-foreground">até</label>
+            <input
+              type="date"
+              value={fim}
+              onChange={(e) => setFim(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+            />
+          </div>
+          <button
+            onClick={() => setCompararPeriodo((v) => !v)}
+            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition ${
+              compararPeriodo
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "bg-card border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ArrowRight className="h-3 w-3" />
+            Comparar período anterior
+          </button>
+        </div>
+        {/* Atalhos de período */}
+        <div className="flex gap-1 flex-wrap">
+          {[
+            { label: "Mês anterior",   i: fmtDate(startOfMonth(subMonths(hoje, 1))), f: fmtDate(endOfMonth(subMonths(hoje, 1))) },
+            { label: "Mês atual",      i: fmtDate(startOfMonth(hoje)),               f: fmtDate(endOfMonth(hoje)) },
+            { label: "Últimos 3 meses",i: fmtDate(startOfMonth(subMonths(hoje, 2))), f: fmtDate(endOfMonth(hoje)) },
+          ].map(({ label, i, f }) => (
+            <button
+              key={label}
+              onClick={() => { setInicio(i); setFim(f); }}
+              className={`text-[11px] px-2.5 py-1 rounded-full border transition ${
+                inicio === i && fim === f
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-muted/30 border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Indicadores do período */}
+      {isLoading ? (
+        <ListSkeleton rows={4} />
+      ) : error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 dark:bg-red-950/20 p-4 text-center">
+          <p className="text-sm text-red-600">Erro ao carregar dados. Tente novamente.</p>
+        </div>
+      ) : metricas ? (
+        <>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="stat-card text-center items-center gap-1">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <p className={`text-lg sm:text-xl font-serif font-bold leading-none ${giniColor}`}>
+                {metricas.gini.toFixed(2)}
+              </p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Gini ({giniLabel})</p>
+            </div>
+            <div className="stat-card text-center items-center gap-1">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <p className={`text-lg sm:text-xl font-serif font-bold leading-none ${metricas.semEscala > 0 ? "text-amber-500" : ""}`}>
+                {metricas.semEscala}
+              </p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">sem escala</p>
+            </div>
+            <div className="stat-card text-center items-center gap-1">
+              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+              <p className="text-lg sm:text-xl font-serif font-bold leading-none">
+                {metricas.mediaAprov}%
+              </p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">% aproveit.</p>
+            </div>
+            <div className="stat-card text-center items-center gap-1">
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <p className="text-lg sm:text-xl font-serif font-bold leading-none">
+                {metricas.totalEscalas}
+              </p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">atribuições</p>
+            </div>
+          </div>
+
+          {/* Nota sobre Gini */}
+          <div className="flex items-start gap-2 rounded-xl bg-muted/40 border border-border px-3 py-2.5">
+            <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              Gini mede desigualdade de distribuição (0 = perfeita, 1 = máxima). Calculado sobre escalas atribuídas
+              — inclui membros elegíveis sem escalas no período.
+            </p>
+          </div>
+
+          {/* Tabela de membros */}
+          <div className="rounded-2xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-muted-foreground">Servidor</th>
+                    <th className="text-center px-2 py-2.5 text-[11px] font-semibold text-muted-foreground">Esc.</th>
+                    <th className="text-center px-2 py-2.5 text-[11px] font-semibold text-muted-foreground">Oport.</th>
+                    <th className="text-center px-2 py-2.5 text-[11px] font-semibold text-muted-foreground">Aprov.</th>
+                    <th className="text-center px-2 py-2.5 text-[11px] font-semibold text-muted-foreground">Pres.</th>
+                    {/* M1: título com nota de que requer ≥2 escalas */}
+                    <th className="text-center px-2 py-2.5 text-[11px] font-semibold text-muted-foreground hidden sm:table-cell" title="Intervalo médio entre serviços consecutivos no período. Exibe — quando há menos de 2 escalas.">
+                      Intervalo ⓘ
+                    </th>
+                    {compararPeriodo && (
+                      <th className="text-center px-2 py-2.5 text-[11px] font-semibold text-muted-foreground">Δ Esc.</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {membros.map((m) => {
+                    const ant = mapaAnt.get(m.membro_id);
+                    // M3: ant===undefined → membro não existia no período anterior (novo/reativado)
+                    //     ant===found   → existia (escalas_total pode ser 0)
+                    const isNovo = compararPeriodo && ant === undefined;
+                    const delta = ant != null ? m.escalas_total - ant.escalas_total : null;
+                    // I3: taxa pode ultrapassar 100% quando há atribuições diretas
+                    const aprovColor =
+                      m.taxa_aproveitamento == null ? "text-muted-foreground"
+                      : m.taxa_aproveitamento > 100  ? "text-blue-500"
+                      : m.taxa_aproveitamento >= 70  ? "text-emerald-600"
+                      : m.taxa_aproveitamento >= 40  ? "text-amber-500"
+                      : "text-red-500";
+                    const presColor =
+                      m.taxa_presenca == null ? "text-muted-foreground"
+                      : m.taxa_presenca >= 80 ? "text-emerald-600"
+                      : m.taxa_presenca >= 60 ? "text-amber-500"
+                      : "text-red-500";
+                    return (
+                      <tr key={m.membro_id} className="bg-card hover:bg-muted/20 transition-colors">
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
+                              style={{ backgroundColor: m.ministerios_periodo[0]?.cor ?? "#6B7280" }}
+                            >
+                              {m.nome.split(" ").slice(0, 2).map((n) => n[0]).join("")}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium truncate text-xs leading-snug">{m.nome}</p>
+                              {m.escalas_futuras > 0 && (
+                                <span className="text-[9px] text-blue-500">+{m.escalas_futuras} futuras</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        {/* Escalas realizadas */}
+                        <td className="px-2 py-2.5 text-center">
+                          <span className={`font-semibold tabular-nums ${m.escalas_realizadas === 0 ? "text-muted-foreground" : ""}`}>
+                            {m.escalas_realizadas}
+                          </span>
+                        </td>
+                        {/* Oportunidades */}
+                        <td className="px-2 py-2.5 text-center">
+                          <span className="tabular-nums text-muted-foreground">{m.oportunidades}</span>
+                        </td>
+                        {/* Taxa aproveitamento — I3: badge quando >100% (atribuições diretas) */}
+                        <td className="px-2 py-2.5 text-center">
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className={`font-semibold tabular-nums ${aprovColor}`}>
+                              {m.taxa_aproveitamento != null ? `${m.taxa_aproveitamento}%` : "—"}
+                            </span>
+                            {m.atribuicoes_extras > 0 && (
+                              <span className="text-[9px] text-blue-500 leading-none" title={`${m.atribuicoes_extras} atribuição(ões) direta(s) fora das oportunidades calculadas`}>
+                                +{m.atribuicoes_extras} direta{m.atribuicoes_extras > 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        {/* Taxa presença */}
+                        <td className="px-2 py-2.5 text-center">
+                          <span className={`tabular-nums ${presColor}`}>
+                            {m.taxa_presenca != null ? `${m.taxa_presenca}%` : "—"}
+                          </span>
+                        </td>
+                        {/* Intervalo médio — M1: título explica restrição */}
+                        <td className="px-2 py-2.5 text-center hidden sm:table-cell"
+                            title={m.media_dias_intervalo == null ? "Requer pelo menos 2 escalas no período para calcular o intervalo médio." : undefined}>
+                          <span className="text-muted-foreground tabular-nums text-xs">
+                            {m.media_dias_intervalo != null ? `${m.media_dias_intervalo}d` : "—"}
+                          </span>
+                        </td>
+                        {/* Delta comparativo — M3: badge "Novo" quando membro não existia no período anterior */}
+                        {compararPeriodo && (
+                          <td className="px-2 py-2.5 text-center">
+                            {isNovo ? (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-medium border border-blue-500/20">
+                                Novo
+                              </span>
+                            ) : delta == null ? (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            ) : (
+                              <span className={`text-xs font-semibold tabular-nums ${
+                                delta > 0 ? "text-emerald-600" : delta < 0 ? "text-red-500" : "text-muted-foreground"
+                              }`}>
+                                {delta > 0 ? `+${delta}` : delta}
+                              </span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {membros.length === 0 && (
+              <div className="p-8 text-center">
+                <p className="text-sm text-muted-foreground">Nenhum dado para o período selecionado.</p>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="p-8 text-center">
+          <p className="text-sm text-muted-foreground">Selecione um período para visualizar os indicadores.</p>
+        </div>
+      )}
     </div>
   );
 }
