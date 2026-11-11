@@ -10,8 +10,10 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   generateEscalaWithAlertas,
+  buildOportunidadesMap,
   type AssignmentHistoryEntry,
   type FuncaoRestricao,
+  type OportunidadesMembro,
 } from "@/lib/escala-engine";
 import { supabaseErrorMessage } from "@/lib/supabase-error";
 import { resolverElegibilidadeFase6c } from "@/biblioteca/fase6c-geracao";
@@ -25,6 +27,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+
+// ─── Constantes de atuação pastoral ──────────────────────────────────────────
+const ATUACAO_ACOLITO_ID     = "4d1c4d7e-e7ea-4bd2-8a3e-4783c521b081";
+const ATUACAO_CERIMONARIO_ID = "a5301793-a4c0-49f6-9917-cc6ef941df71";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -157,8 +163,10 @@ type SimulacaoResultado = {
     membrosElegiveisSemEscala: MembroCobertura[];
     /** Membros sem nenhuma oportunidade válida no período (verdadeiramente inelegíveis) */
     membrosInelegiveis: MembroCobertura[];
-    distribuicao: { id: string; nome: string; count: number; oportunidades: number; taxa: number }[];
+    distribuicao: { id: string; nome: string; count: number; oportunidades: number; taxa: number; grupo?: "acolito" | "cerimonario" | null }[];
     alertas: string[];
+    /** true = S2 usou equidade real (RPC ok); false = usou fallback por recência */
+    s2Ativo: boolean;
   };
 };
 
@@ -167,7 +175,7 @@ type Relatorio = {
   ignoradas: number;
   vagasPreenchidas: number;
   vagasNaoPreenchidas: number;
-  distribuicao: { id: string; nome: string; count: number; oportunidades: number; taxa: number }[];
+  distribuicao: { id: string; nome: string; count: number; oportunidades: number; taxa: number; grupo?: "acolito" | "cerimonario" | null }[];
   funcoesVagas: FuncaoVagaDetalhe[];
   celebracoesSemFuncoes: { titulo: string; data: string }[];
   alertas: string[];
@@ -774,7 +782,7 @@ export function AssistenteGeracaoEscalas({
   }
 
   // ── Motor unificado V3: constrói plano sem gravar no banco ──────────────────
-  function computarPlano(membrosFrecos?: Membro[]): SimulacaoResultado {
+  async function computarPlano(membrosFrecos?: Membro[]): Promise<SimulacaoResultado> {
     // FASE 6C: usa lista filtrada quando fornecida (gerarMutation sempre passa membros frescos)
     const membrosEfetivos = membrosFrecos ?? membros;
     const regras = (paroquiaConfig?.regras_escala ?? {}) as Record<string, unknown>;
@@ -825,6 +833,77 @@ export function AssistenteGeracaoEscalas({
       }
     }
 
+    // ── S2: busca oportunidades históricas via RPC (uma vez por ministerio_id) ──
+    // oportunidadesMap é passado ao motor para ativar o S2 real (40% do score COMUM).
+    // A cada celebração processada, ajustamos o mapa com dois deltas independentes:
+    //   • batchOportunidades: membros elegíveis ganham +1 oportunidade (op++)
+    //   • batchHistory:       membros alocados ganham +1 escala recebida (er++)
+    // Isso garante que S2(A) = (1 - (er+batchEr)/(op+batchOp)) seja monotonicamente
+    // decrescente para alocados e levemente crescente para elegíveis não alocados.
+    const ministerioIdsLote = [...new Set(preVisualizacao.flatMap((c) => c.funcoes.map((f) => f.ministerio_id)))];
+    const oportunidadesMapBase = await buildOportunidadesMap(supabase as any, paroquiaId, ministerioIdsLote);
+    const s2Ativo = oportunidadesMapBase !== undefined;
+
+    // batchOportunidades acumula oportunidades geradas pelas celebrações já processadas
+    // neste lote (para ajuste intra-lote sem re-chamar a RPC).
+    // Chave: membro_id → (ministerio_id → count)
+    const batchOportunidades = new Map<string, Map<string, number>>();
+
+    // Estrutura local para rastrear alocações do lote com celebracaoId (cel._id).
+    // AssignmentHistoryEntry usa apenas `date`, que é insuficiente quando há duas
+    // celebrações distintas no mesmo dia — cel._id é o identificador único correto.
+    type BatchErEntry = { memberId: string; ministerioId: string; celebracaoId: string };
+    const batchErHistory: BatchErEntry[] = [];
+
+    // Registra, para cada celebração já processada, quais membros tinham oportunidade
+    // em cada ministerio_id — alinhado com os critérios 1–4 da RPC (migration 162).
+    function registrarOportunidadesBatch(
+      celFuncoes: FuncaoCelebracao[],
+      celData: string,
+      indispCel: IndispRow[],
+    ) {
+      // Agrupa funções por ministerio_id para verificar atuacoes_exigidas por grupo
+      const funcoesPorMin = new Map<string, FuncaoCelebracao[]>();
+      for (const f of celFuncoes) {
+        if (!funcoesPorMin.has(f.ministerio_id)) funcoesPorMin.set(f.ministerio_id, []);
+        funcoesPorMin.get(f.ministerio_id)!.push(f);
+      }
+
+      // Critério 3b (RPC linha 126): restricoes_dia_semana é exclusão hard.
+      // Calculado uma vez por celebração (não muda por membro).
+      const diaSemana = new Date(celData + "T12:00:00").getDay();
+
+      for (const m of membrosEfetivos) {
+        // Critério 3: indisponibilidade / restrição de missa
+        if (membroEstaBloqueado(m.id, celData, indispCel)) continue;
+
+        // Critério 3b: restricoes_dia_semana — hard exclusion (alinha com RPC)
+        if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
+
+        for (const [ministerioId, funcoes] of funcoesPorMin) {
+          // Critério 1: vínculo ministerial
+          if (!membroPara[m.id]?.includes(ministerioId)) continue;
+
+          // Critério 2: sem funcao_nao_pode
+          if (funcaoRestricoes.some(
+            (r) => r.membro_id === m.id && r.ministerio_id === ministerioId && r.tipo === "nao_pode"
+          )) continue;
+
+          // Critério 4: atuacoes_exigidas — elegível para ao menos uma função-slot
+          const mAtuacoes = membroAtuacoes[m.id] ?? [];
+          const temFuncaoElegivel = funcoes.some((f) =>
+            !f.atuacoes_exigidas?.length ||
+            mAtuacoes.some((a) => f.atuacoes_exigidas!.includes(a))
+          );
+          if (!temFuncaoElegivel) continue;
+
+          if (!batchOportunidades.has(m.id)) batchOportunidades.set(m.id, new Map());
+          const minMap = batchOportunidades.get(m.id)!;
+          minMap.set(ministerioId, (minMap.get(ministerioId) ?? 0) + 1);
+        }
+      }
+    }
+
     const plano: PlanoCelebracao[] = [];
     const todosAlertasGlobais: string[] = [];
 
@@ -861,6 +940,10 @@ export function AssistenteGeracaoEscalas({
       const indispParaGeracao = cel.esporadico
         ? [...indisponibilidades, ...restDiaEsporadico]
         : [...indisponibilidades, ...missaRestricaoIndisp];
+      // indispParaOportunidades omite membro_missa_restricoes para alinhar com a RPC,
+      // que não verifica essa tabela ao calcular oportunidades históricas.
+      // O motor continua usando indispParaGeracao (com missaRestricaoIndisp) para bloqueio real.
+      const indispParaOportunidades: IndispRow[] = indisponibilidades as IndispRow[];
 
       const membrosComAtuacoes = membrosEfetivos.map((m) => ({ ...m, atuacao_ids: membroAtuacoes[m.id] ?? [] }));
 
@@ -893,6 +976,34 @@ export function AssistenteGeracaoEscalas({
       // Nota BUG-2: missas_padrao não possui modo_selecao — campo existe apenas em escalas
       //   individuais. Solenidades ativam mérito automaticamente via solene=true.
       //   Suporte a modo_selecao por missa padrão requer decisão de design + migration futura.
+      // Ajusta op e er com deltas intra-lote das celebrações anteriores a esta.
+      // Para o alocado: op++, er++ → S2 cai (op > er sempre ⟹ (er+1)/(op+1) > er/op).
+      // Para elegível não alocado: op++, er igual → S2 sobe levemente.
+      // Para bloqueado/inelegível: sem delta → S2 inalterado.
+      let oportunidadesMapAjustado: Map<string, Map<string, OportunidadesMembro>> | undefined;
+      if (oportunidadesMapBase) {
+        oportunidadesMapAjustado = new Map();
+        for (const [minId, minMap] of oportunidadesMapBase) {
+          const ajustado = new Map<string, OportunidadesMembro>();
+          for (const [memId, oport] of minMap) {
+            // COUNT(DISTINCT escala_id): deduplica por cel._id (celebracaoId).
+            // `date` é insuficiente — duas celebrações distintas no mesmo dia
+            // compartilhariam a data e seriam incorretamente colapsadas em 1.
+            const batchErCount = new Set(
+              batchErHistory
+                .filter((h) => h.memberId === memId && h.ministerioId === minId)
+                .map((h) => h.celebracaoId)
+            ).size;
+            const batchOpCount = batchOportunidades.get(memId)?.get(minId) ?? 0;
+            ajustado.set(memId, {
+              oportunidades:     oport.oportunidades     + batchOpCount,
+              escalas_recebidas: oport.escalas_recebidas + batchErCount,
+            });
+          }
+          oportunidadesMapAjustado.set(minId, ajustado);
+        }
+      }
+
       const resultado = generateEscalaWithAlertas(
         { titulo: cel.titulo, data: cel.data, tipo: cel.tipo, observacoes: null },
         funcoesPedido,
@@ -907,13 +1018,22 @@ export function AssistenteGeracaoEscalas({
           tem_adoracao:         cel.tem_adoracao,
           tem_bispo:            cel.tem_bispo,
           preferenciaisSolene,  // BUG-1: membros preferenciais agora chegam ao motor
+          oportunidadesMap:     oportunidadesMapAjustado,
         }
       );
 
-      // Atualiza batchHistory para que a próxima celebração veja estas alocações
+      // Atualiza batchHistory e batchOportunidades para a próxima celebração.
+      // batchHistory: rastreia alocações (er++)
+      // batchOportunidades: rastreia quem era elegível (op++) — deve ser chamado DEPOIS
+      // do motor para não influenciar a celebração atual, apenas as seguintes.
       resultado.sugestoes.forEach((s) => {
         batchHistory.push({ memberId: s.membro_id, ministerioId: s.ministerio_id, date: cel.data });
+        batchErHistory.push({ memberId: s.membro_id, ministerioId: s.ministerio_id, celebracaoId: cel._id });
       });
+      if (oportunidadesMapBase) {
+        // Passa indispParaOportunidades (sem missaRestricaoIndisp) para alinhar com a RPC.
+        registrarOportunidadesBatch(cel.funcoes, cel.data, indispParaOportunidades);
+      }
 
       // Detecta funções que ficaram com vagas
       const funcoesVagas: FuncaoVagaDetalhe[] = resultado.detalhesPorFuncao
@@ -1093,17 +1213,24 @@ export function AssistenteGeracaoEscalas({
 
     const distribuicao = membrosEfetivos
       .filter((m) => membroEscalas.has(m.id) || (membroOportunidades.get(m.id) ?? 0) > 0)
-      .map((m) => ({
-        id:           m.id,
-        nome:         m.nome,
-        count:        membroEscalas.get(m.id) ?? 0,
-        oportunidades: membroOportunidades.get(m.id) ?? 0,
-        taxa: (() => {
-          const op = membroOportunidades.get(m.id) ?? 0;
-          const sc = membroEscalas.get(m.id) ?? 0;
-          return op > 0 ? sc / op : 0;
-        })(),
-      }))
+      .map((m) => {
+        const atuacoes = membroAtuacoes[m.id] ?? [];
+        const grupo: "acolito" | "cerimonario" | null =
+          atuacoes.includes(ATUACAO_CERIMONARIO_ID) ? "cerimonario" :
+          atuacoes.includes(ATUACAO_ACOLITO_ID)     ? "acolito"     : null;
+        return {
+          id:           m.id,
+          nome:         m.nome,
+          count:        membroEscalas.get(m.id) ?? 0,
+          oportunidades: membroOportunidades.get(m.id) ?? 0,
+          taxa: (() => {
+            const op = membroOportunidades.get(m.id) ?? 0;
+            const sc = membroEscalas.get(m.id) ?? 0;
+            return op > 0 ? sc / op : 0;
+          })(),
+          grupo,
+        };
+      })
       .sort((a, b) => b.count - a.count);
 
     // Membros com oportunidades reais mas que ainda ficaram com 0 escalas (após deslocamento)
@@ -1168,6 +1295,7 @@ export function AssistenteGeracaoEscalas({
         membrosInelegiveis,
         distribuicao,
         alertas:                  todosAlertasGlobais,
+        s2Ativo,
       },
     };
   }
@@ -1190,7 +1318,7 @@ export function AssistenteGeracaoEscalas({
       );
 
       // Sempre recalcula com membros frescos — não reutiliza simulação pré-filtrada
-      const sim = computarPlano(membrosElegiveisFrecos);
+      const sim = await computarPlano(membrosElegiveisFrecos);
       const total = sim.plano.length;
       setProgresso({ atual: 0, total });
 
@@ -1636,6 +1764,14 @@ export function AssistenteGeracaoEscalas({
                     <div>
                       <h3 className="text-sm font-semibold">Resultado da simulação</h3>
                       <p className="text-xs text-muted-foreground mt-0.5">Revise antes de gravar as escalas no banco.</p>
+                      {!simulacao.sumario.s2Ativo && (
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 px-3 py-1.5 flex items-center gap-2">
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                            <span className="font-semibold">S2 em modo fallback:</span> não foi possível buscar o histórico de oportunidades. Equidade calculada por recência (últimos 30 dias).
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Métricas da simulação */}
@@ -1735,31 +1871,97 @@ export function AssistenteGeracaoEscalas({
                     )}
 
                     {/* Distribuição */}
-                    {simulacao.sumario.distribuicao.length > 0 && (
-                      <div className="rounded-xl border border-border bg-card">
-                        <div className="flex items-center gap-2 px-4 py-2.5 border-b">
-                          <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <p className="text-xs font-semibold">Distribuição simulada</p>
-                          <span className="ml-auto text-[10px] text-muted-foreground">{simulacao.sumario.membrosEscalados} escalado(s)</span>
+                    {simulacao.sumario.distribuicao.length > 0 && (() => {
+                      const acolitos    = simulacao.sumario.distribuicao.filter((d) => d.grupo === "acolito");
+                      const cerimonarios = simulacao.sumario.distribuicao.filter((d) => d.grupo === "cerimonario");
+                      const outros      = simulacao.sumario.distribuicao.filter((d) => !d.grupo);
+                      const temGrupos   = acolitos.length > 0 || cerimonarios.length > 0;
+
+                      const GrupoLinha = ({ m }: { m: typeof simulacao.sumario.distribuicao[0] }) => (
+                        <div className="flex items-center justify-between px-4 py-1.5">
+                          <span className="text-xs truncate flex-1">{m.nome}</span>
+                          <span className="ml-2 text-[10px] text-muted-foreground tabular-nums shrink-0">
+                            {m.oportunidades} oport.
+                          </span>
+                          <span className="ml-2 text-xs font-semibold tabular-nums text-primary shrink-0">
+                            {m.count}×
+                          </span>
+                          <span className="ml-1 text-[10px] tabular-nums text-muted-foreground shrink-0">
+                            ({Math.round(m.taxa * 100)}%)
+                          </span>
                         </div>
-                        <div className="divide-y max-h-40 overflow-y-auto">
-                          {simulacao.sumario.distribuicao.filter((d) => d.count > 0).map((m) => (
-                            <div key={m.id} className="flex items-center justify-between px-4 py-1.5">
-                              <span className="text-xs truncate flex-1">{m.nome}</span>
-                              <span className="ml-2 text-[10px] text-muted-foreground tabular-nums shrink-0">
-                                {m.oportunidades} oport.
-                              </span>
-                              <span className="ml-2 text-xs font-semibold tabular-nums text-primary shrink-0">
-                                {m.count}×
-                              </span>
-                              <span className="ml-1 text-[10px] tabular-nums text-muted-foreground shrink-0">
-                                ({Math.round(m.taxa * 100)}%)
-                              </span>
-                            </div>
-                          ))}
+                      );
+
+                      const GrupoHeader = ({ label, membros }: { label: string; membros: typeof simulacao.sumario.distribuicao }) => {
+                        const escalados = membros.filter((m) => m.count > 0).length;
+                        const totalEscalas = membros.reduce((s, m) => s + m.count, 0);
+                        return (
+                          <div className="flex items-center gap-2 px-4 py-1.5 bg-muted/40 border-b">
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</span>
+                            <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+                              {escalados}/{membros.length} membros · {totalEscalas} escalas
+                            </span>
+                          </div>
+                        );
+                      };
+
+                      return (
+                        <div className="rounded-xl border border-border bg-card">
+                          <div className="flex items-center gap-2 px-4 py-2.5 border-b">
+                            <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <p className="text-xs font-semibold">Distribuição simulada</p>
+                            <span className="ml-auto text-[10px] text-muted-foreground">{simulacao.sumario.membrosEscalados} escalado(s)</span>
+                          </div>
+                          <div className="divide-y max-h-56 overflow-y-auto">
+                            {temGrupos ? (
+                              <>
+                                {acolitos.length > 0 && (
+                                  <>
+                                    <GrupoHeader label="Acólitos" membros={acolitos} />
+                                    {acolitos.filter((d) => d.count > 0).map((m) => <GrupoLinha key={m.id} m={m} />)}
+                                    {acolitos.filter((d) => d.count === 0).map((m) => (
+                                      <div key={m.id} className="flex items-center justify-between px-4 py-1.5 opacity-50">
+                                        <span className="text-xs truncate flex-1 text-muted-foreground">{m.nome}</span>
+                                        <span className="ml-2 text-[10px] text-muted-foreground tabular-nums shrink-0">{m.oportunidades} oport.</span>
+                                        <span className="ml-2 text-xs tabular-nums text-muted-foreground shrink-0">0×</span>
+                                      </div>
+                                    ))}
+                                  </>
+                                )}
+                                {cerimonarios.length > 0 && (
+                                  <>
+                                    <GrupoHeader label="Cerimoniários" membros={cerimonarios} />
+                                    {cerimonarios.filter((d) => d.count > 0).map((m) => <GrupoLinha key={m.id} m={m} />)}
+                                    {cerimonarios.filter((d) => d.count === 0).map((m) => (
+                                      <div key={m.id} className="flex items-center justify-between px-4 py-1.5 opacity-50">
+                                        <span className="text-xs truncate flex-1 text-muted-foreground">{m.nome}</span>
+                                        <span className="ml-2 text-[10px] text-muted-foreground tabular-nums shrink-0">{m.oportunidades} oport.</span>
+                                        <span className="ml-2 text-xs tabular-nums text-muted-foreground shrink-0">0×</span>
+                                      </div>
+                                    ))}
+                                  </>
+                                )}
+                                {outros.length > 0 && (
+                                  <>
+                                    <GrupoHeader label="Sem atuação" membros={outros} />
+                                    {outros.filter((d) => d.count > 0).map((m) => <GrupoLinha key={m.id} m={m} />)}
+                                    {outros.filter((d) => d.count === 0).map((m) => (
+                                      <div key={m.id} className="flex items-center justify-between px-4 py-1.5 opacity-50">
+                                        <span className="text-xs truncate flex-1 text-muted-foreground">{m.nome}</span>
+                                        <span className="ml-2 text-[10px] text-muted-foreground tabular-nums shrink-0">{m.oportunidades} oport.</span>
+                                        <span className="ml-2 text-xs tabular-nums text-muted-foreground shrink-0">0×</span>
+                                      </div>
+                                    ))}
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              simulacao.sumario.distribuicao.filter((d) => d.count > 0).map((m) => <GrupoLinha key={m.id} m={m} />)
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
                       <p className="text-xs text-primary leading-relaxed">
