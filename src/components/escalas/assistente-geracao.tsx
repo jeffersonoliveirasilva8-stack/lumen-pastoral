@@ -64,6 +64,7 @@ type FuncaoCelebracao = {
   ministerio_nome: string;
   ministerio_cor: string;
   quantidade: number;
+  atuacoes_exigidas?: string[] | null;
 };
 
 export type CelebracaoPreview = {
@@ -480,8 +481,8 @@ export function AssistenteGeracaoEscalas({
     enabled: open && mpIds.length > 0,
     queryFn: async () => {
       const { data } = await (supabase as any).from("missa_padrao_funcoes")
-        .select("missa_padrao_id, ministerio_id, quantidade").in("missa_padrao_id", mpIds);
-      return (data ?? []) as { missa_padrao_id: string; ministerio_id: string; quantidade: number }[];
+        .select("missa_padrao_id, ministerio_id, quantidade, atuacoes_exigidas").in("missa_padrao_id", mpIds);
+      return (data ?? []) as { missa_padrao_id: string; ministerio_id: string; quantidade: number; atuacoes_exigidas?: string[] | null }[];
     },
   });
 
@@ -505,9 +506,9 @@ export function AssistenteGeracaoEscalas({
     enabled: open && mpIds.length > 0,
     queryFn: async () => {
       const { data } = await (supabase as any).from("missa_padrao_funcoes_extras")
-        .select("missa_padrao_id, ministerio_id, quantidade, data")
+        .select("missa_padrao_id, ministerio_id, quantidade, data, atuacoes_exigidas")
         .in("missa_padrao_id", mpIds);
-      return (data ?? []) as { missa_padrao_id: string; ministerio_id: string; quantidade: number; data: string }[];
+      return (data ?? []) as { missa_padrao_id: string; ministerio_id: string; quantidade: number; data: string; atuacoes_exigidas?: string[] | null }[];
     },
   });
 
@@ -524,7 +525,7 @@ export function AssistenteGeracaoEscalas({
       // Funções configuradas diretamente nesta missa padrão têm prioridade
       const proprias = missaPadraoFuncoesData.filter((f) => f.missa_padrao_id === missa.id);
       if (proprias.length > 0) {
-        map[missa.id] = proprias.map((f) => ({ ministerio_id: f.ministerio_id, ministerio_nome: ministeriosMap[f.ministerio_id]?.nome ?? "?", ministerio_cor: ministeriosMap[f.ministerio_id]?.cor ?? "#999", quantidade: f.quantidade }));
+        map[missa.id] = proprias.map((f) => ({ ministerio_id: f.ministerio_id, ministerio_nome: ministeriosMap[f.ministerio_id]?.nome ?? "?", ministerio_cor: ministeriosMap[f.ministerio_id]?.cor ?? "#999", quantidade: f.quantidade, atuacoes_exigidas: f.atuacoes_exigidas ?? null }));
       } else if (missa.tipo_missa_id) {
         map[missa.id] = tipoMissaFuncoesData
           .filter((f) => f.tipo_missa_id === missa.tipo_missa_id)
@@ -605,8 +606,12 @@ export function AssistenteGeracaoEscalas({
             );
             for (const ex of extras) {
               const idx = base.findIndex((b) => b.ministerio_id === ex.ministerio_id);
-              if (idx >= 0) base[idx].quantidade = ex.quantidade;
-              else base.push({ ministerio_id: ex.ministerio_id, ministerio_nome: ministeriosMap[ex.ministerio_id]?.nome ?? "?", ministerio_cor: ministeriosMap[ex.ministerio_id]?.cor ?? "#999", quantidade: ex.quantidade });
+              if (idx >= 0) {
+                base[idx].quantidade = ex.quantidade;
+                if (ex.atuacoes_exigidas != null) base[idx].atuacoes_exigidas = ex.atuacoes_exigidas;
+              } else {
+                base.push({ ministerio_id: ex.ministerio_id, ministerio_nome: ministeriosMap[ex.ministerio_id]?.nome ?? "?", ministerio_cor: ministeriosMap[ex.ministerio_id]?.cor ?? "#999", quantidade: ex.quantidade, atuacoes_exigidas: ex.atuacoes_exigidas ?? null });
+              }
             }
             return base;
           })();
@@ -655,12 +660,14 @@ export function AssistenteGeracaoEscalas({
                 const existing = base.find((f) => f.ministerio_id === extra.ministerio_id);
                 if (existing) {
                   existing.quantidade = extra.quantidade;
+                  if (extra.atuacoes_exigidas != null) existing.atuacoes_exigidas = extra.atuacoes_exigidas;
                 } else {
                   base.push({
                     ministerio_id: extra.ministerio_id,
                     ministerio_nome: ministeriosMap[extra.ministerio_id]?.nome ?? "?",
                     ministerio_cor: ministeriosMap[extra.ministerio_id]?.cor ?? "#999",
                     quantidade: extra.quantidade,
+                    atuacoes_exigidas: extra.atuacoes_exigidas ?? null,
                   });
                 }
               }
@@ -872,11 +879,12 @@ export function AssistenteGeracaoEscalas({
       funcoesComCandidatos.sort((a, b) => a._candidatos - b._candidatos);
 
       const funcoesPedido = funcoesComCandidatos.map((f, idx) => ({
-        ministerio_id: f.ministerio_id,
-        quantidade:    f.quantidade,
-        ministerio:    { id: f.ministerio_id, nome: f.ministerio_nome, cor: f.ministerio_cor },
+        ministerio_id:     f.ministerio_id,
+        quantidade:        f.quantidade,
+        ministerio:        { id: f.ministerio_id, nome: f.ministerio_nome, cor: f.ministerio_cor },
         // ordem_prioridade reflete a posição após sort por escassez
-        ordem_prioridade: idx,
+        ordem_prioridade:  idx,
+        ...(f.atuacoes_exigidas?.length ? { atuacoes_exigidas: f.atuacoes_exigidas } : {}),
       }));
 
       // Chama o motor V3 para TODAS as celebrações (missas comuns e solenidades)
@@ -1230,7 +1238,7 @@ export function AssistenteGeracaoEscalas({
           if (!temFuncoes) {
             // Sem funções: salva funções + membros
             const { error: fErr2 } = await (supabase as any).from("escala_funcoes").insert(
-              cel.funcoes.map((f) => ({ escala_id: escalaId, ministerio_id: f.ministerio_id, quantidade: f.quantidade }))
+              cel.funcoes.map((f) => ({ escala_id: escalaId, ministerio_id: f.ministerio_id, quantidade: f.quantidade, ...(f.atuacoes_exigidas?.length ? { atuacoes_exigidas: f.atuacoes_exigidas } : {}) }))
             );
             if (fErr2) throw new Error(`Erro ao salvar funções de "${cel.titulo}" (${cel.data}): ${fErr2.message}`);
             if (alocacoes.length > 0) {
@@ -1286,7 +1294,7 @@ export function AssistenteGeracaoEscalas({
 
         // Grava funções
         const { error: fErr } = await (supabase as any).from("escala_funcoes").insert(
-          cel.funcoes.map((f) => ({ escala_id: newEscala.id, ministerio_id: f.ministerio_id, quantidade: f.quantidade }))
+          cel.funcoes.map((f) => ({ escala_id: newEscala.id, ministerio_id: f.ministerio_id, quantidade: f.quantidade, ...(f.atuacoes_exigidas?.length ? { atuacoes_exigidas: f.atuacoes_exigidas } : {}) }))
         );
         if (fErr) throw new Error(`Erro ao salvar funções de "${cel.titulo}" (${cel.data}): ${fErr.message}`);
         cel.funcoes.forEach((f) => { totalVagasSolicitadas += f.quantidade; });

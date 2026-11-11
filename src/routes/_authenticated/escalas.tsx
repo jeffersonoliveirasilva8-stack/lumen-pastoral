@@ -776,16 +776,17 @@ function EscalasPage() {
       if (nova?.id && payload.tipo_missa_id) {
         const { data: tipoFuncoes } = await anyDb
           .from("tipo_missa_funcoes")
-          .select("ministerio_id, quantidade_min")
+          .select("ministerio_id, quantidade_min, atuacoes_exigidas")
           .eq("tipo_missa_id", payload.tipo_missa_id)
           .eq("tipo_vinculo", "obrigatoria");
 
         if (tipoFuncoes && tipoFuncoes.length > 0) {
           await anyDb.from("escala_funcoes").insert(
-            (tipoFuncoes as { ministerio_id: string; quantidade_min: number }[]).map((tf) => ({
+            (tipoFuncoes as { ministerio_id: string; quantidade_min: number; atuacoes_exigidas?: string[] | null }[]).map((tf) => ({
               escala_id: nova.id,
               ministerio_id: tf.ministerio_id,
               quantidade: tf.quantidade_min,
+              ...(tf.atuacoes_exigidas?.length ? { atuacoes_exigidas: tf.atuacoes_exigidas } : {}),
             }))
           );
 
@@ -797,7 +798,7 @@ function EscalasPage() {
             .in("id", minIds);
           const ministMap = new Map((ministData ?? []).map((m: any) => [m.id, m]));
 
-          const funcoesPedido = (tipoFuncoes as { ministerio_id: string; quantidade_min: number }[]).map((tf) => {
+          const funcoesPedido = (tipoFuncoes as { ministerio_id: string; quantidade_min: number; atuacoes_exigidas?: string[] | null }[]).map((tf) => {
             const min = ministMap.get(tf.ministerio_id) as any;
             return {
               ministerio_id: tf.ministerio_id,
@@ -806,6 +807,7 @@ function EscalasPage() {
               relevancia: min?.relevancia,
               duplicidade_permitida: min?.duplicidade_permitida,
               ordem_prioridade: min?.ordem_prioridade,
+              ...(tf.atuacoes_exigidas?.length ? { atuacoes_exigidas: tf.atuacoes_exigidas } : {}),
             };
           });
 
@@ -1564,7 +1566,7 @@ function EscalasPage() {
 
       const { data: funcoesData } = await (supabase as any)
         .from("escala_funcoes")
-        .select("ministerio_id, quantidade, ministerios(id, nome, cor, relevancia, duplicidade_permitida, ordem_prioridade)")
+        .select("ministerio_id, quantidade, atuacoes_exigidas, ministerios(id, nome, cor, relevancia, duplicidade_permitida, ordem_prioridade)")
         .eq("escala_id", escalaId);
 
       if (!funcoesData || funcoesData.length === 0)
@@ -1594,6 +1596,7 @@ function EscalasPage() {
         relevancia:           f.ministerios?.relevancia,
         duplicidade_permitida: f.ministerios?.duplicidade_permitida,
         ordem_prioridade:     f.ministerios?.ordem_prioridade,
+        ...(f.atuacoes_exigidas?.length ? { atuacoes_exigidas: f.atuacoes_exigidas } : {}),
       }));
 
       const engineConfig = buildEngineConfig(paroquiaConfig);

@@ -2045,18 +2045,21 @@ export type Database = {
       }
       missa_padrao_funcoes: {
         Row: {
+          atuacoes_exigidas: string[] | null
           id: string
           ministerio_id: string
           missa_padrao_id: string
           quantidade: number
         }
         Insert: {
+          atuacoes_exigidas?: string[] | null
           id?: string
           ministerio_id: string
           missa_padrao_id: string
           quantidade?: number
         }
         Update: {
+          atuacoes_exigidas?: string[] | null
           id?: string
           ministerio_id?: string
           missa_padrao_id?: string
@@ -2081,6 +2084,7 @@ export type Database = {
       }
       missa_padrao_funcoes_extras: {
         Row: {
+          atuacoes_exigidas: string[] | null
           created_at: string
           id: string
           ministerio_id: string
@@ -2088,6 +2092,7 @@ export type Database = {
           quantidade: number
         }
         Insert: {
+          atuacoes_exigidas?: string[] | null
           created_at?: string
           id?: string
           ministerio_id: string
@@ -2095,6 +2100,7 @@ export type Database = {
           quantidade?: number
         }
         Update: {
+          atuacoes_exigidas?: string[] | null
           created_at?: string
           id?: string
           ministerio_id?: string
@@ -3376,6 +3382,7 @@ export type Database = {
       }
       tipo_missa_funcoes: {
         Row: {
+          atuacoes_exigidas: string[] | null
           id: string
           ministerio_id: string
           prioridade: number
@@ -3385,6 +3392,7 @@ export type Database = {
           tipo_vinculo: string
         }
         Insert: {
+          atuacoes_exigidas?: string[] | null
           id?: string
           ministerio_id: string
           prioridade?: number
@@ -3394,6 +3402,7 @@ export type Database = {
           tipo_vinculo?: string
         }
         Update: {
+          atuacoes_exigidas?: string[] | null
           id?: string
           ministerio_id?: string
           prioridade?: number
