@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Plus, Pencil, Trash2, Loader2, Users, Search, X, CalendarDays,
   Upload, ChevronRight, Link2, MessageCircle, Star, User, MoreVertical, Sparkles, RefreshCw, Mail,
-  UserCheck, UserX, ClipboardList, FileDown, CheckCircle2, AlertCircle,
+  UserCheck, UserX, ClipboardList, FileDown, CheckCircle2, AlertCircle, SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -2542,12 +2543,18 @@ function MembrosPage() {
     if (filterComunidade !== "todas") list = list.filter((m) => m.comunidade_id === filterComunidade);
     if (filterPrioridade !== "todas") list = list.filter((m) => m.prioridade_escala === filterPrioridade);
     if (debouncedSearch.trim()) {
-      const q = debouncedSearch.toLowerCase();
-      list = list.filter((m) =>
-        m.nome.toLowerCase().includes(q) ||
-        m.email?.toLowerCase().includes(q) ||
-        m.telefone?.includes(q)
-      );
+      // Busca por tokens: "arthur ara" encontra "Arthur Henrique de Oliveira Araújo"
+      const normalize = (s: string) =>
+        s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+      const tokens = normalize(debouncedSearch).split(/\s+/).filter(Boolean);
+      list = list.filter((m) => {
+        const nomeNorm = normalize(m.nome);
+        const emailNorm = normalize(m.email ?? "");
+        const tel = m.telefone ?? "";
+        return tokens.every(
+          (t) => nomeNorm.includes(t) || emailNorm.includes(t) || tel.includes(t)
+        );
+      });
     }
     return list;
   }, [membros, debouncedSearch, filterMin, filterSituacao, filterSexo, filterDisponibilidade, filterAtuacao, filterComunidade, filterPrioridade]);
@@ -3170,100 +3177,122 @@ function MembrosPage() {
                 )}
               </div>
 
-              {/* Filtros — chips horizontais roláveis */}
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
-                <Select value={filterSituacao} onValueChange={(v) => { setFilterSituacao(v); setSelectedIds(new Set()); }}>
-                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterSituacao !== "ativos" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativos">Ativos</SelectItem>
-                    <SelectItem value="inativos">Inativos</SelectItem>
-                    <SelectItem value="com_acesso">Com acesso</SelectItem>
-                    <SelectItem value="sem_acesso">Sem acesso</SelectItem>
-                    <SelectItem value="todos">Todos</SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Filtros — botão com painel Popover */}
+              <div className="flex gap-1.5 items-center">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className={`h-9 flex items-center gap-1.5 rounded-xl px-3 text-sm border transition ${hasFilters ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card hover:bg-muted"}`}>
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      Filtros
+                      {hasFilters && (
+                        <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                          {[filterSituacao !== "ativos", filterSexo !== "todos", filterDisponibilidade !== "todas", filterMin !== "todos", filterAtuacao !== "todas", filterComunidade !== "todas", filterPrioridade !== "todas"].filter(Boolean).length}
+                        </span>
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-72 p-4 space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Situação</label>
+                      <Select value={filterSituacao} onValueChange={(v) => { setFilterSituacao(v); setSelectedIds(new Set()); }}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ativos">Ativos</SelectItem>
+                          <SelectItem value="inativos">Inativos</SelectItem>
+                          <SelectItem value="com_acesso">Com acesso</SelectItem>
+                          <SelectItem value="sem_acesso">Sem acesso</SelectItem>
+                          <SelectItem value="todos">Todos</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <Select value={filterSexo} onValueChange={(v) => { setFilterSexo(v); setSelectedIds(new Set()); }}>
-                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[130px] ${filterSexo !== "todos" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
-                    <SelectValue placeholder="Sexo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos</SelectItem>
-                    <SelectItem value="M">Masculino</SelectItem>
-                    <SelectItem value="F">Feminino</SelectItem>
-                  </SelectContent>
-                </Select>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sexo</label>
+                      <Select value={filterSexo} onValueChange={(v) => { setFilterSexo(v); setSelectedIds(new Set()); }}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos</SelectItem>
+                          <SelectItem value="M">Masculino</SelectItem>
+                          <SelectItem value="F">Feminino</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <Select value={filterDisponibilidade} onValueChange={(v) => { setFilterDisponibilidade(v); setSelectedIds(new Set()); }}>
-                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[180px] ${filterDisponibilidade !== "todas" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
-                    <SelectValue placeholder="Disponibilidade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todas">Disponibilidade</SelectItem>
-                    <SelectItem value="sem_restricoes">Todos os dias</SelectItem>
-                    <SelectItem value="com_restricoes">Com restrições</SelectItem>
-                  </SelectContent>
-                </Select>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Disponibilidade</label>
+                      <Select value={filterDisponibilidade} onValueChange={(v) => { setFilterDisponibilidade(v); setSelectedIds(new Set()); }}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todas">Qualquer</SelectItem>
+                          <SelectItem value="sem_restricoes">Todos os dias</SelectItem>
+                          <SelectItem value="com_restricoes">Com restrições</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                {ministerios.length > 0 && (
-                  <Select value={filterMin} onValueChange={(v) => { setFilterMin(v); setSelectedIds(new Set()); }}>
-                    <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterMin !== "todos" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
-                      <SelectValue placeholder="Função" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todas as funções</SelectItem>
-                      {ministerios.filter((m) => !!m.id).map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
+                    {ministerios.length > 0 && (
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ministério / Função</label>
+                        <Select value={filterMin} onValueChange={(v) => { setFilterMin(v); setSelectedIds(new Set()); }}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todos">Todos</SelectItem>
+                            {ministerios.filter((m) => !!m.id).map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-                {atuacoes.length > 0 && (
-                  <Select value={filterAtuacao} onValueChange={(v) => { setFilterAtuacao(v); setSelectedIds(new Set()); }}>
-                    <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterAtuacao !== "todas" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
-                      <SelectValue placeholder="Atuação" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas as atuações</SelectItem>
-                      {atuacoes.filter((a) => !!a.id).map((a) => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
+                    {atuacoes.length > 0 && (
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Atuação</label>
+                        <Select value={filterAtuacao} onValueChange={(v) => { setFilterAtuacao(v); setSelectedIds(new Set()); }}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todas">Todas</SelectItem>
+                            {atuacoes.filter((a) => !!a.id).map((a) => <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-                {comunidades.length > 0 && (
-                  <Select value={filterComunidade} onValueChange={(v) => { setFilterComunidade(v); setSelectedIds(new Set()); }}>
-                    <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterComunidade !== "todas" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
-                      <SelectValue placeholder="Comunidade" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas</SelectItem>
-                      {comunidades.filter((c) => !!c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
+                    {comunidades.length > 0 && (
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Comunidade</label>
+                        <Select value={filterComunidade} onValueChange={(v) => { setFilterComunidade(v); setSelectedIds(new Set()); }}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todas">Todas</SelectItem>
+                            {comunidades.filter((c) => !!c.id).map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-                <Select value={filterPrioridade} onValueChange={(v) => { setFilterPrioridade(v); setSelectedIds(new Set()); }}>
-                  <SelectTrigger className={`h-8 rounded-full px-3 text-xs shrink-0 gap-1 border max-w-[160px] ${filterPrioridade !== "todas" ? "border-primary/50 bg-primary/5 text-primary" : "border-border bg-card"}`}>
-                    <SelectValue placeholder="Prioridade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todas">Todas</SelectItem>
-                    {PRIORIDADES.filter((p) => p.value !== "nenhuma").map((p) => (
-                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                    ))}
-                    <SelectItem value="nenhuma">Sem prioridade</SelectItem>
-                  </SelectContent>
-                </Select>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Prioridade de escala</label>
+                      <Select value={filterPrioridade} onValueChange={(v) => { setFilterPrioridade(v); setSelectedIds(new Set()); }}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todas">Todas</SelectItem>
+                          {PRIORIDADES.filter((p) => p.value !== "nenhuma").map((p) => (
+                            <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                          ))}
+                          <SelectItem value="nenhuma">Sem prioridade</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                {hasFilters && (
-                  <button
-                    className="h-8 shrink-0 flex items-center gap-1 rounded-full px-3 text-xs text-destructive border border-destructive/30 bg-destructive/5 hover:bg-destructive/10 transition whitespace-nowrap"
-                    onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setFilterSituacao("ativos"); setFilterSexo("todos"); setFilterDisponibilidade("todas"); setSelectedIds(new Set()); }}
-                  >
-                    <X className="h-3 w-3" />Limpar
-                  </button>
-                )}
+                    {hasFilters && (
+                      <button
+                        className="w-full h-8 flex items-center justify-center gap-1.5 rounded-lg text-xs text-destructive border border-destructive/30 bg-destructive/5 hover:bg-destructive/10 transition"
+                        onClick={() => { setFilterMin("todos"); setFilterAtuacao("todas"); setFilterComunidade("todas"); setFilterPrioridade("todas"); setFilterSituacao("ativos"); setFilterSexo("todos"); setFilterDisponibilidade("todas"); setSelectedIds(new Set()); }}
+                      >
+                        <X className="h-3 w-3" /> Limpar todos os filtros
+                      </button>
+                    )}
+                  </PopoverContent>
+                </Popover>
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -3756,11 +3785,11 @@ function MembrosPage() {
       </Dialog>
 
       {/* Sheet adicionar/editar */}
-      <Sheet open={sheetOpen} onOpenChange={(o) => !o && closeSheet()}>
-        <SheetContent className="overflow-y-auto w-full sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle>{editId ? "Editar membro" : "Novo membro"}</SheetTitle>
-          </SheetHeader>
+      <Dialog open={sheetOpen} onOpenChange={(o) => !o && closeSheet()}>
+        <DialogContent className="overflow-y-auto max-h-[90vh] w-full max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editId ? "Editar membro" : "Novo membro"}</DialogTitle>
+          </DialogHeader>
           <MemberForm
             form={form}
             setForm={setForm}
@@ -4034,8 +4063,8 @@ function MembrosPage() {
               </div>
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* Bulk edit dialog */}
       <Dialog open={bulkEditOpen} onOpenChange={(o) => !o && setBulkEditOpen(false)}>

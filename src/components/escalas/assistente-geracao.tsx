@@ -25,6 +25,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
@@ -243,12 +247,26 @@ type IndispMin = Pick<IndispRow, "membro_id" | "data"> & {
   cancelada?: boolean;
   tipo?: string;
   data_fim?: string | null;
+  hora_inicio?: string | null;
+  hora_fim?: string | null;
 };
 
-function membroEstaBloqueado(membroId: string, celData: string, indisp: IndispMin[]): boolean {
+function membroEstaBloqueado(
+  membroId: string,
+  celData: string,
+  indisp: IndispMin[],
+  celHoraInicio?: string | null,
+): boolean {
   return indisp.some((i) => {
     if (i.membro_id !== membroId || i.cancelada) return false;
     if (i.tipo === "intervalo" && i.data_fim) return celData >= i.data && celData <= i.data_fim;
+    if (i.tipo === "periodo") {
+      if (i.data !== celData) return false;
+      // Sem hora na indisp ou na celebração → bloqueia o dia inteiro (conservador)
+      if (!i.hora_fim || !celHoraInicio) return true;
+      // Libera apenas quando a celebração começa claramente DEPOIS que a indisp termina
+      return celHoraInicio < i.hora_fim;
+    }
     return i.data === celData;
   });
 }
@@ -480,6 +498,8 @@ export function AssistenteGeracaoEscalas({
   const [simulacao, setSimulacao] = useState<SimulacaoResultado | null>(null);
   const [ultimaConfig, setUltimaConfig] = useState<ConfigSalva | null>(null);
   const [sugerirUltimaConfig, setSugerirUltimaConfig] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [membroCardId, setMembroCardId] = useState<string | null>(null);
 
   // ── Queries de funções ────────────────────────────────────────────────────
   const mpIds = missasPadrao.map((m) => m.id);
@@ -517,6 +537,21 @@ export function AssistenteGeracaoEscalas({
         .select("missa_padrao_id, ministerio_id, quantidade, data, atuacoes_exigidas")
         .in("missa_padrao_id", mpIds);
       return (data ?? []) as { missa_padrao_id: string; ministerio_id: string; quantidade: number; data: string; atuacoes_exigidas?: string[] | null }[];
+    },
+  });
+
+  // ── Query: últimas escalas do membro selecionado no card ─────────────────
+  const { data: membroCardEscalas = [] } = useQuery({
+    queryKey: ["membro-card-escalas", membroCardId],
+    enabled: !!membroCardId,
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("escala_alocacoes")
+        .select("escala_id, ministerio_id, escalas!inner(data, titulo)")
+        .eq("membro_id", membroCardId)
+        .order("escalas(data)", { ascending: false })
+        .limit(10);
+      return (data ?? []) as { escala_id: string; ministerio_id: string; escalas: { data: string; titulo: string } }[];
     },
   });
 
@@ -719,8 +754,8 @@ export function AssistenteGeracaoEscalas({
           continue;
         }
 
-        // 3. Indisponibilidade — incluindo tipo "intervalo" (P0.3)
-        const semIndisp = semRestrDia.filter((m) => !membroEstaBloqueado(m.id, cel.data, indisponibilidades));
+        // 3. Indisponibilidade — incluindo tipo "intervalo" e "periodo" (P0.3)
+        const semIndisp = semRestrDia.filter((m) => !membroEstaBloqueado(m.id, cel.data, indisponibilidades, cel.hora_inicio));
         if (semIndisp.length === 0) {
           cs.push({ celebracaoTitulo: cel.titulo, ministerioNome: funcao.ministerio_nome, motivo: "todos_indisponiveis" });
           continue;
@@ -826,7 +861,7 @@ export function AssistenteGeracaoEscalas({
         // restricoes_dia_semana é penalidade SUAVE no motor (–20 pts), não exclusão.
         // Manter como hard aqui impedia membros com restrição em todos os dias do mês
         // de receber oportunidades, bloqueando a cobertura mínima.
-        if (membroEstaBloqueado(m.id, cel.data, indispCel)) continue;
+        if (membroEstaBloqueado(m.id, cel.data, indispCel, cel.hora_inicio)) continue;
         const temVinculo = cel.funcoes.some((f) => membroPara[m.id]?.includes(f.ministerio_id));
         if (!temVinculo) continue;
         membroOportunidades.set(m.id, (membroOportunidades.get(m.id) ?? 0) + 1);
@@ -861,6 +896,7 @@ export function AssistenteGeracaoEscalas({
       celFuncoes: FuncaoCelebracao[],
       celData: string,
       indispCel: IndispRow[],
+      celHoraInicio?: string | null,
     ) {
       // Agrupa funções por ministerio_id para verificar atuacoes_exigidas por grupo
       const funcoesPorMin = new Map<string, FuncaoCelebracao[]>();
@@ -875,7 +911,7 @@ export function AssistenteGeracaoEscalas({
 
       for (const m of membrosEfetivos) {
         // Critério 3: indisponibilidade / restrição de missa
-        if (membroEstaBloqueado(m.id, celData, indispCel)) continue;
+        if (membroEstaBloqueado(m.id, celData, indispCel, celHoraInicio)) continue;
 
         // Critério 3b: restricoes_dia_semana — hard exclusion (alinha com RPC)
         if (m.restricoes_dia_semana?.includes(diaSemana)) continue;
@@ -953,7 +989,7 @@ export function AssistenteGeracaoEscalas({
         const candidatos = membrosEfetivos.filter((m) => {
           if (!membroPara[m.id]?.includes(f.ministerio_id)) return false;
           // restricoes_dia_semana não é exclusão — o motor a trata como penalidade suave
-          if (membroEstaBloqueado(m.id, cel.data, indispParaGeracao)) return false;
+          if (membroEstaBloqueado(m.id, cel.data, indispParaGeracao, cel.hora_inicio)) return false;
           return true;
         }).length;
         return { ...f, _candidatos: candidatos };
@@ -1032,7 +1068,7 @@ export function AssistenteGeracaoEscalas({
       });
       if (oportunidadesMapBase) {
         // Passa indispParaOportunidades (sem missaRestricaoIndisp) para alinhar com a RPC.
-        registrarOportunidadesBatch(cel.funcoes, cel.data, indispParaOportunidades);
+        registrarOportunidadesBatch(cel.funcoes, cel.data, indispParaOportunidades, cel.hora_inicio);
       }
 
       // Detecta funções que ficaram com vagas
@@ -1090,7 +1126,7 @@ export function AssistenteGeracaoEscalas({
       )) return false;
 
       // 3. Indisponibilidade + restrição de missa (indispEfetivas inclui ambas)
-      if (membroEstaBloqueado(m.id, planoCel.cel.data, planoCel.indispEfetivas)) return false;
+      if (membroEstaBloqueado(m.id, planoCel.cel.data, planoCel.indispEfetivas, planoCel.cel.hora_inicio)) return false;
 
       // 4. Duplicidade na mesma celebração
       if (planoCel.alocacoes.some((a) => a.membro_id === m.id)) return false;
@@ -1512,6 +1548,8 @@ export function AssistenteGeracaoEscalas({
         onOpenChange={(o) => {
           // P0.2 — bloquear fechamento durante geração
           if (!o && emGeracao) return;
+          // Proteger simulação ativa contra fechamento acidental
+          if (!o && simulacao && passo === 4) { setConfirmClose(true); return; }
           if (!o) onClose();
         }}
       >
@@ -1878,7 +1916,10 @@ export function AssistenteGeracaoEscalas({
                       const temGrupos   = acolitos.length > 0 || cerimonarios.length > 0;
 
                       const GrupoLinha = ({ m }: { m: typeof simulacao.sumario.distribuicao[0] }) => (
-                        <div className="flex items-center justify-between px-4 py-1.5">
+                        <button
+                          className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-muted/50 transition text-left"
+                          onClick={() => setMembroCardId(m.id)}
+                        >
                           <span className="text-xs truncate flex-1">{m.nome}</span>
                           <span className="ml-2 text-[10px] text-muted-foreground tabular-nums shrink-0">
                             {m.oportunidades} oport.
@@ -1889,7 +1930,7 @@ export function AssistenteGeracaoEscalas({
                           <span className="ml-1 text-[10px] tabular-nums text-muted-foreground shrink-0">
                             ({Math.round(m.taxa * 100)}%)
                           </span>
-                        </div>
+                        </button>
                       );
 
                       const GrupoHeader = ({ label, membros }: { label: string; membros: typeof simulacao.sumario.distribuicao }) => {
@@ -2181,6 +2222,112 @@ export function AssistenteGeracaoEscalas({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Card rápido do membro na simulação */}
+      {membroCardId && (() => {
+        const membro = membros.find((m) => m.id === membroCardId);
+        const dist   = simulacao?.sumario.distribuicao.find((d) => d.id === membroCardId);
+        const indispMembro = indisponibilidades.filter((i) => i.membro_id === membroCardId && !i.cancelada);
+        const DIA_NOME = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+        const fmtData  = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+        return (
+          <Dialog open onOpenChange={(o) => !o && setMembroCardId(null)}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="text-base">{membro?.nome ?? "Membro"}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 text-sm">
+                {dist && (
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-muted/50 p-2">
+                      <div className="text-lg font-bold text-primary">{dist.count}</div>
+                      <div className="text-[10px] text-muted-foreground">escalas</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-2">
+                      <div className="text-lg font-bold">{dist.oportunidades}</div>
+                      <div className="text-[10px] text-muted-foreground">oport.</div>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-2">
+                      <div className="text-lg font-bold">{Math.round(dist.taxa * 100)}%</div>
+                      <div className="text-[10px] text-muted-foreground">taxa</div>
+                    </div>
+                  </div>
+                )}
+
+                {membro?.restricoes_dia_semana && membro.restricoes_dia_semana.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Restrições de dia</p>
+                    <div className="flex flex-wrap gap-1">
+                      {membro.restricoes_dia_semana.map((d) => (
+                        <span key={d} className="rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 text-[10px] px-2 py-0.5">
+                          {DIA_NOME[d]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {indispMembro.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Indisponibilidades</p>
+                    <div className="space-y-0.5 max-h-28 overflow-y-auto">
+                      {indispMembro.map((i) => (
+                        <div key={i.id} className="text-xs flex items-center gap-1.5">
+                          <span className="text-muted-foreground">{i.tipo === "intervalo" && i.data_fim ? `${fmtData(i.data)} – ${fmtData(i.data_fim)}` : fmtData(i.data)}{i.hora_inicio && i.hora_fim ? ` · ${i.hora_inicio.slice(0,5)}–${i.hora_fim.slice(0,5)}` : ""}</span>
+                          {i.motivo && <span className="truncate text-muted-foreground/70">· {i.motivo}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {membroCardEscalas.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Últimas escalas</p>
+                    <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                      {membroCardEscalas.map((e, idx) => (
+                        <div key={idx} className="text-xs flex items-center gap-1.5">
+                          <span className="text-muted-foreground shrink-0">{fmtData(e.escalas.data)}</span>
+                          <span className="truncate">{e.escalas.titulo}</span>
+                          {ministeriosMap[e.ministerio_id] && (
+                            <span
+                              className="ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white"
+                              style={{ background: ministeriosMap[e.ministerio_id].cor || "#6b7280" }}
+                            >
+                              {ministeriosMap[e.ministerio_id].nome}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
+
+      {/* Confirmação de fechamento com simulação ativa */}
+      <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Descartar simulação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Há uma simulação de escalas em andamento. Fechar o assistente agora descartará todos os resultados gerados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continuar editando</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { setConfirmClose(false); onClose(); }}
+            >
+              Descartar e fechar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Modal de edição de celebração */}
       {editandoIdx !== null && preVisualizacao[editandoIdx] && (
