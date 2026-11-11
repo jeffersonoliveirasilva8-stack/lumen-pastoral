@@ -208,7 +208,8 @@ const CAP_HIST_JANELA_DIAS  = 365;
 const PENALIDADE_MESMO_DIA    = 50;
 const PENALIDADE_DIA_ANTERIOR = 30;
 const PENALIDADE_DOIS_DIAS    = 15;
-const PENALIDADE_MESMA_SEMANA = 25; // 3–7 dias atrás (inclusive): evita repetição semanal
+const PENALIDADE_MESMA_SEMANA    = 40; // 3–7 dias atrás (inclusive): evita repetição semanal
+const PENALIDADE_PROGRESSIVA_MAX = 25; // dias 9–30: decaimento linear (mantém curva original)
 
 
 // Termos litúrgicos universais para funções acessórias (não são específicos de nenhuma paróquia).
@@ -411,7 +412,7 @@ function calcularScore(
   // membros que estavam há mais tempo sem servir, causando monopolização.
   if (!modoSolenePrincipal && diasSemServir > 8 && diasSemServir <= 30) {
     // Decai linearmente: 25 pts no dia 9 → ~0 pts no dia 30
-    penalidade += Math.round(PENALIDADE_MESMA_SEMANA * (30 - diasSemServir) / 22);
+    penalidade += Math.round(PENALIDADE_PROGRESSIVA_MAX * (30 - diasSemServir) / 22);
   }
 
   // Bônus de prioridade_escala: aplicado APENAS em modo SOLENE/PRINCIPAL (seleção por mérito).
