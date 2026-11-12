@@ -170,11 +170,19 @@ export type InsightFuncao = {
     ja_alocado: number;
     acima_limite: number;
     solenidade_recente: number; // de-priorizado (serviu na última solenidade)
+    intervalo_minimo: number;   // serviu dentro do intervalo_minimo_dias (pool5, soft)
   };
   top_candidatos: InsightCandidato[];
   escolhidos: InsightCandidato[];
   motivo_vazio?: string;
   ultima_data_solene?: string | null; // data da última solenidade para esta função
+  /** Preenchido quando o membro escolhido serviu na semana anterior — repetição inevitável. */
+  repeticao_inevitavel?: {
+    membro_nome: string;
+    penalidade: number;
+    total_pool1: number;   // candidatos em pool1 (todos também penalizados)
+    total_pool5: number;   // candidatos em pool5 (intervalo_minimo)
+  };
 };
 
 export type ResultadoAlocacao = {
@@ -723,7 +731,7 @@ export function alocarMembros(
     );
 
     // Contadores de exclusão
-    const excluidos = { sem_vinculo: 0, indisponibilidade: 0, dia_semana: 0, funcao_nao_pode: 0, atuacao: 0, ja_alocado: 0, acima_limite: 0, solenidade_recente: 0 };
+    const excluidos = { sem_vinculo: 0, indisponibilidade: 0, dia_semana: 0, funcao_nao_pode: 0, atuacao: 0, ja_alocado: 0, acima_limite: 0, solenidade_recente: 0, intervalo_minimo: 0 };
 
     // ── Separação em pools progressivos ─────────────────────────────────────
     // Pool 1: apto + abaixo de ambos os limites + não alocado
@@ -787,7 +795,7 @@ export function alocarMembros(
       if (config?.intervalo_minimo_dias && config.intervalo_minimo_dias > 0) {
         const limite = somarDias(contexto.data, -config.intervalo_minimo_dias);
         if (historicoRecente.some((h) => h.membro_id === m.id && h.data >= limite && h.data < contexto.data)) {
-          excluidos.indisponibilidade++;
+          excluidos.intervalo_minimo++;
           if (!ja_alocados.has(m.id)) pool5.push(m);
           continue;
         }
@@ -989,14 +997,17 @@ export function alocarMembros(
 
     // ── Diagnóstico / insights ────────────────────────────────────────────────
     // Reutiliza scores pré-calculados — sem novo Math.random()
-    const todosScored = [...scored1, ...scored1b, ...scored2, ...scored3]
+    // pool5 incluído para diagnóstico completo (candidatos com intervalo_minimo violado)
+    const todosScored = [...scored1, ...scored1b, ...scored2, ...scored3, ...scored5]
       .sort((a, b) => b.breakdown.total - a.breakdown.total);
 
     const buildInsightCandidato = (c: ReturnType<typeof scorePool>[number], escolhido: boolean): InsightCandidato => {
       // Determina motivo de exclusão específico
       let motivo_exclusao: string | undefined;
       if (!escolhido) {
-        if (pool1b.some((m) => m.id === c.membro.id)) {
+        if (pool5.some((m) => m.id === c.membro.id)) {
+          motivo_exclusao = `Dentro do intervalo mínimo de ${config?.intervalo_minimo_dias ?? 4} dias`;
+        } else if (pool1b.some((m) => m.id === c.membro.id)) {
           motivo_exclusao = "Serviu na solenidade anterior (rodízio de oportunidades)";
         } else if (pool2.some((m) => m.id === c.membro.id)) {
           motivo_exclusao = "Acima do limite semanal (score inferior)";
@@ -1057,6 +1068,26 @@ export function alocarMembros(
     }
 
     const alocadosFinal = selecionados.length + jaNestaFuncao;
+
+    // Detecta repetição inevitável: escolhido serviu na semana anterior (penalidade >= 40)
+    let repeticaoInevitavel: InsightFuncao["repeticao_inevitavel"] | undefined;
+    if (selecionados.length > 0) {
+      const primeiro = selecionados[0];
+      if (primeiro.breakdown.penalidade >= PENALIDADE_MESMA_SEMANA) {
+        repeticaoInevitavel = {
+          membro_nome: primeiro.membro.nome,
+          penalidade:  primeiro.breakdown.penalidade,
+          total_pool1: pool1.length,
+          total_pool5: pool5.length,
+        };
+        alertas.push(
+          `⚠ "${funcao.ministerio_nome}": ${primeiro.membro.nome} repete da semana anterior` +
+          ` — todos os ${pool1.length} candidato(s) de pool1 serviram nos últimos 7 dias` +
+          (pool5.length > 0 ? `; ${pool5.length} candidato(s) no intervalo mínimo (pool5).` : "."),
+        );
+      }
+    }
+
     detalhesPorFuncao.push({
       ministerio_id:   funcao.ministerio_id,
       ministerio_nome: funcao.ministerio_nome,
@@ -1075,6 +1106,7 @@ export function alocarMembros(
       escolhidos:           topCandidatos.filter((c) => c.escolhido),
       motivo_vazio:         motivoVazio,
       ultima_data_solene:   ultimaDataSolene,
+      repeticao_inevitavel: repeticaoInevitavel,
     });
   }
 

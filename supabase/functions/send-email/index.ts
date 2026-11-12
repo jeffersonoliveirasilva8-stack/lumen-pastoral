@@ -827,9 +827,11 @@ Deno.serve(async (req) => {
     if (!template) return json({ ok: false, error: "Missing field: template" }, 400);
 
     // x-email-secret: triggers do banco (server-to-server).
-    // JWT válido: frontend — aceito apenas para mfa_admin_code, cujo chamador já
-    // está autenticado via Supabase Auth. Todos os outros templates exigem o secret.
-    if (!secretAuthorized && !(template === "mfa_admin_code" && requesterId !== null)) {
+    // JWT válido: frontend — aceito apenas para mfa_admin_code (usuário autenticado).
+    // reset_senha: chamado por usuário não autenticado (esqueceu a senha) — sem JWT nem
+    // secret; protegido pelo rate limiter (check_email_rate_limit) aplicado logo abaixo.
+    const isPublicTemplate = template === "reset_senha";
+    if (!secretAuthorized && !isPublicTemplate && !(template === "mfa_admin_code" && requesterId !== null)) {
       return json({ ok: false, error: "Unauthorized" }, 401);
     }
 

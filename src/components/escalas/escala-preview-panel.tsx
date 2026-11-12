@@ -185,8 +185,16 @@ export function EscalaPreviewPanel({
                       {snapshot.excluidos.indisponibilidade > 0 && (
                         <span>{snapshot.excluidos.indisponibilidade} indisponíveis</span>
                       )}
+                      {snapshot.excluidos.intervalo_minimo > 0 && (
+                        <span>{snapshot.excluidos.intervalo_minimo} no intervalo mín.</span>
+                      )}
                       {snapshot.excluidos.acima_limite > 0 && (
                         <span>{snapshot.excluidos.acima_limite} acima do limite</span>
+                      )}
+                      {snapshot.repeticao_inevitavel && (
+                        <span className="text-amber-500 font-medium">
+                          ⚠ repete semana anterior ({snapshot.repeticao_inevitavel.total_pool1} pool1 penalizados)
+                        </span>
                       )}
                       {snapshot.motivo_vazio && (
                         <span className="text-amber-600">{snapshot.motivo_vazio}</span>
