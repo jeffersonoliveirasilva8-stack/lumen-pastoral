@@ -1069,19 +1069,23 @@ export function alocarMembros(
 
     const alocadosFinal = selecionados.length + jaNestaFuncao;
 
-    // Detecta repetição inevitável: escolhido serviu na semana anterior (penalidade >= 40)
+    // Detecta repetição inevitável: algum escolhido serviu na semana anterior (penalidade >= 40)
+    // E TODOS os candidatos de pool1 também possuem essa penalidade (ou pool1 estava vazio).
+    // Verifica todos os selecionados para cobrir o caso quantidade > 1.
     let repeticaoInevitavel: InsightFuncao["repeticao_inevitavel"] | undefined;
-    if (selecionados.length > 0) {
-      const primeiro = selecionados[0];
-      if (primeiro.breakdown.penalidade >= PENALIDADE_MESMA_SEMANA) {
+    const repEntry = selecionados.find((s) => s.breakdown.penalidade >= PENALIDADE_MESMA_SEMANA);
+    if (repEntry) {
+      const todosPool1Penalizados =
+        scored1.length > 0 && scored1.every((s) => s.breakdown.penalidade >= PENALIDADE_MESMA_SEMANA);
+      if (pool1.length === 0 || todosPool1Penalizados) {
         repeticaoInevitavel = {
-          membro_nome: primeiro.membro.nome,
-          penalidade:  primeiro.breakdown.penalidade,
+          membro_nome: repEntry.membro.nome,
+          penalidade:  repEntry.breakdown.penalidade,
           total_pool1: pool1.length,
           total_pool5: pool5.length,
         };
         alertas.push(
-          `⚠ "${funcao.ministerio_nome}": ${primeiro.membro.nome} repete da semana anterior` +
+          `⚠ "${funcao.ministerio_nome}": ${repEntry.membro.nome} repete da semana anterior` +
           ` — todos os ${pool1.length} candidato(s) de pool1 serviram nos últimos 7 dias` +
           (pool5.length > 0 ? `; ${pool5.length} candidato(s) no intervalo mínimo (pool5).` : "."),
         );
