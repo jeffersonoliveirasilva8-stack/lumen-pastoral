@@ -258,6 +258,12 @@ function EscalasPage() {
   const [reorganizarOpen, setReorganizarOpen] = useState(false);
   const [reorganizarEscalaId, setReorganizarEscalaId] = useState("");
 
+  // Guard de arquivamento: membros com status não-final
+  type PendenteArquivamento = { membro_nome: string; ministerio_nome: string; status_atual: string };
+  const [archiveGuardTarget, setArchiveGuardTarget] = useState<Escala | null>(null);
+  const [archiveGuardPendentes, setArchiveGuardPendentes] = useState<PendenteArquivamento[]>([]);
+  const [archiveGuardChecking, setArchiveGuardChecking] = useState(false);
+
   // Buffer de mudanças de membros — aplica só ao clicar Salvar
   const [pendingAdds, setPendingAdds] = useState<{ membro_id: string; ministerio_id: string }[]>([]);
   const [pendingRemoves, setPendingRemoves] = useState<string[]>([]);
@@ -960,6 +966,34 @@ function EscalasPage() {
     },
   });
 
+  // Verifica pendentes antes de arquivar uma escala publicada.
+  // Se houver membros com status não-final, abre o modal de alerta.
+  // Caso contrário, prossegue direto para o deleteMutation.
+  async function checkAndArchive(escala: Escala) {
+    if (escala.status !== "publicada") {
+      deleteMutation.mutate(escala);
+      return;
+    }
+    setArchiveGuardChecking(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("verificar_pendentes_arquivamento", {
+        p_escala_id: escala.id,
+      });
+      if (error) throw error;
+      const pendentes = (data ?? []) as { membro_nome: string; ministerio_nome: string; status_atual: string }[];
+      if (pendentes.length > 0) {
+        setArchiveGuardTarget(escala);
+        setArchiveGuardPendentes(pendentes);
+      } else {
+        deleteMutation.mutate(escala);
+      }
+    } catch (err) {
+      toast.error("Não foi possível verificar os membros pendentes. Verifique a conexão e tente novamente.");
+    } finally {
+      setArchiveGuardChecking(false);
+    }
+  }
+
   const deleteMutation = useMutation({
     mutationFn: async (escala: Escala) => {
       if (escala.status === "publicada" || escala.status === "arquivada") {
@@ -1048,6 +1082,19 @@ function EscalasPage() {
 
   const atribuirMutation = useMutation({
     mutationFn: async ({ membro_id, ministerio_id }: { membro_id: string; ministerio_id: string }) => {
+      // Verificação backend de duplicidade quando permitir_duplicidade=false
+      const paroquia_id = profile?.paroquia_id;
+      if (paroquia_id && detailEscala?.id) {
+        const { data: dupCheck } = await (supabase as any).rpc("verificar_membro_ja_escalado", {
+          p_membro_id: membro_id,
+          p_escala_id: detailEscala.id,
+          p_paroquia_id: paroquia_id,
+        });
+        const resultado = Array.isArray(dupCheck) ? dupCheck[0] : dupCheck;
+        if (resultado?.ja_escalado) {
+          throw new Error(`Este membro já está escalado em "${resultado.escala_titulo}" neste dia (${resultado.ministerio_nome}). Configuração da paróquia não permite duplicidade de escala no mesmo dia.`);
+        }
+      }
       // upsert: se já existe linha soft-deleted (ativo=false), reativa em vez de duplicar
       const { error } = await (supabase as any).from("escala_membros").upsert({
         escala_id: detailEscala!.id,
@@ -1496,6 +1543,21 @@ function EscalasPage() {
 
   const swapMembroMutation = useMutation({
     mutationFn: async ({ removeId, escalaId, membroId, ministerioId }: { removeId: string; removeMembroId: string; escalaId: string; membroId: string; ministerioId: string }) => {
+      // Verificação backend de duplicidade ao substituir membro manualmente
+      const paroquia_id = profile?.paroquia_id;
+      if (paroquia_id) {
+        const { data: dupCheck } = await (supabase as any).rpc("verificar_membro_ja_escalado", {
+          p_membro_id: membroId,
+          p_escala_id: escalaId,
+          p_paroquia_id: paroquia_id,
+        });
+        const resultado = Array.isArray(dupCheck) ? dupCheck[0] : dupCheck;
+        if (resultado?.ja_escalado) {
+          throw new Error(
+            `Este membro já está escalado em "${resultado.escala_titulo}" neste dia (${resultado.ministerio_nome}). Configuração da paróquia não permite duplicidade de escala no mesmo dia.`
+          );
+        }
+      }
       const { error: updErr } = await (supabase as any)
         .from("escala_membros")
         .update({ ativo: false, removido_em: new Date().toISOString() })
@@ -2623,12 +2685,15 @@ function EscalasPage() {
                 if (!deleteTarget) return;
                 if ((deleteTarget as any)._forceHardDelete) {
                   hardDeleteMutation.mutate(deleteTarget.id);
+                } else if (deleteTarget.status === "publicada") {
+                  setDeleteTarget(null);
+                  checkAndArchive(deleteTarget);
                 } else {
                   deleteMutation.mutate(deleteTarget);
                 }
               }}
             >
-              {(deleteMutation.isPending || hardDeleteMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+              {(deleteMutation.isPending || hardDeleteMutation.isPending || archiveGuardChecking) && <Loader2 className="h-4 w-4 animate-spin" />}
               {(deleteTarget as any)?._forceHardDelete
                 ? "Excluir permanentemente"
                 : deleteTarget?.status === "publicada" || deleteTarget?.status === "arquivada"
@@ -2638,6 +2703,73 @@ function EscalasPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de alerta: membros com status não-final ao arquivar */}
+      <Dialog open={!!archiveGuardTarget} onOpenChange={(o) => { if (!o) { setArchiveGuardTarget(null); setArchiveGuardPendentes([]); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Membros sem presença registrada
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              <strong>{archiveGuardTarget?.titulo}</strong> possui{" "}
+              {archiveGuardPendentes.length === 1 ? "1 membro" : `${archiveGuardPendentes.length} membros`}{" "}
+              com status não finalizado. Registre a presença, falta, justificativa ou recusa antes de arquivar para manter o histórico correto.
+            </p>
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Membro</th>
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Função</th>
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {archiveGuardPendentes.map((p, i) => (
+                    <tr key={i} className="border-t">
+                      <td className="px-3 py-2">{p.membro_nome}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{p.ministerio_nome}</td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          p.status_atual === "confirmado"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                        }`}>
+                          {p.status_atual === "confirmado" ? "Confirmado" : "Pendente"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Acesse a Sacristia para registrar as presenças. Se preferir, você pode arquivar assim mesmo — os registros ficarão sem histórico de participação.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setArchiveGuardTarget(null); setArchiveGuardPendentes([]); }}>
+              Resolver antes
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const target = archiveGuardTarget;
+                setArchiveGuardTarget(null);
+                setArchiveGuardPendentes([]);
+                if (target) deleteMutation.mutate(target);
+              }}
+            >
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Arquivar assim mesmo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -4850,6 +4982,21 @@ function EscalaDetail({
   // Definidas aqui para ter acesso direto a escala.id sem passar por closure do pai
   const atribuirLocalMutation = useMutation({
     mutationFn: async ({ membro_id, ministerio_id }: { membro_id: string; ministerio_id: string }) => {
+      // Verificação backend de duplicidade quando permitir_duplicidade=false
+      const paroquia_id = authProfile?.paroquia_id;
+      if (paroquia_id) {
+        const { data: dupCheck } = await (supabase as any).rpc("verificar_membro_ja_escalado", {
+          p_membro_id: membro_id,
+          p_escala_id: escala.id,
+          p_paroquia_id: paroquia_id,
+        });
+        const resultado = Array.isArray(dupCheck) ? dupCheck[0] : dupCheck;
+        if (resultado?.ja_escalado) {
+          throw new Error(
+            `Este membro já está escalado em "${resultado.escala_titulo}" neste dia (${resultado.ministerio_nome}). Configuração da paróquia não permite duplicidade de escala no mesmo dia.`
+          );
+        }
+      }
       const { error } = await (supabase as any).from("escala_membros").upsert({
         escala_id: escala.id,
         membro_id,
