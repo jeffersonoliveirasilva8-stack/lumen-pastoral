@@ -8,6 +8,7 @@ import {
   AlertCircle, TrendingUp, Search, X, CheckCheck, History, Ban, ArrowLeftRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -61,6 +62,7 @@ function SacristiaPage() {
   const [presencaMap, setPresencaMap] = useState<Record<string, "presente" | "faltou" | "atrasado" | "justificou" | "pendente">>({});
   const [justificativaMap, setJustificativaMap] = useState<Record<string, string>>({});
   const [savingEscalaId, setSavingEscalaId] = useState<string | null>(null);
+  const [salvasIds, setSalvasIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>("em_andamento");
   const [busca, setBusca] = useState("");
   const [filtroMinisterio, setFiltroMinisterio] = useState<string | null>(null);
@@ -227,7 +229,8 @@ function SacristiaPage() {
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
-      toast.success("Presenças salvas.");
+      setSalvasIds((prev) => new Set([...prev, escalaId]));
+      toast.success("Presenças salvas.", { duration: 6000 });
 
       // Envia e-mail de confirmação para cada membro com status final registrado
       const escala = todasEscalas.find((e) => e.id === escalaId);
@@ -320,6 +323,8 @@ function SacristiaPage() {
   // Salvar presenças de todas as escalas abertas em lote
   async function salvarTodos() {
     setSalvandoTodos(true);
+    const erros: string[] = [];
+    const salvas: string[] = [];
     try {
       for (const escala of escalasExibidas) {
         const membrosDestaEscala = membrosEscala.filter((m) => m.escala_id === escala.id);
@@ -336,8 +341,14 @@ function SacristiaPage() {
           p_escala_id: escala.id,
           p_updates: updates,
         });
-        if (error) throw error;
+        if (error) {
+          // Falha individual não interrompe as demais — acumula para relatar ao final
+          erros.push(`${escala.titulo}: ${supabaseErrorMessage(error)}`);
+        } else {
+          salvas.push(escala.id);
+        }
       }
+      setSalvasIds((prev) => new Set([...prev, ...salvas]));
       qc.invalidateQueries({ queryKey: ["sacristia-membros-todos"] });
       qc.invalidateQueries({ queryKey: ["sacristia-todas"] });
       qc.invalidateQueries({ queryKey: ["escala-membros"] });
@@ -345,9 +356,13 @@ function SacristiaPage() {
       qc.invalidateQueries({ queryKey: ["pm-escalas"] });
       qc.invalidateQueries({ queryKey: ["pm-todas-escalas"] });
       qc.invalidateQueries({ queryKey: ["portal-home-escalas"] });
-      toast.success("Todas as presenças salvas.");
-    } catch (e) {
-      toast.error(supabaseErrorMessage(e));
+      if (erros.length === 0) {
+        toast.success(`${salvas.length} escala${salvas.length !== 1 ? "s" : ""} salva${salvas.length !== 1 ? "s" : ""} com sucesso.`, { duration: 6000 });
+      } else if (salvas.length > 0) {
+        toast.warning(`${salvas.length} salva${salvas.length !== 1 ? "s" : ""}, ${erros.length} com erro:\n${erros.join("\n")}`, { duration: 8000 });
+      } else {
+        toast.error(`Nenhuma escala salva:\n${erros.join("\n")}`, { duration: 8000 });
+      }
     } finally {
       setSalvandoTodos(false);
     }
@@ -453,7 +468,7 @@ function SacristiaPage() {
         ].map((t) => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => { setTab(t.id); setSalvasIds(new Set()); }}
             className={`px-3 py-1.5 text-sm font-medium rounded-t-lg transition-colors ${
               tab === t.id
                 ? "text-foreground border-b-2 border-primary -mb-px"
@@ -677,10 +692,26 @@ function SacristiaPage() {
                           {finais}/{membros.length} registrados
                         </span>
                       </div>
+                      {membros.length > 0 && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <Progress
+                            value={Math.round((finais / membros.length) * 100)}
+                            className="h-1.5 flex-1"
+                          />
+                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                            {Math.round((finais / membros.length) * 100)}%
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {tab === "pendentes" && membros.length === 0 && (
                         <AlertCircle className="h-4 w-4 text-amber-500" />
+                      )}
+                      {escala.status === "arquivada" && (
+                        <Badge variant="outline" className="text-slate-600 border-slate-300 bg-slate-50 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-700 text-[10px]">
+                          Retroativo
+                        </Badge>
                       )}
                       {escala.solene && (
                         <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 text-[10px]">
@@ -860,14 +891,21 @@ function SacristiaPage() {
                           Todos presentes
                         </Button>
                       )}
-                      <Button
-                        className="flex-1 gap-2"
-                        disabled={isSaving}
-                        onClick={() => salvarPresencasMutation.mutate(escala.id)}
-                      >
-                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
-                        Enviar registro de presenças
-                      </Button>
+                      {salvasIds.has(escala.id) && finais === membros.length ? (
+                        <div className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
+                          <CheckCheck className="h-4 w-4" />
+                          Concluído
+                        </div>
+                      ) : (
+                        <Button
+                          className="flex-1 gap-2"
+                          disabled={isSaving}
+                          onClick={() => salvarPresencasMutation.mutate(escala.id)}
+                        >
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+                          Enviar registro de presenças
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
