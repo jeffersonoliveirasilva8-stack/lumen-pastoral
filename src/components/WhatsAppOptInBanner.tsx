@@ -65,7 +65,7 @@ export function WhatsAppOptInBanner({ membroId }: Props) {
   function handleAtivar() {
     closeReasonRef.current = "ativar";
     setOpen(false);
-    navigate({ to: "/portal-membro/perfil" });
+    navigate({ to: "/portal-membro/perfil", search: { ativar_whatsapp: true } });
   }
 
   function handleAgora() {
@@ -134,7 +134,7 @@ export function WhatsAppOptInBanner({ membroId }: Props) {
               onClick={handleAtivar}
             >
               <MessageCircle className="h-4 w-4" aria-hidden="true" />
-              Ativar notificações pelo WhatsApp
+              Continuar para ativar
             </Button>
             <Button
               variant="ghost"

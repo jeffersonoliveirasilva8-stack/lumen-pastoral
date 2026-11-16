@@ -104,17 +104,35 @@ function extractDDDNumero(tel: string | null | undefined): string {
 function MembroWhatsAppSection({
   membroId,
   telefoneExistente,
+  highlightFromBanner = false,
 }: {
   membroId: string | undefined;
   telefoneExistente?: string | null;
+  highlightFromBanner?: boolean;
 }) {
   const qc = useQueryClient();
   const [telefone, setTelefone] = useState(() => extractDDDNumero(telefoneExistente));
   const [showRevoke, setShowRevoke] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const [highlighted, setHighlighted] = useState(false);
 
   useEffect(() => {
     setTelefone((prev) => (prev ? prev : extractDDDNumero(telefoneExistente)));
   }, [telefoneExistente]);
+
+  // Scroll e destaque quando o membro chega via banner do pop-up
+  useEffect(() => {
+    if (!highlightFromBanner || !sectionRef.current) return;
+    // Aguarda o layout estar pronto antes de rolar
+    const timer = setTimeout(() => {
+      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setHighlighted(true);
+      // Remove o destaque após 3 s
+      const off = setTimeout(() => setHighlighted(false), 3000);
+      return () => clearTimeout(off);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [highlightFromBanner]);
 
   const handleTelChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setTelefone(e.target.value.replace(/\D/g, "").slice(0, 11));
@@ -191,7 +209,23 @@ function MembroWhatsAppSection({
   }
 
   return (
-    <div className="mt-4 rounded-xl border border-border bg-card p-4 space-y-3">
+    <div
+      ref={sectionRef}
+      className={[
+        "mt-4 rounded-xl border bg-card p-4 space-y-3 transition-colors duration-700",
+        highlighted
+          ? "border-green-400 ring-2 ring-green-300 dark:ring-green-700"
+          : "border-border",
+      ].join(" ")}
+    >
+      {highlightFromBanner && !consent?.whatsapp_opt_in && (
+        <div className="flex items-start gap-2 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-3 py-2.5">
+          <MessageCircle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-green-600" />
+          <p className="text-xs text-green-800 dark:text-green-300 leading-relaxed">
+            Para concluir a ativação, habilite as notificações pelo WhatsApp e confirme seu consentimento abaixo.
+          </p>
+        </div>
+      )}
       <p className="text-xs font-semibold flex items-center gap-1.5">
         <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" /> WhatsApp
       </p>
@@ -318,6 +352,9 @@ function MembroWhatsAppSection({
 export const Route = createFileRoute("/portal-membro/perfil")({
   component: PortalMembroPerfil,
   head: () => ({ meta: [{ title: "Meu Perfil — Portal do Servidor" }] }),
+  validateSearch: (s: Record<string, unknown>): { ativar_whatsapp?: boolean } => ({
+    ativar_whatsapp: s.ativar_whatsapp === true || s.ativar_whatsapp === "true" || undefined,
+  }),
 });
 
 type MembroCompleto = {
@@ -361,6 +398,7 @@ type FormData = {
 function PortalMembroPerfil() {
   const { membro, refreshMembro } = useMembroAuth();
   const qc = useQueryClient();
+  const { ativar_whatsapp } = Route.useSearch();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [localFotoUrl, setLocalFotoUrl] = useState<string | null>(null);
@@ -766,7 +804,11 @@ function PortalMembroPerfil() {
       <MembroPushSection paroquiaId={membro?.paroquia_id} />
 
       {/* ── Consentimento WhatsApp ── */}
-      <MembroWhatsAppSection membroId={membro?.id} telefoneExistente={membro?.telefone} />
+      <MembroWhatsAppSection
+        membroId={membro?.id}
+        telefoneExistente={membro?.telefone}
+        highlightFromBanner={ativar_whatsapp === true}
+      />
 
       {/* ── Segurança ── */}
       <div className="mt-4">
