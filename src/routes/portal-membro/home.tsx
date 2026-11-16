@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import { useMembroAuth } from "@/hooks/use-membro-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { WhatsAppOptInBanner } from "@/components/WhatsAppOptInBanner";
 import { getLiturgicalDays } from "@/lib/liturgical-calendar";
 import { useRankingPos } from "@/lib/ranking";
 import { useLiturgiaHoje } from "@/hooks/use-liturgia";
@@ -365,6 +366,9 @@ function PortalMembroHome() {
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-6 pb-24">
+
+      {/* ── Pop-up de adesão WhatsApp (só para quem ainda não autorizou) ── */}
+      <WhatsAppOptInBanner membroId={membro.id} />
 
       {/* ── Banner de aniversário (só aparece no dia do próprio membro) ── */}
       {isAniversario && (

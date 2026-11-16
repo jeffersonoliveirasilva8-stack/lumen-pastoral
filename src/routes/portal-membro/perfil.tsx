@@ -161,6 +161,8 @@ function MembroWhatsAppSection({
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["pm-whatsapp-consent", membroId] });
+      // Atualiza o banner do portal para não exibir pop-up ao membro que acabou de autorizar
+      qc.invalidateQueries({ queryKey: ["wpp-optin-check", membroId] });
       if (vars.optIn) {
         toast.success("Notificações por WhatsApp habilitadas.");
         setTelefone("");
