@@ -15,6 +15,7 @@ import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getPostLoginRoute } from "@/lib/auth-redirect";
+import { AuthProvider } from "@/hooks/use-auth";
 
 // Constante injetada pelo Vite em build-time (vite.config.ts → define)
 // true = Vercel SPA, false = Cloudflare SSR
@@ -142,7 +143,7 @@ function AuthSync() {
           user_id: session.user.id, email: session.user.email,
         });
         const route = await getPostLoginRoute(supabase);
-        navigate({ to: route as any, replace: true });
+        if (route) navigate({ to: route as any, replace: true });
       }
     });
     return () => subscription.unsubscribe();
@@ -154,9 +155,11 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthSync />
-      <Outlet />
-      <Toaster richColors position="top-right" />
+      <AuthProvider>
+        <AuthSync />
+        <Outlet />
+        <Toaster richColors position="top-right" />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

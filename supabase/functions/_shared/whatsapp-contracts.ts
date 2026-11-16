@@ -47,6 +47,8 @@ export const EVENTO_TIPOS = [
   "substituicao_confirmada_substituto",  // substituto confirmado (mensagem própria)
   "lembrete_escala",
   "aviso_pastoral",
+  "boas_vindas",           // primeiro opt-in do membro
+  "escalas_consolidadas",  // lista completa de escalas futuras (disparo administrativo)
 ] as const;
 
 export type EventoTipo = typeof EVENTO_TIPOS[number];
@@ -148,6 +150,29 @@ export type AvisoPastoralContext = {
   remetente?:    string;
 };
 
+export type BoasVindasContext = {
+  nome_membro:   string;
+  paroquia_nome: string;
+  /** URL do portal do membro — opcional */
+  link_portal?:  string;
+};
+
+export type EscalaConsolidadaItem = {
+  data_escala:  string;   // "DD/MM/YYYY"
+  hora_escala?: string;   // "HH:MM"
+  celebracao?:  string;   // título/nome da celebração
+  ministerio:   string;   // função do membro
+  local?:       string;
+};
+
+export type EscalasConsolidadasContext = {
+  nome_membro:   string;
+  paroquia_nome: string;
+  escalas:       EscalaConsolidadaItem[];
+  link_portal?:  string;
+  operacao_id:   string;  // UUID da operação — incluído no payload para rastreabilidade
+};
+
 // Union discriminada — usada internamente no renderer de templates
 export type TemplateContext =
   | EscalaPublicadaContext
@@ -158,7 +183,9 @@ export type TemplateContext =
   | SubstituicaoRecusadaContext
   | SubstituicaoConfirmadaSubstitutoContext
   | LembreteEscalaContext
-  | AvisoPastoralContext;
+  | AvisoPastoralContext
+  | BoasVindasContext
+  | EscalasConsolidadasContext;
 
 // ── Renderer de mensagens ─────────────────────────────────────────────────────
 // A Edge Function chama renderMensagem(evento_tipo, context) antes de enviarWhatsApp.
@@ -286,6 +313,33 @@ export function renderMensagem(tipo: EventoTipo, ctx: TemplateContext): string {
         `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
         `${c.mensagem}` +
         `${assinatura}`
+      );
+    }
+    case "boas_vindas": {
+      const c = ctx as BoasVindasContext;
+      return (
+        `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
+        `Bem-vindo(a) ao *Lumen Pastoral* da ${c.paroquia_nome}!\n\n` +
+        `Você ativou as notificações por WhatsApp. ` +
+        `A partir de agora você receberá avisos sobre suas escalas de serviço diretamente aqui.\n\n` +
+        `Que o Senhor abençoe o seu serviço!` +
+        `${c.link_portal ? `\n\n📱 Acesse seu portal: ${c.link_portal}` : ""}`
+      );
+    }
+    case "escalas_consolidadas": {
+      const c = ctx as EscalasConsolidadasContext;
+      const linhas = c.escalas.map((e) => {
+        const hora  = e.hora_escala ? ` às ${e.hora_escala}` : "";
+        const local = e.local ? `\n   📍 ${e.local}` : "";
+        const cel   = e.celebracao ? `\n   ✨ ${e.celebracao}` : "";
+        return `📅 *${e.data_escala}*${hora}\n   🎭 ${e.ministerio}${cel}${local}`;
+      });
+      return (
+        `Paz e bem, ${c.nome_membro}! 🙏\n\n` +
+        `Suas próximas escalas na *${c.paroquia_nome}*:\n\n` +
+        linhas.join("\n\n") +
+        `\n\nQue o Senhor abençoe o seu serviço!` +
+        `${c.link_portal ? `\n\n📱 Portal: ${c.link_portal}` : ""}`
       );
     }
     default: {

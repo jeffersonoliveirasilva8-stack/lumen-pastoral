@@ -99,6 +99,7 @@ function AuthLayout() {
     enabled: !!profile?.paroquia_id && !isLimitedCoord,
     refetchInterval: 60_000,
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { count } = await anyDb
         .from("solicitacoes_membros")
@@ -115,6 +116,7 @@ function AuthLayout() {
     enabled: !!profile?.paroquia_id && !isLimitedCoord,
     refetchInterval: 60_000,
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data } = await anyDb.rpc("get_ocorrencias_paroquia", {
         p_paroquia_id: profile!.paroquia_id,
@@ -130,6 +132,7 @@ function AuthLayout() {
     enabled: !!profile?.paroquia_id,
     refetchInterval: 60_000,
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { count } = await anyDb
         .from("substituicoes")
@@ -146,6 +149,7 @@ function AuthLayout() {
     enabled: !!profile?.paroquia_id,
     refetchInterval: 60_000,
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { count } = await anyDb
         .from("notificacoes")

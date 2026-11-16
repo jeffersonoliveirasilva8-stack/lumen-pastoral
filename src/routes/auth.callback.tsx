@@ -46,7 +46,7 @@ function AuthCallback() {
       if (session?.user && !processed.current) {
         processed.current = true;
         const route = await getPostLoginRoute(supabase);
-        navigate({ to: route, replace: true });
+        navigate({ to: route ?? "/membro/login", replace: true });
         return;
       }
 
@@ -63,7 +63,7 @@ function AuthCallback() {
             processed.current = true;
             clearTimeout(timeout);
             const route = await getPostLoginRoute(supabase);
-            navigate({ to: route, replace: true });
+            navigate({ to: route ?? "/membro/login", replace: true });
           }
         },
       );

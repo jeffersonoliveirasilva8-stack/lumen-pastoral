@@ -29,31 +29,30 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    // Busca role do usuário
-    const { data: userRole } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+    // P0B: buscar role e paroquia_id em paralelo — ambas dependem só de user_id
+    const [{ data: userRole }, { data: profile }] = await Promise.all([
+      supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+      supabase
+        .from('profiles')
+        .select('paroquia_id')
+        .eq('id', user_id)
+        .single(),
+    ])
 
     const app_role = userRole?.role ?? 'membro'
     const is_super_admin = app_role === 'super_admin'
-
-    // Busca paroquia_id do perfil
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('paroquia_id')
-      .eq('id', user_id)
-      .single()
-
     const paroquia_id = profile?.paroquia_id ?? null
 
     let plan_slug: string | null = null
     let sub_status: string | null = null
 
-    // Se tem paróquia, busca status da assinatura
+    // Subscriptions só pode ser buscada após obter paroquia_id acima
     if (paroquia_id) {
       const { data: sub } = await supabase
         .from('subscriptions')

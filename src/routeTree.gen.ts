@@ -81,6 +81,7 @@ import { Route as SuperadminUsuariosRouteImport } from './routes/superadmin/usua
 import { Route as SuperadminWebhooksRouteImport } from './routes/superadmin/webhooks'
 import { Route as AuthenticatedAdminLiturgiaRouteImport } from './routes/_authenticated/admin.liturgia'
 import { Route as AuthenticatedAdminParoquiasRouteImport } from './routes/_authenticated/admin.paroquias'
+import { Route as AuthenticatedAdminWhatsappRouteImport } from './routes/_authenticated/admin.whatsapp'
 import { Route as AuthenticatedConfiguracoesAdministradoresRouteImport } from './routes/_authenticated/configuracoes.administradores'
 import { Route as AuthenticatedConfiguracoesParoquiaRouteImport } from './routes/_authenticated/configuracoes.paroquia'
 import { Route as SuperadminParoquiasIdRouteImport } from './routes/superadmin/paroquias.$id'
@@ -463,6 +464,12 @@ const AuthenticatedAdminParoquiasRoute =
     path: '/admin/paroquias',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedAdminWhatsappRoute =
+  AuthenticatedAdminWhatsappRouteImport.update({
+    id: '/admin/whatsapp',
+    path: '/admin/whatsapp',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedConfiguracoesAdministradoresRoute =
   AuthenticatedConfiguracoesAdministradoresRouteImport.update({
     id: '/administradores',
@@ -553,6 +560,7 @@ export interface FileRoutesByFullPath {
   '/superadmin/webhooks': typeof SuperadminWebhooksRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
+  '/admin/whatsapp': typeof AuthenticatedAdminWhatsappRoute
   '/configuracoes/administradores': typeof AuthenticatedConfiguracoesAdministradoresRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
   '/superadmin/paroquias/$id': typeof SuperadminParoquiasIdRoute
@@ -629,6 +637,7 @@ export interface FileRoutesByTo {
   '/superadmin/webhooks': typeof SuperadminWebhooksRoute
   '/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
+  '/admin/whatsapp': typeof AuthenticatedAdminWhatsappRoute
   '/configuracoes/administradores': typeof AuthenticatedConfiguracoesAdministradoresRoute
   '/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
   '/superadmin/paroquias/$id': typeof SuperadminParoquiasIdRoute
@@ -707,6 +716,7 @@ export interface FileRoutesById {
   '/superadmin/webhooks': typeof SuperadminWebhooksRoute
   '/_authenticated/admin/liturgia': typeof AuthenticatedAdminLiturgiaRoute
   '/_authenticated/admin/paroquias': typeof AuthenticatedAdminParoquiasRoute
+  '/_authenticated/admin/whatsapp': typeof AuthenticatedAdminWhatsappRoute
   '/_authenticated/configuracoes/administradores': typeof AuthenticatedConfiguracoesAdministradoresRoute
   '/_authenticated/configuracoes/paroquia': typeof AuthenticatedConfiguracoesParoquiaRoute
   '/superadmin/paroquias/$id': typeof SuperadminParoquiasIdRoute
@@ -785,6 +795,7 @@ export interface FileRouteTypes {
     | '/superadmin/webhooks'
     | '/admin/liturgia'
     | '/admin/paroquias'
+    | '/admin/whatsapp'
     | '/configuracoes/administradores'
     | '/configuracoes/paroquia'
     | '/superadmin/paroquias/$id'
@@ -861,6 +872,7 @@ export interface FileRouteTypes {
     | '/superadmin/webhooks'
     | '/admin/liturgia'
     | '/admin/paroquias'
+    | '/admin/whatsapp'
     | '/configuracoes/administradores'
     | '/configuracoes/paroquia'
     | '/superadmin/paroquias/$id'
@@ -938,6 +950,7 @@ export interface FileRouteTypes {
     | '/superadmin/webhooks'
     | '/_authenticated/admin/liturgia'
     | '/_authenticated/admin/paroquias'
+    | '/_authenticated/admin/whatsapp'
     | '/_authenticated/configuracoes/administradores'
     | '/_authenticated/configuracoes/paroquia'
     | '/superadmin/paroquias/$id'
@@ -1475,6 +1488,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminParoquiasRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/admin/whatsapp': {
+      id: '/_authenticated/admin/whatsapp'
+      path: '/admin/whatsapp'
+      fullPath: '/admin/whatsapp'
+      preLoaderRoute: typeof AuthenticatedAdminWhatsappRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/configuracoes/administradores': {
       id: '/_authenticated/configuracoes/administradores'
       path: '/administradores'
@@ -1545,6 +1565,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSubstituicoesRoute: typeof AuthenticatedSubstituicoesRoute
   AuthenticatedAdminLiturgiaRoute: typeof AuthenticatedAdminLiturgiaRoute
   AuthenticatedAdminParoquiasRoute: typeof AuthenticatedAdminParoquiasRoute
+  AuthenticatedAdminWhatsappRoute: typeof AuthenticatedAdminWhatsappRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -1578,6 +1599,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSubstituicoesRoute: AuthenticatedSubstituicoesRoute,
   AuthenticatedAdminLiturgiaRoute: AuthenticatedAdminLiturgiaRoute,
   AuthenticatedAdminParoquiasRoute: AuthenticatedAdminParoquiasRoute,
+  AuthenticatedAdminWhatsappRoute: AuthenticatedAdminWhatsappRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

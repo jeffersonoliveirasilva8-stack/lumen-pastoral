@@ -29,8 +29,8 @@ function MembroLoginPage() {
       if (session?.user) {
         const route = await getPostLoginRoute(supabase);
         clearTimeout(timeout);
-        if (route === "/membro/login") {
-          // Membro não encontrado no portal — exibe form em vez de loop infinito
+        if (!route || route === "/membro/login") {
+          // null = erro de banco/timeout; "/membro/login" = membro não encontrado
           setChecking(false);
         } else {
           navigate({ to: route, replace: true });
@@ -43,8 +43,8 @@ function MembroLoginPage() {
         if (session?.user) {
           const route = await getPostLoginRoute(supabase);
           clearTimeout(timeout);
-          if (route === "/membro/login") {
-            // Sessão ativa mas membro não encontrado — mostra form sem loop infinito
+          if (!route || route === "/membro/login") {
+            // null = erro de banco/timeout; "/membro/login" = membro não encontrado
             setChecking(false);
           } else {
             navigate({ to: route, replace: true });
@@ -304,6 +304,11 @@ function SenhaForm({ onShowOtp }: { onShowOtp: () => void }) {
         return;
       }
       const route = await getPostLoginRoute(supabase);
+      if (route === null) {
+        // Erro de banco ou timeout — não fazer signOut, permitir nova tentativa
+        toast.error("Servidor lento. Tente novamente em alguns segundos.");
+        return;
+      }
       if (route === "/membro/login") {
         await supabase.auth.signOut();
         toast.error("Acesso não encontrado. Verifique com o coordenador se seu cadastro está ativo.");

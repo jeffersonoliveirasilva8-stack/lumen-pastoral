@@ -52,7 +52,7 @@ function MfaChallengePage() {
         if (!processed.current) {
           processed.current = true;
           const route = await getPostLoginRoute(supabase);
-          navigate({ to: route, replace: true });
+          navigate({ to: route ?? "/painel", replace: true });
         }
         return;
       }
@@ -70,7 +70,7 @@ function MfaChallengePage() {
       if (!activeFactor) {
         // Nenhum fator cadastrado — redireciona normalmente
         const route = await getPostLoginRoute(supabase);
-        navigate({ to: route, replace: true });
+        navigate({ to: route ?? "/painel", replace: true });
         return;
       }
 
@@ -168,7 +168,7 @@ function MfaChallengePage() {
 
       // Verificação bem-sucedida → AAL2
       const route = await getPostLoginRoute(supabase);
-      navigate({ to: route, replace: true });
+      navigate({ to: route ?? "/painel", replace: true });
     } catch {
       toast.error("Erro ao verificar o código. Tente novamente.");
     } finally {

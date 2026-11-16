@@ -66,6 +66,10 @@ function LoginPage() {
 
       // getPostLoginRoute tem timeout de 10s internamente — nunca trava indefinidamente
       const route = await getPostLoginRoute(supabase);
+      if (!route) {
+        toast.error("Servidor lento. Tente novamente em alguns segundos.");
+        return;
+      }
       toast.success("Bem-vindo de volta.");
       navigate({ to: route, replace: true });
     } finally {

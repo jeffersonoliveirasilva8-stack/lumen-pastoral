@@ -28,7 +28,7 @@ export type PostLoginRoute =
   | "/acesso-negado"
   | "/auth/admin-mfa";
 
-async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> {
+async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute | null> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return "/membro/login";
@@ -36,8 +36,11 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabase as any;
 
-    const [{ data: rolesData }] = await Promise.all([
+    // P0A: buscar roles e membro em paralelo — user.id é conhecido neste ponto
+    // e o membro quase sempre existe, então a segunda query raramente é wasted.
+    const [{ data: rolesData }, { data: membroParalelo }] = await Promise.all([
       db.from("user_roles").select("role").eq("user_id", user.id),
+      db.from("membros").select("ativo, conta_ativada").eq("auth_user_id", user.id).maybeSingle(),
     ]);
 
     const roles: string[] = (rolesData ?? []).map((r: { role: string }) => r.role);
@@ -63,11 +66,8 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
     );
 
     if (isPortalRole) {
-      const { data: membroData } = await db
-        .from("membros")
-        .select("ativo, conta_ativada")
-        .eq("auth_user_id", user.id)
-        .maybeSingle();
+      // reutiliza o resultado paralelo já obtido acima
+      const membroData = membroParalelo;
 
       if (membroData?.ativo === false) return "/acesso-negado";
       if (membroData?.conta_ativada === false) return "/membro/primeiro-acesso";
@@ -79,13 +79,8 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
     // primeiros acessos (auth_user_id ainda não vinculado), e qualquer
     // combinação futura de roles não mapeada acima.
     {
-      // 1. Já vinculado — busca direta por auth_user_id (mais confiável)
-      const { data: membroById } = await db
-        .from("membros")
-        .select("ativo, conta_ativada")
-        .eq("auth_user_id", user.id)
-        .eq("ativo", true)
-        .maybeSingle();
+      // 1. Já vinculado — reutiliza resultado da query paralela acima
+      const membroById = membroParalelo?.ativo === true ? membroParalelo : null;
 
       if (membroById) {
         if (membroById.conta_ativada === false) return "/membro/primeiro-acesso";
@@ -128,16 +123,21 @@ async function _resolveRoute(supabase: SupabaseClient): Promise<PostLoginRoute> 
     // Sem vínculo identificado → tela de login do membro
     return "/membro/login";
   } catch {
-    return "/membro/login";
+    // Erros de banco (statement timeout, rede) retornam null — não "não encontrado"
+    return null;
   }
 }
 
-/** Wrapper com timeout de 10s — nunca trava o login independente da velocidade da rede */
+/**
+ * Wrapper com timeout de 10s — nunca trava o login independente da velocidade da rede.
+ * Retorna null em caso de timeout ou erro de banco (distinto de "/membro/login" que
+ * significa "usuário não encontrado"). Callers NÃO devem fazer signOut quando null.
+ */
 export async function getPostLoginRoute(
   supabase: SupabaseClient,
-): Promise<PostLoginRoute> {
-  const timeout = new Promise<PostLoginRoute>((resolve) =>
-    setTimeout(() => resolve("/membro/login"), 10_000),
+): Promise<PostLoginRoute | null> {
+  const timeout = new Promise<null>((resolve) =>
+    setTimeout(() => resolve(null), 10_000),
   );
   return Promise.race([_resolveRoute(supabase), timeout]);
 }

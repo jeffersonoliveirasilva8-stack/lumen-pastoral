@@ -6,7 +6,7 @@ import {
   Calendar, CalendarRange, Users, Sparkles, Activity, ChevronRight,
   AlertTriangle, Cake, CheckCircle2, UserX, UserCheck,
   CalendarOff, Zap, Loader2, FileText, BookOpen, ClipboardList,
-  TrendingUp, ArrowLeftRight, Clock, HandHelping, ChevronDown,
+  TrendingUp, ArrowLeftRight, Clock, HandHelping, ChevronDown, MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -1172,6 +1172,7 @@ function DashboardPage() {
             { to: "/substituicoes",label: "Substituições",   icon: ArrowLeftRight, color: "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-200 dark:border-violet-800 hover:bg-violet-500/20" },
             { to: "/ocorrencias",  label: "Ocorrências",     icon: AlertTriangle,  color: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-500/20" },
             { to: "/admin/liturgia", label: "Liturgia",       icon: BookOpen,       color: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-500/20" },
+            { to: "/admin/whatsapp", label: "WhatsApp",        icon: MessageCircle,  color: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 hover:bg-green-500/20" },
           ].map(({ to, label, icon: Icon, color }) => (
             <Link
               key={to}
