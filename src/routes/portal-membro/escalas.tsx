@@ -20,6 +20,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const anyDb = supabase as any;
@@ -140,6 +144,9 @@ function PortalMembroEscalas() {
   const { membro, isAdministrador } = useMembroAuth();
   const qc = useQueryClient();
   const [somenteMinha, setSomenteMinha] = useState(false);
+  const [sugestaoModal, setSugestaoModal] = useState<{ substituicao_id: string; ministerio_id: string } | null>(null);
+  const [sugestaoSearch, setSugestaoSearch] = useState("");
+  const [sugestaoSelecionado, setSugestaoSelecionado] = useState<{ id: string; nome: string } | null>(null);
 
   // ── Realtime ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -518,6 +525,17 @@ function PortalMembroEscalas() {
       }
 
       toast.success(args.status === "recusado" ? "Recusa registrada." : "Presença confirmada.");
+      // Oferecer sugestão de substituto após recusa
+      if (args.status === "recusado" && (_data as any)?.substituicao_id) {
+        const substId = (_data as any).substituicao_id as string;
+        anyDb.rpc("portal_get_ministerio_de_escala_membro", {
+          p_escala_membro_id: args.escala_membro_id,
+        }).then(({ data: minId }: { data: string | null }) => {
+          if (minId && substId) {
+            setSugestaoModal({ substituicao_id: substId, ministerio_id: minId });
+          }
+        }).catch(() => {});
+      }
     },
     onError: (e: Error) => {
       const msg = e.message === "confirmacao_desativada"
@@ -648,6 +666,43 @@ function PortalMembroEscalas() {
   const pendentes = todasEscalas.filter((esc) =>
     esc.membrosEscalados.some((m) => m.membro_id === membro?.id && m.status === "pendente")
   ).length;
+
+  // ── Sugestão de substituto ────────────────────────────────────────────
+  const { data: membrosMinisterio = [] } = useQuery<{ membro_id: string; nome: string }[]>({
+    queryKey: ["portal-membros-ministerio", sugestaoModal?.ministerio_id],
+    enabled: !!sugestaoModal?.ministerio_id,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await anyDb.rpc("portal_buscar_membros_ministerio", {
+        p_ministerio_id: sugestaoModal!.ministerio_id,
+      });
+      if (error) return [];
+      return data ?? [];
+    },
+  });
+
+  const sugerirMutation = useMutation({
+    mutationFn: async ({ substituicao_id, substituto_id }: { substituicao_id: string; substituto_id: string }) => {
+      const { data, error } = await anyDb.rpc("portal_sugerir_substituto", {
+        p_substituicao_id:        substituicao_id,
+        p_substituto_sugerido_id: substituto_id,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error ?? "Erro");
+      return data;
+    },
+    onSuccess: () => {
+      setSugestaoModal(null);
+      setSugestaoSearch("");
+      setSugestaoSelecionado(null);
+      toast.success("Sugestão enviada. A coordenação receberá para aprovação.");
+    },
+    onError: () => toast.error("Erro ao enviar sugestão."),
+  });
+
+  const membrosFiltered = membrosMinisterio.filter((m) =>
+    !sugestaoSearch || m.nome.toLowerCase().includes(sugestaoSearch.toLowerCase())
+  );
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 pb-24 lg:px-6">
@@ -836,6 +891,58 @@ function PortalMembroEscalas() {
           <HistoricoTab historico={historico} loading={loadingHistorico} />
         </TabsContent>
       </Tabs>
+
+      {/* Dialog: sugerir substituto após recusa */}
+      <Dialog open={!!sugestaoModal} onOpenChange={(o) => { if (!o) { setSugestaoModal(null); setSugestaoSearch(""); setSugestaoSelecionado(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Você já tem alguém em mente?</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Sugira um colega de ministério para substituí-lo. A coordenação precisará aprovar.
+          </p>
+          <Input
+            placeholder="Buscar por nome…"
+            value={sugestaoSearch}
+            onChange={(e) => { setSugestaoSearch(e.target.value); setSugestaoSelecionado(null); }}
+            autoFocus
+          />
+          {sugestaoSelecionado ? (
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2.5">
+              <p className="text-sm font-medium">{sugestaoSelecionado.nome}</p>
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setSugestaoSelecionado(null)}>Trocar</Button>
+            </div>
+          ) : (
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {membrosFiltered.slice(0, 10).map((m) => (
+                <button
+                  key={m.membro_id}
+                  onClick={() => setSugestaoSelecionado({ id: m.membro_id, nome: m.nome })}
+                  className="w-full text-left rounded-xl border border-border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                >
+                  {m.nome}
+                </button>
+              ))}
+              {membrosFiltered.length === 0 && sugestaoSearch && (
+                <p className="text-xs text-muted-foreground text-center py-3">Nenhum membro encontrado.</p>
+              )}
+            </div>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              className="flex-1"
+              disabled={!sugestaoSelecionado || sugerirMutation.isPending}
+              onClick={() => sugestaoModal && sugestaoSelecionado && sugerirMutation.mutate({ substituicao_id: sugestaoModal.substituicao_id, substituto_id: sugestaoSelecionado.id })}
+            >
+              {sugerirMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              Sugerir {sugestaoSelecionado?.nome.split(" ")[0]}
+            </Button>
+            <Button variant="ghost" onClick={() => { setSugestaoModal(null); setSugestaoSearch(""); setSugestaoSelecionado(null); }}>
+              Pular
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

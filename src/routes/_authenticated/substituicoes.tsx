@@ -43,6 +43,7 @@ type Substituicao = {
   ministerio_cor: string;
   solicitante_nome: string;
   substituto_nome: string | null;
+  substituto_sugerido_nome: string | null;
   aprovador_nome: string | null;
   aberta_para_membros: boolean;
   solene: boolean;
@@ -75,6 +76,7 @@ function AdminSubstituicoes() {
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectMotivo, setRejectMotivo] = useState("");
   const [substitutosModal, setSubstitutosModal] = useState<{ substId: string; escalaId: string; ministerioId: string } | null>(null);
+  const [sortMode, setSortMode] = useState<"dias" | "presenca" | "score">("dias");
   const [searchTerm, setSearchTerm] = useState("");
 
   const { data: configEscalas } = useQuery<{ substituicao_ativa: boolean } | null>({
@@ -219,6 +221,40 @@ function AdminSubstituicoes() {
                 : e.message === "nao_encontrada"   ? "Substituição não encontrada."
                 : e.message === "status_invalido"  ? "Esta substituição não pode ser modificada."
                 : "Erro ao liberar vaga.";
+      toast.error(msg);
+    },
+  });
+
+  const indicarMutation = useMutation({
+    mutationFn: async ({ substId, membroId }: { substId: string; membroId: string }) => {
+      const { data, error } = await anyDb.rpc("coord_indicar_substituto", {
+        p_substituicao_id: substId,
+        p_membro_id: membroId,
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error ?? "Erro ao indicar substituto");
+      return data as { old_substituto_id: string | null; solicitante_id: string };
+    },
+    onSuccess: (data, { substId }) => {
+      qc.invalidateQueries({ queryKey: ["admin-substituicoes"] });
+      setSubstitutosModal(null);
+      toast.success("Substituto indicado e escala atualizada.");
+      // Notifica solicitante + novo substituto
+      anyDb.functions.invoke("notificar-substituicao", {
+        body: { substituicao_id: substId, acao: "aprovada" },
+      }).catch(() => {});
+      // Notifica voluntário deslocado (se havia outro)
+      if (data.old_substituto_id) {
+        anyDb.functions.invoke("notificar-substituicao", {
+          body: { substituicao_id: substId, acao: "voluntario_rejeitado", substituto_id: data.old_substituto_id },
+        }).catch(() => {});
+      }
+    },
+    onError: (e: Error) => {
+      const msg = e.message === "sem_permissao"  ? "Sem permissão."
+                : e.message === "status_invalido" ? "Esta substituição não pode ser modificada."
+                : e.message === "membro_invalido" ? "Membro não encontrado ou inativo."
+                : "Erro ao indicar substituto.";
       toast.error(msg);
     },
   });
@@ -443,7 +479,7 @@ function AdminSubstituicoes() {
       </Dialog>
 
       {/* Dialog: buscar substitutos */}
-      <Dialog open={!!substitutosModal} onOpenChange={(o) => !o && setSubstitutosModal(null)}>
+      <Dialog open={!!substitutosModal} onOpenChange={(o) => { if (!o) { setSubstitutosModal(null); setSortMode("dias"); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -451,6 +487,22 @@ function AdminSubstituicoes() {
               Membros qualificados para substituir
             </DialogTitle>
           </DialogHeader>
+          {/* Sort toggle */}
+          {substitutos.length > 1 && (
+            <div className="flex gap-1 rounded-xl border border-border p-1">
+              {([ ["dias", "Tempo sem servir"], ["presenca", "Comparecimento"], ["score", "Pontuação"] ] as const).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setSortMode(mode)}
+                  className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${
+                    sortMode === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {loadingSubstitutos ? (
             <div className="flex justify-center py-6">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -462,36 +514,50 @@ function AdminSubstituicoes() {
           ) : (
             <>
               <p className="text-xs text-muted-foreground">
-                {substitutos.length} membro{substitutos.length !== 1 ? "s" : ""} elegível{substitutos.length !== 1 ? "s" : ""} · ordenado por prioridade do motor
+                {substitutos.length} membro{substitutos.length !== 1 ? "s" : ""} elegível{substitutos.length !== 1 ? "s" : ""}
               </p>
-              <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                {substitutos.map((s, idx) => (
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {[...substitutos].sort((a, b) => {
+                  if (sortMode === "presenca") return (b.taxa_presenca ?? 0) - (a.taxa_presenca ?? 0);
+                  if (sortMode === "score")    return b.score - a.score;
+                  // dias: null (nunca convocado) = mais tempo sem servir = primeira posição
+                  if (a.dias_sem_servir === null && b.dias_sem_servir === null) return 0;
+                  if (a.dias_sem_servir === null) return -1;
+                  if (b.dias_sem_servir === null) return 1;
+                  return b.dias_sem_servir - a.dias_sem_servir;
+                }).map((s, idx) => (
                   <div
                     key={s.membro_id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="text-xs font-mono text-muted-foreground/60 w-4 shrink-0 text-right">{idx + 1}</span>
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{s.nome}</p>
                         <p className="text-[11px] text-muted-foreground">
-                          {s.dias_sem_servir !== null
-                            ? `${s.dias_sem_servir}d sem servir`
-                            : "nunca convocado"
-                          }
+                          {s.dias_sem_servir !== null ? `${s.dias_sem_servir}d sem servir` : "nunca convocado"}
                           {" · "}
                           {s.taxa_presenca !== null ? `${s.taxa_presenca}% presença` : "sem histórico"}
+                          {" · "}{s.score}pts
                         </p>
                       </div>
                     </div>
-                    <span className="text-xs text-muted-foreground shrink-0">{s.score}pts</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 h-7 text-xs rounded-lg"
+                      disabled={indicarMutation.isPending}
+                      onClick={() => substitutosModal && indicarMutation.mutate({ substId: substitutosModal.substId, membroId: s.membro_id })}
+                    >
+                      {indicarMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Escalar"}
+                    </Button>
                   </div>
                 ))}
               </div>
             </>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubstitutosModal(null)}>Fechar</Button>
+            <Button variant="outline" onClick={() => { setSubstitutosModal(null); setSortMode("dias"); }}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -608,7 +674,22 @@ function SubstAdminCard({
                   {subst.substituto_nome} quer substituir
                 </p>
                 <p className="text-[11px] text-blue-600/70 dark:text-blue-400/70">
-                  Aguarda aprovação da coordenação
+                  Aguarda aprovação · você também pode indicar outro membro
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Sugestão do membro solicitante */}
+          {subst.substituto_sugerido_nome && subst.status === "solicitada" && (
+            <div className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-800 px-3 py-2">
+              <HandHelping className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">
+                  Sugestão do membro: {subst.substituto_sugerido_nome}
+                </p>
+                <p className="text-[11px] text-violet-600/70 dark:text-violet-400/70">
+                  Use "Buscar substituto" para escalar diretamente ou aprovar outro
                 </p>
               </div>
             </div>
@@ -662,7 +743,7 @@ function SubstAdminCard({
                   Aprovar troca
                 </Button>
               )}
-              {subst.status === "solicitada" && (
+              {["solicitada", "com_voluntario"].includes(subst.status) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -671,7 +752,7 @@ function SubstAdminCard({
                   onClick={() => onBuscarSubstitutos(subst.escala_id, subst.ministerio_id)}
                 >
                   <Users className="h-3.5 w-3.5" />
-                  Buscar substituto
+                  {subst.status === "com_voluntario" ? "Indicar outro" : "Buscar substituto"}
                 </Button>
               )}
               {subst.status === "solicitada" && (
