@@ -52,7 +52,8 @@ type Substituto = {
   membro_id: string;
   nome: string;
   score: number;
-  tem_indisp: boolean;
+  dias_sem_servir: number | null;
+  taxa_presenca: number | null;
 };
 
 const STATUS_FILTER = [
@@ -447,7 +448,7 @@ function AdminSubstituicoes() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Membros disponíveis para substituir
+              Membros qualificados para substituir
             </DialogTitle>
           </DialogHeader>
           {loadingSubstitutos ? (
@@ -456,32 +457,38 @@ function AdminSubstituicoes() {
             </div>
           ) : substitutos.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
-              Nenhum membro disponível com essa função.
+              Nenhum membro qualificado e disponível para essa função.
             </p>
           ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {substitutos.map((s) => (
-                <div
-                  key={s.membro_id}
-                  className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${
-                    s.tem_indisp
-                      ? "border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 dark:border-amber-800"
-                      : "border-border bg-card"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{s.nome}</p>
-                    {s.tem_indisp && (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
-                        <AlertTriangle className="h-3 w-3" />
-                        Tem indisponibilidade nessa data
-                      </p>
-                    )}
+            <>
+              <p className="text-xs text-muted-foreground">
+                {substitutos.length} membro{substitutos.length !== 1 ? "s" : ""} elegível{substitutos.length !== 1 ? "s" : ""} · ordenado por prioridade do motor
+              </p>
+              <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                {substitutos.map((s, idx) => (
+                  <div
+                    key={s.membro_id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-xs font-mono text-muted-foreground/60 w-4 shrink-0 text-right">{idx + 1}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{s.nome}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {s.dias_sem_servir !== null
+                            ? `${s.dias_sem_servir}d sem servir`
+                            : "nunca convocado"
+                          }
+                          {" · "}
+                          {s.taxa_presenca !== null ? `${s.taxa_presenca}% presença` : "sem histórico"}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">{s.score}pts</span>
                   </div>
-                  <span className="text-xs text-muted-foreground shrink-0">{s.score}pts</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubstitutosModal(null)}>Fechar</Button>
