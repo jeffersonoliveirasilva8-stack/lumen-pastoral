@@ -651,6 +651,10 @@ function SubstAdminCard({
             </p>
           )}
 
+          <p className="text-[11px] text-muted-foreground/70">
+            Solicitado em {format(new Date(subst.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+          </p>
+
           {subst.status === "aprovada" && subst.aprovador_nome && (
             <p className="text-xs text-green-700 dark:text-green-400">
               <CheckCircle2 className="h-3 w-3 inline mr-1" />

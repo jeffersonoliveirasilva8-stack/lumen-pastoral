@@ -62,6 +62,9 @@ type MembroEscalado = {
   nome: string;
   status: string;
   justificativa: string | null;
+  recusado_em: string | null;
+  prazo_recusa_horas: number | null;
+  prazo_recusa_expirado: boolean;
 };
 
 type EscalaPublicada = {
@@ -238,6 +241,9 @@ function PortalMembroEscalas() {
           nome: em.membros?.nome ?? "—",
           status: em.status,
           justificativa: em.justificativa ?? null,
+          recusado_em: em.recusado_em ?? null,
+          prazo_recusa_horas: em.prazo_recusa_horas ?? null,
+          prazo_recusa_expirado: em.prazo_recusa_expirado ?? false,
         })),
       }));
     },
@@ -542,8 +548,8 @@ function PortalMembroEscalas() {
         ? "A coordenação desativou o sistema de confirmação."
         : e.message === "motivo_obrigatorio"
         ? "Informe o motivo da recusa antes de confirmar."
-        : e.message === "prazo_expirado"
-        ? "O prazo para informar a recusa expirou."
+        : e.message === "prazo_expirado" || e.message === "prazo_recusa_expirado"
+        ? "O prazo para recusar esta escala já encerrou. Fale com a coordenação."
         : e.message;
       toast.error(msg);
     },
@@ -1117,6 +1123,7 @@ function EscalaPortalCard({
   const isPendente   = myMembro?.status === "pendente";
   const isConfirmado = myMembro?.status === "confirmado";
   const isRecusado   = myMembro?.status === "recusado";
+  const prazoExpirado = myMembro?.prazo_recusa_expirado ?? false;
 
   const dateObj    = new Date(escala.data + "T12:00:00");
   const dayNum     = format(dateObj, "d");
@@ -1258,25 +1265,34 @@ function EscalaPortalCard({
 
       {/* ── Confirmar / Recusar ── */}
       {myMembro && isPendente && confirmacaoAtiva && !recusando && (
-        <div className="border-t border-border/40 px-4 py-3 flex gap-2">
-          <Button
-            size="sm"
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-xl"
-            disabled={saving}
-            onClick={() => onResponder(myMembro.id, "confirmado", undefined, myMembro.ministerio_nome)}
-          >
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-            Confirmar
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive border-destructive/30 hover:bg-destructive/10 rounded-xl"
-            onClick={() => setRecusando(true)}
-          >
-            <XCircle className="h-3.5 w-3.5" />
-            Recusar
-          </Button>
+        <div className="border-t border-border/40 px-4 py-3 flex gap-2 flex-col">
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-xl"
+              disabled={saving}
+              onClick={() => onResponder(myMembro.id, "confirmado", undefined, myMembro.ministerio_nome)}
+            >
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+              Confirmar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive border-destructive/30 hover:bg-destructive/10 rounded-xl"
+              disabled={prazoExpirado}
+              onClick={() => setRecusando(true)}
+              title={prazoExpirado ? `Prazo para recusa encerrado (${myMembro.prazo_recusa_horas}h de antecedência)` : undefined}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              Recusar
+            </Button>
+          </div>
+          {prazoExpirado && (
+            <p className="text-[11px] text-muted-foreground text-center">
+              Prazo para recusa encerrado. Apenas confirmação disponível. Fale com a coordenação se precisar de ajuda.
+            </p>
+          )}
         </div>
       )}
 
@@ -1312,17 +1328,29 @@ function EscalaPortalCard({
         </div>
       )}
 
+      {myMembro && isRecusado && myMembro.recusado_em && (
+        <div className="border-t border-border/40 px-4 py-2 text-[11px] text-muted-foreground">
+          Recusado em {format(new Date(myMembro.recusado_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+        </div>
+      )}
+
       {myMembro && (isConfirmado || isRecusado) && confirmacaoAtiva && (
-        <div className="border-t border-border/40 px-4 py-2.5">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="w-full text-muted-foreground text-xs h-8 rounded-xl"
-            disabled={saving}
-            onClick={() => onResponder(myMembro.id, "pendente")}
-          >
-            {isConfirmado ? "Cancelar confirmação" : "Mudar resposta"}
-          </Button>
+        <div className="border-t border-border/40 px-4 py-2.5 space-y-1">
+          {!prazoExpirado ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="w-full text-muted-foreground text-xs h-8 rounded-xl"
+              disabled={saving}
+              onClick={() => onResponder(myMembro.id, "pendente")}
+            >
+              {isConfirmado ? "Cancelar confirmação" : "Mudar resposta"}
+            </Button>
+          ) : (
+            <p className="text-[11px] text-muted-foreground text-center py-1">
+              Prazo encerrado — fale com a coordenação para alterações.
+            </p>
+          )}
         </div>
       )}
 
