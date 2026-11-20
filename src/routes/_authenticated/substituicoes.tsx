@@ -35,6 +35,7 @@ type Substituicao = {
   motivo_rejeicao: string | null;
   aprovado_em: string | null;
   created_at: string;
+  recusado_em: string | null;
   escala_id: string;
   escala_titulo: string;
   escala_data: string;
@@ -651,9 +652,12 @@ function SubstAdminCard({
             </p>
           )}
 
-          <p className="text-[11px] text-muted-foreground/70">
-            Solicitado em {format(new Date(subst.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-          </p>
+          <div className="text-[11px] text-muted-foreground/70 space-y-0.5">
+            {subst.recusado_em && (
+              <p>Recusado em {format(new Date(subst.recusado_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
+            )}
+            <p>Solicitado em {format(new Date(subst.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
+          </div>
 
           {subst.status === "aprovada" && subst.aprovador_nome && (
             <p className="text-xs text-green-700 dark:text-green-400">
