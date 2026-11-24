@@ -31,7 +31,12 @@
 --      • E-mail do usuário vem de auth.users (mesmo padrão das triggers da 166).
 --      • URL via _edge_fn_url('send-email') e autenticação via x-email-secret
 --        (_push_config.internal_email_secret), sem chave chumbada.
---      • Mesmas datas, filtros, templates, campos e marcação lembrete_presenca_*_em.
+--      • Mesmas datas, filtros, templates e campos.
+--      • lembrete_presenca_*_em só é gravado quando a requisição ao send-email foi
+--        enfileirada no pg_net (antes marcava mesmo sem envio). Sem destinatário
+--        ou sem internal_email_secret: RAISE WARNING e a escala fica sem marca.
+--        O resultado HTTP (assíncrono) fica em net._http_response; a função não
+--        reenvia em caso de falha posterior (como as demais triggers de e-mail).
 --
 -- NÃO ALTERA: Edge Functions, outbox/worker de WhatsApp, consentimento,
 --             horários dos jobs, demais jobs.
@@ -69,6 +74,7 @@ DECLARE
   v_paroquia     TEXT;
   v_fn_url       TEXT := public._edge_fn_url('send-email');
   v_email_secret TEXT;
+  v_req_id       BIGINT;
 BEGIN
   SELECT val INTO v_email_secret FROM public._push_config WHERE key = 'internal_email_secret';
 
@@ -86,7 +92,8 @@ BEGIN
     FROM escala_membros WHERE escala_id = v_escala.id;
 
     IF v_pendentes > 0 THEN
-      v_email := NULL;
+      v_email  := NULL;
+      v_req_id := NULL;
       SELECT nome INTO v_paroquia FROM paroquias WHERE id = v_escala.paroquia_id;
 
       SELECT u.email INTO v_email
@@ -99,7 +106,7 @@ BEGIN
       LIMIT 1;
 
       IF v_email IS NOT NULL AND v_email_secret IS NOT NULL THEN
-        PERFORM net.http_post(
+        v_req_id := net.http_post(
           url     := v_fn_url,
           headers := jsonb_build_object(
             'Content-Type',   'application/json',
@@ -118,9 +125,14 @@ BEGIN
         );
       ELSIF v_email IS NOT NULL THEN
         RAISE WARNING 'enviar_lembretes_presenca: e-mail não enviado — internal_email_secret não configurado';
+      ELSE
+        RAISE WARNING 'enviar_lembretes_presenca: escala % sem destinatário (admin/coordenador com e-mail)', v_escala.id;
       END IF;
 
-      UPDATE escalas SET lembrete_presenca_1d_em = NOW() WHERE id = v_escala.id;
+      -- Só marca quando a requisição foi enfileirada no pg_net.
+      IF v_req_id IS NOT NULL THEN
+        UPDATE escalas SET lembrete_presenca_1d_em = NOW() WHERE id = v_escala.id;
+      END IF;
     END IF;
   END LOOP;
 
@@ -138,7 +150,8 @@ BEGIN
     FROM escala_membros WHERE escala_id = v_escala.id;
 
     IF v_pendentes > 0 THEN
-      v_email := NULL;
+      v_email  := NULL;
+      v_req_id := NULL;
       SELECT nome INTO v_paroquia FROM paroquias WHERE id = v_escala.paroquia_id;
 
       SELECT u.email INTO v_email
@@ -151,7 +164,7 @@ BEGIN
       LIMIT 1;
 
       IF v_email IS NOT NULL AND v_email_secret IS NOT NULL THEN
-        PERFORM net.http_post(
+        v_req_id := net.http_post(
           url     := v_fn_url,
           headers := jsonb_build_object(
             'Content-Type',   'application/json',
@@ -169,9 +182,14 @@ BEGIN
         );
       ELSIF v_email IS NOT NULL THEN
         RAISE WARNING 'enviar_lembretes_presenca: e-mail não enviado — internal_email_secret não configurado';
+      ELSE
+        RAISE WARNING 'enviar_lembretes_presenca: escala % sem destinatário (admin/coordenador com e-mail)', v_escala.id;
       END IF;
 
-      UPDATE escalas SET lembrete_presenca_2d_em = NOW() WHERE id = v_escala.id;
+      -- Só marca quando a requisição foi enfileirada no pg_net.
+      IF v_req_id IS NOT NULL THEN
+        UPDATE escalas SET lembrete_presenca_2d_em = NOW() WHERE id = v_escala.id;
+      END IF;
     END IF;
   END LOOP;
 END;
