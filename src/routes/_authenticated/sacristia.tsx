@@ -636,6 +636,10 @@ function SacristiaPage() {
               return STATUS_FINAIS.includes(s);
             }).length;
             const isSaving = savingEscalaId === escala.id;
+            // Alterações locais ainda não enviadas (inclusive em escalas já concluídas)
+            const temAlteracaoLocal = membros.some(
+              (m: MembroEscala) => presencaMap[m.id] !== undefined && presencaMap[m.id] !== m.status
+            );
             const isHoje = escala.data === hojeStr;
             const d = new Date(escala.data + "T00:00:00");
 
@@ -878,7 +882,7 @@ function SacristiaPage() {
                     </>
                   )}
 
-                  {membros.length > 0 && tab !== "concluidas" && (
+                  {membros.length > 0 && (tab !== "concluidas" || temAlteracaoLocal) && (
                     <div className="flex gap-2 mt-2">
                       {grupos.length > 0 && (
                         <Button
@@ -891,7 +895,7 @@ function SacristiaPage() {
                           Todos presentes
                         </Button>
                       )}
-                      {salvasIds.has(escala.id) && finais === membros.length ? (
+                      {salvasIds.has(escala.id) && finais === membros.length && !temAlteracaoLocal ? (
                         <div className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
                           <CheckCheck className="h-4 w-4" />
                           Concluído
