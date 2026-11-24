@@ -73,16 +73,19 @@ Deno.serve(async (req) => {
     }
     return emailSecretCache;
   }
-  async function emailHeaders(): Promise<Record<string, string>> {
-    const h: Record<string, string> = {
+  // Retorna null quando não há segredo: o chamador NÃO deve chamar o send-email
+  // (ele responderia 401) e deve contabilizar a falha.
+  async function emailHeaders(): Promise<Record<string, string> | null> {
+    const secret = await getEmailSecret();
+    if (!secret) return null;
+    return {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${anonKey}`,
       "apikey": anonKey,
+      "x-email-secret": secret,
     };
-    const secret = await getEmailSecret();
-    if (secret) h["x-email-secret"] = secret;
-    return h;
   }
+  const EMAIL_SECRET_AUSENTE = "e-mail não enviado: INTERNAL_EMAIL_SECRET e _push_config.internal_email_secret ausentes";
 
   // Lê modo do query-param ou body
   const url   = new URL(req.url);
@@ -138,21 +141,28 @@ Deno.serve(async (req) => {
       if (!membro?.email) continue;
       if (i > 0) await new Promise((r) => setTimeout(r, 800));
       try {
-        const res = await fetch(sendEmailUrl, {
-          method: "POST",
-          headers: await emailHeaders(),
-          body: JSON.stringify({
-            template:     "evento_convite",
-            to:           membro.email,
-            nome:         membro.nome,
-            paroquia:     paroquiaNome,
-            escalaTitulo: (evento as any).titulo,
-            escalaData,
-            escalaHora,
-          }),
-        });
-        if (res.ok) enviados++;
-        else erros.push(`${membro.email}: ${await res.text()}`);
+        const headers = await emailHeaders();
+        if (!headers) {
+          // Sem segredo: não chama o send-email; segue para push e próximo membro.
+          console.error(`[lembrete-escalas] ${EMAIL_SECRET_AUSENTE} (${membro.email})`);
+          erros.push(`${membro.email}: ${EMAIL_SECRET_AUSENTE}`);
+        } else {
+          const res = await fetch(sendEmailUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              template:     "evento_convite",
+              to:           membro.email,
+              nome:         membro.nome,
+              paroquia:     paroquiaNome,
+              escalaTitulo: (evento as any).titulo,
+              escalaData,
+              escalaHora,
+            }),
+          });
+          if (res.ok) enviados++;
+          else erros.push(`${membro.email}: ${await res.text()}`);
+        }
       } catch (err: any) {
         erros.push(`${membro.email}: ${err.message}`);
       }
@@ -290,25 +300,32 @@ Deno.serve(async (req) => {
     if (i > 0) await new Promise((r) => setTimeout(r, 350));
 
     try {
-      const res = await fetch(sendEmailUrl, {
-        method: "POST",
-        headers: await emailHeaders(),
-        body: JSON.stringify({
-          template:      "lembrete_escala",
-          to:            membro.email,
-          nome:          membro.nome,
-          paroquia:      paroquiaNome,
-          escalaTitulo:  escala.titulo,
-          escalaData:    escala.data,
-          escalaHora:    escala.hora_inicio?.slice(0, 5) ?? "",
-          ministerioNome: min?.nome ?? "",
-          total:         diasRestantes,
-        }),
-      });
-      if (res.ok) enviados++;
-      else {
-        const body = await res.text();
-        erros.push(`${membro.email}: ${body}`);
+      const headers = await emailHeaders();
+      if (!headers) {
+        // Sem segredo: não chama o send-email; push/WhatsApp e próximos membros seguem.
+        console.error(`[lembrete-escalas] ${EMAIL_SECRET_AUSENTE} (${membro.email})`);
+        erros.push(`${membro.email}: ${EMAIL_SECRET_AUSENTE}`);
+      } else {
+        const res = await fetch(sendEmailUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            template:      "lembrete_escala",
+            to:            membro.email,
+            nome:          membro.nome,
+            paroquia:      paroquiaNome,
+            escalaTitulo:  escala.titulo,
+            escalaData:    escala.data,
+            escalaHora:    escala.hora_inicio?.slice(0, 5) ?? "",
+            ministerioNome: min?.nome ?? "",
+            total:         diasRestantes,
+          }),
+        });
+        if (res.ok) enviados++;
+        else {
+          const body = await res.text();
+          erros.push(`${membro.email}: ${body}`);
+        }
       }
     } catch (err: any) {
       erros.push(`${membro.email}: ${err.message}`);
