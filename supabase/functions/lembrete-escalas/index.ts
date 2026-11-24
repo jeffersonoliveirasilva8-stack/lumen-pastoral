@@ -9,6 +9,8 @@
 //
 // Env vars:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
+//   INTERNAL_EMAIL_SECRET (opcional; fallback: _push_config.internal_email_secret)
+//     enviado como x-email-secret ao send-email (exigido desde a migration 166)
 
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -56,6 +58,31 @@ Deno.serve(async (req) => {
   const sendWhatsAppUrl = `${supabaseUrl}/functions/v1/send-whatsapp`;
 
   const admin = createClient(supabaseUrl, serviceKey);
+
+  // Segredo interno exigido pelo send-email (x-email-secret). Mesmo valor que as
+  // triggers do banco leem de _push_config.internal_email_secret (migration 166).
+  let emailSecretCache: string | null | undefined;
+  async function getEmailSecret(): Promise<string | null> {
+    if (emailSecretCache !== undefined) return emailSecretCache;
+    emailSecretCache = Deno.env.get("INTERNAL_EMAIL_SECRET") || null;
+    if (!emailSecretCache) {
+      try {
+        const { data: cfg } = await admin.from("_push_config").select("val").eq("key", "internal_email_secret").maybeSingle();
+        emailSecretCache = cfg?.val ?? null;
+      } catch { emailSecretCache = null; }
+    }
+    return emailSecretCache;
+  }
+  async function emailHeaders(): Promise<Record<string, string>> {
+    const h: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${anonKey}`,
+      "apikey": anonKey,
+    };
+    const secret = await getEmailSecret();
+    if (secret) h["x-email-secret"] = secret;
+    return h;
+  }
 
   // Lê modo do query-param ou body
   const url   = new URL(req.url);
@@ -113,7 +140,7 @@ Deno.serve(async (req) => {
       try {
         const res = await fetch(sendEmailUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${anonKey}`, "apikey": anonKey },
+          headers: await emailHeaders(),
           body: JSON.stringify({
             template:     "evento_convite",
             to:           membro.email,
@@ -265,11 +292,7 @@ Deno.serve(async (req) => {
     try {
       const res = await fetch(sendEmailUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${anonKey}`,
-          "apikey": anonKey,
-        },
+        headers: await emailHeaders(),
         body: JSON.stringify({
           template:      "lembrete_escala",
           to:            membro.email,
