@@ -1,6 +1,7 @@
--- Migration 243: segmentação de Comunicados por função e atuação pastoral.
+-- Migration 243: segmentação de Comunicados por atuação pastoral.
+-- O filtro de função já existe em ministerios/membro_ministerios; a interface o identifica como "Função".
+
 ALTER TABLE public.comunicacao_pastoral_mensagens
-  ADD COLUMN IF NOT EXISTS destinatario_funcao_id uuid REFERENCES public.ministerios(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS destinatario_atuacao_id uuid REFERENCES public.atuacoes_pastorais(id) ON DELETE SET NULL;
 
 ALTER TABLE public.comunicacao_pastoral_mensagens DROP CONSTRAINT IF EXISTS chk_apenas_um_segmento;
@@ -9,7 +10,6 @@ ALTER TABLE public.comunicacao_pastoral_mensagens
     ((destinatario_membro_id IS NOT NULL)::int +
      (destinatario_ministerio_id IS NOT NULL)::int +
      (destinatario_escala_id IS NOT NULL)::int +
-     (destinatario_funcao_id IS NOT NULL)::int +
      (destinatario_atuacao_id IS NOT NULL)::int) <= 1
   );
 
@@ -19,7 +19,6 @@ CREATE OR REPLACE FUNCTION coord_enviar_aviso_pastoral(
   p_destinatario_membro_id     uuid DEFAULT NULL,
   p_destinatario_ministerio_id uuid DEFAULT NULL,
   p_destinatario_escala_id     uuid DEFAULT NULL,
-  p_destinatario_funcao_id    uuid DEFAULT NULL,
   p_destinatario_atuacao_id   uuid DEFAULT NULL
 )
 RETURNS jsonb
@@ -56,22 +55,14 @@ BEGIN
     (p_destinatario_membro_id IS NOT NULL)::int +
     (p_destinatario_ministerio_id IS NOT NULL)::int +
     (p_destinatario_escala_id IS NOT NULL)::int +
-    (p_destinatario_funcao_id IS NOT NULL)::int +
     (p_destinatario_atuacao_id IS NOT NULL)::int
   ) > 1 THEN
     RETURN jsonb_build_object('ok', false, 'error', 'Selecione apenas um tipo de destinatário por envio.');
   END IF;
 
-  IF p_destinatario_funcao_id IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM ministerios WHERE id = p_destinatario_funcao_id
-      AND paroquia_id = p_paroquia_id AND ativo = true
-  ) THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'Função inválida ou pertencente a outra paróquia.');
-  END IF;
-
   IF p_destinatario_atuacao_id IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM atuacoes_pastorais WHERE id = p_destinatario_atuacao_id
-      AND paroquia_id = p_paroquia_id AND ativo = true
+    SELECT 1 FROM atuacoes_pastorais
+    WHERE id = p_destinatario_atuacao_id AND paroquia_id = p_paroquia_id AND ativo = true
   ) THEN
     RETURN jsonb_build_object('ok', false, 'error', 'Atuação inválida ou pertencente a outra paróquia.');
   END IF;
@@ -121,12 +112,7 @@ BEGIN
           AND  em2.escala_id = p_destinatario_escala_id
           AND  em2.ativo IS NOT FALSE
       )
-            WHEN p_destinatario_funcao_id IS NOT NULL THEN EXISTS (
-        SELECT 1 FROM membro_ministerios mm
-        WHERE mm.membro_id = m.id AND mm.ministerio_id = p_destinatario_funcao_id
-          AND mm.ativo = true
-      )
-      WHEN p_destinatario_atuacao_id IS NOT NULL THEN EXISTS (
+            WHEN p_destinatario_atuacao_id IS NOT NULL THEN EXISTS (
         SELECT 1 FROM membro_atuacoes ma
         JOIN atuacoes_pastorais ap ON ap.id = ma.atuacao_id
         WHERE ma.membro_id = m.id AND ma.atuacao_id = p_destinatario_atuacao_id
@@ -147,12 +133,10 @@ ELSE true
 
   INSERT INTO comunicacao_pastoral_mensagens (
     paroquia_id, remetente_id, mensagem,
-    destinatario_membro_id, destinatario_ministerio_id, destinatario_escala_id,
-    destinatario_funcao_id, destinatario_atuacao_id
+    destinatario_membro_id, destinatario_ministerio_id, destinatario_escala_id, destinatario_atuacao_id
   ) VALUES (
     p_paroquia_id, v_remetente_id, p_mensagem,
-    p_destinatario_membro_id, p_destinatario_ministerio_id, p_destinatario_escala_id,
-    p_destinatario_funcao_id, p_destinatario_atuacao_id
+    p_destinatario_membro_id, p_destinatario_ministerio_id, p_destinatario_escala_id, p_destinatario_atuacao_id
   )
   RETURNING id INTO v_mensagem_id;
 
@@ -181,12 +165,7 @@ ELSE true
             AND  em2.escala_id = p_destinatario_escala_id
             AND  em2.ativo IS NOT FALSE
         )
-              WHEN p_destinatario_funcao_id IS NOT NULL THEN EXISTS (
-        SELECT 1 FROM membro_ministerios mm
-        WHERE mm.membro_id = m.id AND mm.ministerio_id = p_destinatario_funcao_id
-          AND mm.ativo = true
-      )
-      WHEN p_destinatario_atuacao_id IS NOT NULL THEN EXISTS (
+              WHEN p_destinatario_atuacao_id IS NOT NULL THEN EXISTS (
         SELECT 1 FROM membro_atuacoes ma
         JOIN atuacoes_pastorais ap ON ap.id = ma.atuacao_id
         WHERE ma.membro_id = m.id AND ma.atuacao_id = p_destinatario_atuacao_id
@@ -238,5 +217,5 @@ END;
 $$;
 
 
-GRANT EXECUTE ON FUNCTION public.coord_enviar_aviso_pastoral(uuid, text, uuid, uuid, uuid, uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.coord_enviar_aviso_pastoral(uuid, text, uuid, uuid, uuid, uuid) TO authenticated;
 NOTIFY pgrst, 'reload schema';
