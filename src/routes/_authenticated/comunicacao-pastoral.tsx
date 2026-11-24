@@ -114,7 +114,10 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
         .eq("paroquia_id", paroquiaId)
         .eq("ativo", true)
         .eq("whatsapp_opt_in", true)
+        .eq("conta_ativada", true)
+        .not("whatsapp_telefone", "is", null)
         .order("nome");
+      if (error) throw error;
       return data ?? [];
     },
     enabled: segmento === "membro",
@@ -123,12 +126,13 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
   const { data: ministerios = [] } = useQuery<Ministerio[]>({
     queryKey: ["cp-ministerios", paroquiaId],
     queryFn: async () => {
-      const { data } = await anyDb
+      const { data, error } = await anyDb
         .from("ministerios")
         .select("id, nome")
         .eq("paroquia_id", paroquiaId)
         .eq("ativo", true)
         .order("nome");
+      if (error) throw error;
       return data ?? [];
     },
     enabled: segmento === "ministerio",
@@ -137,7 +141,7 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
   const { data: escalas = [] } = useQuery<Escala[]>({
     queryKey: ["cp-escalas", paroquiaId],
     queryFn: async () => {
-      const { data } = await anyDb
+      const { data, error } = await anyDb
         .from("escalas")
         .select("id, titulo, data")
         .eq("paroquia_id", paroquiaId)
@@ -145,6 +149,7 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
         .gte("data", new Date().toISOString().slice(0, 10))
         .order("data")
         .limit(30);
+      if (error) throw error;
       return data ?? [];
     },
     enabled: segmento === "escala",
