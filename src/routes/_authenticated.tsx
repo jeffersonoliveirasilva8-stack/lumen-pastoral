@@ -277,7 +277,7 @@ function AuthLayout() {
       { to: "/ranking",        label: "Ranking",    icon: Trophy,       color: "bg-amber-600" },
       { to: "/espiritualidade",label: "Liturgia",   icon: BookOpen,     color: "bg-violet-600" },
       { to: "/formacoes",      label: "Pastoral",   icon: Leaf,         color: "bg-teal-600" },
-      ...(roles.some((role) => ["coordenador", "admin", "super_admin"].includes(role)) ? [{ to: "/comunicacao-pastoral", label: "Comunicados", icon: MessageSquare, color: "bg-cyan-600" }] : []),
+      ...(roles.some((role) => ["coordenador", "admin_paroquial", "super_admin"].includes(role)) ? [{ to: "/comunicacao-pastoral", label: "Comunicados", icon: MessageSquare, color: "bg-cyan-600" }] : []),
       { to: "/ocorrencias",    label: "Ocorrências",icon: AlertCircle,  color: "bg-red-500", badge: ocorrenciasAbertas },
     ] : []),
     // Configuração visível apenas para admin pleno
