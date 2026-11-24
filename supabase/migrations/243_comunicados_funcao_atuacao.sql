@@ -60,6 +60,28 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'Selecione apenas um tipo de destinatário por envio.');
   END IF;
 
+  IF p_destinatario_membro_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM membros
+    WHERE id = p_destinatario_membro_id AND paroquia_id = p_paroquia_id
+      AND ativo = true AND conta_ativada = true
+  ) THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Membro inválido ou não elegível nesta paróquia.');
+  END IF;
+
+  IF p_destinatario_ministerio_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM ministerios
+    WHERE id = p_destinatario_ministerio_id AND paroquia_id = p_paroquia_id AND ativo = true
+  ) THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Função inválida ou pertencente a outra paróquia.');
+  END IF;
+
+  IF p_destinatario_escala_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM escalas
+    WHERE id = p_destinatario_escala_id AND paroquia_id = p_paroquia_id AND status = 'publicada'
+  ) THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Escala inválida, não publicada ou pertencente a outra paróquia.');
+  END IF;
+
   IF p_destinatario_atuacao_id IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM atuacoes_pastorais
     WHERE id = p_destinatario_atuacao_id AND paroquia_id = p_paroquia_id AND ativo = true
