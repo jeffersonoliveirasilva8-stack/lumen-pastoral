@@ -9,6 +9,8 @@
 //
 // Env vars:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY
+//   INTERNAL_EMAIL_SECRET (opcional; fallback: _push_config.internal_email_secret)
+//     enviado como x-email-secret ao send-email (exigido desde a migration 166)
 
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -56,6 +58,37 @@ Deno.serve(async (req) => {
   const sendWhatsAppUrl = `${supabaseUrl}/functions/v1/send-whatsapp`;
 
   const admin = createClient(supabaseUrl, serviceKey);
+
+  // Segredo interno exigido pelo send-email (x-email-secret). Mesmo valor que as
+  // triggers do banco leem de _push_config.internal_email_secret (migration 166).
+  let emailSecretCache: string | null | undefined;
+  async function getEmailSecret(): Promise<string | null> {
+    if (emailSecretCache !== undefined) return emailSecretCache;
+    // Vazio ou só espaços conta como ausente (o send-email responderia 401).
+    const envSecret = Deno.env.get("INTERNAL_EMAIL_SECRET");
+    emailSecretCache = envSecret && envSecret.trim() ? envSecret : null;
+    if (!emailSecretCache) {
+      try {
+        const { data: cfg } = await admin.from("_push_config").select("val").eq("key", "internal_email_secret").maybeSingle();
+        const dbSecret = cfg?.val;
+        emailSecretCache = typeof dbSecret === "string" && dbSecret.trim() ? dbSecret : null;
+      } catch { emailSecretCache = null; }
+    }
+    return emailSecretCache;
+  }
+  // Retorna null quando não há segredo: o chamador NÃO deve chamar o send-email
+  // (ele responderia 401) e deve contabilizar a falha.
+  async function emailHeaders(): Promise<Record<string, string> | null> {
+    const secret = await getEmailSecret();
+    if (!secret) return null;
+    return {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${anonKey}`,
+      "apikey": anonKey,
+      "x-email-secret": secret,
+    };
+  }
+  const EMAIL_SECRET_AUSENTE = "e-mail não enviado: INTERNAL_EMAIL_SECRET e _push_config.internal_email_secret ausentes";
 
   // Lê modo do query-param ou body
   const url   = new URL(req.url);
@@ -111,21 +144,28 @@ Deno.serve(async (req) => {
       if (!membro?.email) continue;
       if (i > 0) await new Promise((r) => setTimeout(r, 800));
       try {
-        const res = await fetch(sendEmailUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${anonKey}`, "apikey": anonKey },
-          body: JSON.stringify({
-            template:     "evento_convite",
-            to:           membro.email,
-            nome:         membro.nome,
-            paroquia:     paroquiaNome,
-            escalaTitulo: (evento as any).titulo,
-            escalaData,
-            escalaHora,
-          }),
-        });
-        if (res.ok) enviados++;
-        else erros.push(`${membro.email}: ${await res.text()}`);
+        const headers = await emailHeaders();
+        if (!headers) {
+          // Sem segredo: não chama o send-email; segue para push e próximo membro.
+          console.error(`[lembrete-escalas] ${EMAIL_SECRET_AUSENTE} (${membro.email})`);
+          erros.push(`${membro.email}: ${EMAIL_SECRET_AUSENTE}`);
+        } else {
+          const res = await fetch(sendEmailUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              template:     "evento_convite",
+              to:           membro.email,
+              nome:         membro.nome,
+              paroquia:     paroquiaNome,
+              escalaTitulo: (evento as any).titulo,
+              escalaData,
+              escalaHora,
+            }),
+          });
+          if (res.ok) enviados++;
+          else erros.push(`${membro.email}: ${await res.text()}`);
+        }
       } catch (err: any) {
         erros.push(`${membro.email}: ${err.message}`);
       }
@@ -263,29 +303,32 @@ Deno.serve(async (req) => {
     if (i > 0) await new Promise((r) => setTimeout(r, 350));
 
     try {
-      const res = await fetch(sendEmailUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${anonKey}`,
-          "apikey": anonKey,
-        },
-        body: JSON.stringify({
-          template:      "lembrete_escala",
-          to:            membro.email,
-          nome:          membro.nome,
-          paroquia:      paroquiaNome,
-          escalaTitulo:  escala.titulo,
-          escalaData:    escala.data,
-          escalaHora:    escala.hora_inicio?.slice(0, 5) ?? "",
-          ministerioNome: min?.nome ?? "",
-          total:         diasRestantes,
-        }),
-      });
-      if (res.ok) enviados++;
-      else {
-        const body = await res.text();
-        erros.push(`${membro.email}: ${body}`);
+      const headers = await emailHeaders();
+      if (!headers) {
+        // Sem segredo: não chama o send-email; push/WhatsApp e próximos membros seguem.
+        console.error(`[lembrete-escalas] ${EMAIL_SECRET_AUSENTE} (${membro.email})`);
+        erros.push(`${membro.email}: ${EMAIL_SECRET_AUSENTE}`);
+      } else {
+        const res = await fetch(sendEmailUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            template:      "lembrete_escala",
+            to:            membro.email,
+            nome:          membro.nome,
+            paroquia:      paroquiaNome,
+            escalaTitulo:  escala.titulo,
+            escalaData:    escala.data,
+            escalaHora:    escala.hora_inicio?.slice(0, 5) ?? "",
+            ministerioNome: min?.nome ?? "",
+            total:         diasRestantes,
+          }),
+        });
+        if (res.ok) enviados++;
+        else {
+          const body = await res.text();
+          erros.push(`${membro.email}: ${body}`);
+        }
       }
     } catch (err: any) {
       erros.push(`${membro.email}: ${err.message}`);
