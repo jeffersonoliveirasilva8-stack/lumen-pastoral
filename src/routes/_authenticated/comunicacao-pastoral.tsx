@@ -59,15 +59,16 @@ type Mensagem = {
   total_falhas: number;
   criado_em: string;
   remetente_nome: string;
-  destinatario_tipo: "individual" | "ministerio" | "escala" | "todos";
+  destinatario_tipo: "individual" | "ministerio" | "escala" | "atuacao" | "todos";
   destinatario_label: string;
 };
 
 type Ministerio = { id: string; nome: string };
+type Atuacao = { id: string; nome: string };
 type Escala     = { id: string; titulo: string; data: string };
 type Membro     = { id: string; nome: string };
 
-type SegmentoTipo = "todos" | "membro" | "ministerio" | "escala";
+type SegmentoTipo = "todos" | "membro" | "ministerio" | "escala" | "atuacao";
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ function SegmentoIcon({ tipo }: { tipo: string }) {
   if (tipo === "individual") return <User className="w-3.5 h-3.5 text-muted-foreground" />;
   if (tipo === "ministerio") return <Users className="w-3.5 h-3.5 text-muted-foreground" />;
   if (tipo === "escala")     return <CalendarRange className="w-3.5 h-3.5 text-muted-foreground" />;
+  if (tipo === "atuacao")    return <Users className="w-3.5 h-3.5 text-muted-foreground" />;
   return <Users className="w-3.5 h-3.5 text-muted-foreground" />;
 }
 
@@ -98,6 +100,7 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
   const [membroId, setMembroId]         = useState<string>("");
   const [ministerioId, setMinisterioId] = useState<string>("");
   const [escalaId, setEscalaId]         = useState<string>("");
+  const [atuacaoId, setAtuacaoId]       = useState<string>("");
   const [confirming, setConfirming]     = useState(false);
   const [showPreview, setShowPreview]   = useState(false);
   const sendingRef                      = useRef(false);
@@ -147,6 +150,22 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
     enabled: segmento === "escala",
   });
 
+  const { data: atuacoes = [] } = useQuery<Atuacao[]>({
+    queryKey: ["cp-atuacoes", paroquiaId],
+    queryFn: async () => {
+      const { data, error } = await anyDb
+        .from("atuacoes_pastorais")
+        .select("id, nome")
+        .eq("paroquia_id", paroquiaId)
+        .eq("ativo", true)
+        .order("ordem")
+        .order("nome");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: segmento === "atuacao",
+  });
+
   const enviarMutation = useMutation({
     mutationFn: async () => {
       if (sendingRef.current) throw new Error("Envio já em andamento");
@@ -158,6 +177,7 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
           p_destinatario_membro_id:     segmento === "membro"     ? membroId     : null,
           p_destinatario_ministerio_id: segmento === "ministerio" ? ministerioId : null,
           p_destinatario_escala_id:     segmento === "escala"     ? escalaId     : null,
+          p_destinatario_atuacao_id:    segmento === "atuacao"    ? atuacaoId    : null,
         });
         if (error) throw error;
         if (!data?.ok) throw new Error(data?.error ?? "Erro desconhecido");
@@ -167,12 +187,13 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
       }
     },
     onSuccess: (data) => {
-      toast.success(`Aviso enviado para ${data.total} destinatário(s)!`);
+      toast.success(`Aviso encaminhado para processamento: ${data.total} destinatário(s).`);
       setMensagem("");
       setSegmento("todos");
       setMembroId("");
       setMinisterioId("");
       setEscalaId("");
+      setAtuacaoId("");
       qc.invalidateQueries({ queryKey: ["cp-historico", paroquiaId] });
     },
     onError: (err: any) => {
@@ -185,7 +206,8 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
     (segmento === "todos" ||
       (segmento === "membro"     && membroId)     ||
       (segmento === "ministerio" && ministerioId) ||
-      (segmento === "escala"     && escalaId));
+      (segmento === "escala"     && escalaId)     ||
+      (segmento === "atuacao"    && atuacaoId));
 
   return (
     <Card>
@@ -209,8 +231,9 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
             <SelectContent>
               <SelectItem value="todos">Todos os membros com WhatsApp</SelectItem>
               <SelectItem value="membro">Membro específico</SelectItem>
-              <SelectItem value="ministerio">Por ministério</SelectItem>
+              <SelectItem value="ministerio">Por função</SelectItem>
               <SelectItem value="escala">Por escala</SelectItem>
+              <SelectItem value="atuacao">Por atuação</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -262,6 +285,25 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        )}
+
+        {segmento === "atuacao" && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Atuação pastoral</label>
+            <Select value={atuacaoId} onValueChange={setAtuacaoId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a atuação…" />
+              </SelectTrigger>
+              <SelectContent>
+                {atuacoes.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>{a.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {atuacoes.length === 0 && (
+              <p className="text-xs text-muted-foreground">Nenhuma atuação ativa cadastrada nesta paróquia.</p>
+            )}
           </div>
         )}
 
@@ -327,8 +369,9 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
                     <strong>Destinatários:</strong>{" "}
                     {segmento === "todos"       && "Todos os membros com WhatsApp ativo"}
                     {segmento === "membro"      && (membros.find(m => m.id === membroId)?.nome ?? "Membro selecionado")}
-                    {segmento === "ministerio"  && (ministerios.find(m => m.id === ministerioId)?.nome ?? "Ministério selecionado")}
+                    {segmento === "ministerio"  && (ministerios.find(m => m.id === ministerioId)?.nome ?? "Função selecionada")}
                     {segmento === "escala"      && (escalas.find(e => e.id === escalaId)?.titulo ?? "Escala selecionada")}
+                    {segmento === "atuacao"     && (atuacoes.find(a => a.id === atuacaoId)?.nome ?? "Atuação selecionada")}
                   </p>
                   <p><strong>Mensagem:</strong></p>
                   <p className="rounded bg-muted px-3 py-2 text-foreground whitespace-pre-wrap">{mensagem.trim()}</p>
@@ -460,9 +503,11 @@ function ComunicacaoPastoralPage() {
           destinatario_membro_id,
           destinatario_ministerio_id,
           destinatario_escala_id,
+          destinatario_atuacao_id,
           membro_dest:membros!destinatario_membro_id(nome),
           min_dest:ministerios!destinatario_ministerio_id(nome),
-          esc_dest:escalas!destinatario_escala_id(titulo, data)
+          esc_dest:escalas!destinatario_escala_id(titulo, data),
+          atuacao_dest:atuacoes_pastorais!destinatario_atuacao_id(nome)
         `)
         .eq("paroquia_id", paroquiaId!)
         .order("criado_em", { ascending: false })
@@ -482,6 +527,8 @@ function ComunicacaoPastoralPage() {
           ? "ministerio"
           : row.destinatario_escala_id
           ? "escala"
+          : row.destinatario_atuacao_id
+          ? "atuacao"
           : "todos",
         destinatario_label:   row.destinatario_membro_id
           ? (row.membro_dest?.nome ?? "Membro")
@@ -489,6 +536,8 @@ function ComunicacaoPastoralPage() {
           ? (row.min_dest?.nome ?? "Ministério")
           : row.destinatario_escala_id
           ? `${row.esc_dest?.titulo ?? "Escala"} — ${row.esc_dest?.data ? format(new Date(row.esc_dest.data + "T00:00:00"), "dd/MM") : ""}`
+          : row.destinatario_atuacao_id
+          ? (row.atuacao_dest?.nome ?? "Atuação")
           : "Todos os membros",
       }));
     },
