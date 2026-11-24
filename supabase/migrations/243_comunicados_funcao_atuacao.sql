@@ -121,6 +121,10 @@ BEGIN
 ELSE true
     END;
 
+  IF v_total = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Nenhum membro elegível encontrado para este filtro. Verifique consentimento, conta ativada e telefone.');
+  END IF;
+
   IF v_total > c_max_dest THEN
     RETURN jsonb_build_object(
       'ok',    false,
