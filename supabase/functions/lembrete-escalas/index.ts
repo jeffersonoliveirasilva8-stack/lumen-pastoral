@@ -64,11 +64,14 @@ Deno.serve(async (req) => {
   let emailSecretCache: string | null | undefined;
   async function getEmailSecret(): Promise<string | null> {
     if (emailSecretCache !== undefined) return emailSecretCache;
-    emailSecretCache = Deno.env.get("INTERNAL_EMAIL_SECRET") || null;
+    // Vazio ou só espaços conta como ausente (o send-email responderia 401).
+    const envSecret = Deno.env.get("INTERNAL_EMAIL_SECRET");
+    emailSecretCache = envSecret && envSecret.trim() ? envSecret : null;
     if (!emailSecretCache) {
       try {
         const { data: cfg } = await admin.from("_push_config").select("val").eq("key", "internal_email_secret").maybeSingle();
-        emailSecretCache = cfg?.val ?? null;
+        const dbSecret = cfg?.val;
+        emailSecretCache = typeof dbSecret === "string" && dbSecret.trim() ? dbSecret : null;
       } catch { emailSecretCache = null; }
     }
     return emailSecretCache;
