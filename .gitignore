@@ -40,3 +40,7 @@ env
 # Supabase local state (contém project-ref, organization_id, connection strings)
 supabase/.temp/
 .vercel
+
+# Estados de sessão do Playwright (contêm refresh_token de usuários reais)
+scripts/.admin-state.json
+scripts/.member-state.json
