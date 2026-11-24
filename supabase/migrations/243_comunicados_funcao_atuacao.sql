@@ -13,7 +13,11 @@ ALTER TABLE public.comunicacao_pastoral_mensagens
      (destinatario_atuacao_id IS NOT NULL)::int) <= 1
   );
 
-CREATE OR REPLACE FUNCTION coord_enviar_aviso_pastoral(
+-- Remove a assinatura antiga (5 argumentos). Como o novo sexto argumento tem DEFAULT NULL,
+-- manter ambas as versões deixa chamadas com 5 argumentos ambíguas no PostgREST/PostgreSQL.
+DROP FUNCTION IF EXISTS public.coord_enviar_aviso_pastoral(uuid, text, uuid, uuid, uuid);
+
+CREATE OR REPLACE FUNCTION public.coord_enviar_aviso_pastoral(
   p_paroquia_id                uuid,
   p_mensagem                   text,
   p_destinatario_membro_id     uuid DEFAULT NULL,
@@ -243,5 +247,9 @@ END;
 $$;
 
 
+-- SECURITY DEFINER: permitir execução apenas a usuários autenticados; a própria RPC
+-- valida papel, vínculo e paróquia antes de qualquer disparo.
+REVOKE ALL ON FUNCTION public.coord_enviar_aviso_pastoral(uuid, text, uuid, uuid, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.coord_enviar_aviso_pastoral(uuid, text, uuid, uuid, uuid, uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.coord_enviar_aviso_pastoral(uuid, text, uuid, uuid, uuid, uuid) TO authenticated;
 NOTIFY pgrst, 'reload schema';
