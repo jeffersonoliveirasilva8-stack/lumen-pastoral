@@ -108,7 +108,7 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
   const { data: membros = [] } = useQuery<Membro[]>({
     queryKey: ["cp-membros", paroquiaId],
     queryFn: async () => {
-      const { data } = await anyDb
+      const { data, error } = await anyDb
         .from("membros")
         .select("id, nome")
         .eq("paroquia_id", paroquiaId)
