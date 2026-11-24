@@ -78,7 +78,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: subs } = await supabase
         .from('subscriptions')
-        .select('paroquia_id, paroquias(nome, email_contato)')
+        .select('paroquia_id, paroquias(nome, contato_email)')
         .eq('status', 'trial')
         .gte('trial_until', dateStart.toISOString())
         .lte('trial_until', dateEnd.toISOString())
@@ -115,7 +115,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: subs } = await supabase
         .from('subscriptions')
-        .select('paroquia_id, paroquias(nome, email_contato)')
+        .select('paroquia_id, paroquias(nome, contato_email)')
         .eq('status', 'past_due')
         .gte('updated_at', dateStart.toISOString())
         .lte('updated_at', dateEnd.toISOString())
