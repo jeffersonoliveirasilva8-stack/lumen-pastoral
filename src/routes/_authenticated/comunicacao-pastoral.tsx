@@ -436,11 +436,13 @@ function MensagemCard({ msg }: { msg: Mensagem }) {
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
-const PERFIS_AUTORIZADOS = ["coordenador", "admin", "super_admin"];
+const PERFIS_AUTORIZADOS = ["coordenador", "admin_paroquial", "super_admin"];
 
 function ComunicacaoPastoralPage() {
-  const { membro } = useAuth() as any;
-  const paroquiaId = membro?.paroquia_id as string | undefined;
+  const { profile, roles } = useAuth();
+  const paroquiaId = profile?.paroquia_id ?? undefined;
+  const remetenteNome = profile?.nome_completo ?? "";
+  const temPermissao = roles.some((role) => PERFIS_AUTORIZADOS.includes(role));
 
   const { data: historico = [], isLoading } = useQuery<Mensagem[]>({
     queryKey: ["cp-historico", paroquiaId],
@@ -493,9 +495,19 @@ function ComunicacaoPastoralPage() {
     enabled: !!paroquiaId,
   });
 
-  const temPermissao = PERFIS_AUTORIZADOS.includes(membro?.perfil ?? "");
-
-  if (!paroquiaId) return null;
+  if (!paroquiaId) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        <Card>
+          <CardContent className="py-10 text-center space-y-2">
+            <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto" />
+            <p className="font-medium">Paróquia não identificada</p>
+            <p className="text-sm text-muted-foreground">Não foi possível carregar os dados da sua paróquia. Atualize a página; se o problema persistir, procure o administrador do sistema.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
@@ -517,7 +529,7 @@ function ComunicacaoPastoralPage() {
           </CardContent>
         </Card>
       ) : (
-        <FormularioEnvio paroquiaId={paroquiaId} remetenteNome={membro?.nome ?? ""} />
+        <FormularioEnvio paroquiaId={paroquiaId} remetenteNome={remetenteNome} />
       )}
 
       <div className="space-y-3">
