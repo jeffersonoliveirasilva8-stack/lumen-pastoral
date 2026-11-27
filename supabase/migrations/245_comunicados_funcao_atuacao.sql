@@ -1,4 +1,13 @@
--- Migration 243: segmentação de Comunicados por atuação pastoral.
+-- Migration 245: segmentação de Comunicados por atuação pastoral.
+-- (Renumerada de 243 para 245: 243 e 244 já foram usadas pelas correções de recusa de escala.)
+-- Parte da versão da migration 176 de coord_enviar_aviso_pastoral e acrescenta:
+--   * filtro por atuação (membro_atuacoes / atuacoes_pastorais);
+--   * validação de IDs e segmentos contra a paróquia do remetente;
+--   * telefone em branco não conta como telefone (mesma regra do _pode_enviar_whatsapp);
+--   * mensagem vazia/longa devolve erro amigável em vez de exceção de CHECK;
+--   * trava por remetente (pg_advisory_xact_lock) para o limite de 3/hora valer mesmo com cliques simultâneos;
+--   * bloqueio de reenvio idêntico (mesmo remetente, texto e segmento) em 10 minutos;
+--   * search_path fixo na função SECURITY DEFINER.
 -- O filtro de função já existe em ministerios/membro_ministerios; a interface o identifica como "Função".
 
 ALTER TABLE public.comunicacao_pastoral_mensagens
@@ -28,6 +37,7 @@ CREATE OR REPLACE FUNCTION public.coord_enviar_aviso_pastoral(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_remetente_id   uuid;
@@ -40,7 +50,6 @@ DECLARE
   v_payload        jsonb;
   v_total          int := 0;
   v_disparos_hora  int;
-  v_link           text := 'https://lumenpastoral.com.br/portal-membro/home';
   c_max_dest       constant int := 200;
   c_max_hora       constant int := 3;
 BEGIN
@@ -53,6 +62,14 @@ BEGIN
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'error', 'Sem permissão para enviar avisos pastorais');
+  END IF;
+
+  IF p_mensagem IS NULL OR char_length(btrim(p_mensagem)) = 0 THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Escreva a mensagem antes de enviar.');
+  END IF;
+
+  IF char_length(p_mensagem) > 1000 THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'A mensagem passa de 1000 caracteres.');
   END IF;
 
   IF (
@@ -93,6 +110,27 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'Atuação inválida ou pertencente a outra paróquia.');
   END IF;
 
+  -- Serializa disparos do mesmo remetente: sem isso, dois cliques simultâneos
+  -- leem a mesma contagem e ambos passam do limite de 3 por hora.
+  PERFORM pg_advisory_xact_lock(hashtextextended('coord_enviar_aviso_pastoral:' || v_remetente_id::text, 0));
+
+  -- Reenvio idêntico (mesmo texto e mesmo segmento) em menos de 10 minutos é
+  -- tratado como duplicidade: cada disparo gera um evento_ref_id novo, então a
+  -- deduplicação de whatsapp_sends não pegaria esse caso.
+  IF EXISTS (
+    SELECT 1 FROM comunicacao_pastoral_mensagens cm
+    WHERE cm.remetente_id = v_remetente_id
+      AND cm.paroquia_id  = p_paroquia_id
+      AND cm.criado_em    > now() - interval '10 minutes'
+      AND cm.mensagem     = p_mensagem
+      AND cm.destinatario_membro_id     IS NOT DISTINCT FROM p_destinatario_membro_id
+      AND cm.destinatario_ministerio_id IS NOT DISTINCT FROM p_destinatario_ministerio_id
+      AND cm.destinatario_escala_id     IS NOT DISTINCT FROM p_destinatario_escala_id
+      AND cm.destinatario_atuacao_id    IS NOT DISTINCT FROM p_destinatario_atuacao_id
+  ) THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'Este mesmo aviso já foi enviado para estes destinatários há menos de 10 minutos.');
+  END IF;
+
   DELETE FROM comunicacao_pastoral_rate_limit
   WHERE  remetente_id = v_remetente_id
     AND  paroquia_id  = p_paroquia_id
@@ -123,7 +161,7 @@ BEGIN
     AND  m.ativo             = true
     AND  m.conta_ativada     = true
     AND  m.whatsapp_opt_in   = true
-    AND  m.whatsapp_telefone IS NOT NULL
+    AND  nullif(btrim(m.whatsapp_telefone), '') IS NOT NULL
     AND CASE
       WHEN p_destinatario_membro_id IS NOT NULL     THEN m.id = p_destinatario_membro_id
       WHEN p_destinatario_ministerio_id IS NOT NULL THEN EXISTS (
@@ -154,7 +192,7 @@ ELSE true
   IF v_total > c_max_dest THEN
     RETURN jsonb_build_object(
       'ok',    false,
-      'error', format('O disparo atingiria %s destinatários, acima do limite de %s. Use segmentação por ministério ou escala.', v_total, c_max_dest)
+      'error', format('O disparo atingiria %s destinatários, acima do limite de %s. Use segmentação por função, atuação ou escala.', v_total, c_max_dest)
     );
   END IF;
 
@@ -180,7 +218,7 @@ ELSE true
       AND  m.ativo             = true
       AND  m.conta_ativada     = true
       AND  m.whatsapp_opt_in   = true
-      AND  m.whatsapp_telefone IS NOT NULL
+      AND  nullif(btrim(m.whatsapp_telefone), '') IS NOT NULL
       AND CASE
         WHEN p_destinatario_membro_id IS NOT NULL     THEN m.id = p_destinatario_membro_id
         WHEN p_destinatario_ministerio_id IS NOT NULL THEN EXISTS (

@@ -261,10 +261,10 @@ function FormularioEnvio({ paroquiaId, remetenteNome }: { paroquiaId: string; re
 
         {segmento === "ministerio" && (
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Ministério</label>
+            <label className="text-sm font-medium">Função</label>
             <Select value={ministerioId} onValueChange={setMinisterioId}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o ministério…" />
+                <SelectValue placeholder="Selecione a função…" />
               </SelectTrigger>
               <SelectContent>
                 {ministerios.map((m) => (
@@ -411,11 +411,12 @@ function MensagemCard({ msg }: { msg: Mensagem }) {
   const { data: destinatarios = [], isLoading } = useQuery({
     queryKey: ["cp-destinatarios", msg.id],
     queryFn: async () => {
-      const { data } = await anyDb
+      const { data, error } = await anyDb
         .from("comunicacao_pastoral_destinatarios")
         .select("id, membro_id, status, motivo, membros(nome)")
         .eq("mensagem_id", msg.id)
         .order("criado_em");
+      if (error) throw error;
       return (data ?? []) as Array<{ id: string; membro_id: string; status: string; motivo: string | null; membros: { nome: string } | null }>;
     },
     enabled: open,
@@ -492,10 +493,10 @@ function ComunicacaoPastoralPage() {
   const remetenteNome = profile?.nome_completo ?? "";
   const temPermissao = roles.some((role) => PERFIS_AUTORIZADOS.includes(role));
 
-  const { data: historico = [], isLoading } = useQuery<Mensagem[]>({
+  const { data: historico = [], isLoading, isError: historicoErro } = useQuery<Mensagem[]>({
     queryKey: ["cp-historico", paroquiaId],
     queryFn: async () => {
-      const { data } = await anyDb
+      const { data, error } = await anyDb
         .from("comunicacao_pastoral_mensagens")
         .select(`
           id,
@@ -517,6 +518,7 @@ function ComunicacaoPastoralPage() {
         .eq("paroquia_id", paroquiaId!)
         .order("criado_em", { ascending: false })
         .limit(50);
+      if (error) throw error;
 
       return (data ?? []).map((row: any) => ({
         id:                   row.id,
@@ -538,7 +540,7 @@ function ComunicacaoPastoralPage() {
         destinatario_label:   row.destinatario_membro_id
           ? (row.membro_dest?.nome ?? "Membro")
           : row.destinatario_ministerio_id
-          ? (row.min_dest?.nome ?? "Ministério")
+          ? (row.min_dest?.nome ?? "Função")
           : row.destinatario_escala_id
           ? `${row.esc_dest?.titulo ?? "Escala"} — ${row.esc_dest?.data ? format(new Date(row.esc_dest.data + "T00:00:00"), "dd/MM") : ""}`
           : row.destinatario_atuacao_id
@@ -598,7 +600,15 @@ function ComunicacaoPastoralPage() {
           </div>
         )}
 
-        {!isLoading && historico.length === 0 && (
+        {!isLoading && historicoErro && (
+          <Card>
+            <CardContent className="py-8 text-center text-destructive text-sm">
+              Não foi possível carregar o histórico de envios. Atualize a página.
+            </CardContent>
+          </Card>
+        )}
+
+        {!isLoading && !historicoErro && historico.length === 0 && (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground text-sm">
               Nenhum aviso pastoral enviado ainda.
