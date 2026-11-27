@@ -7,7 +7,11 @@
 --   notificacoes com tipo = 'info'. A constraint (PATCH_EVOLUCAO_V2.sql) só
 --   aceita 'aviso', 'alerta', 'urgente' ou 'sistema', então a recusa inteira
 --   falhava.
--- Correção: mesma função da 238, só trocando 'info' por 'aviso'.
+-- Segundo erro (achado ao testar em produção): o mesmo INSERT usava a coluna
+--   membro_id, que não existe em notificacoes. A coluna do destinatário é
+--   destinatario_id (FK membros.id), como em coord_liberar_vaga_substituicao.
+-- Correção: mesma função da 238, trocando 'info' por 'aviso' e membro_id por
+--   destinatario_id no aviso de vaga aos membros elegíveis.
 -- Idempotente (CREATE OR REPLACE, mesma assinatura).
 
 CREATE OR REPLACE FUNCTION public.portal_recusar_escala(
@@ -171,7 +175,7 @@ BEGIN
 
       -- Notificação in-app
       INSERT INTO public.notificacoes
-        (paroquia_id, membro_id, titulo, mensagem, tipo, lida, apenas_admin, link_referencia)
+        (paroquia_id, destinatario_id, titulo, mensagem, tipo, lida, apenas_admin, link_referencia)
       VALUES (
         v_paroquia_id, v_elegivel.membro_id,
         'Vaga aberta para substituição',
